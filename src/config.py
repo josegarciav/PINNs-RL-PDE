@@ -1,16 +1,16 @@
 
 CONFIG = {
     # Training settings
-    'learning_rate': 0.001,
+    'learning_rate': 0.0001,
     'num_epochs': 2000,
-    'num_points': 10000,             # Collocation points
-    'num_boundary_points': 1000,     # Boundary condition points
+    'num_points': 5000,             # Collocation points
+    'num_boundary_points': 2000,     # Boundary condition points
     'log_interval': 100,            # Log frequency of iterations
-    'lambda_bc': 1.0,               # Boundary loss weight
+    'lambda_bc': 10,               # Boundary loss weight
 
     # Model architecture settings
     'input_dim': 2,                 # PDE input dimension (x, t)
-    'hidden_dim': 128,
+    'hidden_dim': 256,
     'output_dim': 1,
     'num_layers': 8,
     'activation': 'tanh',
@@ -21,11 +21,8 @@ CONFIG = {
     'rl_gamma': 0.99,
     'rl_hidden_dim': 64,
 
-    # Device settings
-    'device': 'mps',                # Explicitly set device ('mps', 'cuda', 'cpu')
-
-    # Visualization and checkpointing
-    'log_interval': 100,            # Epoch logging interval
+    # Device settings and paths
+    'device': 'mps', # Explicitly set device ('mps', 'cuda', 'cpu')
     'model_save_path': 'results/models/pinn_trained.pth',
     'results_path': 'results/',
 }

@@ -3,7 +3,6 @@
 # Complexity: Simple, 2nd-order linear
 
 import torch
-import numpy as np
 from .pde_base import PDEBase
 
 
@@ -25,15 +24,18 @@ class HeatEquation(PDEBase):
         return u_t - self.alpha * u_xx
 
     def boundary_conditions(self, x, t):
+        """
+        Define initial and boundary conditions:
+        u(x,0) = sin(pi*x), u(0,t)=0, u(1,t)=0
+        """
         x, t = x.to(self.device), t.to(self.device)
 
-        # Initial condition: u(x,0) = sin(pi*x)
-        initial_condition = torch.sin(np.pi * x) * (t == 0).float()
+        # Initial condition at t=0
+        initial_condition = torch.sin(torch.pi * x)
 
-        # Boundary condition: u(0,t)=u(1,t)=0
+        # Boundary conditions at x=0 and x=1
         boundary_condition = torch.zeros_like(x)
 
-        # Combine initial and boundary conditions logically:
         return torch.where(t == 0, initial_condition, boundary_condition)
 
     def exact_solution(self, x, t):

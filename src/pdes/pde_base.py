@@ -42,24 +42,16 @@ class PDEBase:
     def enforce_boundary_conditions(self, model, x, t=None):
         """
         Computes and applies boundary conditions during training.
-
-        :param model: The PINN model.
-        :param x: Boundary points in space (tensor).
-        :param t: Optional time variable (tensor).
-        :return: MSE loss enforcing boundary conditions.
         """
         x = x.to(self.device)
         if t is not None:
             t = t.to(self.device)
 
-        # Compute predicted values at boundary points
-        with torch.no_grad():  # Detach to prevent unnecessary autograd tracking
-            u_pred = model(torch.cat([x, t], dim=1) if t is not None else x)
+        inputs = torch.cat([x, t], dim=1) if t is not None else x
+        u_pred = model(inputs)
 
-        # Expected boundary values
         bc = self.boundary_conditions(x, t)
-
-        return torch.mean((u_pred - bc) ** 2)  # Mean Squared Error (MSE) loss
+        return torch.mean((u_pred - bc) ** 2)
 
     def exact_solution(self, x, t=None):
         """
