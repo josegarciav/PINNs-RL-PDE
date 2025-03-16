@@ -2,8 +2,8 @@ CONFIG = {
     # Training settings
     'learning_rate': 0.001,
     'num_epochs': 2000,
-    'num_points': 5000,             # Collocation points
-    'num_boundary_points': 100,     # Boundary condition points
+    'num_points': 10000,             # Collocation points
+    'num_boundary_points': 1000,     # Boundary condition points
     'log_interval': 100,            # Log frequency of iterations
     'lambda_bc': 1.0,               # Boundary loss weight
 
@@ -11,7 +11,7 @@ CONFIG = {
     'input_dim': 2,                 # PDE input dimension (x, t)
     'hidden_dim': 128,
     'output_dim': 1,
-    'num_layers': 6,
+    'num_layers': 8,
     'activation': 'tanh',
 
     # Reinforcement Learning settings

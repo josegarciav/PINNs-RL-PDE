@@ -14,7 +14,7 @@ from src.pdes.heat_equation import HeatEquation
 from src.pinn import PINNModel
 from src.trainer import PDETrainer
 from src.config import CONFIG
-from src.utils import plot_pinn_solution
+from src.utils import plot_pinn_solution, plot_pinn_3d_solution
 
 def main():
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
@@ -39,6 +39,7 @@ def main():
 
     # Plot results
     plot_pinn_solution(pinn, pde)
+    plot_pinn_3d_solution(pinn, pde, domain=(0, 1), t_domain=(0, 1), resolution=100)
 
 if __name__ == "__main__":
     main()

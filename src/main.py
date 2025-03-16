@@ -5,7 +5,7 @@ from src.pinn import PINNModel
 from src.rl_agent import CollocationRLAgent
 from src.trainer import PDETrainer
 from src.pdes.heat_equation import HeatEquation
-from src.utils import plot_pinn_solution, save_model
+from src.utils import plot_pinn_solution, save_model, plot_pinn_3d_solution
 
 def main():
     # Device setup
@@ -42,10 +42,11 @@ def main():
     trainer.train()
 
     # Save trained model
-    save_model(pinn, CONFIG['model_save_path'])
+    # save_model(pinn, CONFIG['model_save_path'])
 
     # Plot results
     plot_pinn_solution(pinn, pde, domain=pde.domain, device=device)
+    plot_pinn_3d_solution(pinn, pde, domain=(0, 1), t_domain=(0, 1), resolution=100)
 
 if __name__ == "__main__":
     main()

@@ -35,3 +35,7 @@ class HeatEquation(PDEBase):
 
         # Combine initial and boundary conditions logically:
         return torch.where(t == 0, initial_condition, boundary_condition)
+
+    def exact_solution(self, x, t):
+        """ Exact analytical solution for Heat equation: u(x,t) = sin(pi*x)*exp(-alpha*pi^2*t) """
+        return torch.sin(torch.pi * x) * torch.exp(-self.alpha * torch.pi**2 * t)
