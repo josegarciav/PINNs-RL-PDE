@@ -1,5 +1,15 @@
 
 import torch
+import sys
+import os
+
+# Ensure project root is in path
+import sys
+from pathlib import Path
+sys_path = Path(__file__).resolve().parents[1]
+if str(sys_path) not in sys.path:
+    sys.path.append(str(sys_path))
+
 from src.pdes.heat_equation import HeatEquation
 from src.pinn import PINNModel
 from src.trainer import PDETrainer
@@ -7,16 +17,27 @@ from src.config import CONFIG
 from src.utils import plot_pinn_solution
 
 def main():
-    # Set up device
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    print(f"Using device: {device}")
 
-    # Initialize PDE, PINN, and trainer
-    pde = HeatEquation(device=device)
-    pinn = PINNModel(input_dim=2, hidden_dim=64, output_dim=1).to(device)
-    trainer = PDETrainer(pde, pinn, None, CONFIG)  # No RL for first test
+    # Initialize PDE
+    pde = HeatEquation(domain=(0, 1), device=device)
 
-    # Train PINN
+    # Initialize PINN
+    pinn = PINNModel(
+        input_dim=CONFIG['input_dim'],
+        hidden_dim=CONFIG['hidden_dim'],
+        output_dim=CONFIG['output_dim'],
+        device=device
+    )
+
+    # Initialize trainer without RL
+    trainer = PDETrainer(pde=pde, pinn=pinn, rl_agent=None, config=CONFIG)
+
+    # Train model
     trainer.train()
+
+    # Plot results
     plot_pinn_solution(pinn, pde)
 
 if __name__ == "__main__":

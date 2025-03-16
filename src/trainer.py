@@ -1,7 +1,7 @@
 
 import torch
 import torch.optim as optim
-from utils import generate_collocation_points
+from src.utils import generate_collocation_points
 
 
 class PDETrainer:
@@ -34,7 +34,11 @@ class PDETrainer:
                 collocation_points = generate_collocation_points(self.config['num_points']).to(self.device)
 
             # Compute PDE residuals
-            residual_loss = torch.mean(self.pde.compute_residual(self.pinn, collocation_points) ** 2)
+            residual_loss = torch.mean(
+                self.pde.compute_residual(
+                    self.pinn, collocation_points[:, [0]], collocation_points[:, [1]]
+                ) ** 2
+            )
 
             # Compute Boundary Condition Loss
             boundary_points = generate_collocation_points(self.config['num_boundary_points']).to(self.device)
