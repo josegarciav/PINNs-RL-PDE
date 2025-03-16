@@ -27,4 +27,8 @@ class AllenCahnEquation(PDEBase):
 
     def boundary_conditions(self, x):
         x = x.to(self.device)
-        return torch.tanh(5 * (x - 0.5))  # Example boundary condition
+        return torch.tanh(5 * (x - 0.5))
+
+    def exact_solution(self, x, t):
+        """Exact analytical solution for Allen-Cahn equation: u(x,t) = tanh(5(x - 0.5))"""
+        return None

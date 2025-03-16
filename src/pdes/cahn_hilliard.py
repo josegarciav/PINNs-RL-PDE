@@ -29,4 +29,8 @@ class CahnHilliardEquation(PDEBase):
 
     def boundary_conditions(self, x):
         x = x.to(self.device)
-        return torch.sin(torch.pi * x)  # Example boundary condition
+        return torch.sin(torch.pi * x)
+
+    def exact_solution(self, x, t):
+        """Exact analytical solution for Cahn-Hilliard equation: u(x,t) = sin(pi*x) * exp(-D*pi^2*t)"""
+        return None

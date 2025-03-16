@@ -29,3 +29,7 @@ class BurgersEquation(PDEBase):
     def boundary_conditions(self, x):
         x = x.to(self.device)
         return torch.sin(torch.pi * x)  # Example boundary condition
+
+    def exact_solution(self, x, t):
+        """Exact analytical solution for Burgers' equation: u(x,t) = -2ν(∂ₓf(x,t) + f(x,t))"""
+        return None

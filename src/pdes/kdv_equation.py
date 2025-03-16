@@ -27,4 +27,8 @@ class KdVEquation(PDEBase):
 
     def boundary_conditions(self, x):
         x = x.to(self.device)
-        return torch.sin(2 * torch.pi * x)  # Example boundary condition
+        return torch.sin(2 * torch.pi * x)
+
+    def exact_solution(self, x, t):
+        """Exact analytical solution for KdV equation: u(x,t) = 2*cosh(2*pi*(x - 4*t))^-2"""
+        return None

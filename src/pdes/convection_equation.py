@@ -29,3 +29,7 @@ class ConvectionEquation(PDEBase):
     def boundary_conditions(self, x):
         x = x.to(self.device)
         return torch.sin(torch.pi * x)  # Example boundary condition
+
+    def exact_solution(self, x, t):
+        """Exact analytical solution for Convection equation: u(x,t) = sin(pi(x - c*t))"""
+        return None

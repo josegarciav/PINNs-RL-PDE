@@ -29,3 +29,7 @@ class WaveEquation(PDEBase):
     def boundary_conditions(self, x):
         x = x.to(self.device)
         return torch.sin(torch.pi * x)  # Example BC
+
+    def exact_solution(self, x, t):
+        """Exact analytical solution for Wave equation: u(x,t) = sin(pi*x) * cos(pi*c*t)"""
+        return torch.sin(torch.pi * x) * torch.cos(torch.pi * self.c * t)

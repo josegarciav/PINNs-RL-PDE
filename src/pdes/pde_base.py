@@ -60,3 +60,14 @@ class PDEBase:
         bc = self.boundary_conditions(x, t)
 
         return torch.mean((u_pred - bc) ** 2)  # Mean Squared Error (MSE) loss
+
+    def exact_solution(self, x, t=None):
+        """
+        Compute the exact analytical solution for the PDE.
+        This method must be implemented by subclasses.
+
+        :param x: Collocation points in space (tensor).
+        :param t: Optional time variable (tensor).
+        :return: Exact solution tensor.
+        """
+        raise NotImplementedError("Subclasses must implement exact_solution()")

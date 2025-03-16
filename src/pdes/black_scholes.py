@@ -31,3 +31,9 @@ class BlackScholesEquation(PDEBase):
     def boundary_conditions(self, S):
         S = S.to(self.device)
         return torch.maximum(S - 1, torch.zeros_like(S))  # Call option boundary condition
+
+    def exact_solution(self, S, t):
+        """Exact analytical solution for Black-Scholes equation: u(S,t) = S * N(d1) - X * exp(-r*t) * N(d2)"""
+        d1 = (torch.log(S) + (self.r + 0.5 * self.sigma**2) * t) / (self.sigma * torch.sqrt(t))
+        d2 = d1 - self.sigma * torch.sqrt(t)
+        return S * torch.distributions.Normal(0, 1).cdf(d1) - torch.exp(-self.r * t) * torch.distributions.Normal(0, 1).cdf(d2)
