@@ -11,23 +11,6 @@ def generate_collocation_points(num_points, domain=(0, 1)):
     points = torch.linspace(domain[0], domain[1], num_points).view(-1, 1)
     return points
 
-def plot_solution(model, pde, domain=(0, 1), resolution=100):
-    """
-    Visualize the learned solution of the PINN.
-    """
-    x = torch.linspace(domain[0], domain[1], resolution).view(-1, 1)
-    t = torch.zeros_like(x)  # Assuming t=0 for visualization
-    with torch.no_grad():
-        u_pred = model(torch.cat((x, t), dim=1))
-
-    plt.figure(figsize=(8, 5))
-    plt.plot(x.numpy(), u_pred.numpy(), label="PINN Solution")
-    plt.xlabel("x")
-    plt.ylabel("u(x, t=0)")
-    plt.title(f"Solution of {pde.__class__.__name__}")
-    plt.legend()
-    plt.show()
-
 def save_model(model, filename="pinn_model.pth"):
     """
     Save the trained model.
@@ -40,3 +23,30 @@ def load_model(model, filename="pinn_model.pth"):
     """
     model.load_state_dict(torch.load(filename))
     model.eval()
+
+    import torch
+
+def plot_pinn_solution(model, pde, domain=(0, 1), resolution=100):
+    """
+    Visualize the PINN-predicted solution vs. expected behavior.
+    
+    :param model: Trained PINN model.
+    :param pde: PDE class instance.
+    :param domain: Tuple defining the spatial range.
+    :param resolution: Number of points for plotting.
+    """
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+
+    x = torch.linspace(domain[0], domain[1], resolution).view(-1, 1).to(device)
+    t = torch.zeros_like(x)  # Assume t=0 for initial testing
+
+    with torch.no_grad():
+        u_pred = model(torch.cat((x, t), dim=1))
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(x.cpu().numpy(), u_pred.cpu().numpy(), label="PINN Prediction", linestyle="dashed")
+    plt.xlabel("x")
+    plt.ylabel("u(x, t=0)")
+    plt.title(f"Solution of {pde.__class__.__name__} using PINNs")
+    plt.legend()
+    plt.show()
