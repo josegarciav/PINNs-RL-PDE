@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 
+
 class CollocationRLAgent:
     def __init__(self, state_dim, action_dim, hidden_dim=64, lr=0.001):
         self.model = nn.Sequential(

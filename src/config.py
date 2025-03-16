@@ -3,7 +3,7 @@ CONFIG = {
     # Training settings
     'learning_rate': 0.001,
     'num_epochs': 1000,
-    'num_points': 100,
+    'num_points': 100, # Number of collocation points (uniform vs. RL-optimized)
     'batch_size': 32,
     'log_interval': 100,
 

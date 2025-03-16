@@ -1,5 +1,6 @@
 # Base class for PDEs
 
+
 import torch
 
 class PDEBase:
@@ -7,7 +8,7 @@ class PDEBase:
 
     def __init__(self, domain, device=None):
         """
-        Initialize PDE with its domain.
+        Initialize PDE with its domain and device.
 
         :param domain: Tuple (min, max) indicating the range of the PDE.
         :param device: Torch device (CPU/GPU/MPS).
@@ -21,8 +22,8 @@ class PDEBase:
         This method must be implemented by subclasses.
 
         :param model: The PINN model.
-        :param x: Collocation points in space.
-        :param t: Optional time variable.
+        :param x: Collocation points in space (tensor).
+        :param t: Optional time variable (tensor).
         :return: Residual loss tensor.
         """
         raise NotImplementedError("Subclasses must implement compute_residual()")
@@ -31,22 +32,31 @@ class PDEBase:
         """
         Define boundary conditions for the PDE.
         This method must be implemented by subclasses.
-        
-        :param x: Collocation points in space.
-        :param t: Optional time variable.
-        :return: Boundary condition enforcement tensor.
+
+        :param x: Collocation points in space (tensor).
+        :param t: Optional time variable (tensor).
+        :return: Expected boundary values (tensor).
         """
         raise NotImplementedError("Subclasses must implement boundary_conditions()")
 
     def enforce_boundary_conditions(self, model, x, t=None):
         """
         Computes and applies boundary conditions during training.
-        
+
         :param model: The PINN model.
-        :param x: Boundary points in space.
-        :param t: Optional time variable.
-        :return: Loss from boundary conditions.
+        :param x: Boundary points in space (tensor).
+        :param t: Optional time variable (tensor).
+        :return: MSE loss enforcing boundary conditions.
         """
+        x = x.to(self.device)
+        if t is not None:
+            t = t.to(self.device)
+
+        # Compute predicted values at boundary points
+        with torch.no_grad():  # Detach to prevent unnecessary autograd tracking
+            u_pred = model(torch.cat([x, t], dim=1) if t is not None else x)
+
+        # Expected boundary values
         bc = self.boundary_conditions(x, t)
-        u_pred = model(torch.cat([x, t], dim=1) if t is not None else x)
-        return torch.mean((u_pred - bc) ** 2)  # MSE loss for BCs
+
+        return torch.mean((u_pred - bc) ** 2)  # Mean Squared Error (MSE) loss

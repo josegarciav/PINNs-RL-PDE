@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 def generate_collocation_points(num_points, domain=(0, 1)):
     """
     Generate collocation points uniformly within the domain.

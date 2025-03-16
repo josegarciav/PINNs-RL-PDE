@@ -1,17 +1,17 @@
-# Heat equation
-# Application domains: Heat transfer, climate modeling, biomedical engineering.
-# Complexity: Simple, 2nd-order linear
+# Allen-Cahn equation
+# Application domains: Materials science, phase transitions, biological morphogenesis.
+# Complexity: Nonlinear, 2nd-order
 
 
 import torch
 from .pde_base import PDEBase
 
-class HeatEquation(PDEBase):
-    """1D Heat equation: ∂u/∂t - α ∂²u/∂x² = 0"""
+class AllenCahnEquation(PDEBase):
+    """Allen-Cahn equation: ∂u/∂t - D ∂²u/∂x² + u - u³ = 0"""
 
-    def __init__(self, alpha=0.01, domain=(0, 1), device=None):
+    def __init__(self, D=0.01, domain=(0, 1), device=None):
         super().__init__(domain, device)
-        self.alpha = alpha  # Thermal diffusivity
+        self.D = D  # Diffusion coefficient
 
     def compute_residual(self, model, x, t):
         x = x.to(self.device)
@@ -20,12 +20,11 @@ class HeatEquation(PDEBase):
         t.requires_grad_(True)
 
         u = model(torch.cat((x, t), dim=1))
-
         u_t = torch.autograd.grad(u, t, torch.ones_like(u), create_graph=True)[0]
         u_xx = torch.autograd.grad(torch.autograd.grad(u, x, torch.ones_like(u), create_graph=True)[0], x, torch.ones_like(u), create_graph=True)[0]
 
-        return u_t - self.alpha * u_xx
+        return u_t - self.D * u_xx + u - u**3
 
     def boundary_conditions(self, x):
         x = x.to(self.device)
-        return torch.sin(torch.pi * x)  # Example BC: u(0, t) = 0
+        return torch.tanh(5 * (x - 0.5))  # Example boundary condition

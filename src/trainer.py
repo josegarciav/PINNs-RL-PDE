@@ -3,6 +3,7 @@ import torch
 import torch.optim as optim
 from utils import generate_collocation_points
 
+
 class PDETrainer:
     def __init__(self, pde, pinn, rl_agent, config):
         """
