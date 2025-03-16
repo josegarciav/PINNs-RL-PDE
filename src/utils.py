@@ -53,7 +53,7 @@ def plot_pinn_solution(model, pde, domain=(0, 1), resolution=100, device=None):
 
     with torch.no_grad():
         inputs = torch.cat((x, t), dim=1)
-        u_pred = model(inputs=inputs)
+        u_pred = model(inputs)
 
     plt.figure(figsize=(8, 5))
     plt.plot(x.cpu().numpy(), u_pred.cpu().numpy(), label="PINN Prediction")

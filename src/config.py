@@ -1,17 +1,17 @@
 CONFIG = {
     # Training settings
     'learning_rate': 0.001,
-    'num_epochs': 5000,
-    'num_points': 1000,             # Collocation points
-    'num_boundary_points': 200,     # Boundary condition points
-    'log_interval': 100,            # Log frequency
+    'num_epochs': 2000,
+    'num_points': 5000,             # Collocation points
+    'num_boundary_points': 100,     # Boundary condition points
+    'log_interval': 100,            # Log frequency of iterations
     'lambda_bc': 1.0,               # Boundary loss weight
 
     # Model architecture settings
     'input_dim': 2,                 # PDE input dimension (x, t)
-    'hidden_dim': 64,
+    'hidden_dim': 128,
     'output_dim': 1,
-    'num_layers': 4,
+    'num_layers': 6,
     'activation': 'tanh',
 
     # Reinforcement Learning settings
