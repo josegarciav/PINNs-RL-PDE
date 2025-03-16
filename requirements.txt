@@ -3,3 +3,10 @@ numpy
 matplotlib 
 gym 
 scipy 
+tqdm
+pandas
+seaborn
+jupyter
+pytest
+black
+flake8
