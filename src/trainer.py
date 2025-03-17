@@ -31,7 +31,7 @@ class PDETrainer:
         for epoch in range(1, epochs + 1):
             # Generate collocation points
             if self.rl_agent:
-                collocation_points = self.rl_agent.select_points()
+                collocation_points = self.rl_agent.select_points(num_points, self.pde.domain)
             else:
                 collocation_points = generate_collocation_points(
                     num_points=self.config["num_points"],
