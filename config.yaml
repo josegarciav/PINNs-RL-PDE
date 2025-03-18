@@ -1,0 +1,96 @@
+# Device Configuration
+device: "mps"  # Options: "cuda", "mps", "cpu"
+
+# Model Architecture
+model:
+  input_dim: 2  # (x, t)
+  hidden_dim: 64
+  output_dim: 1  # u(x,t)
+  num_layers: 4
+  activation: "tanh"  # Options: "tanh", "relu", "gelu"
+  fourier_features: true
+  fourier_scale: 10.0
+  dropout: 0.1
+  layer_norm: true
+
+# PDE Configuration
+pde:
+  domain: [0.0, 1.0]  # Spatial domain [x_min, x_max]
+  time_domain: [0.0, 1.0]  # Temporal domain [t_min, t_max]
+  initial_condition:
+    type: "sine"
+    amplitude: 1.0
+    frequency: 2.0
+  boundary_conditions:
+    left:
+      type: "dirichlet"
+      value: 0.0
+    right:
+      type: "dirichlet"
+      value: 0.0
+    initial:
+      type: "sine"
+      amplitude: 1.0
+      frequency: 2.0
+  exact_solution:
+    type: "sine"
+    amplitude: 1.0
+    frequency: 2.0
+
+# Training Configuration
+training:
+  num_epochs: 10000
+  batch_size: 1000
+  num_collocation_points: 10000
+  validation_frequency: 100
+  early_stopping:
+    enabled: true
+    patience: 10
+  optimizer:
+    name: "adam"
+    lr: 0.001
+    weight_decay: 1e-5
+  rl_update_frequency: 10  # Update RL agent every N epochs
+
+# Reinforcement Learning Configuration
+rl:
+  enabled: true
+  state_dim: 2  # (x, t)
+  action_dim: 1  # Sampling probability
+  hidden_dim: 64
+  learning_rate: 0.001
+  gamma: 0.99
+  epsilon_start: 1.0
+  epsilon_end: 0.01
+  epsilon_decay: 0.995
+  memory_size: 10000
+  batch_size: 64
+  target_update: 100
+  reward_weights:
+    residual: 1.0
+    boundary: 1.0
+    initial: 1.0
+    exploration: 0.1
+
+# Evaluation Configuration
+evaluation:
+  num_points: 1000  # Number of points for evaluation
+  metrics:
+    - "l2_error"
+    - "max_error"
+    - "mean_error"
+  save_plots: true
+  plot_frequency: 100  # Plot every N epochs
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  save_checkpoints: true
+  checkpoint_frequency: 1000
+  log_frequency: 100
+
+# Paths
+paths:
+  results_dir: "results"
+  checkpoint_dir: "checkpoints"
+  log_dir: "logs" 
