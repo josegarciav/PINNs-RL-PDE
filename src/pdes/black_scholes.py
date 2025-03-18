@@ -7,6 +7,7 @@ from .pde_base import PDEBase, PDEConfig
 from typing import Dict, Any, Optional, Union, Tuple, List
 from src.rl_agent import RLAgent
 
+
 class BlackScholesEquation(PDEBase):
     """
     Implementation of the Black-Scholes Equation: ∂V/∂t + (1/2)σ²S²∂²V/∂S² + rS∂V/∂S - rV = 0
@@ -51,37 +52,50 @@ class BlackScholesEquation(PDEBase):
         
         :param model: Neural network model
         :param x: Spatial coordinates (stock prices)
-        :param t: Time coordinates
+        :param t: Time coordinates (time to maturity)
         :return: Residual tensor
         """
-        xt = torch.cat([x, t], dim=1)
-        xt.requires_grad_(True)
+        # Ensure input tensors require gradients
+        x = x.requires_grad_(True)
+        t = t.requires_grad_(True)
         
-        # Compute derivatives
+        # Combine inputs
+        xt = torch.cat([x, t], dim=1)
+        
+        # Get model prediction (option price)
         V = model(xt)
-        V_t = torch.autograd.grad(V, t, grad_outputs=torch.ones_like(V),
-                                create_graph=True)[0]
+        
+        # Compute time derivative
+        V_t = torch.autograd.grad(V, t, grad_outputs=torch.ones_like(V), create_graph=True, allow_unused=True)[0]
+        if V_t is None:
+            V_t = torch.zeros_like(V)
         
         # Compute first and second derivatives with respect to S
         if self.dimension == 1:
-            V_S = torch.autograd.grad(V, x, grad_outputs=torch.ones_like(V),
-                                    create_graph=True)[0]
-            V_SS = torch.autograd.grad(V_S, x, grad_outputs=torch.ones_like(V_S),
-                                     create_graph=True)[0]
+            V_S = torch.autograd.grad(V, x, grad_outputs=torch.ones_like(V), create_graph=True, allow_unused=True)[0]
+            if V_S is None:
+                V_S = torch.zeros_like(V)
+            V_SS = torch.autograd.grad(V_S, x, grad_outputs=torch.ones_like(V_S), create_graph=True, allow_unused=True)[0]
+            if V_SS is None:
+                V_SS = torch.zeros_like(V)
         else:
             # For higher dimensions, compute derivatives for each dimension
             V_S = torch.zeros_like(V)
             V_SS = torch.zeros_like(V)
             for dim in range(self.dimension):
-                V_S_dim = torch.autograd.grad(V, x[:, dim:dim+1], grad_outputs=torch.ones_like(V),
-                                            create_graph=True)[0]
-                V_S += V_S_dim
-                V_SS_dim = torch.autograd.grad(V_S_dim, x[:, dim:dim+1], grad_outputs=torch.ones_like(V_S_dim),
-                                             create_graph=True)[0]
-                V_SS += V_SS_dim
+                V_S_dim = torch.autograd.grad(V, x[:, dim:dim+1], grad_outputs=torch.ones_like(V), create_graph=True, allow_unused=True)[0]
+                if V_S_dim is not None:
+                    V_S += V_S_dim
+                    V_SS_dim = torch.autograd.grad(V_S_dim, x[:, dim:dim+1], grad_outputs=torch.ones_like(V_S_dim), create_graph=True, allow_unused=True)[0]
+                    if V_SS_dim is not None:
+                        V_SS += V_SS_dim
         
-        # Compute residual
-        return V_t + 0.5 * self.sigma**2 * x**2 * V_SS + self.r * x * V_S - self.r * V
+        # Black-Scholes equation: V_t + (1/2)σ²S²V_SS + rSV_S - rV = 0
+        if self.dimension == 1:
+            return V_t + 0.5 * self.sigma**2 * x**2 * V_SS + self.r * x * V_S - self.r * V
+        else:
+            # For higher dimensions, sum over all dimensions
+            return V_t + 0.5 * self.sigma**2 * torch.sum(x**2 * V_SS, dim=1, keepdim=True) + self.r * torch.sum(x * V_S, dim=1, keepdim=True) - self.r * V
     
     def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """

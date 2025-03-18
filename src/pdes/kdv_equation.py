@@ -18,7 +18,7 @@ class KdVEquation(PDEBase):
                  initial_condition: Dict[str, Any], exact_solution: Dict[str, Any],
                  dimension: int = 1, device: Optional[torch.device] = None):
         """
-        Initialize the KdV Equation.
+        Initialize the KdV equation.
         
         :param domain: Spatial domain (tuple for 1D, list of tuples for higher dimensions)
         :param time_domain: Temporal domain
@@ -29,10 +29,10 @@ class KdVEquation(PDEBase):
         :param device: Device to use for computations
         """
         config = PDEConfig(
-            name="Korteweg-de Vries Equation",
+            name="KdV Equation",
             domain=domain,
             time_domain=time_domain,
-            parameters={},  # KdV equation has no parameters
+            parameters={'speed': 1.0},  # Default soliton speed
             boundary_conditions=boundary_conditions,
             initial_condition=initial_condition,
             exact_solution=exact_solution,
@@ -40,6 +40,7 @@ class KdVEquation(PDEBase):
             device=device
         )
         super().__init__(config)
+        self.speed = config.parameters['speed']
     
     def compute_residual(self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
@@ -90,17 +91,13 @@ class KdVEquation(PDEBase):
         :param t: Time coordinates
         :return: Exact solution tensor
         """
+        c = torch.tensor(self.speed, dtype=x.dtype, device=x.device)  # Convert speed to tensor
         if self.dimension == 1:
-            # 1D KdV solution (soliton)
-            c = 1.0  # Wave speed
-            return 2 * c * torch.sech(torch.sqrt(c) * (x - c * t))**2
+            return 2 * c * (1 / torch.cosh(torch.sqrt(c) * (x - c * t)))**2
         else:
-            # For higher dimensions, use product of solitons
-            solution = torch.ones_like(x[:, 0:1])
-            for dim in range(self.dimension):
-                c = 1.0  # Wave speed
-                solution *= 2 * c * torch.sech(torch.sqrt(c) * (x[:, dim:dim+1] - c * t))**2
-            return solution
+            # For higher dimensions, use the sum of coordinates
+            x_sum = torch.sum(x, dim=1, keepdim=True)
+            return 2 * c * (1 / torch.cosh(torch.sqrt(c) * (x_sum - c * t)))**2
     
     def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
         """
@@ -113,11 +110,11 @@ class KdVEquation(PDEBase):
         if bc_type == 'initial':
             ic_type = params.get('type', 'soliton')
             if ic_type == 'soliton':
-                c = params.get('speed', 1.0)
+                c = torch.tensor(params.get('speed', 1.0), dtype=torch.float32, device=self.device)
                 if self.dimension == 1:
-                    return lambda x, t: 2 * c * torch.sech(torch.sqrt(c) * x)**2
+                    return lambda x, t: 2 * c * (1 / torch.cosh(torch.sqrt(c) * x))**2
                 else:
-                    return lambda x, t: 2 * c * torch.sech(torch.sqrt(c) * torch.sum(x, dim=1, keepdim=True))**2
+                    return lambda x, t: 2 * c * (1 / torch.cosh(torch.sqrt(c) * torch.sum(x, dim=1, keepdim=True)))**2
             else:
                 raise ValueError(f"Unsupported initial condition type: {ic_type}")
         else:

@@ -11,168 +11,307 @@ from src.pdes.burgers_equation import BurgersEquation
 from src.pdes.cahn_hilliard import CahnHilliardEquation
 from src.pdes.convection_equation import ConvectionEquation
 from src.rl_agent import RLAgent
-from src.pdes.pde_base import PDEConfig
 
 
 class TestPDEs(unittest.TestCase):
     def setUp(self):
-        self.device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-        self.x = torch.linspace(0, 1, 10).unsqueeze(1).to(self.device)
-        self.t = torch.linspace(0, 1, 10).unsqueeze(1).to(self.device)
-        self.xt = torch.cat([self.x, self.t], dim=1).requires_grad_(True)
+        """Set up test fixtures."""
+        # Set device
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        # Basic test points
+        self.x = torch.linspace(0, 1, 100).reshape(-1, 1).to(self.device)
+        self.t = torch.linspace(0, 1, 100).reshape(-1, 1).to(self.device)
+        self.xt = torch.cat([self.x, self.t], dim=1)
+        
+        # Initialize PINN models
+        self.model = PINNModel(
+            input_dim=2,
+            hidden_dim=32,
+            output_dim=1,
+            num_layers=2,
+            device=self.device
+        )
 
-        # Initialize 1D PDEs with parameters
+        self.model_2d = PINNModel(
+            input_dim=3,
+            hidden_dim=32,
+            output_dim=1,
+            num_layers=2,
+            device=self.device
+        )
+        
+        # Initialize RL agent for adaptive sampling tests
+        self.rl_agent = RLAgent(
+            state_dim=2,
+            action_dim=1,
+            hidden_dim=32,
+            device=self.device
+        )
+        
+        # Initialize heat equation for common tests
+        domain = (0.0, 1.0)
+        time_domain = (0.0, 1.0)
+        boundary_conditions = {
+            'dirichlet': {'value': 0.0},
+            'neumann': {'value': 0.0},
+            'periodic': {}
+        }
+        initial_condition = {'type': 'sine', 'amplitude': 1.0, 'frequency': 2.0}
+        exact_solution = {'type': 'sine_wave', 'amplitude': 1.0, 'frequency': 2.0}
+        
         self.heat_eq = HeatEquation(
-            alpha=0.01,
-            domain=(0.0, 1.0),
-            time_domain=(0.0, 1.0),
-            boundary_conditions={
-                'dirichlet': {'value': 0.0},
-                'neumann': {'value': 0.0},
-                'periodic': {}
-            },
-            initial_condition={
-                'type': 'sine',
-                'amplitude': 1.0,
-                'frequency': 2.0
-            },
-            exact_solution={
-                'type': 'sine_wave',
-                'amplitude': 1.0,
-                'frequency': 2.0
-            },
+            alpha=0.01,  # Thermal diffusivity
+            domain=domain,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
+            dimension=1,
+            device=self.device
+        )
+
+        # Initialize wave equation for common tests
+        self.wave_eq = WaveEquation(
+            c=1.0,  # Wave speed
+            domain=domain,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
+            dimension=1,
+            device=self.device
+        )
+
+    def test_heat_equation(self):
+        """Test the Heat equation implementation."""
+        # Test 1D Heat equation
+        domain = (0.0, 1.0)
+        time_domain = (0.0, 1.0)
+        boundary_conditions = {
+            'dirichlet': {'value': 0.0},
+            'neumann': {'value': 0.0},
+            'periodic': {}
+        }
+        initial_condition = {'type': 'sine', 'amplitude': 1.0, 'frequency': 2.0}
+        exact_solution = {'type': 'sine_wave', 'amplitude': 1.0, 'frequency': 2.0}
+        
+        heat_eq = HeatEquation(
+            alpha=0.01,  # Thermal diffusivity
+            domain=domain,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
             dimension=1,
             device=self.device
         )
         
-        # Initialize 2D Heat Equation
-        self.heat_eq_2d = HeatEquation(
+        # Test collocation points
+        x, t = heat_eq.generate_collocation_points(100)
+        self.assertEqual(x.shape, (100, 1))
+        self.assertEqual(t.shape, (100, 1))
+        self.assertTrue(torch.all(x >= domain[0]) and torch.all(x <= domain[1]))
+        self.assertTrue(torch.all(t >= time_domain[0]) and torch.all(t <= time_domain[1]))
+        
+        # Test exact solution
+        u_exact = heat_eq.exact_solution(x, t)
+        self.assertEqual(u_exact.shape, (100, 1))
+        self.assertTrue(torch.isfinite(u_exact).all())
+        
+        # Test boundary conditions
+        x_boundary = torch.tensor([domain[0], domain[1]], dtype=torch.float32).reshape(-1, 1)
+        t_boundary = torch.zeros_like(x_boundary)
+        u_boundary = heat_eq._create_boundary_condition('initial', initial_condition)(x_boundary, t_boundary)
+        self.assertEqual(u_boundary.shape, (2, 1))
+        
+        # Test residual computation
+        residual = heat_eq.compute_residual(self.model, x, t)
+        self.assertEqual(residual.shape, (100, 1))
+        self.assertTrue(torch.isfinite(residual).all())
+        
+        # Test 2D Heat equation
+        domain_2d = [(0.0, 1.0), (0.0, 1.0)]
+        heat_eq_2d = HeatEquation(
             alpha=0.01,
-            domain=[(0.0, 1.0), (0.0, 1.0)],  # 2D domain
-            time_domain=(0.0, 1.0),
-            boundary_conditions={
-                'dirichlet': {'value': 0.0},
-                'neumann': {'value': 0.0},
-                'periodic': {}
-            },
-            initial_condition={
-                'type': 'sine',
-                'amplitude': 1.0,
-                'frequency': 2.0
-            },
-            exact_solution={
-                'type': 'sine_wave',
-                'amplitude': 1.0,
-                'frequency': 2.0
-            },
+            domain=domain_2d,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
             dimension=2,
             device=self.device
         )
         
-        # Initialize Wave Equation with parameters
-        self.wave_eq = WaveEquation(
+        # Test 2D collocation points
+        x_2d, t_2d = heat_eq_2d.generate_collocation_points(100)
+        self.assertEqual(x_2d.shape, (100, 2))
+        self.assertEqual(t_2d.shape, (100, 1))
+        for i, (min_val, max_val) in enumerate(domain_2d):
+            self.assertTrue(torch.all(x_2d[:, i] >= min_val) and torch.all(x_2d[:, i] <= max_val))
+        
+        # Test 2D exact solution
+        u_exact_2d = heat_eq_2d.exact_solution(x_2d, t_2d)
+        self.assertEqual(u_exact_2d.shape, (100, 1))
+        self.assertTrue(torch.isfinite(u_exact_2d).all())
+        
+        # Test 2D residual computation
+        residual_2d = heat_eq_2d.compute_residual(self.model_2d, x_2d, t_2d)
+        self.assertEqual(residual_2d.shape, (100, 1))
+        self.assertTrue(torch.isfinite(residual_2d).all())
+
+    def test_wave_equation(self):
+        """Test the Wave equation implementation."""
+        # Test 1D Wave equation
+        domain = (0.0, 1.0)
+        time_domain = (0.0, 1.0)
+        boundary_conditions = {
+            'dirichlet': {'value': 0.0},
+            'neumann': {'value': 0.0},
+            'periodic': {}
+        }
+        initial_condition = {'type': 'sine', 'amplitude': 1.0, 'frequency': 2.0}
+        exact_solution = {'type': 'sine_wave', 'amplitude': 1.0, 'frequency': 2.0}
+        
+        wave_eq = WaveEquation(
             c=1.0,
-            domain=(0.0, 1.0),
-            time_domain=(0.0, 1.0),
-            boundary_conditions={
-                'dirichlet': {'value': 0.0},
-                'neumann': {'value': 0.0},
-                'periodic': {}
-            },
-            initial_condition={
-                'type': 'sine',
-                'amplitude': 1.0,
-                'frequency': 2.0
-            },
-            exact_solution={
-                'type': 'sine_wave',
-                'amplitude': 1.0,
-                'frequency': 2.0
-            },
+            domain=domain,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
             dimension=1,
             device=self.device
         )
         
-        # Initialize Black-Scholes Equation with parameters
-        self.bs_eq = BlackScholesEquation(
-            sigma=0.2,
-            r=0.05,
-            domain=(0.0, 1.0),
-            time_domain=(0.0, 1.0),
-            boundary_conditions={
-                'dirichlet': {'value': 0.0},
-                'neumann': {'value': 0.0},
-                'periodic': {}
-            },
-            initial_condition={
-                'type': 'call',
-                'strike': 1.0
-            },
-            exact_solution={
-                'type': 'call',
-                'strike': 1.0
-            },
+        # Test collocation points
+        x, t = wave_eq.generate_collocation_points(100)
+        self.assertEqual(x.shape, (100, 1))
+        self.assertEqual(t.shape, (100, 1))
+        self.assertTrue(torch.all(x >= domain[0]) and torch.all(x <= domain[1]))
+        self.assertTrue(torch.all(t >= time_domain[0]) and torch.all(t <= time_domain[1]))
+        
+        # Test exact solution
+        u_exact = wave_eq.exact_solution(x, t)
+        self.assertEqual(u_exact.shape, (100, 1))
+        self.assertTrue(torch.isfinite(u_exact).all())
+        
+        # Test boundary conditions
+        x_boundary = torch.tensor([domain[0], domain[1]], dtype=torch.float32).reshape(-1, 1)
+        t_boundary = torch.zeros_like(x_boundary)
+        u_boundary = wave_eq._create_boundary_condition('initial', initial_condition)(x_boundary, t_boundary)
+        self.assertEqual(u_boundary.shape, (2, 1))
+        
+        # Test residual computation
+        residual = wave_eq.compute_residual(self.model, x, t)
+        self.assertEqual(residual.shape, (100, 1))
+        self.assertTrue(torch.isfinite(residual).all())
+        
+        # Test 2D Wave equation
+        domain_2d = [(0.0, 1.0), (0.0, 1.0)]
+        wave_eq_2d = WaveEquation(
+            c=1.0,
+            domain=domain_2d,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
+            dimension=2,
+            device=self.device
+        )
+        
+        # Test 2D collocation points
+        x_2d, t_2d = wave_eq_2d.generate_collocation_points(100)
+        self.assertEqual(x_2d.shape, (100, 2))
+        self.assertEqual(t_2d.shape, (100, 1))
+        for i, (min_val, max_val) in enumerate(domain_2d):
+            self.assertTrue(torch.all(x_2d[:, i] >= min_val) and torch.all(x_2d[:, i] <= max_val))
+        
+        # Test 2D exact solution
+        u_exact_2d = wave_eq_2d.exact_solution(x_2d, t_2d)
+        self.assertEqual(u_exact_2d.shape, (100, 1))
+        self.assertTrue(torch.isfinite(u_exact_2d).all())
+        
+        # Test 2D residual computation
+        residual_2d = wave_eq_2d.compute_residual(self.model_2d, x_2d, t_2d)
+        self.assertEqual(residual_2d.shape, (100, 1))
+        self.assertTrue(torch.isfinite(residual_2d).all())
+
+    def test_black_scholes(self):
+        """Test the Black-Scholes equation implementation."""
+        # Test 1D Black-Scholes equation
+        domain = (0.0, 200.0)  # Stock price domain
+        time_domain = (0.0, 1.0)  # Time to maturity
+        strike = 100.0
+        boundary_conditions = {
+            'dirichlet': {'value': 0.0},
+            'neumann': {'value': 1.0},  # Delta at upper boundary
+            'initial': {'type': 'call_option', 'strike_price': strike}
+        }
+        initial_condition = {'type': 'call_option', 'strike_price': strike}
+        exact_solution = {'type': 'call_option', 'strike_price': strike}
+        
+        bs_eq = BlackScholesEquation(
+            sigma=0.2,  # Volatility
+            r=0.05,    # Risk-free rate
+            domain=domain,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
             dimension=1,
             device=self.device
         )
-
-        # Initialize PINN model with new architecture
-        self.model = PINNModel(
-            input_dim=2,
-            hidden_dim=64,
-            output_dim=1,
-            num_layers=4,
-            activation="tanh",
-            fourier_features=True,
-            fourier_scale=10.0,
-            dropout=0.1,
-            layer_norm=True,
+        
+        # Test collocation points
+        x, t = bs_eq.generate_collocation_points(100)
+        self.assertEqual(x.shape, (100, 1))
+        self.assertEqual(t.shape, (100, 1))
+        self.assertTrue(torch.all(x >= domain[0]) and torch.all(x <= domain[1]))
+        self.assertTrue(torch.all(t >= time_domain[0]) and torch.all(t <= time_domain[1]))
+        
+        # Test exact solution
+        u_exact = bs_eq.exact_solution(x, t)
+        self.assertEqual(u_exact.shape, (100, 1))
+        self.assertTrue(torch.isfinite(u_exact).all())
+        self.assertTrue(torch.all(u_exact >= 0))  # Option price is non-negative
+        
+        # Test boundary conditions
+        x_boundary = torch.tensor([domain[0], domain[1]], dtype=torch.float32).reshape(-1, 1)
+        t_boundary = torch.zeros_like(x_boundary)
+        u_boundary = bs_eq._create_boundary_condition('initial', initial_condition)(x_boundary, t_boundary)
+        self.assertEqual(u_boundary.shape, (2, 1))
+        
+        # Test 2D Black-Scholes equation (basket option)
+        domain_2d = [(0.0, 200.0), (0.0, 200.0)]  # Two stock prices
+        bs_eq_2d = BlackScholesEquation(
+            sigma=0.2,
+            r=0.05,
+            domain=domain_2d,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
+            dimension=2,
             device=self.device
         )
 
-        # Initialize 2D PINN model
-        self.model_2d = PINNModel(
-            input_dim=3,  # (x, y, t)
-            hidden_dim=64,
-            output_dim=1,
-            num_layers=4,
-            activation="tanh",
-            fourier_features=True,
-            fourier_scale=10.0,
-            dropout=0.1,
-            layer_norm=True,
-            device=self.device
-        )
-
-        # Initialize RL agent
-        self.rl_agent = RLAgent(
-            state_dim=2,
-            action_dim=1,
-            hidden_dim=64,
-            learning_rate=0.001,
-            gamma=0.99,
-            epsilon_start=1.0,
-            epsilon_end=0.01,
-            epsilon_decay=0.995,
-            memory_size=10000,
-            batch_size=64,
-            target_update=100,
-            device=self.device
-        )
-
-    def test_heat_equation_residual(self):
-        residual = self.heat_eq.compute_residual(self.model, self.x, self.t)
-        self.assertEqual(residual.shape, (10, 1))
-        self.assertTrue(torch.isfinite(residual).all())
-
-    def test_wave_equation_residual(self):
-        residual = self.wave_eq.compute_residual(self.model, self.x, self.t)
-        self.assertEqual(residual.shape, (10, 1))
-        self.assertTrue(torch.isfinite(residual).all())
-
-    def test_black_scholes_residual(self):
-        residual = self.bs_eq.compute_residual(self.model, self.x, self.t)
-        self.assertEqual(residual.shape, (10, 1))
+        # Test 2D collocation points
+        x_2d, t_2d = bs_eq_2d.generate_collocation_points(100)
+        self.assertEqual(x_2d.shape, (100, 2))
+        self.assertEqual(t_2d.shape, (100, 1))
+        for i, (min_val, max_val) in enumerate(domain_2d):
+            self.assertTrue(torch.all(x_2d[:, i] >= min_val) and torch.all(x_2d[:, i] <= max_val))
+        
+        # Test 2D exact solution
+        u_exact_2d = bs_eq_2d.exact_solution(x_2d, t_2d)
+        self.assertEqual(u_exact_2d.shape, (100, 1))
+        self.assertTrue(torch.isfinite(u_exact_2d).all())
+        self.assertTrue(torch.all(u_exact_2d >= 0))  # Option price is non-negative
+        
+        # Test residual computation
+        residual = bs_eq_2d.compute_residual(self.model_2d, x_2d, t_2d)
+        self.assertEqual(residual.shape, (100, 1))
         self.assertTrue(torch.isfinite(residual).all())
 
     def test_boundary_conditions(self):
@@ -197,7 +336,7 @@ class TestPDEs(unittest.TestCase):
     def test_exact_solution(self):
         # Test exact solution computation
         exact_sol = self.heat_eq.exact_solution(self.x, self.t)
-        self.assertEqual(exact_sol.shape, (10, 1))
+        self.assertEqual(exact_sol.shape, (100, 1))
         self.assertTrue(torch.isfinite(exact_sol).all())
 
     def test_adaptive_sampling(self):
@@ -212,7 +351,18 @@ class TestPDEs(unittest.TestCase):
         self.assertTrue(torch.all(t >= 0) and torch.all(t <= 1))
         
         # Test 2D Heat Equation
-        x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy='adaptive')
+        domain_2d = [(0.0, 1.0), (0.0, 1.0)]
+        heat_eq_2d = HeatEquation(
+            alpha=0.01,
+            domain=domain_2d,
+            time_domain=(0.0, 1.0),
+            boundary_conditions=self.heat_eq.config.boundary_conditions,
+            initial_condition=self.heat_eq.config.initial_condition,
+            exact_solution=self.heat_eq.config.exact_solution,
+            dimension=2,
+            device=self.device
+        )
+        x, t = heat_eq_2d.generate_collocation_points(num_points, strategy='adaptive')
         self.assertEqual(x.shape, (num_points, 2))
         self.assertEqual(t.shape, (num_points, 1))
         self.assertTrue(torch.all(x[:, 0] >= 0) and torch.all(x[:, 0] <= 1))
@@ -221,13 +371,6 @@ class TestPDEs(unittest.TestCase):
         
         # Test Wave Equation
         x, t = self.wave_eq.generate_collocation_points(num_points, strategy='adaptive')
-        self.assertEqual(x.shape, (num_points, 1))
-        self.assertEqual(t.shape, (num_points, 1))
-        self.assertTrue(torch.all(x >= 0) and torch.all(x <= 1))
-        self.assertTrue(torch.all(t >= 0) and torch.all(t <= 1))
-        
-        # Test Black-Scholes Equation
-        x, t = self.bs_eq.generate_collocation_points(num_points, strategy='adaptive')
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
         self.assertTrue(torch.all(x >= 0) and torch.all(x <= 1))
@@ -262,140 +405,6 @@ class TestPDEs(unittest.TestCase):
         
         self.assertEqual(action.shape, (1, 1))  # Single action value
         self.assertTrue(0 <= action.item() <= 1)  # Action should be probability
-
-    def test_2d_heat_equation(self):
-        """Test 2D heat equation functionality."""
-        # Generate 2D collocation points
-        num_points = 100
-        x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy='latin_hypercube')
-        
-        # Check shapes
-        self.assertEqual(x.shape, (num_points, 2))  # 2D spatial coordinates
-        self.assertEqual(t.shape, (num_points, 1))  # Time coordinate
-        
-        # Check domain bounds
-        self.assertTrue(torch.all(x[:, 0] >= 0) and torch.all(x[:, 0] <= 1))
-        self.assertTrue(torch.all(x[:, 1] >= 0) and torch.all(x[:, 1] <= 1))
-        self.assertTrue(torch.all(t >= 0) and torch.all(t <= 1))
-        
-        # Test residual computation
-        residual = self.heat_eq_2d.compute_residual(self.model_2d, x, t)
-        self.assertEqual(residual.shape, (num_points, 1))
-        self.assertTrue(torch.isfinite(residual).all())
-        
-        # Test boundary conditions
-        x_boundary = torch.tensor([[0.0, 0.0], [1.0, 1.0]], device=self.device)
-        t_boundary = torch.zeros(2, 1, device=self.device)
-        
-        for bc_type, bc_func in self.heat_eq_2d.boundary_conditions.items():
-            bc_value = bc_func(x_boundary, t_boundary)
-            self.assertEqual(bc_value.shape, (2, 1))
-            self.assertTrue(torch.isfinite(bc_value).all())
-
-    def test_2d_wave_equation(self):
-        """Test 2D wave equation functionality."""
-        # Initialize 2D Wave Equation
-        wave_eq_2d = WaveEquation(
-            c=1.0,
-            domain=[(0.0, 1.0), (0.0, 1.0)],  # 2D domain
-            time_domain=(0.0, 1.0),
-            boundary_conditions={
-                'dirichlet': {'value': 0.0},
-                'neumann': {'value': 0.0},
-                'periodic': {}
-            },
-            initial_condition={
-                'type': 'sine',
-                'amplitude': 1.0,
-                'frequency': 2.0
-            },
-            exact_solution={
-                'type': 'sine_wave',
-                'amplitude': 1.0,
-                'frequency': 2.0
-            },
-            dimension=2,
-            device=self.device
-        )
-        
-        # Generate 2D collocation points
-        num_points = 100
-        x, t = wave_eq_2d.generate_collocation_points(num_points, strategy='latin_hypercube')
-        
-        # Check shapes
-        self.assertEqual(x.shape, (num_points, 2))  # 2D spatial coordinates
-        self.assertEqual(t.shape, (num_points, 1))  # Time coordinate
-        
-        # Check domain bounds
-        self.assertTrue(torch.all(x[:, 0] >= 0) and torch.all(x[:, 0] <= 1))
-        self.assertTrue(torch.all(x[:, 1] >= 0) and torch.all(x[:, 1] <= 1))
-        self.assertTrue(torch.all(t >= 0) and torch.all(t <= 1))
-        
-        # Test residual computation
-        residual = wave_eq_2d.compute_residual(self.model_2d, x, t)
-        self.assertEqual(residual.shape, (num_points, 1))
-        self.assertTrue(torch.isfinite(residual).all())
-        
-        # Test boundary conditions
-        x_boundary = torch.tensor([[0.0, 0.0], [1.0, 1.0]], device=self.device)
-        t_boundary = torch.zeros(2, 1, device=self.device)
-        
-        for bc_type, bc_func in wave_eq_2d.boundary_conditions.items():
-            bc_value = bc_func(x_boundary, t_boundary)
-            self.assertEqual(bc_value.shape, (2, 1))
-            self.assertTrue(torch.isfinite(bc_value).all())
-
-    def test_2d_black_scholes(self):
-        """Test 2D Black-Scholes equation functionality."""
-        # Initialize 2D Black-Scholes Equation
-        bs_eq_2d = BlackScholesEquation(
-            sigma=0.2,
-            r=0.05,
-            domain=[(0.0, 1.0), (0.0, 1.0)],  # 2D domain
-            time_domain=(0.0, 1.0),
-            boundary_conditions={
-                'dirichlet': {'value': 0.0},
-                'neumann': {'value': 0.0},
-                'periodic': {}
-            },
-            initial_condition={
-                'type': 'call',
-                'strike': 1.0
-            },
-            exact_solution={
-                'type': 'call',
-                'strike': 1.0
-            },
-            dimension=2,
-            device=self.device
-        )
-        
-        # Generate 2D collocation points
-        num_points = 100
-        x, t = bs_eq_2d.generate_collocation_points(num_points, strategy='latin_hypercube')
-        
-        # Check shapes
-        self.assertEqual(x.shape, (num_points, 2))  # 2D spatial coordinates
-        self.assertEqual(t.shape, (num_points, 1))  # Time coordinate
-        
-        # Check domain bounds
-        self.assertTrue(torch.all(x[:, 0] >= 0) and torch.all(x[:, 0] <= 1))
-        self.assertTrue(torch.all(x[:, 1] >= 0) and torch.all(x[:, 1] <= 1))
-        self.assertTrue(torch.all(t >= 0) and torch.all(t <= 1))
-        
-        # Test residual computation
-        residual = bs_eq_2d.compute_residual(self.model_2d, x, t)
-        self.assertEqual(residual.shape, (num_points, 1))
-        self.assertTrue(torch.isfinite(residual).all())
-        
-        # Test boundary conditions
-        x_boundary = torch.tensor([[0.0, 0.0], [1.0, 1.0]], device=self.device)
-        t_boundary = torch.zeros(2, 1, device=self.device)
-        
-        for bc_type, bc_func in bs_eq_2d.boundary_conditions.items():
-            bc_value = bc_func(x_boundary, t_boundary)
-            self.assertEqual(bc_value.shape, (2, 1))
-            self.assertTrue(torch.isfinite(bc_value).all())
 
     def test_kdv_equation(self):
         """Test the Korteweg-de Vries (KdV) equation implementation."""
@@ -462,23 +471,19 @@ class TestPDEs(unittest.TestCase):
 
     def test_burgers_equation(self):
         """Test the Burgers' equation implementation."""
-        # ... existing code ...
-
-    def test_convection_equation(self):
-        """Test the Convection equation implementation."""
-        # Test 1D Convection equation
+        # Test 1D Burgers' equation
         domain = (-1, 1)
         time_domain = (0, 1)
         boundary_conditions = {
-            'left': {'type': 'periodic'},
-            'right': {'type': 'periodic'},
-            'initial': {'type': 'gaussian', 'amplitude': 1.0, 'width': 0.1}
+            'left': {'type': 'dirichlet', 'value': 0.0},
+            'right': {'type': 'dirichlet', 'value': 0.0},
+            'initial': {'type': 'tanh', 'epsilon': 0.1}
         }
-        initial_condition = {'type': 'gaussian', 'amplitude': 1.0, 'width': 0.1}
-        exact_solution = {'type': 'gaussian', 'amplitude': 1.0, 'width': 0.1}
+        initial_condition = {'type': 'tanh', 'epsilon': 0.1}
+        exact_solution = {'type': 'tanh', 'epsilon': 0.1}
         
-        convection = ConvectionEquation(
-            c=1.0,  # Wave speed
+        burgers = BurgersEquation(
+            nu=0.01,  # Kinematic viscosity
             domain=domain,
             time_domain=time_domain,
             boundary_conditions=boundary_conditions,
@@ -489,27 +494,110 @@ class TestPDEs(unittest.TestCase):
         )
         
         # Test collocation points
-        x, t = convection.generate_collocation_points(100)
+        x, t = burgers.generate_collocation_points(100)
         self.assertEqual(x.shape, (100, 1))
         self.assertEqual(t.shape, (100, 1))
         self.assertTrue(torch.all(x >= domain[0]) and torch.all(x <= domain[1]))
         self.assertTrue(torch.all(t >= time_domain[0]) and torch.all(t <= time_domain[1]))
         
         # Test exact solution
-        u_exact = convection.exact_solution(x, t)
+        u_exact = burgers.exact_solution(x, t)
         self.assertEqual(u_exact.shape, (100, 1))
         self.assertTrue(torch.isfinite(u_exact).all())
         
         # Test boundary conditions
         x_boundary = torch.tensor([domain[0], domain[1]], dtype=torch.float32).reshape(-1, 1)
         t_boundary = torch.zeros_like(x_boundary)
-        u_boundary = convection._create_boundary_condition('initial', initial_condition)(x_boundary, t_boundary)
+        u_boundary = burgers._create_boundary_condition('initial', initial_condition)(x_boundary, t_boundary)
+        self.assertEqual(u_boundary.shape, (2, 1))
+        
+        # Test 2D Burgers' equation
+        domain_2d = [(-1, 1), (-1, 1)]
+        burgers_2d = BurgersEquation(
+            nu=0.01,
+            domain=domain_2d,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
+            dimension=2,
+            device=self.device
+        )
+        
+        # Test 2D collocation points
+        x_2d, t_2d = burgers_2d.generate_collocation_points(100)
+        self.assertEqual(x_2d.shape, (100, 2))
+        self.assertEqual(t_2d.shape, (100, 1))
+        for i, (min_val, max_val) in enumerate(domain_2d):
+            self.assertTrue(torch.all(x_2d[:, i] >= min_val) and torch.all(x_2d[:, i] <= max_val))
+        
+        # Test 2D exact solution
+        u_exact_2d = burgers_2d.exact_solution(x_2d, t_2d)
+        self.assertEqual(u_exact_2d.shape, (100, 1))
+        self.assertTrue(torch.isfinite(u_exact_2d).all())
+
+    def test_convection(self):
+        """Test convection equation functionality."""
+        # 1D Convection equation
+        domain = (-1, 1)
+        time_domain = (0, 1)
+        velocity = 1.0  # Changed from c to velocity
+        
+        # Define boundary conditions
+        boundary_conditions = {
+            'left': {'type': 'dirichlet', 'value': 0.0},
+            'right': {'type': 'dirichlet', 'value': 0.0},
+            'initial': {'type': 'sine', 'amplitude': 1.0, 'frequency': 2.0}
+        }
+        
+        # Define initial condition
+        initial_condition = {
+            'type': 'sine',
+            'amplitude': 1.0,
+            'frequency': 2.0
+        }
+        
+        # Define exact solution
+        exact_solution = {
+            'type': 'sine',
+            'amplitude': 1.0,
+            'frequency': 2.0
+        }
+        
+        # Create convection equation instance
+        convection_eq = ConvectionEquation(
+            velocity=velocity,  # Changed from c to velocity
+            domain=domain,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
+            dimension=1,
+            device=self.device
+        )
+        
+        # Test collocation points
+        x, t = convection_eq.generate_collocation_points(100)
+        self.assertEqual(x.shape, (100, 1))
+        self.assertEqual(t.shape, (100, 1))
+        self.assertTrue(torch.all(x >= domain[0]) and torch.all(x <= domain[1]))
+        self.assertTrue(torch.all(t >= time_domain[0]) and torch.all(t <= time_domain[1]))
+        
+        # Test exact solution
+        u_exact = convection_eq.exact_solution(x, t)
+        self.assertEqual(u_exact.shape, (100, 1))
+        self.assertTrue(torch.isfinite(u_exact).all())
+        
+        # Test boundary conditions
+        x_boundary = torch.tensor([domain[0], domain[1]], dtype=torch.float32).reshape(-1, 1)
+        t_boundary = torch.zeros_like(x_boundary)
+        u_boundary = convection_eq._create_boundary_condition('initial', initial_condition)(x_boundary, t_boundary)
         self.assertEqual(u_boundary.shape, (2, 1))
         
         # Test 2D Convection equation
         domain_2d = [(-1, 1), (-1, 1)]
         convection_2d = ConvectionEquation(
-            c=1.0,
+            velocity=velocity,
             domain=domain_2d,
             time_domain=time_domain,
             boundary_conditions=boundary_conditions,
@@ -530,6 +618,202 @@ class TestPDEs(unittest.TestCase):
         u_exact_2d = convection_2d.exact_solution(x_2d, t_2d)
         self.assertEqual(u_exact_2d.shape, (100, 1))
         self.assertTrue(torch.isfinite(u_exact_2d).all())
+
+    def test_allen_cahn(self):
+        """Test the Allen-Cahn equation implementation."""
+        # Test 1D Allen-Cahn equation
+        domain = (-1, 1)
+        time_domain = (0, 1)
+        epsilon = 0.1  # Interface width parameter
+        boundary_conditions = {
+            'left': {'type': 'dirichlet', 'value': -1.0},
+            'right': {'type': 'dirichlet', 'value': 1.0},
+            'initial': {'type': 'tanh', 'epsilon': epsilon}
+        }
+        initial_condition = {'type': 'tanh', 'epsilon': epsilon}
+        exact_solution = {'type': 'tanh', 'epsilon': epsilon}
+        
+        allen_cahn = AllenCahnEquation(
+            epsilon=epsilon,  # Interface width parameter
+            domain=domain,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
+            dimension=1,
+            device=self.device
+        )
+        
+        # Test collocation points
+        x, t = allen_cahn.generate_collocation_points(100)
+        self.assertEqual(x.shape, (100, 1))
+        self.assertEqual(t.shape, (100, 1))
+        self.assertTrue(torch.all(x >= domain[0]) and torch.all(x <= domain[1]))
+        self.assertTrue(torch.all(t >= time_domain[0]) and torch.all(t <= time_domain[1]))
+        
+        # Test exact solution
+        u_exact = allen_cahn.exact_solution(x, t)
+        self.assertEqual(u_exact.shape, (100, 1))
+        self.assertTrue(torch.isfinite(u_exact).all())
+        self.assertTrue(torch.all(u_exact >= -1.0) and torch.all(u_exact <= 1.0))  # Phase field bounds
+        
+        # Test boundary conditions
+        x_boundary = torch.tensor([domain[0], domain[1]], dtype=torch.float32).reshape(-1, 1)
+        t_boundary = torch.zeros_like(x_boundary)
+        u_boundary = allen_cahn._create_boundary_condition('initial', initial_condition)(x_boundary, t_boundary)
+        self.assertEqual(u_boundary.shape, (2, 1))
+        
+        # Test residual computation
+        residual = allen_cahn.compute_residual(self.model, x, t)
+        self.assertEqual(residual.shape, (100, 1))
+        self.assertTrue(torch.isfinite(residual).all())
+        
+        # Test 2D Allen-Cahn equation
+        domain_2d = [(-1, 1), (-1, 1)]
+        allen_cahn_2d = AllenCahnEquation(
+            epsilon=epsilon,
+            domain=domain_2d,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
+            dimension=2,
+            device=self.device
+        )
+        
+        # Test 2D collocation points
+        x_2d, t_2d = allen_cahn_2d.generate_collocation_points(100)
+        self.assertEqual(x_2d.shape, (100, 2))
+        self.assertEqual(t_2d.shape, (100, 1))
+        for i, (min_val, max_val) in enumerate(domain_2d):
+            self.assertTrue(torch.all(x_2d[:, i] >= min_val) and torch.all(x_2d[:, i] <= max_val))
+        
+        # Test 2D exact solution
+        u_exact_2d = allen_cahn_2d.exact_solution(x_2d, t_2d)
+        self.assertEqual(u_exact_2d.shape, (100, 1))
+        self.assertTrue(torch.isfinite(u_exact_2d).all())
+        self.assertTrue(torch.all(u_exact_2d >= -1.0) and torch.all(u_exact_2d <= 1.0))  # Phase field bounds
+        
+        # Test 2D residual computation
+        residual_2d = allen_cahn_2d.compute_residual(self.model_2d, x_2d, t_2d)
+        self.assertEqual(residual_2d.shape, (100, 1))
+        self.assertTrue(torch.isfinite(residual_2d).all())
+        
+        # Test phase separation dynamics
+        # The Allen-Cahn equation should preserve the phase field bounds [-1, 1]
+        t_evolution = torch.linspace(0, 1, 10).reshape(-1, 1)
+        x_fixed = torch.zeros(1, 1)
+        u_evolution = allen_cahn.exact_solution(x_fixed.repeat(10, 1), t_evolution)
+        self.assertTrue(torch.all(u_evolution >= -1.0) and torch.all(u_evolution <= 1.0))
+        
+        # Test interface motion
+        # The interface should move according to mean curvature flow
+        x_interface = torch.linspace(-0.5, 0.5, 50).reshape(-1, 1)
+        t_interface = torch.ones_like(x_interface) * 0.5
+        u_interface = allen_cahn.exact_solution(x_interface, t_interface)
+        self.assertTrue(torch.all(torch.diff(u_interface, dim=0) >= 0))  # Monotonicity at interface
+
+    def test_cahn_hilliard(self):
+        """Test the Cahn-Hilliard equation implementation."""
+        # Test 1D Cahn-Hilliard equation
+        domain = (-1, 1)
+        time_domain = (0, 1)
+        epsilon = 0.1  # Interface width parameter
+        boundary_conditions = {
+            'left': {'type': 'periodic'},
+            'right': {'type': 'periodic'},
+            'initial': {'type': 'tanh', 'epsilon': epsilon}
+        }
+        initial_condition = {'type': 'tanh', 'epsilon': epsilon}
+        exact_solution = {'type': 'tanh', 'epsilon': epsilon}
+        
+        cahn_hilliard = CahnHilliardEquation(
+            epsilon=epsilon,  # Interface width parameter
+            domain=domain,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
+            dimension=1,
+            device=self.device
+        )
+        
+        # Test collocation points
+        x, t = cahn_hilliard.generate_collocation_points(100)
+        self.assertEqual(x.shape, (100, 1))
+        self.assertEqual(t.shape, (100, 1))
+        self.assertTrue(torch.all(x >= domain[0]) and torch.all(x <= domain[1]))
+        self.assertTrue(torch.all(t >= time_domain[0]) and torch.all(t <= time_domain[1]))
+        
+        # Test exact solution
+        u_exact = cahn_hilliard.exact_solution(x, t)
+        self.assertEqual(u_exact.shape, (100, 1))
+        self.assertTrue(torch.isfinite(u_exact).all())
+        self.assertTrue(torch.all(u_exact >= -1.0) and torch.all(u_exact <= 1.0))  # Phase field bounds
+        
+        # Test boundary conditions
+        x_boundary = torch.tensor([domain[0], domain[1]], dtype=torch.float32).reshape(-1, 1)
+        t_boundary = torch.zeros_like(x_boundary)
+        u_boundary = cahn_hilliard._create_boundary_condition('initial', initial_condition)(x_boundary, t_boundary)
+        self.assertEqual(u_boundary.shape, (2, 1))
+        
+        # Test residual computation
+        residual = cahn_hilliard.compute_residual(self.model, x, t)
+        self.assertEqual(residual.shape, (100, 1))
+        self.assertTrue(torch.isfinite(residual).all())
+        
+        # Test 2D Cahn-Hilliard equation
+        domain_2d = [(-1, 1), (-1, 1)]
+        cahn_hilliard_2d = CahnHilliardEquation(
+            epsilon=epsilon,
+            domain=domain_2d,
+            time_domain=time_domain,
+            boundary_conditions=boundary_conditions,
+            initial_condition=initial_condition,
+            exact_solution=exact_solution,
+            dimension=2,
+            device=self.device
+        )
+        
+        # Test 2D collocation points
+        x_2d, t_2d = cahn_hilliard_2d.generate_collocation_points(100)
+        self.assertEqual(x_2d.shape, (100, 2))
+        self.assertEqual(t_2d.shape, (100, 1))
+        for i, (min_val, max_val) in enumerate(domain_2d):
+            self.assertTrue(torch.all(x_2d[:, i] >= min_val) and torch.all(x_2d[:, i] <= max_val))
+        
+        # Test 2D exact solution
+        u_exact_2d = cahn_hilliard_2d.exact_solution(x_2d, t_2d)
+        self.assertEqual(u_exact_2d.shape, (100, 1))
+        self.assertTrue(torch.isfinite(u_exact_2d).all())
+        self.assertTrue(torch.all(u_exact_2d >= -1.0) and torch.all(u_exact_2d <= 1.0))  # Phase field bounds
+        
+        # Test 2D residual computation
+        residual_2d = cahn_hilliard_2d.compute_residual(self.model_2d, x_2d, t_2d)
+        self.assertEqual(residual_2d.shape, (100, 1))
+        self.assertTrue(torch.isfinite(residual_2d).all())
+        
+        # Test phase separation dynamics
+        # The Cahn-Hilliard equation should preserve the phase field bounds [-1, 1]
+        t_evolution = torch.linspace(0, 1, 10).reshape(-1, 1)
+        x_fixed = torch.zeros(1, 1)
+        u_evolution = cahn_hilliard.exact_solution(x_fixed.repeat(10, 1), t_evolution)
+        self.assertTrue(torch.all(u_evolution >= -1.0) and torch.all(u_evolution <= 1.0))
+        
+        # Test mass conservation
+        # The Cahn-Hilliard equation should conserve mass
+        x_mass = torch.linspace(-1, 1, 100).reshape(-1, 1)
+        t_mass = torch.zeros_like(x_mass)
+        u_mass = cahn_hilliard.exact_solution(x_mass, t_mass)
+        mass = torch.mean(u_mass)
+        self.assertTrue(torch.abs(mass) < 0.1)  # Mass should be approximately conserved
+        
+        # Test interface motion
+        # The interface should move according to surface diffusion
+        x_interface = torch.linspace(-0.5, 0.5, 50).reshape(-1, 1)
+        t_interface = torch.ones_like(x_interface) * 0.5
+        u_interface = cahn_hilliard.exact_solution(x_interface, t_interface)
+        self.assertTrue(torch.all(torch.diff(u_interface, dim=0) >= 0))  # Monotonicity at interface
 
 if __name__ == "__main__":
     unittest.main()

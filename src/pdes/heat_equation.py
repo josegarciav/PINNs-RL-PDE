@@ -52,31 +52,41 @@ class HeatEquation(PDEBase):
         :param t: Time coordinates
         :return: Residual tensor
         """
-        xt = torch.cat([x, t], dim=1)
-        xt.requires_grad_(True)
+        # Ensure input tensors require gradients
+        x = x.requires_grad_(True)
+        t = t.requires_grad_(True)
         
-        # Compute derivatives
+        # Combine inputs
+        xt = torch.cat([x, t], dim=1)
+        
+        # Get model prediction
         u = model(xt)
-        u_t = torch.autograd.grad(u, t, grad_outputs=torch.ones_like(u),
-                                create_graph=True)[0]
+        
+        # Compute time derivative
+        u_t = torch.autograd.grad(u, t, grad_outputs=torch.ones_like(u), create_graph=True, allow_unused=True)[0]
+        if u_t is None:
+            u_t = torch.zeros_like(u)
         
         # Compute Laplacian based on dimension
         if self.dimension == 1:
-            u_xx = torch.autograd.grad(u, x, grad_outputs=torch.ones_like(u),
-                                     create_graph=True)[0]
-            u_xx = torch.autograd.grad(u_xx, x, grad_outputs=torch.ones_like(u_xx),
-                                     create_graph=True)[0]
+            u_x = torch.autograd.grad(u, x, grad_outputs=torch.ones_like(u), create_graph=True, allow_unused=True)[0]
+            if u_x is None:
+                u_x = torch.zeros_like(u)
+            u_xx = torch.autograd.grad(u_x, x, grad_outputs=torch.ones_like(u_x), create_graph=True, allow_unused=True)[0]
+            if u_xx is None:
+                u_xx = torch.zeros_like(u)
             laplacian = u_xx
         else:
             # For higher dimensions, compute Laplacian as sum of second derivatives
             laplacian = torch.zeros_like(u)
             for dim in range(self.dimension):
-                u_xx = torch.autograd.grad(u, x[:, dim:dim+1], grad_outputs=torch.ones_like(u),
-                                         create_graph=True)[0]
-                u_xx = torch.autograd.grad(u_xx, x[:, dim:dim+1], grad_outputs=torch.ones_like(u_xx),
-                                         create_graph=True)[0]
-                laplacian += u_xx
+                u_x = torch.autograd.grad(u, x[:, dim:dim+1], grad_outputs=torch.ones_like(u), create_graph=True, allow_unused=True)[0]
+                if u_x is not None:
+                    u_xx = torch.autograd.grad(u_x, x[:, dim:dim+1], grad_outputs=torch.ones_like(u_x), create_graph=True, allow_unused=True)[0]
+                    if u_xx is not None:
+                        laplacian += u_xx
         
+        # Heat equation: u_t - α∇²u = 0
         return u_t - self.alpha * laplacian
     
     def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:

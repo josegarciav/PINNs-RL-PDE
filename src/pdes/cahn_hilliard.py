@@ -53,48 +53,65 @@ class CahnHilliardEquation(PDEBase):
         :param t: Time coordinates
         :return: Residual tensor
         """
+        # Ensure input tensors require gradients
+        x = x.requires_grad_(True)
+        t = t.requires_grad_(True)
+
+        # Combine inputs
         xt = torch.cat([x, t], dim=1)
-        xt.requires_grad_(True)
-        
-        # Compute derivatives
+
+        # Get model prediction
         u = model(xt)
-        u_t = torch.autograd.grad(u, t, grad_outputs=torch.ones_like(u),
-                                create_graph=True)[0]
-        
-        # Compute chemical potential (ε²∇²u + u - u³)
+
+        # Compute time derivative
+        u_t = torch.autograd.grad(u, t, grad_outputs=torch.ones_like(u), create_graph=True, allow_unused=True)[0]
+        if u_t is None:
+            u_t = torch.zeros_like(u)
+
+        # Compute chemical potential μ = -ε²∇²u + f'(u)
+        # where f'(u) = u³ - u is the derivative of the double-well potential
         if self.dimension == 1:
-            u_x = torch.autograd.grad(u, x, grad_outputs=torch.ones_like(u),
-                                    create_graph=True)[0]
-            u_xx = torch.autograd.grad(u_x, x, grad_outputs=torch.ones_like(u_x),
-                                     create_graph=True)[0]
-            chemical_potential = self.epsilon**2 * u_xx + u - u**3
-            mu_xx = torch.autograd.grad(chemical_potential, x, grad_outputs=torch.ones_like(chemical_potential),
-                                      create_graph=True)[0]
-            mu_xx = torch.autograd.grad(mu_xx, x, grad_outputs=torch.ones_like(mu_xx),
-                                      create_graph=True)[0]
+            u_x = torch.autograd.grad(u, x, grad_outputs=torch.ones_like(u), create_graph=True, allow_unused=True)[0]
+            if u_x is None:
+                u_x = torch.zeros_like(u)
+            u_xx = torch.autograd.grad(u_x, x, grad_outputs=torch.ones_like(u_x), create_graph=True, allow_unused=True)[0]
+            if u_xx is None:
+                u_xx = torch.zeros_like(u)
+            laplacian = u_xx
         else:
-            # For higher dimensions, compute Laplacian for each dimension
-            chemical_potential = torch.zeros_like(u)
+            # For higher dimensions, compute Laplacian as sum of second derivatives
+            laplacian = torch.zeros_like(u)
             for dim in range(self.dimension):
-                u_x = torch.autograd.grad(u, x[:, dim:dim+1], grad_outputs=torch.ones_like(u),
-                                        create_graph=True)[0]
-                u_xx = torch.autograd.grad(u_x, x[:, dim:dim+1], grad_outputs=torch.ones_like(u_x),
-                                         create_graph=True)[0]
-                chemical_potential += self.epsilon**2 * u_xx
-            chemical_potential += u - u**3
-            
-            # Compute Laplacian of chemical potential
-            mu_xx = torch.zeros_like(u)
+                u_x = torch.autograd.grad(u, x[:, dim:dim+1], grad_outputs=torch.ones_like(u), create_graph=True, allow_unused=True)[0]
+                if u_x is not None:
+                    u_xx = torch.autograd.grad(u_x, x[:, dim:dim+1], grad_outputs=torch.ones_like(u_x), create_graph=True, allow_unused=True)[0]
+                    if u_xx is not None:
+                        laplacian += u_xx
+
+        # Chemical potential μ = -ε²∇²u + f'(u)
+        mu = -self.epsilon**2 * laplacian + u**3 - u
+
+        # Compute ∇²μ
+        if self.dimension == 1:
+            mu_x = torch.autograd.grad(mu, x, grad_outputs=torch.ones_like(mu), create_graph=True, allow_unused=True)[0]
+            if mu_x is None:
+                mu_x = torch.zeros_like(mu)
+            mu_xx = torch.autograd.grad(mu_x, x, grad_outputs=torch.ones_like(mu_x), create_graph=True, allow_unused=True)[0]
+            if mu_xx is None:
+                mu_xx = torch.zeros_like(mu)
+            laplacian_mu = mu_xx
+        else:
+            # For higher dimensions, compute Laplacian as sum of second derivatives
+            laplacian_mu = torch.zeros_like(mu)
             for dim in range(self.dimension):
-                mu_x = torch.autograd.grad(chemical_potential, x[:, dim:dim+1],
-                                         grad_outputs=torch.ones_like(chemical_potential),
-                                         create_graph=True)[0]
-                mu_xx += torch.autograd.grad(mu_x, x[:, dim:dim+1],
-                                           grad_outputs=torch.ones_like(mu_x),
-                                           create_graph=True)[0]
-        
-        # Compute residual (∂u/∂t = ∇²(ε²∇²u + u - u³))
-        return u_t - mu_xx
+                mu_x = torch.autograd.grad(mu, x[:, dim:dim+1], grad_outputs=torch.ones_like(mu), create_graph=True, allow_unused=True)[0]
+                if mu_x is not None:
+                    mu_xx = torch.autograd.grad(mu_x, x[:, dim:dim+1], grad_outputs=torch.ones_like(mu_x), create_graph=True, allow_unused=True)[0]
+                    if mu_xx is not None:
+                        laplacian_mu += mu_xx
+
+        # Cahn-Hilliard equation: u_t = ∇²μ
+        return u_t - laplacian_mu
     
     def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """

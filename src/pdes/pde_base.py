@@ -81,6 +81,10 @@ class PDEBase:
         :param params: Parameters for the boundary condition
         :return: Boundary condition function
         """
+        # Map left/right to dirichlet for backward compatibility
+        if bc_type in ['left', 'right']:
+            bc_type = 'dirichlet'
+        
         if bc_type == 'dirichlet':
             value = params.get('value', 0.0)
             return lambda x, t: torch.full_like(x[:, 0:1], value)  # Keep shape consistent
@@ -158,7 +162,7 @@ class PDEBase:
         elif strategy == 'adaptive':
             # Use RL agent for adaptive sampling
             points = []
-            for _ in range(num_points):
+            while len(points) < num_points:
                 # Generate random point
                 if self.dimension == 1:
                     x = torch.rand(1, 1) * (self.domain[1] - self.domain[0]) + self.domain[0]
