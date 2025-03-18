@@ -191,11 +191,12 @@ class RLAgent:
         :param state: Current state tensor
         :return: Selected action tensor
         """
-        if torch.rand(1).item() > self.epsilon:
+        if torch.rand(1).to(self.device).item() > self.epsilon:
             with torch.no_grad():
+                state = state.to(self.device)
                 return self.policy_net(state).view(1, -1)
         else:
-            return torch.rand(1, 1, device=self.device)  # Random action between 0 and 1
+            return torch.rand(1, 1, device=self.device) # Random action between 0 and 1
     
     def get_points_from_action(self, action: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """

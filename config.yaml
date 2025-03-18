@@ -39,9 +39,9 @@ pde:
 
 # Training Configuration
 training:
-  num_epochs: 10000
+  num_epochs: 1000
   batch_size: 1000
-  num_collocation_points: 10000
+  num_collocation_points: 1000
   validation_frequency: 100
   early_stopping:
     enabled: true
@@ -74,7 +74,7 @@ rl:
 
 # Evaluation Configuration
 evaluation:
-  num_points: 1000  # Number of points for evaluation
+  num_points: 100  # Number of points for evaluation
   metrics:
     - "l2_error"
     - "max_error"

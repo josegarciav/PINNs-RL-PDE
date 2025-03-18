@@ -95,25 +95,21 @@ class PDETrainer:
         :return: Dictionary of validation losses
         """
         self.model.eval()
-        with torch.no_grad():
-            # Generate validation points
-            x_val, t_val = self.pde.generate_collocation_points(num_points)
-            x_val = x_val.to(self.device)
-            t_val = t_val.to(self.device)
-            
-            # Compute losses
-            residual_loss = self.pde.compute_residual_loss(self.model, x_val, t_val)
-            boundary_loss = self.pde.compute_boundary_loss(self.model)
-            initial_loss = self.pde.compute_initial_loss(self.model)
-            
-            total_loss = residual_loss + boundary_loss + initial_loss
-            
-            return {
-                'total_loss': total_loss.item(),
-                'residual_loss': residual_loss.item(),
-                'boundary_loss': boundary_loss.item(),
-                'initial_loss': initial_loss.item()
-            }
+        
+        # Generate validation points
+        x_val, t_val = self.pde.generate_collocation_points(num_points)
+        x_val = x_val.to(self.device).requires_grad_(True)
+        t_val = t_val.to(self.device).requires_grad_(True)
+        
+        # Compute losses
+        losses = self.pde.compute_loss(self.model, x_val, t_val)
+        
+        return {
+            'total_loss': losses['total'].item(),
+            'residual_loss': losses['residual'].item(),
+            'boundary_loss': losses['boundary'].item(),
+            'initial_loss': losses['initial'].item()
+        }
     
     def _update_learning_rate(self, val_loss: float):
         """
@@ -167,12 +163,8 @@ class PDETrainer:
                 self.optimizer.zero_grad()
                 
                 # Compute losses
-                residual_loss = self.pde.compute_residual_loss(self.model, x_batch, t_batch)
-                boundary_loss = self.pde.compute_boundary_loss(self.model)
-                initial_loss = self.pde.compute_initial_loss(self.model)
-                
-                # Total loss
-                total_loss = residual_loss + boundary_loss + initial_loss
+                losses = self.pde.compute_loss(self.model, x_batch, t_batch)
+                total_loss = losses['total']
                 
                 # Backward pass
                 total_loss.backward()
@@ -187,9 +179,9 @@ class PDETrainer:
                 epoch_losses.append(total_loss.item())
                 pbar.set_postfix({
                     'loss': f"{total_loss.item():.6f}",
-                    'residual': f"{residual_loss.item():.6f}",
-                    'boundary': f"{boundary_loss.item():.6f}",
-                    'initial': f"{initial_loss.item():.6f}"
+                    'residual': f"{losses['residual'].item():.6f}",
+                    'boundary': f"{losses['boundary'].item():.6f}",
+                    'initial': f"{losses['initial'].item():.6f}"
                 })
             
             # Compute average epoch loss

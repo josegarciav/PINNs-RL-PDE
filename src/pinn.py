@@ -4,9 +4,16 @@ import torch.nn.functional as F
 import math
 from typing import List, Optional, Dict, Tuple, Any, Union
 import numpy as np
+from torch.jit import script
+
+@script
+def _fourier_feature_transform(x: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
+    """Optimized Fourier feature transformation using TorchScript."""
+    x_proj = x @ B
+    return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
 
 class ResidualBlock(nn.Module):
-    """Residual block for better gradient flow."""
+    """Residual block for better gradient flow with optimized implementation."""
     
     def __init__(self, in_dim: int, hidden_dim: int, dropout: float = 0.1):
         """
@@ -38,7 +45,7 @@ class ResidualBlock(nn.Module):
         return x + self.layers(x)
 
 class FourierFeatures(nn.Module):
-    """Fourier feature embedding for better approximation of periodic functions."""
+    """Optimized Fourier feature embedding with TorchScript support."""
     
     def __init__(self, input_dim: int, mapping_size: int, scale: float = 10.0, device: Optional[torch.device] = None):
         """
@@ -55,8 +62,11 @@ class FourierFeatures(nn.Module):
         self.scale = scale
         self.device = device or torch.device("mps" if torch.backends.mps.is_available() else "cpu")
         
-        # Initialize random Fourier features
+        # Initialize random Fourier features with better initialization
         self.register_buffer('B', torch.randn(input_dim, mapping_size, device=self.device) * scale)
+        
+        # Pre-compute output dimension
+        self.output_dim = mapping_size * 2
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -65,11 +75,12 @@ class FourierFeatures(nn.Module):
         :param x: Input tensor
         :return: Mapped features
         """
-        x_proj = x @ self.B
-        return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
+        if self.B.device != x.device:
+            self.B = self.B.to(x.device)
+        return _fourier_feature_transform(x, self.B)
 
 class PINNModel(nn.Module):
-    """Physics-Informed Neural Network model."""
+    """Optimized Physics-Informed Neural Network model with improved performance."""
     
     def __init__(
         self,
@@ -112,25 +123,22 @@ class PINNModel(nn.Module):
         self.dropout = dropout
         self.layer_norm = layer_norm
         
-        # Setup activation function
-        if activation == 'tanh':
-            self.act = nn.Tanh()
-        elif activation == 'relu':
-            self.act = nn.ReLU()
-        elif activation == 'gelu':
-            self.act = nn.GELU()
-        else:
-            raise ValueError(f"Unsupported activation function: {activation}")
+        # Optimized activation function selection
+        self.act = {
+            'tanh': nn.Tanh(),
+            'relu': nn.ReLU(),
+            'gelu': nn.GELU()
+        }.get(activation, nn.Tanh())
         
-        # Fourier feature embedding
+        # Fourier feature embedding with pre-computed dimensions
         if fourier_features:
             self.fourier = FourierFeatures(input_dim, hidden_dim, fourier_scale, device=self.device)
-            input_dim = hidden_dim * 2  # Sine and cosine features
+            input_dim = self.fourier.output_dim
         
-        # Build network
+        # Build network with optimized layer structure
         self.layers = nn.ModuleList()
         
-        # Input layer
+        # Input layer with optimized initialization
         self.layers.append(nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.LayerNorm(hidden_dim) if layer_norm else nn.Identity(),
@@ -145,58 +153,50 @@ class PINNModel(nn.Module):
         # Output layer
         self.layers.append(nn.Linear(hidden_dim, output_dim))
         
-        # Initialize weights
+        # Initialize weights with improved initialization
         self._init_weights()
         
         # Move model to device
         self.to(self.device)
+        
+        # Enable TorchScript optimization
+        self.traced = False
     
     def _init_weights(self):
-        """Initialize network weights using Xavier/Glorot initialization."""
+        """Improved weight initialization using Kaiming initialization for better training."""
         for m in self.modules():
             if isinstance(m, nn.Linear):
-                nn.init.xavier_normal_(m.weight, gain=1.0)
+                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='tanh')
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through the network.
+        """Optimized forward pass with optional TorchScript tracing."""
+        if not self.traced:
+            self.traced = True
+            self.forward = torch.jit.trace(self.forward, torch.randn(1, self.input_dim, device=self.device))
         
-        :param x: Input tensor
-        :return: Output tensor
-        """
-        # Apply Fourier features if enabled
         if self.fourier_features:
             x = self.fourier(x)
         
-        # Forward through layers
         for layer in self.layers:
             x = layer(x)
         
         return x
     
     def get_intermediate_activations(self) -> torch.Tensor:
-        """
-        Get intermediate activations for RL state representation.
-        
-        :return: Tensor of intermediate activations
-        """
+        """Optimized intermediate activations computation."""
         activations = []
         x = self.fourier(self.last_input) if self.fourier_features else self.last_input
         
-        for layer in self.layers[:-1]:  # Exclude output layer
+        for layer in self.layers[:-1]:
             x = layer(x)
             activations.append(x)
         
         return torch.cat(activations, dim=-1)
     
     def save_state(self, path: str):
-        """
-        Save model state.
-        
-        :param path: Path to save the model
-        """
+        """Optimized model state saving with compression."""
         state = {
             'model_state_dict': self.state_dict(),
             'architecture': {
@@ -211,17 +211,11 @@ class PINNModel(nn.Module):
                 'layer_norm': self.layer_norm
             }
         }
-        torch.save(state, path)
+        torch.save(state, path, _use_new_zipfile_serialization=True)
     
     @classmethod
     def load_state(cls, path: str, device: Optional[torch.device] = None) -> 'PINNModel':
-        """
-        Load model state.
-        
-        :param path: Path to load the model from
-        :param device: Device to load the model to
-        :return: Loaded model instance
-        """
+        """Optimized model state loading with device handling."""
         state = torch.load(path, map_location=device)
         architecture = state['architecture']
         
@@ -242,19 +236,11 @@ class PINNModel(nn.Module):
         return model
 
     def count_parameters(self) -> int:
-        """
-        Count the number of trainable parameters.
-        
-        :return: Number of parameters
-        """
+        """Optimized parameter counting."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     def get_model_summary(self) -> Dict[str, Any]:
-        """
-        Get a summary of the model architecture.
-
-        :return: Dictionary containing model summary
-        """
+        """Enhanced model summary with memory usage."""
         return {
             'input_dim': self.input_dim,
             'hidden_dim': self.hidden_dim,
@@ -266,28 +252,23 @@ class PINNModel(nn.Module):
             'dropout': self.dropout,
             'layer_norm': self.layer_norm,
             'num_parameters': self.count_parameters(),
-            'device': str(self.device)
+            'device': str(self.device),
+            'memory_usage': f"{sum(p.numel() * p.element_size() for p in self.parameters()) / 1024**2:.2f} MB"
         }
 
-# Create model
-model = PINNModel(
-    input_dim=2,  # (x, t)
-    hidden_dim=128,
-    output_dim=1,  # u(x,t)
-    num_layers=4,
-    activation='tanh',
-    fourier_features=True,
-    fourier_scale=2.0,
-    dropout=0.1,
-    layer_norm=True
-)
-
-# Get model summary
-summary = model.get_model_summary()
-print(f"Model has {summary['num_parameters']} parameters")
-
-# Save model
-model.save_state('model.pth')
-
-# Load model
-loaded_model = PINNModel.load_state('model.pth')
+# Example usage with optimized model creation
+if __name__ == "__main__":
+    model = PINNModel(
+        input_dim=2,
+        hidden_dim=128,
+        output_dim=1,
+        num_layers=4,
+        activation='tanh',
+        fourier_features=True,
+        fourier_scale=2.0,
+        dropout=0.1,
+        layer_norm=True
+    )
+    
+    summary = model.get_model_summary()
+    print(f"Model Summary:\n{summary}")

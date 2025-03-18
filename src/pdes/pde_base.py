@@ -176,10 +176,10 @@ class PDEBase:
                 
                 # Get RL agent's action (sampling probability)
                 state = torch.cat([x, t], dim=1)
-                action = self.rl_agent.select_action(state)
+                action = self.rl_agent.select_action(state.to(self.device))
                 
                 # Accept/reject based on action
-                if torch.rand(1) < action:
+                if torch.rand(1).to(self.device) < action:
                     points.append((x, t))
             
             # Stack accepted points
@@ -205,7 +205,7 @@ class PDEBase:
         residual_loss = torch.mean(residual**2)
         
         # Compute boundary conditions
-        x_boundary = torch.tensor([self.domain[0], self.domain[1]], device=self.device).reshape(-1, 1)
+        x_boundary = torch.tensor([self.domain[0], self.domain[1]], dtype=torch.float32, device=self.device).reshape(-1, 1)
         t_boundary = torch.zeros_like(x_boundary)
         u_boundary = model(torch.cat([x_boundary, t_boundary], dim=1))
         u_boundary_exact = torch.cat([
@@ -215,10 +215,11 @@ class PDEBase:
         boundary_loss = torch.mean((u_boundary - u_boundary_exact)**2)
         
         # Compute initial condition
-        x_initial = torch.linspace(self.domain[0], self.domain[1], 100, device=self.device).reshape(-1, 1)
+        x_initial = torch.linspace(self.domain[0], self.domain[1], 100, dtype=torch.float32, device=self.device).reshape(-1, 1)
         t_initial = torch.zeros_like(x_initial)
         u_initial = model(torch.cat([x_initial, t_initial], dim=1))
-        u_initial_exact = self.boundary_conditions['initial'](x_initial, t_initial)
+        initial_condition_fn = self._create_boundary_condition('initial', self.config.initial_condition)
+        u_initial_exact = initial_condition_fn(x_initial, t_initial)
         initial_loss = torch.mean((u_initial - u_initial_exact)**2)
         
         return {
