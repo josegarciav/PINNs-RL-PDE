@@ -91,19 +91,37 @@ class HeatEquation(PDEBase):
     
     def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
-        Compute exact analytical solution.
+        Compute exact analytical solution for the heat equation.
+        
+        The solution is of the form:
+        u(x,t) = A * exp(-alpha * k^2 * pi^2 * t) * sin(k * pi * x)
+        
+        where:
+        - A is the amplitude
+        - k is the frequency
+        - alpha is the thermal diffusivity
         
         :param x: Spatial coordinates
         :param t: Time coordinates
         :return: Exact solution tensor
         """
+        A = self.config.exact_solution.get('amplitude', 1.0)
+        k = self.config.exact_solution.get('frequency', 2.0)
+        
         if self.dimension == 1:
-            return torch.exp(-self.alpha * (2 * torch.pi)**2 * t) * torch.sin(2 * torch.pi * x)
+            # Compute the time-dependent amplitude
+            time_factor = torch.exp(-self.alpha * (k * torch.pi)**2 * t)
+            # Compute the spatial oscillation
+            space_factor = torch.sin(k * torch.pi * x)
+            # Combine them
+            return A * time_factor * space_factor
         else:
             # For higher dimensions, use product of sine waves
             solution = torch.ones_like(x[:, 0:1])
             for dim in range(self.dimension):
-                solution *= torch.exp(-self.alpha * (2 * torch.pi)**2 * t) * torch.sin(2 * torch.pi * x[:, dim:dim+1])
+                time_factor = torch.exp(-self.alpha * (k * torch.pi)**2 * t)
+                space_factor = torch.sin(k * torch.pi * x[:, dim:dim+1])
+                solution *= A * time_factor * space_factor
             return solution
     
     def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:

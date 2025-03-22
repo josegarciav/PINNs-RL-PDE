@@ -4,10 +4,10 @@ device: "mps"  # Options: "cuda", "mps", "cpu"
 # Model Architecture
 model:
   input_dim: 2  # (x, t)
-  hidden_dim: 64
+  hidden_dim: 124
   output_dim: 1  # u(x,t)
-  num_layers: 4
-  activation: "tanh"  # Options: "tanh", "relu", "gelu"
+  num_layers: 8
+  activation: "relu"  # Options: "tanh", "relu", "gelu"
   fourier_features: true
   fourier_scale: 10.0
   dropout: 0.1
@@ -15,8 +15,10 @@ model:
 
 # PDE Configuration
 pde:
-  domain: [0.0, 1.0]  # Spatial domain [x_min, x_max]
-  time_domain: [0.0, 1.0]  # Temporal domain [t_min, t_max]
+  parameters:
+    alpha: 0.01  # Thermal diffusivity coefficient
+  domain: [0.0, 3.14159]  # Spatial domain [x_min, x_max]
+  time_domain: [0.0, 3.14159]  # Temporal domain [t_min, t_max]
   initial_condition:
     type: "sine"
     amplitude: 1.0
@@ -49,12 +51,12 @@ training:
   optimizer:
     name: "adam"
     lr: 0.001
-    weight_decay: 1e-5
+    weight_decay: 1.0e-5
   rl_update_frequency: 10  # Update RL agent every N epochs
 
 # Reinforcement Learning Configuration
 rl:
-  enabled: true
+  enabled: false
   state_dim: 2  # (x, t)
   action_dim: 1  # Sampling probability
   hidden_dim: 64
