@@ -21,4 +21,4 @@ ENV/
 
 # Ignore model weights & config files (if necessary)
 *.pth
-config.yaml 
+config.yaml
