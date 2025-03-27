@@ -2,7 +2,7 @@
 
 import torch
 import numpy as np
-from typing import Tuple, Optional, Dict, List, Union
+from typing import Tuple, Optional, Dict, List, Union, Any
 import os
 import json
 import logging
@@ -637,13 +637,13 @@ def create_interactive_report(
 
 
 def save_training_metrics(
-    history: Dict[str, Any], 
-    experiment_dir: str, 
-    metadata: Optional[Dict[str, Any]] = None
+    history: Dict[str, Any],
+    experiment_dir: str,
+    metadata: Optional[Dict[str, Any]] = None,
 ):
     """
     Save training metrics and metadata in real-time for dashboard monitoring.
-    
+
     Args:
         history: Dictionary containing training metrics
         experiment_dir: Directory to save the metrics
@@ -651,16 +651,16 @@ def save_training_metrics(
     """
     # Create experiment directory if it doesn't exist
     os.makedirs(experiment_dir, exist_ok=True)
-    
+
     # Save history for real-time monitoring
     history_file = os.path.join(experiment_dir, "history.json")
     with open(history_file, "w") as f:
         json.dump(history, f, indent=2)
-    
+
     # Save metadata if provided
     if metadata:
         metadata_file = os.path.join(experiment_dir, "metadata.json")
-        
+
         # Update existing metadata if it exists
         if os.path.exists(metadata_file):
             try:
@@ -671,11 +671,11 @@ def save_training_metrics(
                 metadata = existing_metadata
             except:
                 pass
-        
+
         # Add timestamp
         metadata["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         with open(metadata_file, "w") as f:
             json.dump(metadata, f, indent=2)
-            
+
     return history_file

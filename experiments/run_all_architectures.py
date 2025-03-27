@@ -94,7 +94,7 @@ def run_architecture(
             reward_weights=config["rl"]["reward_weights"],
             device=device,
         )
-        
+
         # Update PDE with RL agent for adaptive sampling
         pde.rl_agent = rl_agent
 
@@ -115,7 +115,7 @@ def run_architecture(
         batch_size=config["training"]["batch_size"],
         num_points=config["training"]["num_collocation_points"],
         validation_frequency=config["training"]["validation_frequency"],
-        experiment_dir=str(experiment_dir)
+        experiment_dir=str(experiment_dir),
     )
     training_time = time.time() - start_time
 
@@ -176,11 +176,7 @@ def main():
     # List of architectures to test
     architectures = ["fourier", "resnet", "siren", "autoencoder", "feedforward"]
     results = []
-    metrics = {
-        'training_loss': {},
-        'validation_loss': {},
-        'computation_time': {}
-    }
+    metrics = {"training_loss": {}, "validation_loss": {}, "computation_time": {}}
 
     # Run each architecture
     for architecture in architectures:
@@ -188,12 +184,18 @@ def main():
         try:
             result = run_architecture(config, architecture, device, base_dir)
             results.append(result)
-            
+
             # Update metrics for interactive report
-            metrics['training_loss'][f"HeatEquation_{architecture}"] = result['history']['train_loss']
-            metrics['validation_loss'][f"HeatEquation_{architecture}"] = result['history']['val_loss']
-            metrics['computation_time'][f"HeatEquation_{architecture}"] = result['training_time']
-            
+            metrics["training_loss"][f"HeatEquation_{architecture}"] = result[
+                "history"
+            ]["train_loss"]
+            metrics["validation_loss"][f"HeatEquation_{architecture}"] = result[
+                "history"
+            ]["val_loss"]
+            metrics["computation_time"][f"HeatEquation_{architecture}"] = result[
+                "training_time"
+            ]
+
             logger.info(f"Successfully completed {architecture} architecture")
         except Exception as e:
             logger.error(f"Error running {architecture} architecture: {str(e)}")
@@ -208,11 +210,14 @@ def main():
     report_path = base_dir / "interactive_report.html"
     create_interactive_report(
         experiment_dir=str(base_dir),
-        pdes=[HeatEquation(**config['pde']['parameters'])],
-        architectures=[{'name': result['architecture'], 'model': result['model']} for result in results],
+        pdes=[HeatEquation(**config["pde"]["parameters"])],
+        architectures=[
+            {"name": result["architecture"], "model": result["model"]}
+            for result in results
+        ],
         metrics=metrics,
         config=config,
-        save_path=str(report_path)
+        save_path=str(report_path),
     )
 
     # Print summary

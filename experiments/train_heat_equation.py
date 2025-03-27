@@ -99,7 +99,7 @@ def main():
             reward_weights=config["rl"]["reward_weights"],
             device=device,
         )
-        
+
         # Update PDE with RL agent for adaptive sampling
         pde.rl_agent = rl_agent
 
@@ -120,7 +120,7 @@ def main():
         batch_size=config["training"]["batch_size"],
         num_points=config["training"]["num_collocation_points"],
         validation_frequency=config["training"]["validation_frequency"],
-        experiment_dir=str(experiment_dir)
+        experiment_dir=str(experiment_dir),
     )
     training_time = time.time() - start_time
 
@@ -144,11 +144,11 @@ def main():
 
     # Prepare metrics for interactive report
     metrics = {
-        'training_loss': history['train_loss'],
-        'validation_loss': history['val_loss'],
-        'computation_time': {
+        "training_loss": history["train_loss"],
+        "validation_loss": history["val_loss"],
+        "computation_time": {
             f"{pde.__class__.__name__}_{config['model']['architecture']}": training_time
-        }
+        },
     }
 
     # Create interactive report
@@ -156,13 +156,10 @@ def main():
     create_interactive_report(
         experiment_dir=str(experiment_dir),
         pdes=[pde],  # For now just the heat equation
-        architectures=[{
-            'name': config['model']['architecture'],
-            'model': model
-        }],
+        architectures=[{"name": config["model"]["architecture"], "model": model}],
         metrics=metrics,
         config=config,
-        save_path=str(report_path)
+        save_path=str(report_path),
     )
 
     logger.info("Training completed successfully")

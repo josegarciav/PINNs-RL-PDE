@@ -54,11 +54,7 @@ def benchmark_pde(
     # Initialize model with different architectures
     architectures = ["fourier", "resnet", "siren", "autoencoder", "feedforward"]
     results = {}
-    metrics = {
-        'training_loss': {},
-        'validation_loss': {},
-        'computation_time': {}
-    }
+    metrics = {"training_loss": {}, "validation_loss": {}, "computation_time": {}}
 
     for arch in architectures:
         model_params["architecture"] = arch
@@ -117,9 +113,13 @@ def benchmark_pde(
         )
 
         # Update metrics for interactive report
-        metrics['training_loss'][f"{pde.__class__.__name__}_{arch}"] = history['train_loss']
-        metrics['validation_loss'][f"{pde.__class__.__name__}_{arch}"] = history['val_loss']
-        metrics['computation_time'][f"{pde.__class__.__name__}_{arch}"] = training_time
+        metrics["training_loss"][f"{pde.__class__.__name__}_{arch}"] = history[
+            "train_loss"
+        ]
+        metrics["validation_loss"][f"{pde.__class__.__name__}_{arch}"] = history[
+            "val_loss"
+        ]
+        metrics["computation_time"][f"{pde.__class__.__name__}_{arch}"] = training_time
 
         results[arch] = {
             "training_time": training_time,
@@ -370,16 +370,12 @@ def main():
                 "dimension": 1,
                 "device": device,
             },
-        }
+        },
     ]
 
     # Run benchmarks for each PDE
     all_results = {}
-    all_metrics = {
-        'training_loss': {},
-        'validation_loss': {},
-        'computation_time': {}
-    }
+    all_metrics = {"training_loss": {}, "validation_loss": {}, "computation_time": {}}
 
     for pde_config in pde_configs:
         logger.info(f"\nBenchmarking {pde_config['name']}...")
@@ -393,11 +389,11 @@ def main():
                 device,
             )
             all_results[pde_config["name"]] = results
-            
+
             # Merge metrics
             for key in all_metrics:
                 all_metrics[key].update(metrics[key])
-                
+
         except Exception as e:
             logger.error(f"Error benchmarking {pde_config['name']}: {str(e)}")
             continue
@@ -411,15 +407,13 @@ def main():
     report_path = results_dir / "interactive_report.html"
     create_interactive_report(
         experiment_dir=str(results_dir),
-        pdes=[pde_config["class"](**pde_config["params"]) for pde_config in pde_configs],
-        architectures=[{'name': arch, 'model': None} for arch in results.keys()],
+        pdes=[
+            pde_config["class"](**pde_config["params"]) for pde_config in pde_configs
+        ],
+        architectures=[{"name": arch, "model": None} for arch in results.keys()],
         metrics=all_metrics,
-        config={
-            'model': model_params,
-            'training': training_params,
-            'rl': rl_params
-        },
-        save_path=str(report_path)
+        config={"model": model_params, "training": training_params, "rl": rl_params},
+        save_path=str(report_path),
     )
 
     logger.info("Benchmarking completed successfully")

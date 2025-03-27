@@ -116,9 +116,9 @@ def train_model(
     """
     # Create trainer
     trainer = PDETrainer(
-        pde=pde, 
-        pinn=model, 
-        rl_agent=rl_agent, 
+        pde=pde,
+        pinn=model,
+        rl_agent=rl_agent,
         config=config,
     )
 
@@ -128,7 +128,7 @@ def train_model(
         batch_size=config.training.batch_size,
         num_points=config.training.num_collocation_points,
         validation_frequency=config.training.validation_frequency,
-        experiment_dir=exp_dir
+        experiment_dir=exp_dir,
     )
 
     # Save final model
@@ -197,7 +197,7 @@ def main():
         source_term=config.pde.source_term,
         device=config.device,
     )
-    
+
     # Add RL agent to PDE for adaptive sampling if available
     if rl_agent:
         pde.rl_agent = rl_agent

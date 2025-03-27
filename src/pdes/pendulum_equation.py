@@ -30,7 +30,9 @@ class PendulumEquation(PDEBase):
         self.g = config.parameters["g"]
         self.L = config.parameters["L"]
 
-    def compute_residual(self, x: torch.Tensor, t: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
+    def compute_residual(
+        self, x: torch.Tensor, t: torch.Tensor, u: torch.Tensor
+    ) -> torch.Tensor:
         """Compute the residual of the pendulum equation.
 
         Args:
@@ -69,9 +71,13 @@ class PendulumEquation(PDEBase):
         elif self.config.initial_condition["type"] == "constant":
             return torch.full_like(x, self.config.initial_condition["value"])
         else:
-            raise ValueError(f"Unknown initial condition type: {self.config.initial_condition['type']}")
+            raise ValueError(
+                f"Unknown initial condition type: {self.config.initial_condition['type']}"
+            )
 
-    def compute_boundary_condition(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def compute_boundary_condition(
+        self, x: torch.Tensor, t: torch.Tensor
+    ) -> torch.Tensor:
         """Compute the boundary condition.
 
         Args:
@@ -82,7 +88,9 @@ class PendulumEquation(PDEBase):
             Boundary condition values
         """
         if self.config.boundary_conditions["dirichlet"]["type"] == "fixed":
-            return torch.full_like(x, self.config.boundary_conditions["dirichlet"]["value"])
+            return torch.full_like(
+                x, self.config.boundary_conditions["dirichlet"]["value"]
+            )
         elif self.config.boundary_conditions["dirichlet"]["type"] == "periodic":
             return torch.sin(2 * np.pi * x)
         else:
@@ -110,7 +118,9 @@ class PendulumEquation(PDEBase):
                 / (2 * self.config.exact_solution["sigma"] ** 2)
             )
         else:
-            raise ValueError(f"Unknown exact solution type: {self.config.exact_solution['type']}")
+            raise ValueError(
+                f"Unknown exact solution type: {self.config.exact_solution['type']}"
+            )
 
     def compute_time_derivative(
         self, u: torch.Tensor, t: torch.Tensor, order: int = 1
@@ -145,7 +155,9 @@ class PendulumEquation(PDEBase):
         else:
             raise ValueError(f"Unsupported derivative order: {order}")
 
-    def compute_energy(self, x: torch.Tensor, t: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
+    def compute_energy(
+        self, x: torch.Tensor, t: torch.Tensor, u: torch.Tensor
+    ) -> torch.Tensor:
         """Compute the total energy of the system.
 
         Args:
@@ -165,7 +177,9 @@ class PendulumEquation(PDEBase):
 
         return kinetic_energy + potential_energy
 
-    def compute_phase_space(self, x: torch.Tensor, t: torch.Tensor, u: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def compute_phase_space(
+        self, x: torch.Tensor, t: torch.Tensor, u: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute the phase space coordinates (θ, dθ/dt).
 
         Args:

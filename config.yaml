@@ -94,4 +94,4 @@ logging:
 # Paths
 paths:
   results_dir: "results"
-  log_dir: "logs" 
+  log_dir: "logs"

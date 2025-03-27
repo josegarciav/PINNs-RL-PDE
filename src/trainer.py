@@ -132,7 +132,7 @@ class PDETrainer:
         batch_size: int,
         num_points: int,
         validation_frequency: int = 10,
-        experiment_dir: str = None
+        experiment_dir: str = None,
     ):
         """
         Train the model.
@@ -144,12 +144,12 @@ class PDETrainer:
         :param experiment_dir: Directory to save real-time training data
         """
         self.logger.info("Starting training...")
-        
+
         # Create directories for visualizations and experiment data
         os.makedirs("visualizations", exist_ok=True)
         if experiment_dir:
             os.makedirs(experiment_dir, exist_ok=True)
-            
+
             # Save initial metadata
             metadata = {
                 "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -159,10 +159,10 @@ class PDETrainer:
                     "num_epochs": num_epochs,
                     "batch_size": batch_size,
                     "num_points": num_points,
-                    "validation_frequency": validation_frequency
-                }
+                    "validation_frequency": validation_frequency,
+                },
             }
-            
+
             # Save initial metadata
             try:
                 save_training_metrics({}, experiment_dir, metadata)
@@ -181,7 +181,9 @@ class PDETrainer:
             for _ in pbar:
                 # Generate batch of collocation points
                 # Use adaptive sampling if RL agent is available
-                sampling_strategy = "adaptive" if self.rl_agent is not None else "uniform"
+                sampling_strategy = (
+                    "adaptive" if self.rl_agent is not None else "uniform"
+                )
                 x_batch, t_batch = self.pde.generate_collocation_points(
                     batch_size, strategy=sampling_strategy
                 )
@@ -253,17 +255,18 @@ class PDETrainer:
             # Store collocation points for visualization
             if self.rl_agent:
                 points_history.append(x_batch.cpu().numpy())
-            
+
             # Visualize collocation points at regular intervals
             if epoch % self.viz_frequency == 0 and self.rl_agent:
                 self.rl_agent.visualize_collocation_evolution(points_history, epoch)
-                
+
             # Generate comprehensive visualization at the end of training
             if epoch == num_epochs - 1 or (self.patience_counter >= self.patience):
-                if hasattr(self.pde, 'visualize_collocation_evolution'):
+                if hasattr(self.pde, "visualize_collocation_evolution"):
                     self.pde.visualize_collocation_evolution(
-                        save_path=f"visualizations/final_collocation_evolution_epoch_{epoch}.png")
-            
+                        save_path=f"visualizations/final_collocation_evolution_epoch_{epoch}.png"
+                    )
+
             # Save progress for real-time monitoring
             if experiment_dir:
                 try:
@@ -277,7 +280,7 @@ class PDETrainer:
                     save_training_metrics(self.history, experiment_dir, current_metrics)
                 except Exception as e:
                     self.logger.warning(f"Error saving training metrics: {e}")
-                
+
         # Save final metrics
         if experiment_dir:
             try:
@@ -291,7 +294,7 @@ class PDETrainer:
                 save_training_metrics(self.history, experiment_dir, final_metrics)
             except Exception as e:
                 self.logger.warning(f"Error saving final metrics: {e}")
-                
+
         return self.history
 
     def get_training_history(self) -> Dict[str, List[float]]:

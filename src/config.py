@@ -49,7 +49,7 @@ class ModelConfig:
     fourier_scale: float = 2.0
     dropout: float = 0.1
     layer_norm: bool = True
-    architecture: str = "fourier"  # New parameter for architecture selection
+    architecture: str = "fourier"  # parameter for architecture selection
 
 
 @dataclass

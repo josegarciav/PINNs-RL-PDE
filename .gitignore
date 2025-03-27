@@ -18,6 +18,10 @@ ENV/
 
 # Results and logs
 *.log
+logs/
+results/
+visualizations/
+checkpoints/
 
 # Ignore model weights & config files (if necessary)
 *.pth

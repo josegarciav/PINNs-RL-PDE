@@ -9,86 +9,126 @@ import json
 import numpy as np
 from datetime import datetime
 import glob
+import argparse
+import sys
+
+
+# Parse command line arguments for port
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="PINNs-RL-PDE Training Monitor Dashboard"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8050, help="Port to run the dashboard on"
+    )
+    return parser.parse_args()
+
 
 # Initialize the Dash app
 app = dash.Dash(__name__)
 
 # Define the layout
-app.layout = html.Div([
-    html.H1("PINNs-RL-PDE Training Monitor", style={'textAlign': 'center'}),
-    
-    # Experiment selector
-    html.Div([
-        html.Label("Select Experiment:"),
-        dcc.Dropdown(id='experiment-selector', placeholder='Select experiment...'),
-    ], style={'marginBottom': '20px', 'width': '50%', 'margin': 'auto'}),
-    
-    # Main metrics panel
-    html.Div([
-        html.Div([
-            dcc.Graph(id='loss-graph'),
-        ], style={'width': '50%', 'display': 'inline-block'}),
-        html.Div([
-            dcc.Graph(id='collocation-evolution'),
-        ], style={'width': '50%', 'display': 'inline-block'}),
-    ]),
-    
-    # Architecture comparison
-    html.H2("Architecture Comparison", style={'textAlign': 'center', 'marginTop': '30px'}),
-    dcc.Graph(id='architecture-comparison'),
-    
-    # PDE comparison
-    html.H2("PDE Comparison", style={'textAlign': 'center', 'marginTop': '30px'}),
-    dcc.Graph(id='pde-comparison'),
-    
-    # Experiment metadata
-    html.Div([
-        html.H2("Experiment Details", style={'textAlign': 'center'}),
-        html.Pre(id='experiment-details', style={
-            'whiteSpace': 'pre-wrap',
-            'wordBreak': 'break-all',
-            'backgroundColor': '#f5f5f5',
-            'padding': '10px',
-            'border': '1px solid #ddd',
-            'borderRadius': '5px',
-            'maxHeight': '400px',
-            'overflow': 'auto'
-        })
-    ], style={'marginTop': '30px'}),
-    
-    # Automatic update interval
-    dcc.Interval(id='interval-component', interval=5*1000, n_intervals=0),
-], style={'padding': '20px'})
+app.layout = html.Div(
+    [
+        html.H1("PINNs-RL-PDE Training Monitor", style={"textAlign": "center"}),
+        # Experiment selector
+        html.Div(
+            [
+                html.Label("Select Experiment:"),
+                dcc.Dropdown(
+                    id="experiment-selector", placeholder="Select experiment..."
+                ),
+            ],
+            style={"marginBottom": "20px", "width": "50%", "margin": "auto"},
+        ),
+        # Main metrics panel
+        html.Div(
+            [
+                html.Div(
+                    [
+                        dcc.Graph(id="loss-graph"),
+                    ],
+                    style={"width": "50%", "display": "inline-block"},
+                ),
+                html.Div(
+                    [
+                        dcc.Graph(id="collocation-evolution"),
+                    ],
+                    style={"width": "50%", "display": "inline-block"},
+                ),
+            ]
+        ),
+        # Architecture comparison
+        html.H2(
+            "Architecture Comparison",
+            style={"textAlign": "center", "marginTop": "30px"},
+        ),
+        dcc.Graph(id="architecture-comparison"),
+        # PDE comparison
+        html.H2("PDE Comparison", style={"textAlign": "center", "marginTop": "30px"}),
+        dcc.Graph(id="pde-comparison"),
+        # Experiment metadata
+        html.Div(
+            [
+                html.H2("Experiment Details", style={"textAlign": "center"}),
+                html.Pre(
+                    id="experiment-details",
+                    style={
+                        "whiteSpace": "pre-wrap",
+                        "wordBreak": "break-all",
+                        "backgroundColor": "#f5f5f5",
+                        "padding": "10px",
+                        "border": "1px solid #ddd",
+                        "borderRadius": "5px",
+                        "maxHeight": "400px",
+                        "overflow": "auto",
+                    },
+                ),
+            ],
+            style={"marginTop": "30px"},
+        ),
+        # Automatic update interval
+        dcc.Interval(id="interval-component", interval=5 * 1000, n_intervals=0),
+    ],
+    style={"padding": "20px"},
+)
+
 
 # Callback to update experiment list
 @app.callback(
-    Output('experiment-selector', 'options'),
-    Input('interval-component', 'n_intervals')
+    Output("experiment-selector", "options"), Input("interval-component", "n_intervals")
 )
 def update_experiments(_):
     # Get list of experiment directories
     experiment_dirs = []
-    for results_dir in ["results", "experiments"]:  # Check both possible result directories
+    for results_dir in [
+        "results",
+        "experiments",
+    ]:  # Check both possible result directories
         if os.path.exists(results_dir):
-            experiment_dirs.extend([
-                {"label": d, "value": os.path.join(results_dir, d)}
-                for d in os.listdir(results_dir) 
-                if os.path.isdir(os.path.join(results_dir, d))
-            ])
+            experiment_dirs.extend(
+                [
+                    {"label": d, "value": os.path.join(results_dir, d)}
+                    for d in os.listdir(results_dir)
+                    if os.path.isdir(os.path.join(results_dir, d))
+                ]
+            )
     return experiment_dirs
+
 
 # Callback to update main graphs
 @app.callback(
-    [Output('loss-graph', 'figure'),
-     Output('collocation-evolution', 'figure'),
-     Output('experiment-details', 'children')],
-    [Input('experiment-selector', 'value'),
-     Input('interval-component', 'n_intervals')]
+    [
+        Output("loss-graph", "figure"),
+        Output("collocation-evolution", "figure"),
+        Output("experiment-details", "children"),
+    ],
+    [Input("experiment-selector", "value"), Input("interval-component", "n_intervals")],
 )
 def update_graphs(experiment, _):
     if not experiment:
         return {}, {}, "No experiment selected"
-    
+
     # Load training data
     experiment_details = "Experiment not found"
     try:
@@ -96,19 +136,30 @@ def update_graphs(experiment, _):
         history_file = os.path.join(experiment, "history.json")
         if not os.path.exists(history_file):
             # Try alternative locations
-            alt_files = glob.glob(os.path.join(experiment, "**", "history.json"), recursive=True)
+            alt_files = glob.glob(
+                os.path.join(experiment, "**", "history.json"), recursive=True
+            )
             if alt_files:
                 history_file = alt_files[0]
-        
+
         with open(history_file, "r") as f:
             history = json.load(f)
-        
+
         # Load metadata if available
         metadata_file = os.path.join(experiment, "metadata.json")
+        early_stopping_triggered = False
+        training_completed = False
+
         if os.path.exists(metadata_file):
             with open(metadata_file, "r") as f:
                 metadata = json.load(f)
                 experiment_details = json.dumps(metadata, indent=2)
+                # Check if early stopping was triggered
+                early_stopping_triggered = metadata.get(
+                    "early_stopping_triggered", False
+                )
+                # Check if training is marked as completed
+                training_completed = "end_time" in metadata
         else:
             # Create basic metadata from config if available
             config_file = os.path.join(experiment, "config.json")
@@ -116,25 +167,133 @@ def update_graphs(experiment, _):
                 with open(config_file, "r") as f:
                     config = json.load(f)
                     experiment_details = f"Experiment: {os.path.basename(experiment)}\nConfiguration:\n{json.dumps(config, indent=2)}"
-        
+
         # Loss figure
         loss_fig = go.Figure()
-        loss_fig.add_trace(go.Scatter(y=history["train_loss"], name="Training Loss"))
+
+        # Get data for x-axis (epochs)
+        train_epochs = list(range(1, len(history["train_loss"]) + 1))
+
+        # Determine if training has finished - check for both early stopping and natural completion
+        final_epoch = len(history["train_loss"])
+        total_epochs = final_epoch  # Default to final_epoch
+
+        # Try to get total epochs from metadata if available
+        if os.path.exists(metadata_file):
+            with open(metadata_file, "r") as f:
+                metadata = json.load(f)
+                if (
+                    "training_params" in metadata
+                    and "num_epochs" in metadata["training_params"]
+                ):
+                    total_epochs = metadata["training_params"]["num_epochs"]
+        else:
+            # Try to get from config if available
+            config_file = os.path.join(experiment, "config.json")
+            if os.path.exists(config_file):
+                with open(config_file, "r") as f:
+                    config = json.load(f)
+                    if "training" in config and "num_epochs" in config["training"]:
+                        total_epochs = config["training"]["num_epochs"]
+
+        # Create training loss trace
+        loss_fig.add_trace(
+            go.Scatter(x=train_epochs, y=history["train_loss"], name="Training Loss")
+        )
+
+        # Add validation loss if available
         if "val_loss" in history and history["val_loss"]:
-            loss_fig.add_trace(go.Scatter(y=history["val_loss"], name="Validation Loss"))
-        
+            # For validation, we need to account for validation frequency
+            val_frequency = 10  # Default validation frequency
+
+            # Try to get validation frequency from metadata or config
+            if os.path.exists(metadata_file):
+                with open(metadata_file, "r") as f:
+                    metadata_data = json.load(f)
+                    if (
+                        "training_params" in metadata_data
+                        and "validation_frequency" in metadata_data["training_params"]
+                    ):
+                        val_frequency = metadata_data["training_params"][
+                            "validation_frequency"
+                        ]
+            else:
+                # Try to get from config if available
+                config_file = os.path.join(experiment, "config.json")
+                if os.path.exists(config_file):
+                    with open(config_file, "r") as f:
+                        config = json.load(f)
+                        if (
+                            "training" in config
+                            and "validation_frequency" in config["training"]
+                        ):
+                            val_frequency = config["training"]["validation_frequency"]
+
+            val_epochs = list(
+                range(
+                    val_frequency,
+                    len(history["val_loss"]) * val_frequency + 1,
+                    val_frequency,
+                )
+            )
+            val_epochs = val_epochs[
+                : len(history["val_loss"])
+            ]  # Make sure we don't exceed the number of validation points
+
+            loss_fig.add_trace(
+                go.Scatter(x=val_epochs, y=history["val_loss"], name="Validation Loss")
+            )
+
         # Add component losses if available
         for component in ["residual_loss", "boundary_loss", "initial_loss"]:
             if component in history and history[component]:
-                loss_fig.add_trace(go.Scatter(y=history[component], name=component.replace("_", " ").title()))
-                
+                # Use the same x-axis values as validation loss
+                if "val_loss" in history and history["val_loss"]:
+                    component_epochs = val_epochs[: len(history[component])]
+                else:
+                    component_epochs = list(range(1, len(history[component]) + 1))
+
+                loss_fig.add_trace(
+                    go.Scatter(
+                        x=component_epochs,
+                        y=history[component],
+                        name=component.replace("_", " ").title(),
+                    )
+                )
+
+        # Add training status annotation
+        status_text = ""
+        if early_stopping_triggered:
+            status_text = (
+                f"Early stopping triggered at epoch {final_epoch}/{total_epochs}"
+            )
+        elif training_completed:
+            status_text = f"Training completed ({final_epoch} epochs)"
+
+        if status_text:
+            loss_fig.add_annotation(
+                text=status_text,
+                x=0.5,
+                y=0.05,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                font=dict(size=12, color="red"),
+                bordercolor="red",
+                borderwidth=1,
+                borderpad=4,
+                bgcolor="white",
+            )
+
         loss_fig.update_layout(
-            title="Training Progress", 
-            xaxis_title="Epoch", 
+            title="Training Progress",
+            xaxis_title="Epoch",
             yaxis_title="Loss",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            legend=dict(
+                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+            ),
         )
-        
+
         # Find the most recent collocation visualization
         vis_dir = "visualizations"
         if not os.path.exists(vis_dir):
@@ -142,107 +301,130 @@ def update_graphs(experiment, _):
             vis_dir = os.path.join(experiment, "visualizations")
             if not os.path.exists(vis_dir):
                 # Try to find any visualization files in the experiment directory
-                vis_files = glob.glob(os.path.join(experiment, "**", "*collocation*.png"), recursive=True)
+                vis_files = glob.glob(
+                    os.path.join(experiment, "**", "*collocation*.png"), recursive=True
+                )
                 if vis_files:
                     # Use the most recent one
                     vis_files.sort(key=os.path.getmtime, reverse=True)
                     vis_path = vis_files[0]
-                    
+
                     # Create a figure with the image
                     try:
                         from PIL import Image
+
                         img = np.array(Image.open(vis_path))
                         colloc_fig = px.imshow(img)
                         colloc_fig.update_layout(
                             title="Collocation Points Distribution",
-                            coloraxis_showscale=False
+                            coloraxis_showscale=False,
                         )
                         # Remove axis labels and ticks
-                        colloc_fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False)
-                        colloc_fig.update_yaxes(showticklabels=False, showgrid=False, zeroline=False)
-                        
+                        colloc_fig.update_xaxes(
+                            showticklabels=False, showgrid=False, zeroline=False
+                        )
+                        colloc_fig.update_yaxes(
+                            showticklabels=False, showgrid=False, zeroline=False
+                        )
+
                         return loss_fig, colloc_fig, experiment_details
                     except Exception as e:
                         print(f"Error loading visualization image: {e}")
-        
+
         # Look for visualization files in the visualization directory
         if os.path.exists(vis_dir):
             latest_vis = sorted(
-                [f for f in os.listdir(vis_dir) 
-                if f.endswith(".png") and (
-                    f.startswith("latest_collocation_evolution") or 
-                    f.startswith("latest_density_heatmap") or
-                    f.startswith("collocation_evolution_epoch") or
-                    f.startswith("final_collocation_evolution")
-                )],
+                [
+                    f
+                    for f in os.listdir(vis_dir)
+                    if f.endswith(".png")
+                    and (
+                        f.startswith("latest_collocation_evolution")
+                        or f.startswith("latest_density_heatmap")
+                        or f.startswith("collocation_evolution_epoch")
+                        or f.startswith("final_collocation_evolution")
+                    )
+                ],
                 key=lambda x: os.path.getmtime(os.path.join(vis_dir, x)),
-                reverse=True
+                reverse=True,
             )
-            
+
             if latest_vis:
                 # Use the most recent visualization
                 vis_path = os.path.join(vis_dir, latest_vis[0])
-                
+
                 try:
                     # Create a figure with the image
                     from PIL import Image
+
                     img = np.array(Image.open(vis_path))
                     colloc_fig = px.imshow(img)
                     colloc_fig.update_layout(
                         title="Collocation Points Distribution",
-                        coloraxis_showscale=False
+                        coloraxis_showscale=False,
                     )
                     # Remove axis labels and ticks
-                    colloc_fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False)
-                    colloc_fig.update_yaxes(showticklabels=False, showgrid=False, zeroline=False)
-                    
+                    colloc_fig.update_xaxes(
+                        showticklabels=False, showgrid=False, zeroline=False
+                    )
+                    colloc_fig.update_yaxes(
+                        showticklabels=False, showgrid=False, zeroline=False
+                    )
+
                     return loss_fig, colloc_fig, experiment_details
                 except Exception as e:
                     print(f"Error loading visualization image: {e}")
-        
+
         # Create empty figure if no visualization available
         colloc_fig = go.Figure()
         colloc_fig.add_annotation(
             text="No collocation visualization available",
-            x=0.5, y=0.5,
+            x=0.5,
+            y=0.5,
             showarrow=False,
-            font=dict(size=16)
+            font=dict(size=16),
         )
         colloc_fig.update_layout(
             title="Collocation Points Distribution",
             xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
-            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False)
+            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
         )
-            
+
         return loss_fig, colloc_fig, experiment_details
     except Exception as e:
         print(f"Error loading data: {e}")
         return {}, {}, f"Error loading experiment data: {str(e)}"
 
+
 # Callback to update architecture comparison
 @app.callback(
-    Output('architecture-comparison', 'figure'),
-    [Input('interval-component', 'n_intervals')]
+    Output("architecture-comparison", "figure"),
+    [Input("interval-component", "n_intervals")],
 )
 def update_architecture_comparison(_):
     # Find all experiments and group by architecture
     architectures = {}
-    
+
     # Search for experiment directories
     experiment_dirs = []
-    for results_dir in ["results", "experiments"]:  # Check both possible result directories
+    for results_dir in [
+        "results",
+        "experiments",
+    ]:  # Check both possible result directories
         if os.path.exists(results_dir):
-            experiment_dirs.extend([
-                os.path.join(results_dir, d)
-                for d in os.listdir(results_dir) 
-                if os.path.isdir(os.path.join(results_dir, d))
-            ])
-    
+            experiment_dirs.extend(
+                [
+                    os.path.join(results_dir, d)
+                    for d in os.listdir(results_dir)
+                    if os.path.isdir(os.path.join(results_dir, d))
+                ]
+            )
+
     # Group experiments by architecture
     for exp_dir in experiment_dirs:
         # Try to find architecture information in metadata or config
         architecture = None
-        
+
         # Check metadata.json first
         metadata_file = os.path.join(exp_dir, "metadata.json")
         if os.path.exists(metadata_file):
@@ -255,7 +437,7 @@ def update_architecture_comparison(_):
                         architecture = metadata["config"]["model"].get("architecture")
             except:
                 pass
-        
+
         # If not found, check config.json
         if not architecture:
             config_file = os.path.join(exp_dir, "config.json")
@@ -267,7 +449,7 @@ def update_architecture_comparison(_):
                             architecture = config["model"]["architecture"]
                 except:
                     pass
-            
+
             # Try model_config.json as well
             if not architecture:
                 config_file = os.path.join(exp_dir, "model_config.json")
@@ -279,102 +461,119 @@ def update_architecture_comparison(_):
                                 architecture = config["model"]["architecture"]
                     except:
                         pass
-        
+
         # If still not found, try to infer from directory name
         if not architecture:
             dir_name = os.path.basename(exp_dir)
-            parts = dir_name.split('_')
+            parts = dir_name.split("_")
             if len(parts) >= 3:
                 architecture = parts[2]  # Assuming architecture is in this position
             else:
                 # Use unknown as fallback
                 architecture = "unknown"
-        
+
         # Load history.json
         history_file = os.path.join(exp_dir, "history.json")
         if not os.path.exists(history_file):
             # Try alternative locations
-            alt_files = glob.glob(os.path.join(exp_dir, "**", "history.json"), recursive=True)
+            alt_files = glob.glob(
+                os.path.join(exp_dir, "**", "history.json"), recursive=True
+            )
             if alt_files:
                 history_file = alt_files[0]
             else:
                 continue
-                
+
         try:
             with open(history_file, "r") as f:
                 history = json.load(f)
-                
+
             if architecture not in architectures:
                 architectures[architecture] = []
-                
-            architectures[architecture].append({
-                "name": os.path.basename(exp_dir),
-                "train_loss": history.get("train_loss", []),
-                "val_loss": history.get("val_loss", []) if "val_loss" in history else []
-            })
+
+            architectures[architecture].append(
+                {
+                    "name": os.path.basename(exp_dir),
+                    "train_loss": history.get("train_loss", []),
+                    "val_loss": (
+                        history.get("val_loss", []) if "val_loss" in history else []
+                    ),
+                }
+            )
         except:
             continue
-    
+
     # Create comparison graph
     fig = go.Figure()
-    
+
     colors = px.colors.qualitative.Plotly
     color_idx = 0
-    
+
     for arch, experiments in architectures.items():
         for i, exp in enumerate(experiments):
             # Add training loss
             if exp["train_loss"]:
-                fig.add_trace(go.Scatter(
-                    y=exp["train_loss"],
-                    name=f"{arch} - {exp['name']}",
-                    line=dict(color=colors[color_idx % len(colors)], dash="solid")
-                ))
-                
+                fig.add_trace(
+                    go.Scatter(
+                        y=exp["train_loss"],
+                        name=f"{arch} - {exp['name']}",
+                        line=dict(color=colors[color_idx % len(colors)], dash="solid"),
+                    )
+                )
+
                 # Add validation loss if available
                 if exp["val_loss"]:
-                    fig.add_trace(go.Scatter(
-                        y=exp["val_loss"],
-                        name=f"{arch} - {exp['name']} (Val)",
-                        line=dict(color=colors[color_idx % len(colors)], dash="dash")
-                    ))
-                    
+                    fig.add_trace(
+                        go.Scatter(
+                            y=exp["val_loss"],
+                            name=f"{arch} - {exp['name']} (Val)",
+                            line=dict(
+                                color=colors[color_idx % len(colors)], dash="dash"
+                            ),
+                        )
+                    )
+
                 color_idx += 1
-    
+
     fig.update_layout(
         title="Architecture Comparison - Training Loss",
         xaxis_title="Epoch",
         yaxis_title="Loss",
         yaxis_type="log",  # Log scale for better visualization
-        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.05)
+        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.05),
     )
-    
+
     return fig
+
 
 # Callback to update PDE comparison
 @app.callback(
-    Output('pde-comparison', 'figure'),
-    [Input('interval-component', 'n_intervals')]
+    Output("pde-comparison", "figure"), [Input("interval-component", "n_intervals")]
 )
 def update_pde_comparison(_):
     # Find all experiments and group by PDE type
     pdes = {}
-    
+
     # Search for experiment directories
     experiment_dirs = []
-    for results_dir in ["results", "experiments"]:  # Check both possible result directories
+    for results_dir in [
+        "results",
+        "experiments",
+    ]:  # Check both possible result directories
         if os.path.exists(results_dir):
-            experiment_dirs.extend([
-                os.path.join(results_dir, d)
-                for d in os.listdir(results_dir) 
-                if os.path.isdir(os.path.join(results_dir, d))
-            ])
-    
+            experiment_dirs.extend(
+                [
+                    os.path.join(results_dir, d)
+                    for d in os.listdir(results_dir)
+                    if os.path.isdir(os.path.join(results_dir, d))
+                ]
+            )
+
     # Group experiments by PDE type
     for exp_dir in experiment_dirs:
         # Try to find PDE type in metadata or config
         pde_type = None
-        
+
         # Check metadata.json first
         metadata_file = os.path.join(exp_dir, "metadata.json")
         if os.path.exists(metadata_file):
@@ -390,30 +589,34 @@ def update_pde_comparison(_):
                             pde_type = f"heat_eq_a{pde_params['diffusion_coefficient']}"
             except:
                 pass
-        
+
         # If not found, try to infer from directory name
         if not pde_type:
             dir_name = os.path.basename(exp_dir)
-            parts = dir_name.split('_')
+            parts = dir_name.split("_")
             if len(parts) >= 2:
-                pde_type = f"{parts[0]}_{parts[1]}"  # Assuming PDE type is in first two parts
+                pde_type = (
+                    f"{parts[0]}_{parts[1]}"  # Assuming PDE type is in first two parts
+                )
             else:
                 pde_type = dir_name  # Use directory name as fallback
-        
+
         # Load history.json
         history_file = os.path.join(exp_dir, "history.json")
         if not os.path.exists(history_file):
             # Try alternative locations
-            alt_files = glob.glob(os.path.join(exp_dir, "**", "history.json"), recursive=True)
+            alt_files = glob.glob(
+                os.path.join(exp_dir, "**", "history.json"), recursive=True
+            )
             if alt_files:
                 history_file = alt_files[0]
             else:
                 continue
-                
+
         try:
             with open(history_file, "r") as f:
                 history = json.load(f)
-            
+
             # Load computation time if available
             comp_time = None
             if os.path.exists(metadata_file):
@@ -423,25 +626,29 @@ def update_pde_comparison(_):
                         comp_time = metadata.get("training_time")
                 except:
                     pass
-                
+
             if pde_type not in pdes:
                 pdes[pde_type] = []
-                
-            pdes[pde_type].append({
-                "name": os.path.basename(exp_dir),
-                "train_loss": history.get("train_loss", []),
-                "val_loss": history.get("val_loss", []) if "val_loss" in history else [],
-                "computation_time": comp_time
-            })
+
+            pdes[pde_type].append(
+                {
+                    "name": os.path.basename(exp_dir),
+                    "train_loss": history.get("train_loss", []),
+                    "val_loss": (
+                        history.get("val_loss", []) if "val_loss" in history else []
+                    ),
+                    "computation_time": comp_time,
+                }
+            )
         except:
             continue
-    
+
     # Create comparison graph
     fig = go.Figure()
-    
+
     colors = px.colors.qualitative.Plotly
     color_idx = 0
-    
+
     for pde_type, experiments in pdes.items():
         for i, exp in enumerate(experiments):
             # Add training loss
@@ -449,26 +656,52 @@ def update_pde_comparison(_):
                 name = f"{pde_type} - {exp['name']}"
                 if exp["computation_time"]:
                     name += f" ({exp['computation_time']:.2f}s)"
-                    
-                fig.add_trace(go.Scatter(
-                    y=exp["train_loss"],
-                    name=name,
-                    line=dict(color=colors[color_idx % len(colors)])
-                ))
-                
+
+                fig.add_trace(
+                    go.Scatter(
+                        y=exp["train_loss"],
+                        name=name,
+                        line=dict(color=colors[color_idx % len(colors)]),
+                    )
+                )
+
                 color_idx += 1
-    
+
     fig.update_layout(
         title="PDE Comparison - Training Loss",
         xaxis_title="Epoch",
         yaxis_title="Loss",
         yaxis_type="log",  # Log scale for better visualization
-        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.05)
+        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.05),
     )
-    
+
     return fig
 
-if __name__ == '__main__':
-    print("Starting PINNs-RL-PDE Training Monitor")
-    print("Open http://127.0.0.1:8050/ in your browser")
-    app.run_server(debug=True) 
+
+if __name__ == "__main__":
+    # Parse command line arguments
+    args = parse_args()
+    port = args.port
+
+    print(f"Starting PINNs-RL-PDE Training Monitor on port {port}")
+    print(f"Open http://127.0.0.1:{port}/ in your browser")
+
+    # Try different ports if the specified one is in use
+    max_retries = 3
+
+    for attempt in range(max_retries):
+        try:
+            app.run(debug=True, port=port)
+            break
+        except Exception as e:
+            if "Address already in use" in str(e):
+                print(f"Port {port} is in use. Trying port {port+1}...")
+                port += 1
+                if attempt == max_retries - 1:
+                    print(
+                        f"Could not find available port after {max_retries} attempts."
+                    )
+                    print(f"Please close any running dashboards and try again.")
+            else:
+                print(f"Error starting dashboard: {e}")
+                break

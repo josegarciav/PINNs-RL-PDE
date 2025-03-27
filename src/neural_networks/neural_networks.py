@@ -144,52 +144,72 @@ class BaseNetwork(nn.Module):
 
 
 class FeedForwardNetwork(BaseNetwork):
-    """Feed-forward neural network."""
+    """Simple feed-forward neural network with configurable hidden layers."""
 
     def __init__(self, config: NetworkConfig) -> None:
-        """Initialize the network.
+        """
+        Initialize the feed-forward network.
 
-        Args:
-            config: Network configuration dictionary containing:
-                - input_dim: Input dimension
-                - hidden_dims: List of hidden layer dimensions
-                - output_dim: Output dimension
-                - activation: Activation function name
-                - dropout: Dropout rate (optional)
+        :param config: Network configuration dictionary containing:
+            - input_dim: Input dimension
+            - hidden_dims: List of hidden layer dimensions
+            - output_dim: Output dimension
+            - activation: Activation function name ('relu', 'tanh', etc.)
+            - dropout: Dropout rate
+            - layer_norm: Whether to use layer normalization
         """
         super().__init__(config)
         self.input_dim = config["input_dim"]
         self.hidden_dims = config["hidden_dims"]
         self.output_dim = config["output_dim"]
-        self.activation = getattr(F, config.get("activation", "relu"))
-        self.dropout = config.get("dropout", 0.0)
-
+        self.dropout_rate = config.get("dropout", 0.1)
+        self.use_layer_norm = config.get("layer_norm", True)
+        
+        # Get activation function
+        activation_name = config.get("activation", "relu")
+        self.activation = self._get_activation_module(activation_name)
+        
         # Build layers
-        self.layers = nn.ModuleList()
+        layers = []
         prev_dim = self.input_dim
+        
         for hidden_dim in self.hidden_dims:
-            self.layers.append(nn.Linear(prev_dim, hidden_dim))
-            if self.dropout > 0:
-                self.layers.append(nn.Dropout(self.dropout))
+            layers.append(nn.Linear(prev_dim, hidden_dim))
+            if self.use_layer_norm:
+                layers.append(nn.LayerNorm(hidden_dim))
+            layers.append(self.activation)
+            layers.append(nn.Dropout(self.dropout_rate))
             prev_dim = hidden_dim
-        self.layers.append(nn.Linear(prev_dim, self.output_dim))
+            
+        # Output layer
+        layers.append(nn.Linear(prev_dim, self.output_dim))
+        
+        self.layers = nn.Sequential(*layers)
+
+    def _get_activation_module(self, activation_name: str) -> nn.Module:
+        """Convert activation function name to module."""
+        if activation_name == "relu":
+            return nn.ReLU()
+        elif activation_name == "leaky_relu":
+            return nn.LeakyReLU()
+        elif activation_name == "tanh":
+            return nn.Tanh()
+        elif activation_name == "sigmoid":
+            return nn.Sigmoid()
+        elif activation_name == "gelu":
+            return nn.GELU()
+        else:
+            raise ValueError(f"Unsupported activation: {activation_name}")
 
     def forward(self, x: InputType) -> OutputType:
-        """Forward pass of the network.
+        """
+        Forward pass of the network.
 
-        Args:
-            x: Input tensor or array
-
-        Returns:
-            Output tensor or array
+        :param x: Input tensor or array
+        :return: Output tensor or array
         """
         x = self._prepare_input(x)
-        for layer in self.layers[:-1]:
-            if isinstance(layer, nn.Linear):
-                x = self.activation(layer(x))
-            else:
-                x = layer(x)
-        return self.layers[-1](x)
+        return self.layers(x)
 
 
 class ResNetBlock(nn.Module):
@@ -211,17 +231,33 @@ class ResNetBlock(nn.Module):
         :param dropout: Dropout rate
         """
         super().__init__()
-        self.activation = getattr(F, activation)
+        self.activation_fn = self._get_activation_module(activation)
+        
+        # Build the residual block
         self.layers = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
-            self.activation,
+            self.activation_fn,
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, in_dim),
             nn.LayerNorm(in_dim),
-            self.activation,
             nn.Dropout(dropout),
         )
+
+    def _get_activation_module(self, activation_name: str) -> nn.Module:
+        """Convert activation function name to module."""
+        if activation_name == "relu":
+            return nn.ReLU()
+        elif activation_name == "leaky_relu":
+            return nn.LeakyReLU()
+        elif activation_name == "tanh":
+            return nn.Tanh()
+        elif activation_name == "sigmoid":
+            return nn.Sigmoid()
+        elif activation_name == "gelu":
+            return nn.GELU()
+        else:
+            raise ValueError(f"Unsupported activation: {activation_name}")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -230,7 +266,7 @@ class ResNetBlock(nn.Module):
         :param x: Input tensor
         :return: Output tensor
         """
-        return self.activation(x + self.layers(x))
+        return self.activation_fn(x + self.layers(x))
 
 
 class ResNet(BaseNetwork):
@@ -253,7 +289,8 @@ class ResNet(BaseNetwork):
         self.hidden_dim = config["hidden_dim"]
         self.num_blocks = config["num_blocks"]
         self.output_dim = config["output_dim"]
-        self.activation = getattr(F, config.get("activation", "relu"))
+        activation_name = config.get("activation", "relu")
+        self.activation_fn = self._get_activation_module(activation_name)
         self.dropout = config.get("dropout", 0.1)
 
         # Build the ResNet architecture
@@ -272,6 +309,21 @@ class ResNet(BaseNetwork):
         )
         self.output_layer = nn.Linear(self.hidden_dim, self.output_dim)
 
+    def _get_activation_module(self, activation_name: str) -> nn.Module:
+        """Convert activation function name to module."""
+        if activation_name == "relu":
+            return nn.ReLU()
+        elif activation_name == "leaky_relu":
+            return nn.LeakyReLU()
+        elif activation_name == "tanh":
+            return nn.Tanh()
+        elif activation_name == "sigmoid":
+            return nn.Sigmoid()
+        elif activation_name == "gelu":
+            return nn.GELU()
+        else:
+            raise ValueError(f"Unsupported activation: {activation_name}")
+
     def forward(self, x: InputType) -> OutputType:
         """Forward pass of the network.
 
@@ -282,7 +334,7 @@ class ResNet(BaseNetwork):
             Output tensor or array
         """
         x = self._prepare_input(x)
-        x = self.activation(self.input_layer(x))
+        x = self.activation_fn(self.input_layer(x))
         for block in self.blocks:
             x = block(x)
         return self.output_layer(x)
@@ -310,7 +362,8 @@ class FourierNetwork(BaseNetwork):
             "hidden_dims", [128, 128]
         )  # Default hidden dimensions
         self.output_dim = config["output_dim"]
-        self.activation = getattr(F, config.get("activation", "relu"))
+        activation_name = config.get("activation", "relu")
+        self.activation_fn = self._get_activation_module(activation_name)
         self.scale = config.get("scale", 10.0)
 
         # Build layers
@@ -327,6 +380,21 @@ class FourierNetwork(BaseNetwork):
         # Move all layers to device
         self.to(self.device)
 
+    def _get_activation_module(self, activation_name: str) -> nn.Module:
+        """Convert activation function name to module."""
+        if activation_name == "relu":
+            return nn.ReLU()
+        elif activation_name == "leaky_relu":
+            return nn.LeakyReLU()
+        elif activation_name == "tanh":
+            return nn.Tanh()
+        elif activation_name == "sigmoid":
+            return nn.Sigmoid()
+        elif activation_name == "gelu":
+            return nn.GELU()
+        else:
+            raise ValueError(f"Unsupported activation: {activation_name}")
+
     def forward(self, x: InputType) -> OutputType:
         """Forward pass of the network.
 
@@ -339,7 +407,7 @@ class FourierNetwork(BaseNetwork):
         x = self._prepare_input(x)
         x = self.fourier(x)
         for layer in self.layers[:-1]:
-            x = self.activation(layer(x))
+            x = self.activation_fn(layer(x))
         return self.layers[-1](x)
 
 
@@ -421,6 +489,170 @@ class SIRENLayer(nn.Module):
             Output tensor
         """
         return torch.sin(self.omega_0 * self.linear(x))
+
+
+class SelfAttention(nn.Module):
+    """Self-attention layer."""
+
+    def __init__(self, dim: int, heads: int = 4, dropout: float = 0.1) -> None:
+        """Initialize the attention layer.
+
+        Args:
+            dim: Input dimension
+            heads: Number of attention heads
+            dropout: Dropout rate
+        """
+        super().__init__()
+        self.dim = dim
+        self.heads = heads
+        self.head_dim = dim // heads
+        assert self.head_dim * heads == dim, "Dimension must be divisible by heads"
+
+        self.query = nn.Linear(dim, dim)
+        self.key = nn.Linear(dim, dim)
+        self.value = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim)
+        self.dropout = nn.Dropout(dropout)
+        self.scale = self.head_dim ** -0.5
+        self.layer_norm = nn.LayerNorm(dim)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """Forward pass of the layer.
+
+        Args:
+            x: Input tensor of shape (batch_size, dim)
+
+        Returns:
+            Output tensor of shape (batch_size, dim)
+        """
+        residual = x
+        batch_size = x.shape[0]
+
+        # Use unsqueeze to add sequence length dimension of 1
+        # Shape: (batch_size, 1, dim)
+        x = x.unsqueeze(1)
+        
+        # Linear projections
+        q = self.query(x).view(batch_size, 1, self.heads, self.head_dim).transpose(1, 2)
+        k = self.key(x).view(batch_size, 1, self.heads, self.head_dim).transpose(1, 2)
+        v = self.value(x).view(batch_size, 1, self.heads, self.head_dim).transpose(1, 2)
+
+        # Attention
+        scores = torch.matmul(q, k.transpose(-2, -1)) * self.scale
+        attn = F.softmax(scores, dim=-1)
+        attn = self.dropout(attn)
+        
+        # Apply attention to values
+        out = torch.matmul(attn, v)
+        out = out.transpose(1, 2).contiguous().view(batch_size, 1, self.dim)
+        out = self.proj(out).squeeze(1)  # Remove sequence dimension
+        
+        # Add residual connection and apply layer norm
+        out = self.layer_norm(out + residual)
+        
+        return out
+
+
+class FeedForwardBlock(nn.Module):
+    """Feed-forward block for transformer architecture."""
+
+    def __init__(self, dim: int, expansion: int = 4, dropout: float = 0.1) -> None:
+        """Initialize the feed-forward block.
+
+        Args:
+            dim: Input dimension
+            expansion: Dimension expansion factor
+            dropout: Dropout rate
+        """
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(dim, dim * expansion),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(dim * expansion, dim),
+            nn.Dropout(dropout)
+        )
+        self.layer_norm = nn.LayerNorm(dim)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """Forward pass of the block.
+
+        Args:
+            x: Input tensor
+
+        Returns:
+            Output tensor
+        """
+        return self.layer_norm(x + self.net(x))
+
+
+class AttentionNetwork(BaseNetwork):
+    """Neural network with self-attention layers."""
+
+    def __init__(self, config: NetworkConfig) -> None:
+        """Initialize the network.
+
+        Args:
+            config: Network configuration dictionary containing:
+                - input_dim: Input dimension
+                - hidden_dim: Hidden dimension
+                - output_dim: Output dimension
+                - num_layers: Number of attention layers
+                - num_heads: Number of attention heads
+                - dropout: Dropout rate
+                - activation: Activation function name
+        """
+        super().__init__(config)
+        self.input_dim = config["input_dim"]
+        self.hidden_dim = config["hidden_dim"]
+        self.output_dim = config["output_dim"]
+        self.num_layers = config.get("num_layers", 4)
+        self.num_heads = config.get("num_heads", 4)
+        self.dropout = config.get("dropout", 0.1)
+        self.activation = getattr(F, config.get("activation", "gelu"))
+
+        # Input projection
+        self.input_proj = nn.Linear(self.input_dim, self.hidden_dim)
+        
+        # Attention layers
+        self.layers = nn.ModuleList()
+        for _ in range(self.num_layers):
+            self.layers.append(nn.ModuleList([
+                SelfAttention(self.hidden_dim, self.num_heads, self.dropout),
+                FeedForwardBlock(self.hidden_dim, dropout=self.dropout)
+            ]))
+        
+        # Output projection
+        self.output_proj = nn.Linear(self.hidden_dim, self.output_dim)
+        
+        # Initialize weights
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        """Initialize weights with small values to prevent exploding gradients."""
+        if isinstance(module, nn.Linear):
+            module.weight.data.normal_(mean=0.0, std=0.02)
+            if module.bias is not None:
+                module.bias.data.zero_()
+
+    def forward(self, x: InputType) -> OutputType:
+        """Forward pass of the network.
+
+        Args:
+            x: Input tensor or array
+
+        Returns:
+            Output tensor or array
+        """
+        x = self._prepare_input(x)
+        x = self.input_proj(x)
+        
+        # Apply attention layers
+        for attn, ff in self.layers:
+            x = attn(x)
+            x = ff(x)
+            
+        return self.output_proj(x)
 
 
 class AutoEncoder(BaseNetwork):
@@ -523,7 +755,7 @@ class PINNModel(BaseNetwork):
         :param hidden_dim: Hidden layer dimension
         :param output_dim: Output dimension (u)
         :param num_layers: Number of layers
-        :param activation: Activation function ('tanh', 'relu', 'gelu')
+        :param activation: Activation function name ('tanh', 'relu', 'gelu')
         :param fourier_features: Whether to use Fourier features
         :param fourier_scale: Scale factor for Fourier features
         :param dropout: Dropout rate
@@ -568,6 +800,15 @@ class PINNModel(BaseNetwork):
             )
             super().__init__(config)
             self.model = SIREN(config)
+        elif architecture == "attention":
+            config.update({
+                "hidden_dim": hidden_dim,
+                "num_layers": num_layers - 1,
+                "num_heads": 4,  # Default number of heads
+                "dropout": dropout
+            })
+            super().__init__(config)
+            self.model = AttentionNetwork(config)
         elif architecture == "autoencoder":
             config.update(
                 {
