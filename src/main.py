@@ -122,12 +122,13 @@ def train_model(
         config=config,
     )
 
-    # Train model
+    # Train model with experiment directory for real-time monitoring
     history = trainer.train(
         num_epochs=config.training.num_epochs,
         batch_size=config.training.batch_size,
         num_points=config.training.num_collocation_points,
         validation_frequency=config.training.validation_frequency,
+        experiment_dir=exp_dir
     )
 
     # Save final model

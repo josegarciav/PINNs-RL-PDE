@@ -115,6 +115,7 @@ def run_architecture(
         batch_size=config["training"]["batch_size"],
         num_points=config["training"]["num_collocation_points"],
         validation_frequency=config["training"]["validation_frequency"],
+        experiment_dir=str(experiment_dir)
     )
     training_time = time.time() - start_time
 

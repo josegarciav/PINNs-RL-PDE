@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Tuple
 import logging
 from tqdm import tqdm
 import os
+from datetime import datetime
+from src.utils.utils import save_training_metrics
 
 
 class PDETrainer:
@@ -130,6 +132,7 @@ class PDETrainer:
         batch_size: int,
         num_points: int,
         validation_frequency: int = 10,
+        experiment_dir: str = None
     ):
         """
         Train the model.
@@ -138,8 +141,33 @@ class PDETrainer:
         :param batch_size: Batch size for training
         :param num_points: Number of collocation points
         :param validation_frequency: Frequency of validation
+        :param experiment_dir: Directory to save real-time training data
         """
         self.logger.info("Starting training...")
+        
+        # Create directories for visualizations and experiment data
+        os.makedirs("visualizations", exist_ok=True)
+        if experiment_dir:
+            os.makedirs(experiment_dir, exist_ok=True)
+            
+            # Save initial metadata
+            metadata = {
+                "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "model_architecture": self.model.__class__.__name__,
+                "pde_type": self.pde.__class__.__name__,
+                "training_params": {
+                    "num_epochs": num_epochs,
+                    "batch_size": batch_size,
+                    "num_points": num_points,
+                    "validation_frequency": validation_frequency
+                }
+            }
+            
+            # Save initial metadata
+            try:
+                save_training_metrics({}, experiment_dir, metadata)
+            except Exception as e:
+                self.logger.warning(f"Error saving initial metadata: {e}")
 
         points_history = []
         for epoch in range(num_epochs):
@@ -235,6 +263,34 @@ class PDETrainer:
                 if hasattr(self.pde, 'visualize_collocation_evolution'):
                     self.pde.visualize_collocation_evolution(
                         save_path=f"visualizations/final_collocation_evolution_epoch_{epoch}.png")
+            
+            # Save progress for real-time monitoring
+            if experiment_dir:
+                try:
+                    # Update metrics
+                    current_metrics = {
+                        "current_epoch": epoch + 1,
+                        "current_loss": avg_loss,
+                        "best_val_loss": self.best_val_loss,
+                        "early_stopping_counter": self.patience_counter,
+                    }
+                    save_training_metrics(self.history, experiment_dir, current_metrics)
+                except Exception as e:
+                    self.logger.warning(f"Error saving training metrics: {e}")
+                
+        # Save final metrics
+        if experiment_dir:
+            try:
+                final_metrics = {
+                    "end_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "total_epochs": epoch + 1,
+                    "final_loss": avg_loss,
+                    "best_val_loss": self.best_val_loss,
+                    "early_stopping_triggered": self.patience_counter >= self.patience,
+                }
+                save_training_metrics(self.history, experiment_dir, final_metrics)
+            except Exception as e:
+                self.logger.warning(f"Error saving final metrics: {e}")
                 
         return self.history
 

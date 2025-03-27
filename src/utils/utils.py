@@ -634,3 +634,48 @@ def create_interactive_report(
         fig.write_html(save_path)
     else:
         fig.show()
+
+
+def save_training_metrics(
+    history: Dict[str, Any], 
+    experiment_dir: str, 
+    metadata: Optional[Dict[str, Any]] = None
+):
+    """
+    Save training metrics and metadata in real-time for dashboard monitoring.
+    
+    Args:
+        history: Dictionary containing training metrics
+        experiment_dir: Directory to save the metrics
+        metadata: Optional metadata about the experiment
+    """
+    # Create experiment directory if it doesn't exist
+    os.makedirs(experiment_dir, exist_ok=True)
+    
+    # Save history for real-time monitoring
+    history_file = os.path.join(experiment_dir, "history.json")
+    with open(history_file, "w") as f:
+        json.dump(history, f, indent=2)
+    
+    # Save metadata if provided
+    if metadata:
+        metadata_file = os.path.join(experiment_dir, "metadata.json")
+        
+        # Update existing metadata if it exists
+        if os.path.exists(metadata_file):
+            try:
+                with open(metadata_file, "r") as f:
+                    existing_metadata = json.load(f)
+                # Update with new metadata
+                existing_metadata.update(metadata)
+                metadata = existing_metadata
+            except:
+                pass
+        
+        # Add timestamp
+        metadata["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        with open(metadata_file, "w") as f:
+            json.dump(metadata, f, indent=2)
+            
+    return history_file
