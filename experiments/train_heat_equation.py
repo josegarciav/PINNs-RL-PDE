@@ -99,6 +99,9 @@ def main():
             reward_weights=config["rl"]["reward_weights"],
             device=device,
         )
+        
+        # Update PDE with RL agent for adaptive sampling
+        pde.rl_agent = rl_agent
 
     # Trainer setup
     trainer = PDETrainer(
@@ -106,6 +109,7 @@ def main():
         pde=pde,
         optimizer_config=config["training"]["optimizer_config"],
         device=device,
+        rl_agent=rl_agent,
     )
 
     # Training loop with timing

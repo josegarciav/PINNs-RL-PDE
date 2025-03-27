@@ -115,10 +115,20 @@ def train_model(
     :return: Training history
     """
     # Create trainer
-    trainer = PDETrainer(pde=pde, pinn=model, rl_agent=rl_agent, config=config)
+    trainer = PDETrainer(
+        pde=pde, 
+        pinn=model, 
+        rl_agent=rl_agent, 
+        config=config,
+    )
 
     # Train model
-    history = trainer.train()
+    history = trainer.train(
+        num_epochs=config.training.num_epochs,
+        batch_size=config.training.batch_size,
+        num_points=config.training.num_collocation_points,
+        validation_frequency=config.training.validation_frequency,
+    )
 
     # Save final model
     model_path = os.path.join(exp_dir, config.paths.model_dir, "final_model.pth")
@@ -186,6 +196,10 @@ def main():
         source_term=config.pde.source_term,
         device=config.device,
     )
+    
+    # Add RL agent to PDE for adaptive sampling if available
+    if rl_agent:
+        pde.rl_agent = rl_agent
 
     # Train model
     history = train_model(model, pde, rl_agent, config, exp_dir)

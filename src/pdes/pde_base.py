@@ -32,43 +32,39 @@ class PDEBase:
     Provides common functionality for all PDE implementations.
     """
 
-    def __init__(self, config: PDEConfig):
+    def __init__(
+        self, 
+        config: PDEConfig,
+        rl_agent=None
+    ):
         """
-        Initialize the PDE base class.
+        Initialize PDE with given configuration.
 
-        :param config: PDEConfig object containing all necessary parameters
+        :param config: Configuration dataclass
+        :param rl_agent: Optional RL agent for adaptive sampling
         """
         self.config = config
-        self.device = config.device or torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        )
+        self.domain = config.domain
+        self.rl_agent = rl_agent  # Store RL agent
+        
+        # Make domain always a list for uniform handling
+        if not isinstance(self.domain[0], (list, tuple)):
+            self.domain = [self.domain]  # Convert to list
+            
+        # Setup device
+        self.device = config.device or torch.device("cpu")
+        
+        # Store dimensionality
         self.dimension = config.dimension
-
-        # Handle domain based on dimension
-        if self.dimension == 1:
-            self.domain = config.domain
-        else:
-            self.domain = config.domain  # List of tuples for each dimension
-
+            
+        # Setup boundary and initial conditions
         self._setup_boundary_conditions()
+        
+        # Setup validation points
         self._setup_validation_points()
-        self.metrics_history = []
-
-        # Initialize RL agent for adaptive sampling
-        self.rl_agent = RLAgent(
-            state_dim=self.dimension + 1,  # spatial dimensions + time
-            action_dim=1,  # sampling probability
-            hidden_dim=64,
-            learning_rate=0.001,
-            gamma=0.99,
-            epsilon_start=1.0,
-            epsilon_end=0.01,
-            epsilon_decay=0.995,
-            memory_size=10000,
-            batch_size=64,
-            target_update=100,
-            device=self.device,
-        )
+        
+        # For tracking point distribution
+        self.collocation_history = []
 
     def _setup_boundary_conditions(self):
         """Set up boundary condition functions from configuration."""
@@ -151,22 +147,66 @@ class PDEBase:
             if self.dimension == 1:
                 # For 1D, domain is a list with one tuple
                 x = torch.linspace(
-                    self.domain[0][0], self.domain[0][1], num_points
+                    self.domain[0][0], self.domain[0][1], int(np.sqrt(num_points))
                 ).reshape(-1, 1)
+                t = torch.linspace(
+                    self.config.time_domain[0], self.config.time_domain[1], int(np.sqrt(num_points))
+                ).reshape(-1, 1)
+                
+                # Create meshgrid for even coverage
+                X, T = torch.meshgrid(x.squeeze(), t.squeeze(), indexing='ij')
+                x = X.reshape(-1, 1)
+                t = T.reshape(-1, 1)
+                
+                # Add some noise for better training
+                x_noise = (self.domain[0][1] - self.domain[0][0]) * 0.01
+                t_noise = (self.config.time_domain[1] - self.config.time_domain[0]) * 0.01
+                x = x + torch.randn_like(x) * x_noise
+                t = t + torch.randn_like(t) * t_noise
+                
+                # Clip to domain
+                x = torch.clamp(x, self.domain[0][0], self.domain[0][1])
+                t = torch.clamp(t, self.config.time_domain[0], self.config.time_domain[1])
+                
             else:
-                # Generate points for each dimension
-                x = []
+                # For multi-dimensional domains
+                grid_points = []
                 for dim in range(self.dimension):
-                    x.append(
-                        torch.linspace(
-                            self.domain[dim][0], self.domain[dim][1], num_points
-                        )
+                    grid_dim = torch.linspace(
+                        self.domain[dim][0], self.domain[dim][1], 
+                        max(2, int(num_points**(1/(self.dimension+1))))
                     )
-                x = torch.stack(x, dim=1)
-
-            t = torch.linspace(
-                self.config.time_domain[0], self.config.time_domain[1], num_points
-            ).reshape(-1, 1)
+                    grid_points.append(grid_dim)
+                
+                # Add time dimension
+                grid_points.append(torch.linspace(
+                    self.config.time_domain[0], self.config.time_domain[1],
+                    max(2, int(num_points**(1/(self.dimension+1))))
+                ))
+                
+                # Create meshgrid
+                grid_tensors = torch.meshgrid(*grid_points, indexing='ij')
+                
+                # Reshape to points
+                points = torch.stack([g.reshape(-1) for g in grid_tensors], dim=1)
+                
+                # Add noise for better training
+                noise_scale = 0.01
+                noise = torch.randn_like(points) * noise_scale
+                points = points + noise
+                
+                # Clip to domain
+                for dim in range(self.dimension):
+                    points[:, dim] = torch.clamp(
+                        points[:, dim], self.domain[dim][0], self.domain[dim][1]
+                    )
+                points[:, -1] = torch.clamp(
+                    points[:, -1], self.config.time_domain[0], self.config.time_domain[1]
+                )
+                
+                # Extract x and t
+                x = points[:, :self.dimension]
+                t = points[:, -1].reshape(-1, 1)
 
         elif strategy == "latin_hypercube":
             sampler = qmc.LatinHypercube(d=self.dimension + 1)  # +1 for time dimension
@@ -178,7 +218,7 @@ class PDEBase:
                 x.append(
                     torch.tensor(
                         qmc.scale(
-                            sample[:, [dim]],
+                            sample[:, dim].reshape(-1, 1),
                             l_bounds=[float(self.domain[dim][0])],
                             u_bounds=[float(self.domain[dim][1])],
                         ),
@@ -190,7 +230,7 @@ class PDEBase:
             # Scale time coordinate
             t = torch.tensor(
                 qmc.scale(
-                    sample[:, [-1]],
+                    sample[:, -1].reshape(-1, 1),
                     l_bounds=[float(self.config.time_domain[0])],
                     u_bounds=[float(self.config.time_domain[1])],
                 ),
@@ -198,43 +238,83 @@ class PDEBase:
             )
 
         elif strategy == "adaptive":
-            # Use RL agent for adaptive sampling
-            points = []
-            while len(points) < num_points:
-                # Generate random point
+            # Use RL agent for adaptive sampling if available
+            if self.rl_agent is not None:
+                # Use the adaptive sampling from RL agent
+                grid_size = min(100, max(10, int(np.sqrt(num_points))))
+                
+                # Create a grid of points for the RL agent to sample from
                 if self.dimension == 1:
-                    x = (
-                        torch.rand(1, 1) * (self.domain[0][1] - self.domain[0][0])
-                        + self.domain[0][0]
+                    x_grid = torch.linspace(
+                        self.domain[0][0], self.domain[0][1], grid_size, device=self.device
                     )
+                    t_grid = torch.linspace(
+                        self.config.time_domain[0], self.config.time_domain[1], grid_size, device=self.device
+                    )
+                    X, T = torch.meshgrid(x_grid, t_grid, indexing='ij')
+                    points = torch.stack([X.flatten(), T.flatten()], dim=1)
                 else:
-                    x = []
+                    # Generate multi-dimensional grid
+                    grid_points = []
                     for dim in range(self.dimension):
-                        x.append(
-                            torch.rand(1, 1)
-                            * (self.domain[dim][1] - self.domain[dim][0])
-                            + self.domain[dim][0]
-                        )
-                    x = torch.cat(x, dim=1)
-
-                t = (
-                    torch.rand(1, 1)
-                    * (self.config.time_domain[1] - self.config.time_domain[0])
-                    + self.config.time_domain[0]
+                        grid_points.append(torch.linspace(
+                            self.domain[dim][0], self.domain[dim][1], grid_size, device=self.device
+                        ))
+                    grid_points.append(torch.linspace(
+                        self.config.time_domain[0], self.config.time_domain[1], grid_size, device=self.device
+                    ))
+                    
+                    grid_tensors = torch.meshgrid(*grid_points, indexing='ij')
+                    points = torch.stack([g.flatten() for g in grid_tensors], dim=1)
+                
+                # Get sampling probabilities from RL agent
+                with torch.no_grad():
+                    probs = self.rl_agent.select_action(points)
+                    probs = torch.abs(probs) # Ensure positive probabilities
+                    probs = probs / torch.sum(probs) # Normalize
+                
+                # Sample points based on probabilities
+                selected_indices = torch.multinomial(
+                    probs.flatten(), min(num_points, len(points)), replacement=True
                 )
-
-                # Get RL agent's action (sampling probability)
-                state = torch.cat([x, t], dim=1)
-                action = self.rl_agent.select_action(state.to(self.device))
-
-                # Accept/reject based on action
-                if torch.rand(1).to(self.device) < action:
-                    points.append((x, t))
-
-            # Stack accepted points
-            x = torch.cat([p[0] for p in points], dim=0)
-            t = torch.cat([p[1] for p in points], dim=0)
-
+                selected_points = points[selected_indices]
+                
+                # Add some small noise to avoid exact grid points
+                noise_scale = min(
+                    0.01,
+                    min([(self.domain[d][1] - self.domain[d][0])/grid_size for d in range(self.dimension)]),
+                    (self.config.time_domain[1] - self.config.time_domain[0])/grid_size
+                )
+                noise = torch.randn_like(selected_points) * noise_scale
+                selected_points = selected_points + noise
+                
+                # Clip to domain bounds
+                for dim in range(self.dimension):
+                    selected_points[:, dim] = torch.clamp(
+                        selected_points[:, dim], self.domain[dim][0], self.domain[dim][1]
+                    )
+                selected_points[:, -1] = torch.clamp(
+                    selected_points[:, -1], self.config.time_domain[0], self.config.time_domain[1]
+                )
+                
+                # Split into spatial and temporal coordinates
+                if self.dimension == 1:
+                    x = selected_points[:, 0].reshape(-1, 1)
+                else:
+                    x = selected_points[:, :self.dimension]
+                t = selected_points[:, -1].reshape(-1, 1)
+                
+                # Store points for visualization
+                self.collocation_history.append(selected_points.cpu().numpy())
+                
+                # Reward the RL agent based on the diversity of selected points
+                if len(self.collocation_history) > 1:
+                    prev_points = torch.tensor(self.collocation_history[-2], device=self.device)
+                    reward = torch.mean(torch.min(torch.cdist(selected_points, prev_points), dim=1)[0])
+                    self.rl_agent.update_epsilon(len(self.collocation_history)) # Update exploration rate
+            else:
+                # Fallback to uniform sampling if no RL agent
+                return self.generate_collocation_points(num_points, strategy="uniform")
         else:
             raise ValueError(f"Unknown sampling strategy: {strategy}")
 
@@ -371,7 +451,7 @@ class PDEBase:
         """
         state = {
             "config": self.config,
-            "metrics_history": self.metrics_history,
+            "collocation_history": self.collocation_history,
             "validation_points": self.validation_points,
         }
         torch.save(state, path)
@@ -384,7 +464,7 @@ class PDEBase:
         """
         state = torch.load(path)
         self.config = state["config"]
-        self.metrics_history = state["metrics_history"]
+        self.collocation_history = state["collocation_history"]
         self.validation_points = state["validation_points"]
         self._setup_boundary_conditions()
 
@@ -426,3 +506,143 @@ class PDEBase:
             actions[i] = self.rl_agent.select_action(states[i : i + 1])
 
         return x, t, actions
+
+    def visualize_collocation_evolution(
+        self,
+        save_path: Optional[str] = None,
+        num_snapshots: int = 5
+    ):
+        """
+        Visualize the evolution of collocation points during training.
+        
+        :param save_path: Path to save the visualization
+        :param num_snapshots: Number of snapshots to visualize
+        """
+        if not self.collocation_history or len(self.collocation_history) < 2:
+            print("Not enough collocation history to visualize evolution")
+            return
+            
+        import matplotlib.pyplot as plt
+        from matplotlib.colors import LinearSegmentedColormap
+        import os
+        
+        # Create output directory if it doesn't exist
+        os.makedirs("visualizations", exist_ok=True)
+        
+        # Create figure
+        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+        plt.suptitle("Evolution of Collocation Points Network", fontsize=16)
+        
+        # Define custom colormap for evolution
+        colors = ["#0d3b66", "#1b9aaa", "#ef476f", "#ffc43d"]
+        cmap = LinearSegmentedColormap.from_list("evolution_cmap", colors, N=len(self.collocation_history))
+        
+        # Select snapshots to visualize
+        indices = np.linspace(0, len(self.collocation_history)-1, num_snapshots).astype(int)
+        
+        # First plot: Progression of points over time
+        ax = axes[0, 0]
+        for i, idx in enumerate(indices):
+            points = self.collocation_history[idx]
+            if self.dimension == 1:
+                x_pts = points[:, 0]
+                y_pts = points[:, 1]  # time dimension
+            else:
+                # For 2D problems, use the first two spatial dimensions
+                x_pts = points[:, 0]
+                y_pts = points[:, 1]
+                
+            alpha = 0.3 + 0.7 * (i / (len(indices)-1))  # Increasing alpha
+            size = 5 + 20 * (i / (len(indices)-1))      # Increasing size
+            ax.scatter(x_pts, y_pts, alpha=alpha, s=size, 
+                      color=cmap(i/(len(indices)-1)), 
+                      label=f"Snapshot {idx}")
+                      
+        ax.set_xlabel("x", fontsize=12)
+        ax.set_ylabel("t", fontsize=12)
+        ax.set_title("Progression of Points", fontsize=14)
+        ax.legend()
+        ax.grid(alpha=0.3)
+        
+        # Second plot: Density evolution (first snapshot)
+        points = self.collocation_history[0]
+        self._plot_density_snapshot(
+            axes[0, 1], points, "Initial Distribution", cmap="Blues")
+            
+        # Third plot: Density evolution (middle snapshot)
+        mid_idx = len(self.collocation_history) // 2
+        points = self.collocation_history[mid_idx]
+        self._plot_density_snapshot(
+            axes[1, 0], points, f"Intermediate Distribution (Snapshot {mid_idx})", cmap="Greens")
+            
+        # Fourth plot: Density evolution (last snapshot)
+        points = self.collocation_history[-1]
+        self._plot_density_snapshot(
+            axes[1, 1], points, "Final Distribution", cmap="Reds")
+            
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, dpi=300)
+        else:
+            plt.savefig("visualizations/collocation_evolution.png", dpi=300)
+        plt.close()
+    
+    def _plot_density_snapshot(self, ax, points, title, cmap="viridis"):
+        """Helper method to plot density snapshot."""
+        from scipy.stats import gaussian_kde
+        
+        if self.dimension == 1:
+            x_pts = points[:, 0]
+            y_pts = points[:, 1]  # time dimension
+        else:
+            # For 2D problems, use the first two spatial dimensions
+            x_pts = points[:, 0]
+            y_pts = points[:, 1]
+            
+        # Define grid for density estimation
+        xmin, xmax = np.min(x_pts), np.max(x_pts)
+        ymin, ymax = np.min(y_pts), np.max(y_pts)
+        
+        # Add small padding
+        x_padding = (xmax - xmin) * 0.05
+        y_padding = (ymax - ymin) * 0.05 if ymax > ymin else 0.05
+        
+        xmin -= x_padding
+        xmax += x_padding
+        ymin -= y_padding
+        ymax += y_padding
+        
+        # Create meshgrid
+        x_grid, y_grid = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
+        positions = np.vstack([x_grid.ravel(), y_grid.ravel()])
+        
+        try:
+            # Kernel density estimation
+            values = np.vstack([x_pts, y_pts])
+            kernel = gaussian_kde(values)
+            density = np.reshape(kernel(positions), x_grid.shape)
+            
+            # Plot density heatmap
+            im = ax.imshow(
+                density.T, origin='lower', extent=[xmin, xmax, ymin, ymax], 
+                aspect='auto', cmap=cmap, alpha=0.8
+            )
+            
+            # Add contour lines
+            contour = ax.contour(
+                x_grid, y_grid, density, colors='white', alpha=0.3, levels=5
+            )
+            
+            plt.colorbar(im, ax=ax, label="Density")
+        except Exception as e:
+            # Fallback to histogram
+            h = ax.hist2d(x_pts, y_pts, bins=50, cmap=cmap)
+            plt.colorbar(h[3], ax=ax, label="Count")
+            
+        # Add points overlay
+        ax.scatter(x_pts, y_pts, s=3, c='white', alpha=0.2)
+        
+        ax.set_xlabel("x", fontsize=12)
+        ax.set_ylabel("t", fontsize=12)
+        ax.set_title(title, fontsize=14)
+        ax.grid(alpha=0.3)

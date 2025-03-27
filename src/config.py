@@ -92,8 +92,6 @@ class EvaluationConfig:
 class LoggingConfig:
     level: str
     save_tensorboard: bool
-    save_checkpoints: bool
-    checkpoint_frequency: int
     log_frequency: int
 
 
@@ -221,8 +219,6 @@ class Config:
         self.logging = LoggingConfig(
             level=logging_config.get("level", "INFO"),
             save_tensorboard=logging_config.get("save_tensorboard", True),
-            save_checkpoints=logging_config.get("save_checkpoints", True),
-            checkpoint_frequency=logging_config.get("checkpoint_frequency", 1000),
             log_frequency=logging_config.get("log_frequency", 100),
         )
 
@@ -366,8 +362,6 @@ class Config:
             "logging": {
                 "level": self.logging.level,
                 "save_tensorboard": self.logging.save_tensorboard,
-                "save_checkpoints": self.logging.save_checkpoints,
-                "checkpoint_frequency": self.logging.checkpoint_frequency,
                 "log_frequency": self.logging.log_frequency,
             },
             "paths": {

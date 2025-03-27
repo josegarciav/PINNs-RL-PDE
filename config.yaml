@@ -88,12 +88,10 @@ evaluation:
 # Logging Configuration
 logging:
   level: "INFO"
-  save_checkpoints: true
-  checkpoint_frequency: 1000
+  save_tensorboard: true
   log_frequency: 100
 
 # Paths
 paths:
   results_dir: "results"
-  checkpoint_dir: "checkpoints"
   log_dir: "logs" 

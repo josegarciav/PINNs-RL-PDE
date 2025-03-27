@@ -3,6 +3,10 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
+import matplotlib.pyplot as plt
+import os
+from scipy.stats import gaussian_kde
+from matplotlib.colors import LinearSegmentedColormap
 from typing import List, Tuple, Dict, Optional
 from collections import deque
 import random
@@ -372,6 +376,153 @@ class RLAgent:
             "std_episode_reward": (
                 np.std(self.episode_rewards) if self.episode_rewards else 0.0
             ),
+        }
+
+    def visualize_collocation_evolution(self, points_history, epoch):
+        """
+        Visualize how collocation points evolve during training
+        Args:
+            points_history: List of points at different epochs
+            epoch: Current training epoch
+        """
+        # Create visualization directory if it doesn't exist
+        os.makedirs("visualizations", exist_ok=True)
+
+        # Skip if not enough history
+        if len(points_history) < 2:
+            return
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Define custom colormap for evolution (from older to newer points)
+        colors = ["#0d3b66", "#1b9aaa", "#ef476f", "#ffc43d"]
+        cmap = LinearSegmentedColormap.from_list("evolution_cmap", colors, N=len(points_history))
+        
+        # Plot points progression with alpha to show density
+        num_checkpoints = min(5, len(points_history))
+        checkpoint_indices = [int(i * (len(points_history)-1) / (num_checkpoints-1)) for i in range(num_checkpoints)]
+        
+        for i, idx in enumerate(checkpoint_indices):
+            points = points_history[idx]
+            x_pts = points[:, 0]
+            if points.shape[1] > 1:
+                y_pts = points[:, 1]
+            else:
+                # If time dimension is separate
+                y_pts = np.zeros_like(x_pts)
+                
+            alpha = 0.3 + 0.7 * (i / (num_checkpoints-1))  # Increasing alpha
+            size = 5 + 20 * (i / (num_checkpoints-1))      # Increasing size
+            ax.scatter(x_pts, y_pts, alpha=alpha, s=size, color=cmap(i/(num_checkpoints-1)), 
+                      label=f"Epoch {int(epoch * idx / max(1, len(points_history)-1))}")
+        
+        ax.set_xlabel("x", fontsize=12)
+        ax.set_ylabel("t", fontsize=12)
+        ax.set_title(f"Evolution of Collocation Points (Epoch {epoch})", fontsize=14)
+        ax.legend()
+        ax.grid(alpha=0.3)
+        
+        # Save the figure
+        plt.tight_layout()
+        plt.savefig(f"visualizations/collocation_evolution_epoch_{epoch}.png", dpi=300)
+        plt.savefig(f"visualizations/latest_collocation_evolution.png", dpi=300)
+        plt.close()
+        
+        # Create a heatmap of the most recent points density
+        if len(points_history) > 0:
+            recent_points = points_history[-1]
+            self._create_density_heatmap(recent_points, epoch)
+    
+    def _create_density_heatmap(self, points, epoch):
+        """Create a heatmap showing the density of collocation points"""
+        # Extract x and y coordinates
+        x_pts = points[:, 0]
+        if points.shape[1] > 1:
+            y_pts = points[:, 1]
+        else:
+            y_pts = np.zeros_like(x_pts)
+            
+        # Define grid for density estimation
+        xmin, xmax = np.min(x_pts), np.max(x_pts)
+        ymin, ymax = np.min(y_pts), np.max(y_pts)
+        
+        # Add small padding
+        x_padding = (xmax - xmin) * 0.05
+        y_padding = (ymax - ymin) * 0.05 if ymax > ymin else 0.05
+        
+        xmin -= x_padding
+        xmax += x_padding
+        ymin -= y_padding
+        ymax += y_padding
+        
+        # Create meshgrid
+        x_grid, y_grid = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
+        positions = np.vstack([x_grid.ravel(), y_grid.ravel()])
+        
+        # Kernel density estimation
+        try:
+            values = np.vstack([x_pts, y_pts])
+            kernel = gaussian_kde(values)
+            density = np.reshape(kernel(positions), x_grid.shape)
+        except Exception as e:
+            # Fallback to histogram if KDE fails
+            fig, ax = plt.subplots(figsize=(10, 8))
+            h = ax.hist2d(x_pts, y_pts, bins=50, cmap="viridis")
+            ax.set_xlabel("x", fontsize=12)
+            ax.set_ylabel("t", fontsize=12)
+            ax.set_title(f"Collocation Points Density (Epoch {epoch})", fontsize=14)
+            plt.colorbar(h[3], ax=ax, label="Point Count")
+            plt.tight_layout()
+            plt.savefig(f"visualizations/density_heatmap_epoch_{epoch}.png", dpi=300)
+            plt.savefig(f"visualizations/latest_density_heatmap.png", dpi=300)
+            plt.close()
+            return
+            
+        # Plot density heatmap
+        fig, ax = plt.subplots(figsize=(10, 8))
+        im = ax.imshow(density.T, origin='lower', extent=[xmin, xmax, ymin, ymax], 
+                       aspect='auto', cmap="viridis")
+                       
+        # Add contour lines for better visualization
+        contour = ax.contour(x_grid, y_grid, density, colors='white', alpha=0.3, levels=5)
+        
+        # Add points overlay
+        ax.scatter(x_pts, y_pts, s=2, c='white', alpha=0.1)
+        
+        ax.set_xlabel("x", fontsize=12)
+        ax.set_ylabel("t", fontsize=12)
+        ax.set_title(f"Collocation Points Density (Epoch {epoch})", fontsize=14)
+        plt.colorbar(im, ax=ax, label="Density")
+        
+        plt.tight_layout()
+        plt.savefig(f"visualizations/density_heatmap_epoch_{epoch}.png", dpi=300)
+        plt.savefig(f"visualizations/latest_density_heatmap.png", dpi=300)
+        plt.close()
+    
+    def get_sampling_density(self):
+        """Return current sampling density map"""
+        # Generate a grid of points
+        x = np.linspace(0, 1, 100)
+        t = np.linspace(0, 1, 100)
+        X, T = np.meshgrid(x, t)
+        grid_points = np.vstack([X.flatten(), T.flatten()])
+        
+        # Convert to tensor
+        grid_tensor = torch.tensor(grid_points.T, dtype=torch.float32, device=self.device)
+        
+        # Get sampling probabilities
+        with torch.no_grad():
+            probs = self.select_action(grid_tensor)
+            probs = probs.cpu().numpy().flatten()
+        
+        # Reshape to grid
+        density_map = probs.reshape(X.shape)
+        
+        return {
+            "x": x,
+            "t": t,
+            "density": density_map
         }
 
 

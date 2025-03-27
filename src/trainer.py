@@ -18,7 +18,8 @@ class PDETrainer:
         pde: "PDEBase",
         optimizer_config: Dict,
         device: Optional[torch.device] = None,
-        checkpoint_dir: str = "checkpoints",
+        rl_agent=None,
+        viz_frequency=10,
     ):
         """
         Initialize trainer.
@@ -27,15 +28,14 @@ class PDETrainer:
         :param pde: PDE instance
         :param optimizer_config: Optimizer configuration
         :param device: Device to train on
-        :param checkpoint_dir: Directory to save checkpoints
+        :param rl_agent: Reinforcement Learning agent
+        :param viz_frequency: Frequency of visualization
         """
         self.device = device or torch.device(
             "mps" if torch.backends.mps.is_available() else "cpu"
         )
         self.model = model.to(self.device)
         self.pde = pde
-        self.checkpoint_dir = checkpoint_dir
-        os.makedirs(checkpoint_dir, exist_ok=True)
 
         # Setup optimizer
         self.optimizer = optim.Adam(
@@ -70,6 +70,9 @@ class PDETrainer:
 
         # Setup logging
         self._setup_logging()
+
+        self.rl_agent = rl_agent
+        self.viz_frequency = viz_frequency
 
     def _setup_logging(self):
         """Setup logging configuration."""
@@ -127,7 +130,6 @@ class PDETrainer:
         batch_size: int,
         num_points: int,
         validation_frequency: int = 10,
-        save_frequency: int = 50,
     ):
         """
         Train the model.
@@ -136,10 +138,10 @@ class PDETrainer:
         :param batch_size: Batch size for training
         :param num_points: Number of collocation points
         :param validation_frequency: Frequency of validation
-        :param save_frequency: Frequency of checkpoint saving
         """
         self.logger.info("Starting training...")
 
+        points_history = []
         for epoch in range(num_epochs):
             self.model.train()
             epoch_losses = []
@@ -150,7 +152,11 @@ class PDETrainer:
             )
             for _ in pbar:
                 # Generate batch of collocation points
-                x_batch, t_batch = self.pde.generate_collocation_points(batch_size)
+                # Use adaptive sampling if RL agent is available
+                sampling_strategy = "adaptive" if self.rl_agent is not None else "uniform"
+                x_batch, t_batch = self.pde.generate_collocation_points(
+                    batch_size, strategy=sampling_strategy
+                )
                 x_batch = x_batch.to(self.device)
                 t_batch = t_batch.to(self.device)
 
@@ -210,57 +216,27 @@ class PDETrainer:
                 if val_losses["total_loss"] < self.best_val_loss:
                     self.best_val_loss = val_losses["total_loss"]
                     self.patience_counter = 0
-                    self.save_checkpoint(f"best_model.pth")
                 else:
                     self.patience_counter += 1
                     if self.patience_counter >= self.patience:
                         self.logger.info("Early stopping triggered!")
                         break
 
-            # Save checkpoint
-            if (epoch + 1) % save_frequency == 0:
-                self.save_checkpoint(f"checkpoint_epoch_{epoch+1}.pth")
-
-    def save_checkpoint(self, filename: str):
-        """
-        Save training checkpoint.
-
-        :param filename: Name of the checkpoint file
-        """
-        checkpoint = {
-            "epoch": len(self.history["train_loss"]),
-            "model_state_dict": self.model.state_dict(),
-            "optimizer_state_dict": self.optimizer.state_dict(),
-            "scheduler_state_dict": self.scheduler.state_dict(),
-            "cosine_scheduler_state_dict": self.cosine_scheduler.state_dict(),
-            "history": self.history,
-            "best_val_loss": self.best_val_loss,
-            "patience_counter": self.patience_counter,
-        }
-
-        path = os.path.join(self.checkpoint_dir, filename)
-        torch.save(checkpoint, path)
-        self.logger.info(f"Saved checkpoint to {path}")
-
-    def load_checkpoint(self, filename: str):
-        """
-        Load training checkpoint.
-
-        :param filename: Name of the checkpoint file
-        """
-        path = os.path.join(self.checkpoint_dir, filename)
-        checkpoint = torch.load(path, map_location=self.device)
-
-        self.model.load_state_dict(checkpoint["model_state_dict"])
-        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
-        self.cosine_scheduler.load_state_dict(checkpoint["cosine_scheduler_state_dict"])
-
-        self.history = checkpoint["history"]
-        self.best_val_loss = checkpoint["best_val_loss"]
-        self.patience_counter = checkpoint["patience_counter"]
-
-        self.logger.info(f"Loaded checkpoint from {path}")
+            # Store collocation points for visualization
+            if self.rl_agent:
+                points_history.append(x_batch.cpu().numpy())
+            
+            # Visualize collocation points at regular intervals
+            if epoch % self.viz_frequency == 0 and self.rl_agent:
+                self.rl_agent.visualize_collocation_evolution(points_history, epoch)
+                
+            # Generate comprehensive visualization at the end of training
+            if epoch == num_epochs - 1 or (self.patience_counter >= self.patience):
+                if hasattr(self.pde, 'visualize_collocation_evolution'):
+                    self.pde.visualize_collocation_evolution(
+                        save_path=f"visualizations/final_collocation_evolution_epoch_{epoch}.png")
+                
+        return self.history
 
     def get_training_history(self) -> Dict[str, List[float]]:
         """
