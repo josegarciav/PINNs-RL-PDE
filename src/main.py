@@ -1,212 +1,127 @@
-import torch
 import os
-import json
-from datetime import datetime
-from typing import Dict, Optional, Tuple
+import sys
+import multiprocessing
+import webbrowser
+from time import sleep
+import argparse
 
-from src.config import Config
-from src.neural_networks.neural_networks import PINNModel
-from src.pde_base import PDEBase
-from src.rl_agent import RLAgent
-from src.trainer import PDETrainer
-from src.utils import (
-    setup_logging,
-    save_model,
-    load_model,
-    plot_pinn_solution,
-    plot_pinn_3d_solution,
-    plot_training_history,
-)
+def run_interactive_trainer():
+    """Run the interactive trainer module"""
+    from src.interactive_trainer import main as trainer_main
+    trainer_main()
 
-
-def setup_experiment(config: Config) -> Tuple[str, str]:
-    """
-    Setup experiment directories and logging.
-
-    :param config: Configuration object
-    :return: Tuple of (experiment directory, log directory)
-    """
-    # Create experiment directory with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    exp_dir = os.path.join(config.paths.experiments_dir, f"pinn_{timestamp}")
-    os.makedirs(exp_dir, exist_ok=True)
-
-    # Create model and log directories
-    model_dir = os.path.join(exp_dir, config.paths.model_dir)
-    log_dir = os.path.join(exp_dir, config.paths.log_dir)
-    os.makedirs(model_dir, exist_ok=True)
-    os.makedirs(log_dir, exist_ok=True)
-
-    # Save configuration
-    config_path = os.path.join(exp_dir, "config.json")
-    with open(config_path, "w") as f:
-        json.dump(config.to_dict(), f, indent=4)
-
-    # Setup logging
-    logger = setup_logging(log_dir)
-    logger.info(f"Starting experiment in directory: {exp_dir}")
-
-    return exp_dir, log_dir
-
-
-def create_model(config: Config) -> PINNModel:
-    """
-    Create and initialize the PINN model.
-
-    :param config: Configuration object
-    :return: Initialized PINN model
-    """
-    # Get the selected PDE type
-    pde_type = config.pde_type
+def run_dashboard(port=8050):
+    """Run the dashboard module"""
+    from src.dashboard import app
+    print(f"\n🚀 Starting PINNs-RL-PDE Dashboard on port {port}")
+    print(f"📊 Open http://127.0.0.1:{port}/ in your browser")
     
-    # Create model using PDE-specific configuration
-    model = PINNModel(
-        pde_type=pde_type,  # Use PDE-specific configuration
-        device=config.device,
-    )
+    # Try different ports if the specified one is in use
+    max_retries = 3
+    current_port = port
     
-    return model
+    for attempt in range(max_retries):
+        try:
+            app.run(debug=False, port=current_port)
+            break
+        except Exception as e:
+            if "Address already in use" in str(e):
+                print(f"Port {current_port} is in use. Trying port {current_port+1}...")
+                current_port += 1
+                if attempt == max_retries - 1:
+                    print(f"Could not find available port after {max_retries} attempts.")
+                    print("Please close any running dashboards and try again.")
+                    sys.exit(1)
+            else:
+                print(f"Error starting dashboard: {e}")
+                sys.exit(1)
 
-
-def create_rl_agent(config: Config) -> Optional[RLAgent]:
-    """
-    Create the RL agent if enabled in config.
-
-    :param config: Configuration object
-    :return: Optional RL agent instance
-    """
-    if config.rl.enabled:
-        return RLAgent(
-            state_dim=config.rl.state_dim,
-            action_dim=config.rl.action_dim,
-            hidden_dim=config.rl.hidden_dim,
-            learning_rate=config.rl.learning_rate,
-            gamma=config.rl.gamma,
-            epsilon_start=config.rl.epsilon_start,
-            epsilon_end=config.rl.epsilon_end,
-            epsilon_decay=config.rl.epsilon_decay,
-            memory_size=config.rl.memory_size,
-            batch_size=config.rl.batch_size,
-            target_update=config.rl.target_update,
-            reward_weights=config.rl.reward_weights,
-            device=config.device,
-        )
-    return None
-
-
-def train_model(
-    model: PINNModel,
-    pde: PDEBase,
-    rl_agent: Optional[RLAgent],
-    config: Config,
-    exp_dir: str,
-) -> Dict:
-    """
-    Train the PINN model with the specified configuration.
-
-    :param model: PINN model instance
-    :param pde: PDE instance
-    :param rl_agent: Optional RL agent
-    :param config: Configuration object
-    :param exp_dir: Experiment directory
-    :return: Training history
-    """
-    # Create trainer
-    trainer = PDETrainer(
-        pde=pde,
-        pinn=model,
-        rl_agent=rl_agent,
-        config=config,
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="PINNs-RL-PDE Main Application",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  Run complete application (trainer first, then dashboard):
+    python src/main.py
+  
+  Run only the interactive trainer:
+    python src/main.py --trainer-only
+    
+  Run only the dashboard viewer:
+    python src/main.py --dashboard-only
+  
+  Specify dashboard port:
+    python src/main.py --port 8051
+        """
     )
-
-    # Train model with experiment directory for real-time monitoring
-    history = trainer.train(
-        num_epochs=config.training.num_epochs,
-        batch_size=config.training.batch_size,
-        num_points=config.training.num_collocation_points,
-        validation_frequency=config.training.validation_frequency,
-        experiment_dir=exp_dir,
+    parser.add_argument(
+        "--port", 
+        type=int, 
+        default=8050, 
+        help="Port to run the dashboard on (default: 8050)"
     )
-
-    # Save final model
-    model_path = os.path.join(exp_dir, config.paths.model_dir, "final_model.pth")
-    save_model(model, model_path, config.to_dict())
-
-    # Plot training history
-    history_path = os.path.join(exp_dir, "training_history.png")
-    plot_training_history(history, save_path=history_path)
-
-    return history
-
-
-def evaluate_model(model: PINNModel, pde: PDEBase, exp_dir: str, config: Config):
-    """
-    Evaluate the trained model and generate visualizations.
-
-    :param model: Trained PINN model
-    :param pde: PDE instance
-    :param exp_dir: Experiment directory
-    :param config: Configuration object
-    """
-    # Generate 2D plots
-    plot_path = os.path.join(exp_dir, "solution_2d.png")
-    plot_pinn_solution(
-        model=model,
-        pde=pde,
-        domain=pde.domain,
-        resolution=config.evaluation.resolution,
-        device=config.device,
-        save_path=plot_path,
+    parser.add_argument(
+        "--dashboard-only",
+        action="store_true",
+        help="Run only the dashboard viewer for existing experiments"
     )
-
-    # Generate 3D plots
-    plot_3d_path = os.path.join(exp_dir, "solution_3d.png")
-    plot_pinn_3d_solution(
-        model=model,
-        pde=pde,
-        domain=pde.domain,
-        t_domain=pde.t_domain,
-        resolution=config.evaluation.resolution,
-        device=config.device,
-        save_path=plot_3d_path,
+    parser.add_argument(
+        "--trainer-only",
+        action="store_true",
+        help="Run only the interactive trainer without dashboard"
     )
-
+    return parser.parse_args()
 
 def main():
-    """Main training script."""
-    # Load configuration
-    config = Config()
-
-    # Setup experiment
-    exp_dir, log_dir = setup_experiment(config)
-
-    # Create model and RL agent
-    model = create_model(config)
-    rl_agent = create_rl_agent(config)
-
-    # Create PDE instance
-    pde = PDEBase(
-        domain=config.pde.domain,
-        t_domain=config.pde.t_domain,
-        initial_condition=config.pde.initial_condition,
-        boundary_conditions=config.pde.boundary_conditions,
-        diffusion_coefficient=config.pde.diffusion_coefficient,
-        source_term=config.pde.source_term,
-        device=config.device,
-    )
-
-    # Add RL agent to PDE for adaptive sampling if available
-    if rl_agent:
-        pde.rl_agent = rl_agent
-
-    # Train model
-    history = train_model(model, pde, rl_agent, config, exp_dir)
-
-    # Evaluate model
-    evaluate_model(model, pde, exp_dir, config)
-
-    print(f"✅ Experiment completed successfully. Results saved in: {exp_dir}")
-
+    # Parse command line arguments
+    args = parse_args()
+    
+    # Print welcome message
+    print("\n" + "="*50)
+    print("🧠 Welcome to PINNs-RL-PDE Framework")
+    print("="*50 + "\n")
+    
+    if args.dashboard_only and args.trainer_only:
+        print("Error: Cannot specify both --dashboard-only and --trainer-only")
+        sys.exit(1)
+    
+    if args.dashboard_only:
+        # Run only the dashboard viewer
+        print("📊 Starting Dashboard Viewer...")
+        run_dashboard(args.port)
+    elif args.trainer_only:
+        # Run only the interactive trainer
+        print("🎯 Starting Interactive Trainer...")
+        run_interactive_trainer()
+    else:
+        # Run complete application (trainer first, then dashboard)
+        print("🎯 Starting Interactive Trainer...")
+        trainer_process = multiprocessing.Process(target=run_interactive_trainer)
+        trainer_process.start()
+        
+        # Wait a bit to let the trainer initialize
+        sleep(2)
+        
+        print("\n📊 Starting Dashboard...")
+        dashboard_process = multiprocessing.Process(target=run_dashboard, args=(args.port,))
+        dashboard_process.start()
+        
+        # Open the dashboard in the default web browser
+        webbrowser.open(f'http://127.0.0.1:{args.port}/')
+        
+        try:
+            # Wait for both processes to complete
+            trainer_process.join()
+            dashboard_process.join()
+        except KeyboardInterrupt:
+            print("\n\n⚠️  Received interrupt signal. Shutting down...")
+            trainer_process.terminate()
+            dashboard_process.terminate()
+            trainer_process.join()
+            dashboard_process.join()
+            print("✅ Shutdown complete")
+            sys.exit(0)
 
 if __name__ == "__main__":
     main()

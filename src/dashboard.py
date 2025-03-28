@@ -1,5 +1,5 @@
 import dash
-from dash import dcc, html
+from dash import dcc, html, callback_context
 from dash.dependencies import Input, Output, State
 import plotly.graph_objects as go
 import plotly.express as px
@@ -11,6 +11,8 @@ from datetime import datetime
 import glob
 import argparse
 import sys
+import base64
+from pathlib import Path
 
 
 # Parse command line arguments for port
@@ -31,12 +33,37 @@ app = dash.Dash(__name__)
 app.layout = html.Div(
     [
         html.H1("PINNs-RL-PDE Training Monitor", style={"textAlign": "center"}),
-        # Experiment selector
+        # Experiment selector and download button row
         html.Div(
             [
-                html.Label("Select Experiment:"),
-                dcc.Dropdown(
-                    id="experiment-selector", placeholder="Select experiment..."
+                html.Div(
+                    [
+                        html.Label("Select Experiment:"),
+                        dcc.Dropdown(
+                            id="experiment-selector", placeholder="Select experiment..."
+                        ),
+                    ],
+                    style={"width": "70%", "display": "inline-block", "verticalAlign": "top"},
+                ),
+                html.Div(
+                    [
+                        html.Button(
+                            "Download Report",
+                            id="download-report-button",
+                            style={
+                                "backgroundColor": "#4CAF50",
+                                "color": "white",
+                                "padding": "10px 20px",
+                                "border": "none",
+                                "borderRadius": "4px",
+                                "cursor": "pointer",
+                                "fontSize": "16px",
+                                "marginTop": "20px",
+                            },
+                        ),
+                        dcc.Download(id="download-report"),
+                    ],
+                    style={"width": "30%", "display": "inline-block", "textAlign": "right"},
                 ),
             ],
             style={"marginBottom": "20px", "width": "50%", "margin": "auto"},
@@ -1107,6 +1134,104 @@ def generate_example_solution(X, Y, solution_type, pde_type, time=None):
         else:
             return np.sin(np.pi * X) * np.cos(2 * np.pi * time) * (1 + 0.1 * np.random.rand(*X.shape) - 0.05)
 
+def generate_html_report(experiment_path, figures, metadata):
+    """Generate an interactive HTML report for the experiment."""
+    html_template = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>PINNs-RL-PDE Experiment Report</title>
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 40px; }}
+            .container {{ max-width: 1200px; margin: 0 auto; }}
+            .section {{ margin-bottom: 40px; }}
+            .plot {{ width: 100%; height: 600px; }}
+            pre {{ background-color: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>PINNs-RL-PDE Experiment Report</h1>
+            <div class="section">
+                <h2>Experiment Details</h2>
+                <pre>{json.dumps(metadata, indent=2)}</pre>
+            </div>
+            <div class="section">
+                <h2>Training Progress</h2>
+                <div id="loss-plot" class="plot"></div>
+            </div>
+            <div class="section">
+                <h2>Collocation Points Distribution</h2>
+                <div id="collocation-plot" class="plot"></div>
+            </div>
+            <div class="section">
+                <h2>Solution Visualization</h2>
+                <div class="row">
+                    <div id="exact-solution" class="plot"></div>
+                    <div id="predicted-solution" class="plot"></div>
+                </div>
+            </div>
+        </div>
+        <script>
+            {figures['loss_plot']}
+            {figures['collocation_plot']}
+            {figures['exact_solution']}
+            {figures['predicted_solution']}
+        </script>
+    </body>
+    </html>
+    """
+    return html_template
+
+@app.callback(
+    Output("download-report", "data"),
+    Input("download-report-button", "n_clicks"),
+    State("experiment-selector", "value"),
+    prevent_initial_call=True,
+)
+def generate_report(n_clicks, experiment):
+    if not experiment or not n_clicks:
+        return None
+    
+    try:
+        # Get current figures and data
+        loss_fig = update_graphs(experiment, None)[0]
+        collocation_fig = update_graphs(experiment, None)[1]
+        exact_solution, predicted_solution = update_solution_visualizations(experiment, 0.5, None)
+        
+        # Load metadata
+        metadata = {}
+        metadata_file = os.path.join(experiment, "metadata.json")
+        if os.path.exists(metadata_file):
+            with open(metadata_file, "r") as f:
+                metadata = json.load(f)
+        
+        # Convert figures to HTML/JavaScript
+        figures = {
+            'loss_plot': f"Plotly.newPlot('loss-plot', {loss_fig.to_json()})",
+            'collocation_plot': f"Plotly.newPlot('collocation-plot', {collocation_fig.to_json()})",
+            'exact_solution': f"Plotly.newPlot('exact-solution', {exact_solution.to_json()})",
+            'predicted_solution': f"Plotly.newPlot('predicted-solution', {predicted_solution.to_json()})"
+        }
+        
+        # Generate HTML report
+        html_content = generate_html_report(experiment, figures, metadata)
+        
+        # Get experiment name for the filename
+        exp_name = os.path.basename(experiment)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"pinns_report_{exp_name}_{timestamp}.html"
+        
+        return dict(
+            content=html_content,
+            filename=filename,
+            type="text/html"
+        )
+        
+    except Exception as e:
+        print(f"Error generating report: {e}")
+        return None
 
 if __name__ == "__main__":
     # Parse command line arguments

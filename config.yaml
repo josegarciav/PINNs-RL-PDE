@@ -1,6 +1,7 @@
 # PINN Configuration with PDE-specific settings
 # Configuration file for Physics-Informed Neural Networks
 
+
 # Device Configuration
 device: "mps"  # Options: "cuda", "mps", "cpu"
 
@@ -11,7 +12,7 @@ architectures:
     activation: "tanh"
     dropout: 0.1
     layer_norm: true
-  
+
   resnet:
     hidden_dim: 124
     num_blocks: 7  # 7 residual blocks by default
