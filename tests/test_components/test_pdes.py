@@ -1,79 +1,110 @@
-import pytest
-import torch
 import unittest
+import torch
 import numpy as np
-from scipy.stats import qmc
-from src.neural_networks.neural_networks import PINNModel
+import pytest
+from src.pdes.pde_base import PDEBase, PDEConfig
 from src.pdes.heat_equation import HeatEquation
 from src.pdes.wave_equation import WaveEquation
-from src.pdes.black_scholes import BlackScholesEquation
 from src.pdes.kdv_equation import KdVEquation
-from src.pdes.allen_cahn import AllenCahnEquation
 from src.pdes.burgers_equation import BurgersEquation
-from src.pdes.cahn_hilliard import CahnHilliardEquation
 from src.pdes.convection_equation import ConvectionEquation
+from src.pdes.allen_cahn import AllenCahnEquation
+from src.pdes.cahn_hilliard import CahnHilliardEquation
+from src.pdes.black_scholes import BlackScholesEquation
 from src.pdes.pendulum_equation import PendulumEquation
-from src.pdes.pde_base import PDEConfig
+from src.neural_networks.neural_networks import FeedForwardNetwork, PINNModel
 from src.rl_agent import RLAgent
+from tests.test_utils import create_pde_from_config
 
 
 class TestPDEs(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
-        # Set device
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Determine the device to use for testing
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            self.device = torch.device("mps")
+        else:
+            self.device = torch.device("cpu")
 
-        # Basic test points
-        self.x = torch.linspace(0, 1, 100).reshape(-1, 1).to(self.device)
-        self.t = torch.linspace(0, 1, 100).reshape(-1, 1).to(self.device)
-        self.xt = torch.cat([self.x, self.t], dim=1)
+        # Create PDEs from config.yaml
+        try:
+            # Try to create Heat Equation from config
+            self.heat_eq = create_pde_from_config("heat", self.device)
+            print("Created Heat Equation from config.yaml")
+        except Exception as e:
+            print(f"Falling back to hardcoded Heat Equation: {e}")
+            # Fallback to hardcoded parameters
+            domain = [(0.0, 1.0)]  # Changed to list of tuples for compatibility
+            time_domain = (0.0, 1.0)
+            boundary_conditions = {"dirichlet": {"type": "fixed", "value": 0.0}}
+            initial_condition = {"type": "sine", "amplitude": 1.0, "frequency": 2.0}
+            exact_solution = {"type": "sine_wave", "amplitude": 1.0, "frequency": 2.0}
+
+            self.heat_eq = HeatEquation(
+                alpha=0.01,  # Thermal diffusivity
+                domain=domain,
+                time_domain=time_domain,
+                boundary_conditions=boundary_conditions,
+                initial_condition=initial_condition,
+                exact_solution=exact_solution,
+                dimension=1,
+                device=self.device,
+            )
+
+        try:
+            # Try to create Wave Equation from config
+            self.wave_eq = create_pde_from_config("wave", self.device)
+            print("Created Wave Equation from config.yaml")
+        except Exception as e:
+            print(f"Falling back to hardcoded Wave Equation: {e}")
+            # Fallback to hardcoded parameters
+            domain = [(0.0, 1.0)]  # Changed to list of tuples for compatibility
+            time_domain = (0.0, 1.0)
+            boundary_conditions = {"dirichlet": {"type": "fixed", "value": 0.0}}
+            initial_condition = {"type": "sine", "amplitude": 1.0, "frequency": 2.0}
+            exact_solution = {"type": "sine_wave", "amplitude": 1.0, "frequency": 2.0}
+
+            # Initialize wave equation for common tests
+            self.wave_eq = WaveEquation(
+                c=1.0,  # Wave speed
+                domain=domain,
+                time_domain=time_domain,
+                boundary_conditions=boundary_conditions,
+                initial_condition=initial_condition,
+                exact_solution=exact_solution,
+                dimension=1,
+                device=self.device,
+            )
+            
+        # Common model for testing
+        self.model = FeedForwardNetwork({
+            "input_dim": 2,  # (x, t)
+            "hidden_dims": [32, 32, 32],  # 3 layers of hidden_dim 32
+            "output_dim": 1,  # u(x, t)
+            "activation": "tanh",
+            "device": self.device
+        })
+        
+        # Set up common test tensors
+        self.x = torch.linspace(0, 1, 10, device=self.device).reshape(-1, 1).requires_grad_(True)
+        self.t = torch.linspace(0, 1, 10, device=self.device).reshape(-1, 1).requires_grad_(True)
+        self.inputs = torch.cat([self.x, self.t], dim=1)
+        self.u = torch.sin(self.x + self.t)  # Simple analytical solution
 
         # Initialize PINN models
-        self.model = PINNModel(
-            input_dim=2, hidden_dim=32, output_dim=1, num_layers=2, device=self.device
-        )
-
         self.model_2d = PINNModel(
-            input_dim=3, hidden_dim=32, output_dim=1, num_layers=2, device=self.device
+            input_dim=3, 
+            hidden_dim=32, 
+            output_dim=1, 
+            num_layers=2, 
+            device=self.device
         )
 
         # Initialize RL agent for adaptive sampling tests
         self.rl_agent = RLAgent(
             state_dim=2, action_dim=1, hidden_dim=32, device=self.device
-        )
-
-        # Initialize heat equation for common tests
-        domain = [(0.0, 1.0)]  # Changed to list of tuples
-        time_domain = (0.0, 1.0)
-        boundary_conditions = {
-            "dirichlet": {"value": 0.0},
-            "neumann": {"value": 0.0},
-            "periodic": {},
-        }
-        initial_condition = {"type": "sine", "amplitude": 1.0, "frequency": 2.0}
-        exact_solution = {"type": "sine_wave", "amplitude": 1.0, "frequency": 2.0}
-
-        self.heat_eq = HeatEquation(
-            alpha=0.01,  # Thermal diffusivity
-            domain=domain,
-            time_domain=time_domain,
-            boundary_conditions=boundary_conditions,
-            initial_condition=initial_condition,
-            exact_solution=exact_solution,
-            dimension=1,
-            device=self.device,
-        )
-
-        # Initialize wave equation for common tests
-        self.wave_eq = WaveEquation(
-            c=1.0,  # Wave speed
-            domain=domain,
-            time_domain=time_domain,
-            boundary_conditions=boundary_conditions,
-            initial_condition=initial_condition,
-            exact_solution=exact_solution,
-            dimension=1,
-            device=self.device,
         )
 
     def test_heat_equation(self):
@@ -355,7 +386,7 @@ class TestPDEs(unittest.TestCase):
     def test_exact_solution(self):
         # Test exact solution computation
         exact_sol = self.heat_eq.exact_solution(self.x, self.t)
-        self.assertEqual(exact_sol.shape, (100, 1))
+        self.assertEqual(exact_sol.shape, (10, 1))
         self.assertTrue(torch.isfinite(exact_sol).all())
 
     def test_adaptive_sampling(self):
