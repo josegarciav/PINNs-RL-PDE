@@ -436,9 +436,23 @@ class PDEBase:
         t_initial = torch.zeros_like(x_initial, device=self.device)
 
         u_initial = model(torch.cat([x_initial, t_initial], dim=1))
-        u_target = self.config.initial_condition["amplitude"] * torch.sin(
-            self.config.initial_condition["frequency"] * torch.pi * x_initial
-        )
+        
+        # Use existing boundary condition functions to handle initial conditions
+        if "initial" in self.boundary_conditions:
+            # If there's a specific initial condition function already created
+            u_target = self.boundary_conditions["initial"](x_initial, t_initial)
+        else:
+            # Handle sine wave case as default (for backward compatibility)
+            ic_type = self.config.initial_condition.get("type", "sine")
+            if ic_type == "sine" and "amplitude" in self.config.initial_condition and "frequency" in self.config.initial_condition:
+                u_target = self.config.initial_condition["amplitude"] * torch.sin(
+                    self.config.initial_condition["frequency"] * torch.pi * x_initial
+                )
+            else:
+                # For other types, create a temporary boundary condition function
+                temp_bc = self._create_boundary_condition("initial", self.config.initial_condition)
+                u_target = temp_bc(x_initial, t_initial)
+                
         initial_loss = torch.mean((u_initial - u_target) ** 2)
 
         # Total loss

@@ -66,9 +66,25 @@ class TestNeuralNetworks(unittest.TestCase):
             "device": self.device
         }
         
-        # Skip this test since there's an issue with activation functions
-        # This would require modifying the source code to fix
-        pass
+        model = ResNet(config)
+        output = model(self.sample_input)
+        
+        # Check output shape
+        self.assertEqual(output.shape, (self.batch_size, self.output_dim))
+        
+        # Test gradients
+        loss = torch.mean(output)
+        loss.backward()
+        
+        # Check if gradients were computed
+        for param in model.parameters():
+            if param.requires_grad:
+                self.assertIsNotNone(param.grad)
+                
+        # Verify ResNet architecture components
+        self.assertEqual(len(model.blocks), config["num_blocks"])
+        for block in model.blocks:
+            self.assertIsInstance(block, ResNetBlock)
 
     def test_fourier_network(self):
         """Test FourierNetwork architecture."""
@@ -290,6 +306,101 @@ class TestNeuralNetworks(unittest.TestCase):
         for param in block.parameters():
             if param.requires_grad:
                 self.assertIsNotNone(param.grad)
+
+    def test_gradient_stability(self):
+        """Test that gradients are not infinite or unstable for each architecture."""
+        # Test all available architectures
+        architectures = ["fourier", "resnet", "siren", "attention", "autoencoder", "feedforward"]
+        
+        for arch in architectures:
+            model = PINNModel(
+                input_dim=self.input_dim,
+                hidden_dim=self.hidden_dim,
+                output_dim=self.output_dim,
+                num_layers=3,
+                activation="tanh",
+                architecture=arch,
+                device=self.device
+            )
+            
+            # Forward pass with gradient tracking
+            output = model(self.sample_input)
+            
+            # Compute gradients
+            loss = torch.mean(output)
+            loss.backward()
+            
+            # Check that gradients are finite and not too large
+            for name, param in model.named_parameters():
+                # Check gradients exist
+                self.assertIsNotNone(param.grad, f"No gradients for {name} in {arch}")
+                
+                # Check no NaN values
+                self.assertFalse(torch.isnan(param.grad).any(), 
+                                f"NaN gradient detected for {name} in {arch}")
+                
+                # Check no infinite values
+                self.assertFalse(torch.isinf(param.grad).any(), 
+                                f"Infinite gradient detected for {name} in {arch}")
+                
+                # Check gradient magnitudes are reasonable (not exploding)
+                max_grad = torch.max(torch.abs(param.grad)).item()
+                self.assertLess(max_grad, 100.0, 
+                               f"Exploding gradient detected for {name} in {arch}: {max_grad}")
+            
+            # Reset gradients for next test
+            model.zero_grad()
+
+    def test_training_stability(self):
+        """Test numerical stability during multiple training steps."""
+        # Test with a representative architecture
+        model = PINNModel(
+            input_dim=self.input_dim,
+            hidden_dim=self.hidden_dim,
+            output_dim=self.output_dim,
+            num_layers=3,
+            activation="tanh",
+            architecture="feedforward",
+            device=self.device
+        )
+        
+        # Use a simple optimizer
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+        
+        # Run multiple training steps
+        num_steps = 20
+        loss_values = []
+        
+        for _ in range(num_steps):
+            # Forward pass
+            output = model(self.sample_input)
+            loss = torch.mean(torch.square(output))  # MSE-like loss
+            loss_values.append(loss.item())
+            
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            
+            # Check gradients before optimization step
+            for param in model.parameters():
+                self.assertFalse(torch.isnan(param.grad).any(), "NaN gradient during training")
+                self.assertFalse(torch.isinf(param.grad).any(), "Infinite gradient during training")
+            
+            # Optimization step
+            optimizer.step()
+            
+            # Check parameters after optimization step
+            for param in model.parameters():
+                self.assertFalse(torch.isnan(param).any(), "NaN parameter during training")
+                self.assertFalse(torch.isinf(param).any(), "Infinite parameter during training")
+        
+        # Verify that loss is decreasing (generally)
+        # Allow for some fluctuations but overall trend should be downward
+        first_half_avg = sum(loss_values[:num_steps//2]) / (num_steps//2)
+        second_half_avg = sum(loss_values[num_steps//2:]) / (num_steps - num_steps//2)
+        
+        self.assertLess(second_half_avg, first_half_avg, 
+                       "Loss not decreasing during training, possible instability")
 
 if __name__ == "__main__":
     unittest.main() 

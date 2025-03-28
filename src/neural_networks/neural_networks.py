@@ -609,7 +609,8 @@ class AttentionNetwork(BaseNetwork):
         self.num_layers = config.get("num_layers", 4)
         self.num_heads = config.get("num_heads", 4)
         self.dropout = config.get("dropout", 0.1)
-        self.activation = getattr(F, config.get("activation", "gelu"))
+        activation_name = config.get("activation", "gelu")
+        self.activation_fn = self._get_activation_module(activation_name)
 
         # Input projection
         self.input_proj = nn.Linear(self.input_dim, self.hidden_dim)
@@ -628,6 +629,21 @@ class AttentionNetwork(BaseNetwork):
         # Initialize weights
         self.apply(self._init_weights)
 
+    def _get_activation_module(self, activation_name: str) -> nn.Module:
+        """Convert activation function name to module."""
+        if activation_name == "relu":
+            return nn.ReLU()
+        elif activation_name == "leaky_relu":
+            return nn.LeakyReLU()
+        elif activation_name == "tanh":
+            return nn.Tanh()
+        elif activation_name == "sigmoid":
+            return nn.Sigmoid()
+        elif activation_name == "gelu":
+            return nn.GELU()
+        else:
+            raise ValueError(f"Unsupported activation: {activation_name}")
+
     def _init_weights(self, module):
         """Initialize weights with small values to prevent exploding gradients."""
         if isinstance(module, nn.Linear):
@@ -645,7 +661,7 @@ class AttentionNetwork(BaseNetwork):
             Output tensor or array
         """
         x = self._prepare_input(x)
-        x = self.input_proj(x)
+        x = self.activation_fn(self.input_proj(x))
         
         # Apply attention layers
         for attn, ff in self.layers:
@@ -672,7 +688,8 @@ class AutoEncoder(BaseNetwork):
         self.input_dim = config["input_dim"]
         self.latent_dim = config["latent_dim"]
         self.hidden_dims = config["hidden_dims"]
-        self.activation = getattr(F, config.get("activation", "relu"))
+        activation_name = config.get("activation", "relu")
+        self.activation_fn = self._get_activation_module(activation_name)
 
         # Build encoder
         self.encoder = nn.ModuleList()
@@ -690,6 +707,21 @@ class AutoEncoder(BaseNetwork):
             prev_dim = hidden_dim
         self.decoder.append(nn.Linear(prev_dim, self.input_dim))
 
+    def _get_activation_module(self, activation_name: str) -> nn.Module:
+        """Convert activation function name to module."""
+        if activation_name == "relu":
+            return nn.ReLU()
+        elif activation_name == "leaky_relu":
+            return nn.LeakyReLU()
+        elif activation_name == "tanh":
+            return nn.Tanh()
+        elif activation_name == "sigmoid":
+            return nn.Sigmoid()
+        elif activation_name == "gelu":
+            return nn.GELU()
+        else:
+            raise ValueError(f"Unsupported activation: {activation_name}")
+
     def encode(self, x: InputType) -> OutputType:
         """Encode input to latent space.
 
@@ -701,7 +733,7 @@ class AutoEncoder(BaseNetwork):
         """
         x = self._prepare_input(x)
         for layer in self.encoder[:-1]:
-            x = self.activation(layer(x))
+            x = self.activation_fn(layer(x))
         return self.encoder[-1](x)
 
     def decode(self, z: InputType) -> OutputType:
@@ -715,7 +747,7 @@ class AutoEncoder(BaseNetwork):
         """
         z = self._prepare_input(z)
         for layer in self.decoder[:-1]:
-            z = self.activation(layer(z))
+            z = self.activation_fn(layer(z))
         return self.decoder[-1](z)
 
     def forward(self, x: InputType) -> OutputType:
@@ -818,6 +850,8 @@ class PINNModel(BaseNetwork):
             )
             super().__init__(config)
             self.model = AutoEncoder(config)
+            # Additional output projection for AutoEncoder to ensure correct output dimension
+            self.output_proj = nn.Linear(input_dim, output_dim)
         else:
             config.update({"hidden_dims": [hidden_dim] * (num_layers - 1)})
             super().__init__(config)
@@ -842,6 +876,9 @@ class PINNModel(BaseNetwork):
         :param x: Input tensor of shape (batch_size, input_dim)
         :return: Output tensor of shape (batch_size, output_dim)
         """
+        if self.architecture == "autoencoder":
+            # For autoencoder, we need to project from input_dim to output_dim
+            return self.output_proj(self.model(x))
         return self.model(x)
 
     def save_state(self, path: str):
