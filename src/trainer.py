@@ -284,12 +284,28 @@ class PDETrainer:
         # Save final metrics
         if experiment_dir:
             try:
+                # Calculate training time in minutes
+                start_time_str = metadata.get("start_time")
+                end_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                # Calculate duration if start time is available
+                training_time_minutes = None
+                if start_time_str:
+                    try:
+                        start_time = datetime.strptime(start_time_str, "%Y-%m-%d %H:%M:%S")
+                        end_time = datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S")
+                        duration = end_time - start_time
+                        training_time_minutes = duration.total_seconds() / 60.0
+                    except Exception as e:
+                        self.logger.warning(f"Error calculating training time: {e}")
+                
                 final_metrics = {
-                    "end_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "end_time": end_time_str,
                     "total_epochs": epoch + 1,
                     "final_loss": avg_loss,
                     "best_val_loss": self.best_val_loss,
                     "early_stopping_triggered": self.patience_counter >= self.patience,
+                    "training_time_minutes": training_time_minutes,
                 }
                 save_training_metrics(self.history, experiment_dir, final_metrics)
             except Exception as e:

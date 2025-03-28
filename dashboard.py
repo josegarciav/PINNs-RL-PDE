@@ -153,6 +153,14 @@ def update_graphs(experiment, _):
         if os.path.exists(metadata_file):
             with open(metadata_file, "r") as f:
                 metadata = json.load(f)
+                
+                # Add training time in minutes to the display if available
+                if "training_time_minutes" in metadata:
+                    time_in_minutes = metadata["training_time_minutes"]
+                    if time_in_minutes is not None:
+                        formatted_time = f"{time_in_minutes:.2f} minutes"
+                        metadata["formatted_training_time"] = formatted_time
+                
                 experiment_details = json.dumps(metadata, indent=2)
                 # Check if early stopping was triggered
                 early_stopping_triggered = metadata.get(
@@ -623,7 +631,12 @@ def update_pde_comparison(_):
                 try:
                     with open(metadata_file, "r") as f:
                         metadata = json.load(f)
-                        comp_time = metadata.get("training_time")
+                        comp_time = metadata.get("training_time_minutes")
+                        if comp_time:
+                            computation_times[pde_type] = comp_time
+                            hover_text = f"Experiment: {os.path.basename(exp_dir)}<br>Training time: {comp_time:.2f} minutes"
+                        else:
+                            hover_text = f"Experiment: {os.path.basename(exp_dir)}"
                 except:
                     pass
 
@@ -638,6 +651,7 @@ def update_pde_comparison(_):
                         history.get("val_loss", []) if "val_loss" in history else []
                     ),
                     "computation_time": comp_time,
+                    "hover_text": hover_text,
                 }
             )
         except:
@@ -655,7 +669,7 @@ def update_pde_comparison(_):
             if exp["train_loss"]:
                 name = f"{pde_type} - {exp['name']}"
                 if exp["computation_time"]:
-                    name += f" ({exp['computation_time']:.2f}s)"
+                    name += f" ({exp['computation_time']:.2f} minutes)"
 
                 fig.add_trace(
                     go.Scatter(
