@@ -56,18 +56,15 @@ def create_model(config: Config) -> PINNModel:
     :param config: Configuration object
     :return: Initialized PINN model
     """
+    # Get the selected PDE type
+    pde_type = config.pde_type
+    
+    # Create model using PDE-specific configuration
     model = PINNModel(
-        input_dim=config.model.input_dim,
-        hidden_dim=config.model.hidden_dim,
-        output_dim=config.model.output_dim,
-        num_layers=config.model.num_layers,
-        activation=config.model.activation,
-        fourier_features=config.model.fourier_features,
-        fourier_scale=config.model.fourier_scale,
-        dropout=config.model.dropout,
-        layer_norm=config.model.layer_norm,
+        pde_type=pde_type,  # Use PDE-specific configuration
         device=config.device,
     )
+    
     return model
 
 

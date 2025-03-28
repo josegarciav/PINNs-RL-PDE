@@ -13,7 +13,7 @@ from src.pdes.black_scholes import BlackScholesEquation
 from src.pdes.pendulum_equation import PendulumEquation
 from src.pdes.pde_base import PDEBase, PDEConfig
 from src.rl_agent import RLAgent, CollocationRLAgent
-from tests.test_utils import create_pde_from_config
+from tests.test_components.test_utils import create_pde_from_config
 
 class TestPDESampling(unittest.TestCase):
     """Test PDE sampling strategies, especially for different dimensions."""

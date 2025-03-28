@@ -1,7 +1,8 @@
 """Utility functions for the PINN framework."""
 
-from .types import Array, ArrayLike
 from .utils import (
+    Array,
+    ArrayLike,
     setup_logging,
     generate_collocation_points,
     save_model,

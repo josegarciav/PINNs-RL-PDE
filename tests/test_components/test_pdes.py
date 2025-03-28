@@ -14,7 +14,7 @@ from src.pdes.black_scholes import BlackScholesEquation
 from src.pdes.pendulum_equation import PendulumEquation
 from src.neural_networks.neural_networks import FeedForwardNetwork, PINNModel
 from src.rl_agent import RLAgent
-from tests.test_utils import create_pde_from_config
+from tests.test_components.test_utils import create_pde_from_config
 
 
 class TestPDEs(unittest.TestCase):
@@ -94,11 +94,9 @@ class TestPDEs(unittest.TestCase):
         self.u = torch.sin(self.x + self.t)  # Simple analytical solution
 
         # Initialize PINN models
+        # Use PDE-specific configuration for model initialization
         self.model_2d = PINNModel(
-            input_dim=3, 
-            hidden_dim=32, 
-            output_dim=1, 
-            num_layers=2, 
+            pde_type="heat_2d",  # Use the 2D heat equation configuration 
             device=self.device
         )
 

@@ -23,6 +23,9 @@ class PDEConfig:
     initial_condition: Dict[str, Any]
     exact_solution: Dict[str, Any]
     dimension: int = 1  # Default to 1D
+    input_dim: Optional[int] = None  # Input dimensions for the NN (spatial + temporal)
+    output_dim: Optional[int] = None  # Output dimensions for the NN (solution components)
+    architecture: Optional[str] = None  # Neural network architecture for this PDE
     device: Optional[torch.device] = None
 
 

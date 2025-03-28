@@ -9,7 +9,10 @@ import logging
 from datetime import datetime
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from .types import ArrayLike
+
+# Type aliases for better readability
+Array = Union[np.ndarray, torch.Tensor]
+ArrayLike = Union[Array, List[float], List[int], Tuple[float, ...], Tuple[int, ...]]
 
 
 def setup_logging(log_dir: str = "logs") -> logging.Logger:

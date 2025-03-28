@@ -4,18 +4,43 @@
 # Device Configuration
 device: "mps"  # Options: "cuda", "mps", "cpu"
 
-# Model Architecture
-model:
-  architecture: "fourier"  # Options: "fourier", "resnet", "siren", "autoencoder", "feedforward"
-  input_dim: 2  # (x, t)
-  hidden_dim: 124
-  output_dim: 1  # u(x,t)
-  num_layers: 8
-  activation: "relu"  # Options: "tanh", "relu", "gelu"
-  fourier_features: true
-  fourier_scale: 10.0
-  dropout: 0.1
-  layer_norm: true
+# Architecture-specific configurations
+architectures:
+  feedforward:
+    hidden_dims: [124, 124, 124, 124, 124, 124, 124]  # 7 hidden layers by default
+    activation: "tanh"
+    dropout: 0.1
+    layer_norm: true
+  
+  resnet:
+    hidden_dim: 124
+    num_blocks: 7  # 7 residual blocks by default
+    activation: "tanh"
+    dropout: 0.1
+  
+  siren:
+    hidden_dims: [124, 124, 124, 124, 124, 124, 124]
+    omega_0: 30.0  # Frequency parameter for sine activation
+  
+  fourier:
+    mapping_size: 124  # Size of the Fourier feature mapping
+    hidden_dims: [124, 124, 124, 124, 124, 124, 124]
+    scale: 10.0  # Scale factor for random Fourier features
+    activation: "relu"
+  
+  attention:
+    hidden_dim: 124
+    num_layers: 4  # 4 attention blocks by default
+    num_heads: 4  # 4 attention heads per block
+    dropout: 0.1
+    activation: "gelu"
+  
+  autoencoder:
+    latent_dim: 64  # Dimension of the latent space
+    hidden_dims: [124, 248, 124]  # Encoder and decoder dimensions
+    activation: "relu"
+    dropout: 0.1
+    layer_norm: true
 
 # Default PDE type to use
 pde_type: "wave"  # Options: "heat", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
@@ -25,11 +50,14 @@ pde_configs:
   # Heat Equation Configuration
   heat:
     name: "Heat Equation"
+    architecture: "fourier"  # Good for smooth diffusion problems
+    input_dim: 2  # (x, t) 
+    output_dim: 1  # u(x,t)
     parameters:
       alpha: 0.01  # Thermal diffusivity coefficient
-    domain: [[0.0, 1.0]]  # Spatial domain [[x_min, x_max]] for 1D
+    domain: [[0.0, 1.0]]  # Spatial domain [[x_min, x_max]] for 1D, [[0.0, 1.0], [0.0, 1.0]] for 2D
     time_domain: [0.0, 1.0]  # Temporal domain [t_min, t_max]
-    dimension: 1
+    dimension: 1 # 1D or 2D
     initial_condition:
       type: "sine"
       amplitude: 1.0
@@ -39,13 +67,16 @@ pde_configs:
         type: "fixed"
         value: 0.0
     exact_solution:
-      type: "sine"
+      type: "sine" #changes to sine_2d for 2D
       amplitude: 1.0
       frequency: 1.0
-  
+
   # Wave Equation Configuration
   wave:
     name: "Wave Equation"
+    architecture: "siren"  # Excellent for capturing oscillations and wave patterns
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
     parameters:
       c: 1.0  # Wave speed
     domain: [[0.0, 1.0]]
@@ -67,6 +98,9 @@ pde_configs:
   # Burgers Equation Configuration
   burgers:
     name: "Burgers Equation"
+    architecture: "resnet"  # Good for nonlinear problems with discontinuities (shocks)
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
     parameters:
       viscosity: 0.01  # Viscosity coefficient
     domain: [[-1.0, 1.0]]
@@ -80,11 +114,18 @@ pde_configs:
       dirichlet:
         type: "fixed"
         value: 0.0
-    # No simple exact solution for Burgers
+    exact_solution:
+      type: "cole_hopf"  # Cole-Hopf transformation for viscous Burgers
+      viscosity: 0.01
+      initial_amplitude: -1.0
+      initial_frequency: 1.0
   
   # Convection Equation Configuration
   convection:
     name: "Convection Equation"
+    architecture: "fourier"  # Good for transport problems with high frequencies
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
     parameters:
       velocity: [1.0]  # Convection velocity vector [vx]
     domain: [[0.0, 2.0]]
@@ -105,6 +146,9 @@ pde_configs:
   # KdV Equation Configuration
   kdv:
     name: "KdV Equation"
+    architecture: "siren"  # Ideal for solitons and nonlinear wave patterns
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
     parameters:
       alpha: 6.0  # Nonlinear coefficient
       beta: 1.0   # Dispersion coefficient
@@ -126,6 +170,9 @@ pde_configs:
   # Allen-Cahn Equation Configuration
   allen_cahn:
     name: "Allen-Cahn Equation"
+    architecture: "fourier"  # Good for problems with sharp interfaces
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
     parameters:
       epsilon: 0.1  # Interface width parameter
       reaction_rate: 1.0  # Reaction rate
@@ -144,6 +191,9 @@ pde_configs:
   # Cahn-Hilliard Equation Configuration
   cahn_hilliard:
     name: "Cahn-Hilliard Equation"
+    architecture: "resnet"  # Good for higher-order problems with phase separation
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
     parameters:
       mobility: 1.0  # Mobility coefficient
       kappa: 0.01  # Interface energy coefficient
@@ -164,6 +214,9 @@ pde_configs:
   # Black-Scholes Equation Configuration
   black_scholes:
     name: "Black-Scholes Equation"
+    architecture: "feedforward"  # Simple and effective for this type of problem
+    input_dim: 2  # (S, t)
+    output_dim: 1  # V(S,t)
     parameters:
       sigma: 0.2  # Volatility
       r: 0.05  # Risk-free interest rate
@@ -185,6 +238,9 @@ pde_configs:
   # Pendulum Equation Configuration
   pendulum:
     name: "Pendulum Equation"
+    architecture: "resnet"  # Good for nonlinear dynamics and oscillatory behavior
+    input_dim: 2  # (theta, t)
+    output_dim: 1  # angular position
     parameters:
       g: 9.81  # Gravitational constant
       L: 1.0   # Pendulum length
@@ -199,7 +255,37 @@ pde_configs:
     boundary_conditions:
       dirichlet:
         type: "periodic"
-    # No simple exact solution for nonlinear pendulum
+    exact_solution:
+      type: "damped_oscillation"  # Approximate solution for small-angle pendulum with damping
+      initial_amplitude: 0.5
+      natural_frequency: 3.132  # sqrt(g/L)
+      damping_coefficient: 0.1
+
+  # Heat Equation 2D Configuration
+  heat_2d:
+    name: "Heat Equation 2D"
+    architecture: "fourier"  # Excellent for multidimensional problems
+    input_dim: 3  # (x, y, t)
+    output_dim: 1  # u(x,y,t)
+    parameters:
+      alpha: 0.01  # Thermal diffusivity coefficient
+    domain: [[0.0, 1.0], [0.0, 1.0]]  # 2D spatial domain
+    time_domain: [0.0, 1.0]
+    dimension: 2
+    initial_condition:
+      type: "sine_2d"
+      amplitude: 1.0
+      frequency_x: 1.0
+      frequency_y: 1.0
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+    exact_solution:
+      type: "sine_2d"
+      amplitude: 1.0
+      frequency_x: 1.0
+      frequency_y: 1.0
 
 # Training Configuration
 training:

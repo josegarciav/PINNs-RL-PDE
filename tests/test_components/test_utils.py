@@ -57,6 +57,9 @@ def load_pde_config(pde_type, device=None):
         initial_condition=pde_config.get("initial_condition", {}),
         exact_solution=pde_config.get("exact_solution", {}),
         dimension=pde_config.get("dimension", 1),
+        input_dim=pde_config.get("input_dim"),
+        output_dim=pde_config.get("output_dim"),
+        architecture=pde_config.get("architecture"),
         device=device
     )
     
@@ -102,6 +105,10 @@ def create_pde_from_config(pde_type, device=None, dimension=None):
             # Extend the domain to multiple dimensions
             base_domain = config.domain[0]
             config.domain = [base_domain] * dimension
+        
+        # Update input_dim based on the new dimension
+        # For spatial dimensions + time, input_dim = dimension + 1
+        config.input_dim = dimension + 1
     
     # Create and return the PDE instance
     return pde_class(config) 

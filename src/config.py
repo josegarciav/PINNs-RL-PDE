@@ -125,13 +125,15 @@ class Config:
         with open(self.config_path, "r") as f:
             config_dict = yaml.safe_load(f)
 
+        # Store the PDE type selected in config
+        self.pde_type = config_dict.get("pde_type", "heat")
+        
         # Check if we need to load a PDE-specific configuration
-        pde_type = config_dict.get("pde_type")
         pde_config = {}
 
-        if pde_type and "pde_configs" in config_dict and pde_type in config_dict["pde_configs"]:
+        if self.pde_type and "pde_configs" in config_dict and self.pde_type in config_dict["pde_configs"]:
             # Extract PDE-specific configuration
-            pde_config = config_dict["pde_configs"][pde_type]
+            pde_config = config_dict["pde_configs"][self.pde_type]
             
             # Use it as the PDE configuration
             config_dict["pde"] = pde_config
@@ -140,18 +142,28 @@ class Config:
         self.device = self._get_device(config_dict.get("device", "mps"))
 
         # Model configuration
+        # If input_dim and output_dim are specified in PDE config, use those values
+        # otherwise fall back to the general model config
         model_config = config_dict.get("model", {})
+        
+        # Get dimensions from PDE config if available
+        input_dim = pde_config.get("input_dim", model_config.get("input_dim", 2))
+        output_dim = pde_config.get("output_dim", model_config.get("output_dim", 1))
+        
+        # Get architecture from PDE config if available
+        architecture = pde_config.get("architecture", model_config.get("architecture", "fourier"))
+        
         self.model = ModelConfig(
-            input_dim=model_config.get("input_dim", 2),
+            input_dim=input_dim,
             hidden_dim=model_config.get("hidden_dim", 128),
-            output_dim=model_config.get("output_dim", 1),
+            output_dim=output_dim,
             num_layers=model_config.get("num_layers", 4),
             activation=model_config.get("activation", "tanh"),
             fourier_features=model_config.get("fourier_features", True),
             fourier_scale=model_config.get("fourier_scale", 2.0),
             dropout=model_config.get("dropout", 0.1),
             layer_norm=model_config.get("layer_norm", True),
-            architecture=model_config.get("architecture", "fourier"),  # New parameter
+            architecture=architecture,  # Use PDE-specific architecture
         )
 
         # PDE configuration
