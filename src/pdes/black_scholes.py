@@ -16,46 +16,24 @@ class BlackScholesEquation(PDEBase):
 
     def __init__(
         self,
-        sigma: float,
-        r: float,
-        domain: Union[Tuple[float, float], List[Tuple[float, float]]],
-        time_domain: Tuple[float, float],
-        boundary_conditions: Dict[str, Dict[str, Any]],
-        initial_condition: Dict[str, Any],
-        exact_solution: Dict[str, Any],
-        dimension: int = 1,
-        device: Optional[torch.device] = None,
+        config: PDEConfig,
+        **kwargs
     ):
         """
         Initialize the Black-Scholes Equation.
 
-        :param sigma: Volatility
-        :param r: Risk-free rate
-        :param domain: Spatial domain (tuple for 1D, list of tuples for higher dimensions)
-        :param time_domain: Temporal domain
-        :param boundary_conditions: Dictionary of boundary conditions
-        :param initial_condition: Dictionary of initial condition parameters
-        :param exact_solution: Dictionary of exact solution parameters
-        :param dimension: Problem dimension (1 for 1D, 2 for 2D, etc.)
-        :param device: Device to use for computations
+        :param config: PDEConfig instance containing all necessary parameters
+        :param kwargs: Additional keyword arguments
         """
-        config = PDEConfig(
-            name="Black-Scholes Equation",
-            domain=domain,
-            time_domain=time_domain,
-            parameters={"sigma": sigma, "r": r},
-            boundary_conditions=boundary_conditions,
-            initial_condition=initial_condition,
-            exact_solution=exact_solution,
-            dimension=dimension,
-            device=device,
-        )
         super().__init__(config)
-        self.sigma = sigma
-        self.r = r
+        self.sigma = self.config.parameters.get("sigma", 0.2)  # Default volatility of 20%
+        self.r = self.config.parameters.get("r", 0.05)  # Default risk-free rate of 5%
 
     def compute_residual(
-        self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
+        self,
+        model: torch.nn.Module,
+        x: torch.Tensor,
+        t: torch.Tensor,
     ) -> torch.Tensor:
         """
         Compute the Black-Scholes equation residual.
@@ -65,80 +43,46 @@ class BlackScholesEquation(PDEBase):
         :param t: Time coordinates (time to maturity)
         :return: Residual tensor
         """
-        # Ensure input tensors require gradients
-        x = x.requires_grad_(True)
-        t = t.requires_grad_(True)
+        # Ensure tensors require gradients
+        x = x.detach().requires_grad_(True)
+        t = t.detach().requires_grad_(True)
 
-        # Combine inputs
-        xt = torch.cat([x, t], dim=1)
+        # Ensure model parameters require gradients
+        for param in model.parameters():
+            param.requires_grad_(True)
 
-        # Get model prediction (option price)
-        V = model(xt)
+        # Set model to training mode
+        model.train()
 
-        # Compute time derivative
-        V_t = torch.autograd.grad(
-            V, t, grad_outputs=torch.ones_like(V), create_graph=True, allow_unused=True
-        )[0]
-        if V_t is None:
-            V_t = torch.zeros_like(V)
+        # Get derivatives
+        derivatives = self.compute_derivatives(
+            model, x, t,
+            spatial_derivatives=[1, 2],
+            temporal_derivatives=[1]
+        )
 
-        # Compute first and second derivatives with respect to S
-        if self.dimension == 1:
-            V_S = torch.autograd.grad(
-                V,
-                x,
-                grad_outputs=torch.ones_like(V),
-                create_graph=True,
-                allow_unused=True,
-            )[0]
-            if V_S is None:
-                V_S = torch.zeros_like(V)
-            V_SS = torch.autograd.grad(
-                V_S,
-                x,
-                grad_outputs=torch.ones_like(V_S),
-                create_graph=True,
-                allow_unused=True,
-            )[0]
-            if V_SS is None:
-                V_SS = torch.zeros_like(V)
-        else:
-            # For higher dimensions, compute derivatives for each dimension
-            V_S = torch.zeros_like(V)
-            V_SS = torch.zeros_like(V)
-            for dim in range(self.dimension):
-                V_S_dim = torch.autograd.grad(
-                    V,
-                    x[:, dim : dim + 1],
-                    grad_outputs=torch.ones_like(V),
-                    create_graph=True,
-                    allow_unused=True,
-                )[0]
-                if V_S_dim is not None:
-                    V_S += V_S_dim
-                    V_SS_dim = torch.autograd.grad(
-                        V_S_dim,
-                        x[:, dim : dim + 1],
-                        grad_outputs=torch.ones_like(V_S_dim),
-                        create_graph=True,
-                        allow_unused=True,
-                    )[0]
-                    if V_SS_dim is not None:
-                        V_SS += V_SS_dim
+        # Get the derivatives we need
+        V_t = derivatives["dt"]
+        V_S = derivatives["dx"] if self.dimension == 1 else derivatives["dx1"]
+        V_SS = derivatives["dx2"] if self.dimension == 1 else derivatives["dx1x1"]
 
         # Black-Scholes equation: V_t + (1/2)σ²S²V_SS + rSV_S - rV = 0
+        V = model(torch.cat([x, t], dim=1))
+        
         if self.dimension == 1:
-            return (
+            residual = (
                 V_t + 0.5 * self.sigma**2 * x**2 * V_SS + self.r * x * V_S - self.r * V
             )
         else:
             # For higher dimensions, sum over all dimensions
-            return (
+            residual = (
                 V_t
                 + 0.5 * self.sigma**2 * torch.sum(x**2 * V_SS, dim=1, keepdim=True)
                 + self.r * torch.sum(x * V_S, dim=1, keepdim=True)
                 - self.r * V
             )
+        
+        return residual
 
     def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
@@ -148,9 +92,13 @@ class BlackScholesEquation(PDEBase):
         :param t: Time coordinates
         :return: Exact solution tensor
         """
+        if not self.config.exact_solution:
+            return None
+
+        K = self.config.exact_solution.get("strike_price", 1.0)  # Strike price
+
         if self.dimension == 1:
             # 1D Black-Scholes solution (European call option)
-            K = 1.0  # Strike price
             d1 = (torch.log(x / K) + (self.r + 0.5 * self.sigma**2) * t) / (
                 self.sigma * torch.sqrt(t)
             )
@@ -160,7 +108,6 @@ class BlackScholesEquation(PDEBase):
             # For higher dimensions, use product of 1D solutions
             solution = torch.ones_like(x[:, 0:1])
             for dim in range(self.dimension):
-                K = 1.0  # Strike price
                 d1 = (
                     torch.log(x[:, dim : dim + 1] / K)
                     + (self.r + 0.5 * self.sigma**2) * t
@@ -206,9 +153,9 @@ class BlackScholesEquation(PDEBase):
         :return: Dictionary of error metrics
         """
         x, t = self.generate_collocation_points(num_points)
-        V_pred = model(torch.cat([x, t], dim=1))
-        V_exact = self.exact_solution(x, t)
-        error = torch.abs(V_pred - V_exact)
+        u_pred = model(torch.cat([x, t], dim=1))
+        u_exact = self.exact_solution(x, t)
+        error = torch.abs(u_pred - u_exact)
         return {
             "l2_error": torch.mean(error**2).item(),
             "max_error": torch.max(error).item(),

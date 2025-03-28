@@ -9,7 +9,7 @@ from plotly.subplots import make_subplots
 import json
 import time
 
-from src.neural_networks.neural_networks import PINNModel
+from src.neural_networks import PINNModel
 from src.pdes.heat_equation import HeatEquation
 from src.trainer import PDETrainer
 from src.rl_agent import RLAgent

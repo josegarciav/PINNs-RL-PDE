@@ -16,114 +16,56 @@ class HeatEquation(PDEBase):
 
     def __init__(
         self,
-        alpha: float,
-        domain: Union[Tuple[float, float], List[Tuple[float, float]]],
-        time_domain: Tuple[float, float],
-        boundary_conditions: Dict[str, Dict[str, Any]],
-        initial_condition: Dict[str, Any],
-        exact_solution: Dict[str, Any],
-        dimension: int = 1,
-        device: Optional[torch.device] = None,
+        config: PDEConfig,
+        **kwargs
     ):
         """
         Initialize the Heat Equation.
 
-        :param alpha: Thermal diffusivity
-        :param domain: Spatial domain (tuple for 1D, list of tuples for higher dimensions)
-        :param time_domain: Temporal domain
-        :param boundary_conditions: Dictionary of boundary conditions
-        :param initial_condition: Dictionary of initial condition parameters
-        :param exact_solution: Dictionary of exact solution parameters
-        :param dimension: Problem dimension (1 for 1D, 2 for 2D, etc.)
-        :param device: Device to use for computations
+        :param config: PDEConfig instance containing all necessary parameters
+        :param kwargs: Additional keyword arguments
         """
-        config = PDEConfig(
-            name="Heat Equation",
-            domain=domain,
-            time_domain=time_domain,
-            parameters={"alpha": alpha},
-            boundary_conditions=boundary_conditions,
-            initial_condition=initial_condition,
-            exact_solution=exact_solution,
-            dimension=dimension,
-            device=device,
-        )
         super().__init__(config)
-        self.alpha = alpha
+        self.alpha = self.config.parameters.get("alpha", 0.01)
 
     def compute_residual(
-        self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
+        self,
+        model: torch.nn.Module,
+        x: torch.Tensor,
+        t: torch.Tensor,
     ) -> torch.Tensor:
         """
-        Compute the heat equation residual.
-
+        Compute the residual of the heat equation.
+        
         :param model: Neural network model
         :param x: Spatial coordinates
         :param t: Time coordinates
         :return: Residual tensor
         """
-        # Ensure input tensors require gradients
-        x = x.requires_grad_(True)
-        t = t.requires_grad_(True)
+        # Ensure tensors require gradients
+        x = x.detach().requires_grad_(True)
+        t = t.detach().requires_grad_(True)
 
-        # Combine inputs
-        xt = torch.cat([x, t], dim=1)
+        # Ensure model parameters require gradients
+        for param in model.parameters():
+            param.requires_grad_(True)
 
-        # Get model prediction
-        u = model(xt)
+        # Set model to training mode
+        model.train()
 
-        # Compute time derivative
-        u_t = torch.autograd.grad(
-            u, t, grad_outputs=torch.ones_like(u), create_graph=True, allow_unused=True
-        )[0]
-        if u_t is None:
-            u_t = torch.zeros_like(u)
+        # Get derivatives
+        derivatives = self.compute_derivatives(
+            model, x, t,
+            spatial_derivatives=[2],
+            temporal_derivatives=[1]
+        )
 
-        # Compute Laplacian based on dimension
-        if self.dimension == 1:
-            u_x = torch.autograd.grad(
-                u,
-                x,
-                grad_outputs=torch.ones_like(u),
-                create_graph=True,
-                allow_unused=True,
-            )[0]
-            if u_x is None:
-                u_x = torch.zeros_like(u)
-            u_xx = torch.autograd.grad(
-                u_x,
-                x,
-                grad_outputs=torch.ones_like(u_x),
-                create_graph=True,
-                allow_unused=True,
-            )[0]
-            if u_xx is None:
-                u_xx = torch.zeros_like(u)
-            laplacian = u_xx
-        else:
-            # For higher dimensions, compute Laplacian as sum of second derivatives
-            laplacian = torch.zeros_like(u)
-            for dim in range(self.dimension):
-                u_x = torch.autograd.grad(
-                    u,
-                    x[:, dim : dim + 1],
-                    grad_outputs=torch.ones_like(u),
-                    create_graph=True,
-                    allow_unused=True,
-                )[0]
-                if u_x is not None:
-                    u_xx = torch.autograd.grad(
-                        u_x,
-                        x[:, dim : dim + 1],
-                        grad_outputs=torch.ones_like(u_x),
-                        create_graph=True,
-                        allow_unused=True,
-                    )[0]
-                    if u_xx is not None:
-                        laplacian += u_xx
-
-        # Heat equation: u_t - α∇²u = 0
-        return u_t - self.alpha * laplacian
+        # Heat equation residual: u_t - α∇²u = 0
+        u_t = derivatives["dt"]
+        laplacian = derivatives["laplacian"]
+        
+        residual = u_t - self.alpha * laplacian
+        return residual
 
     def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
@@ -132,33 +74,40 @@ class HeatEquation(PDEBase):
         The solution is of the form:
         u(x,t) = A * exp(-alpha * k^2 * pi^2 * t) * sin(k * pi * x)
 
-        where:
-        - A is the amplitude
-        - k is the frequency
-        - alpha is the thermal diffusivity
-
         :param x: Spatial coordinates
         :param t: Time coordinates
         :return: Exact solution tensor
         """
-        A = self.config.exact_solution.get("amplitude", 1.0)
-        k = self.config.exact_solution.get("frequency", 2.0)
+        if not self.config.exact_solution:
+            return None
 
-        if self.dimension == 1:
-            # Compute the time-dependent amplitude
-            time_factor = torch.exp(-self.alpha * (k * torch.pi) ** 2 * t)
-            # Compute the spatial oscillation
-            space_factor = torch.sin(k * torch.pi * x)
-            # Combine them
+        solution_type = self.config.exact_solution.get("type", "sine")
+        if solution_type == "sine":
+            A = self.config.exact_solution.get("amplitude", 1.0)
+            k = self.config.exact_solution.get("frequency", 1.0)
+
+            if self.dimension == 1:
+                time_factor = torch.exp(-self.alpha * (k * torch.pi) ** 2 * t)
+                space_factor = torch.sin(k * torch.pi * x)
+                return A * time_factor * space_factor
+            else:
+                # For higher dimensions, use product of sine waves
+                solution = torch.ones_like(x[:, 0:1])
+                for dim in range(self.dimension):
+                    time_factor = torch.exp(-self.alpha * (k * torch.pi) ** 2 * t)
+                    space_factor = torch.sin(k * torch.pi * x[:, dim:dim+1])
+                    solution *= A * time_factor * space_factor
+                return solution
+        elif solution_type == "sine_2d" and self.dimension == 2:
+            A = self.config.exact_solution.get("amplitude", 1.0)
+            kx = self.config.exact_solution.get("frequency_x", 1.0)
+            ky = self.config.exact_solution.get("frequency_y", 1.0)
+            
+            time_factor = torch.exp(-self.alpha * ((kx * torch.pi) ** 2 + (ky * torch.pi) ** 2) * t)
+            space_factor = torch.sin(kx * torch.pi * x[:, 0:1]) * torch.sin(ky * torch.pi * x[:, 1:2])
             return A * time_factor * space_factor
         else:
-            # For higher dimensions, use product of sine waves
-            solution = torch.ones_like(x[:, 0:1])
-            for dim in range(self.dimension):
-                time_factor = torch.exp(-self.alpha * (k * torch.pi) ** 2 * t)
-                space_factor = torch.sin(k * torch.pi * x[:, dim : dim + 1])
-                solution *= A * time_factor * space_factor
-            return solution
+            raise ValueError(f"Unsupported exact solution type: {solution_type}")
 
     def _create_boundary_condition(
         self, bc_type: str, params: Dict[str, Any]
@@ -174,13 +123,18 @@ class HeatEquation(PDEBase):
             ic_type = params.get("type", "sine")
             if ic_type == "sine":
                 A = params.get("amplitude", 1.0)
-                k = params.get("frequency", 2.0)
+                k = params.get("frequency", 1.0)
                 if self.dimension == 1:
                     return lambda x, t: A * torch.sin(k * torch.pi * x)
                 else:
-                    return lambda x, t: A * torch.sin(
-                        k * torch.pi * torch.sum(x, dim=1, keepdim=True)
+                    return lambda x, t: A * torch.prod(
+                        torch.sin(k * torch.pi * x), dim=1, keepdim=True
                     )
+            elif ic_type == "sine_2d" and self.dimension == 2:
+                A = params.get("amplitude", 1.0)
+                kx = params.get("frequency_x", 1.0)
+                ky = params.get("frequency_y", 1.0)
+                return lambda x, t: A * torch.sin(kx * torch.pi * x[:, 0:1]) * torch.sin(ky * torch.pi * x[:, 1:2])
             else:
                 raise ValueError(f"Unsupported initial condition type: {ic_type}")
         else:

@@ -1,7 +1,7 @@
 import unittest
 import torch
 import numpy as np
-from src.neural_networks.neural_networks import (
+from src.neural_networks import (
     FeedForwardNetwork,
     ResNet,
     FourierNetwork,
@@ -12,9 +12,10 @@ from src.neural_networks.neural_networks import (
     FourierFeatures,
     SIRENLayer,
     ResNetBlock,
-    SelfAttention,
-    FeedForwardBlock
+    SelfAttention
 )
+# Import FeedForwardBlock from attention module instead of feedforward
+from src.neural_networks.attention import FeedForwardBlock
 
 class TestNeuralNetworks(unittest.TestCase):
     """Test cases for different neural network architectures."""

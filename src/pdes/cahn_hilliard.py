@@ -17,40 +17,17 @@ class CahnHilliardEquation(PDEBase):
 
     def __init__(
         self,
-        epsilon: float,
-        domain: Union[Tuple[float, float], List[Tuple[float, float]]],
-        time_domain: Tuple[float, float],
-        boundary_conditions: Dict[str, Dict[str, Any]],
-        initial_condition: Dict[str, Any],
-        exact_solution: Dict[str, Any],
-        dimension: int = 1,
-        device: Optional[torch.device] = None,
+        config: PDEConfig,
+        **kwargs
     ):
         """
         Initialize the Cahn-Hilliard Equation.
 
-        :param epsilon: Interface width parameter
-        :param domain: Spatial domain (tuple for 1D, list of tuples for higher dimensions)
-        :param time_domain: Temporal domain
-        :param boundary_conditions: Dictionary of boundary conditions
-        :param initial_condition: Dictionary of initial condition parameters
-        :param exact_solution: Dictionary of exact solution parameters
-        :param dimension: Problem dimension (1 for 1D, 2 for 2D, etc.)
-        :param device: Device to use for computations
+        :param config: PDEConfig instance containing all necessary parameters
+        :param kwargs: Additional keyword arguments
         """
-        config = PDEConfig(
-            name="Cahn-Hilliard Equation",
-            domain=domain,
-            time_domain=time_domain,
-            parameters={"epsilon": epsilon},
-            boundary_conditions=boundary_conditions,
-            initial_condition=initial_condition,
-            exact_solution=exact_solution,
-            dimension=dimension,
-            device=device,
-        )
         super().__init__(config)
-        self.epsilon = epsilon
+        self.epsilon = self.config.parameters.get("epsilon", 0.1)
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor

@@ -16,40 +16,17 @@ class WaveEquation(PDEBase):
 
     def __init__(
         self,
-        c: float,
-        domain: Union[Tuple[float, float], List[Tuple[float, float]]],
-        time_domain: Tuple[float, float],
-        boundary_conditions: Dict[str, Dict[str, Any]],
-        initial_condition: Dict[str, Any],
-        exact_solution: Dict[str, Any],
-        dimension: int = 1,
-        device: Optional[torch.device] = None,
+        config: PDEConfig,
+        **kwargs
     ):
         """
         Initialize the Wave Equation.
 
-        :param c: Wave speed
-        :param domain: Spatial domain (tuple for 1D, list of tuples for higher dimensions)
-        :param time_domain: Temporal domain
-        :param boundary_conditions: Dictionary of boundary conditions
-        :param initial_condition: Dictionary of initial condition parameters
-        :param exact_solution: Dictionary of exact solution parameters
-        :param dimension: Problem dimension (1 for 1D, 2 for 2D, etc.)
-        :param device: Device to use for computations
+        :param config: PDEConfig instance containing all necessary parameters
+        :param kwargs: Additional keyword arguments
         """
-        config = PDEConfig(
-            name="Wave Equation",
-            domain=domain,
-            time_domain=time_domain,
-            parameters={"c": c},
-            boundary_conditions=boundary_conditions,
-            initial_condition=initial_condition,
-            exact_solution=exact_solution,
-            dimension=dimension,
-            device=device,
-        )
         super().__init__(config)
-        self.c = c
+        self.c = self.config.parameters.get("c", 1.0)
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
@@ -172,6 +149,11 @@ class WaveEquation(PDEBase):
                     return lambda x, t: A * torch.sin(
                         k * torch.pi * torch.sum(x, dim=1, keepdim=True)
                     )
+            elif ic_type == "sine_2d" and self.dimension == 2:
+                A = params.get("amplitude", 1.0)
+                kx = params.get("frequency_x", 2.0)
+                ky = params.get("frequency_y", 2.0)
+                return lambda x, t: A * torch.sin(kx * torch.pi * x[:, 0:1]) * torch.sin(ky * torch.pi * x[:, 1:2])
             else:
                 raise ValueError(f"Unsupported initial condition type: {ic_type}")
         else:

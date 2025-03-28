@@ -3,7 +3,7 @@
 
 import torch
 from dataclasses import dataclass
-from typing import Dict, Any, Optional, Tuple, List, Union
+from typing import Dict, Any, Optional, Tuple, List, Union, Set
 import numpy as np
 from scipy.stats import qmc
 from src.rl_agent import RLAgent
@@ -35,6 +35,79 @@ class PDEBase:
     Provides common functionality for all PDE implementations.
     """
 
+    @staticmethod
+    def create(pde_type: str, config: Optional[PDEConfig] = None, **kwargs) -> 'PDEBase':
+        """
+        Factory method to create PDE instances from type and parameters.
+        
+        :param pde_type: Type of PDE to create (e.g., 'heat', 'wave', 'burgers')
+        :param config: Optional PDEConfig instance, if None one will be created from kwargs
+        :param kwargs: Parameters specific to the PDE type
+        :return: Instantiated PDE object
+        """
+        from importlib import import_module
+        from inspect import isclass
+        
+        # Convert pde_type to class name format (e.g., 'heat' -> 'HeatEquation')
+        if '_' in pde_type:
+            # Handle names like 'heat_equation' -> 'HeatEquation'
+            pde_class_name = ''.join(word.capitalize() for word in pde_type.split('_'))
+            if not pde_class_name.endswith('Equation'):
+                pde_class_name += 'Equation'
+        else:
+            # Handle names like 'heat' -> 'HeatEquation'
+            pde_class_name = pde_type.capitalize() + 'Equation'
+            
+        # Try alternative class name formats if needed
+        alternative_class_names = [
+            pde_class_name,
+            pde_type.capitalize(),  # For cases like 'Pendulum' instead of 'PendulumEquation'
+            ''.join(word.capitalize() for word in pde_type.split('_'))  # CamelCase without 'Equation'
+        ]
+            
+        # Try to import and instantiate the appropriate PDE class
+        for class_name in alternative_class_names:
+            try:
+                # Import from module, assuming module name is lowercase
+                module_path = f"src.pdes.{pde_type.lower().replace('equation', '')}"
+                if module_path.endswith('_'):
+                    module_path = module_path[:-1]
+                    
+                module = import_module(module_path)
+                
+                # Get the PDE class
+                pde_class = getattr(module, class_name)
+                
+                # Check if it's a proper class that inherits from PDEBase
+                if isclass(pde_class) and issubclass(pde_class, PDEBase):
+                    # If no config is provided, create one from kwargs
+                    if config is None:
+                        # Extract required parameters for PDEConfig
+                        config_params = {
+                            "name": kwargs.pop("name", f"{class_name}"),
+                            "domain": kwargs.pop("domain", [(0.0, 1.0)]),
+                            "time_domain": kwargs.pop("time_domain", (0.0, 1.0)),
+                            "parameters": kwargs.pop("parameters", {}),
+                            "boundary_conditions": kwargs.pop("boundary_conditions", {}),
+                            "initial_condition": kwargs.pop("initial_condition", {}),
+                            "exact_solution": kwargs.pop("exact_solution", {}),
+                            "dimension": kwargs.pop("dimension", 1),
+                            "input_dim": kwargs.pop("input_dim", None),
+                            "output_dim": kwargs.pop("output_dim", None),
+                            "architecture": kwargs.pop("architecture", None),
+                            "device": kwargs.pop("device", None)
+                        }
+                        config = PDEConfig(**config_params)
+                    
+                    # Instantiate PDE with config and remaining kwargs
+                    return pde_class(config=config, **kwargs)
+            except (ImportError, AttributeError) as e:
+                # Continue trying with other class names
+                continue
+                
+        # If we get here, no valid PDE class was found
+        raise ValueError(f"Could not find PDE implementation for type: {pde_type}")
+
     def __init__(self, config: PDEConfig, rl_agent=None):
         """
         Initialize PDE with given configuration.
@@ -48,15 +121,25 @@ class PDEBase:
 
         # Handle domain configuration in both old and new formats
         if isinstance(self.domain, list):
-            if len(self.domain) > 0 and isinstance(self.domain[0], (list, tuple)):
-                # New format: list of tuples for multi-dimensional domains
-                pass  # Keep as is
-            else:
-                # Old format: [xmin, xmax]
-                self.domain = [(self.domain[0], self.domain[1])]
+            if len(self.domain) > 0:
+                if isinstance(self.domain[0], (list, tuple)):
+                    # Convert any lists to tuples for consistency
+                    self.domain = [(float(d[0]), float(d[1])) for d in self.domain]
+                else:
+                    # Old format: [xmin, xmax] -> [(xmin, xmax)]
+                    self.domain = [(float(self.domain[0]), float(self.domain[1]))]
         else:
             # Default domain if none provided
             self.domain = [(0.0, 1.0)]
+
+        # Update config with normalized domain format
+        self.config.domain = self.domain
+
+        # Handle time domain format
+        if isinstance(self.config.time_domain, list):
+            self.config.time_domain = (float(self.config.time_domain[0]), float(self.config.time_domain[1]))
+        elif not isinstance(self.config.time_domain, tuple):
+            self.config.time_domain = (0.0, 1.0)
 
         # Setup device
         self.device = config.device or torch.device("cpu")
@@ -76,6 +159,13 @@ class PDEBase:
 
         # For tracking point distribution
         self.collocation_history = []
+        
+        # Setup neural network parameters if not specified
+        if self.config.input_dim is None:
+            self.config.input_dim = self.dimension + 1  # Spatial dimensions + time
+            
+        if self.config.output_dim is None:
+            self.config.output_dim = 1  # Default to single output (u)
 
     def _setup_boundary_conditions(self):
         """Set up boundary condition functions from configuration."""
@@ -113,21 +203,51 @@ class PDEBase:
 
         if bc_type == "dirichlet":
             value = params.get("value", 0.0)
-            return lambda x, t: torch.full_like(
-                x[:, 0:1], value
-            )  # Keep shape consistent
+            return lambda x, t: torch.full_like(x[:, 0:1], value)
+            
         elif bc_type == "neumann":
             value = params.get("value", 0.0)
             return lambda x, t: torch.full_like(x[:, 0:1], value)
+            
         elif bc_type == "periodic":
             if self.dimension == 1:
                 return lambda x, t: torch.sin(2 * torch.pi * x[:, 0:1])
             else:
-                return lambda x, t: torch.sin(
-                    2 * torch.pi * torch.sum(x, dim=1, keepdim=True)
-                )
+                return lambda x, t: torch.sin(2 * torch.pi * torch.sum(x, dim=1, keepdim=True))
+                
+        elif bc_type == "initial":
+            # Handle different types of initial conditions
+            ic_type = params.get("type", "sine")
+            
+            if ic_type == "sine":
+                amplitude = params.get("amplitude", 1.0)
+                frequency = params.get("frequency", 1.0)
+                return lambda x, t: amplitude * torch.sin(frequency * torch.pi * x[:, 0:1])
+                
+            elif ic_type == "tanh":
+                epsilon = params.get("epsilon", 0.1)
+                return lambda x, t: torch.tanh(x[:, 0:1] / epsilon)
+                
+            elif ic_type == "gaussian":
+                mean = params.get("mean", 0.0)
+                std = params.get("std", 0.1)
+                return lambda x, t: torch.exp(-((x[:, 0:1] - mean) ** 2) / (2 * std ** 2))
+                
+            elif ic_type == "fixed":
+                value = params.get("value", 0.0)
+                return lambda x, t: torch.full_like(x[:, 0:1], value)
+                
+            elif ic_type == "random":
+                amplitude = params.get("amplitude", 0.1)
+                return lambda x, t: amplitude * (2 * torch.rand_like(x[:, 0:1]) - 1)
+                
+            else:
+                # Default to zero if type not recognized
+                print(f"Warning: Unrecognized initial condition type '{ic_type}'. Defaulting to zero.")
+                return lambda x, t: torch.zeros_like(x[:, 0:1])
         else:
-            raise ValueError(f"Unsupported boundary condition type: {bc_type}")
+            print(f"Warning: Unsupported boundary condition type '{bc_type}'. Defaulting to zero.")
+            return lambda x, t: torch.zeros_like(x[:, 0:1])
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
@@ -141,6 +261,176 @@ class PDEBase:
         :return: Residual tensor
         """
         raise NotImplementedError("Subclasses must implement compute_residual")
+
+    def compute_derivatives(
+        self,
+        model: torch.nn.Module,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        temporal_derivatives: List[int] = None,
+        spatial_derivatives: Set[int] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compute derivatives of the solution with respect to time and space.
+
+        Args:
+            model: Neural network model
+            x: Spatial coordinates
+            t: Time coordinates
+            temporal_derivatives: List of temporal derivative orders to compute
+            spatial_derivatives: Set of spatial derivative orders to compute
+
+        Returns:
+            Dictionary containing computed derivatives
+
+        Raises:
+            ValueError: If derivative order is invalid (>2 for temporal, >4 for spatial)
+        """
+        # Validate derivative orders
+        if temporal_derivatives:
+            max_temporal_order = max(temporal_derivatives)
+            if max_temporal_order > 2:
+                raise ValueError(f"Temporal derivative order {max_temporal_order} is not supported. Maximum order is 2.")
+        
+        if spatial_derivatives:
+            max_spatial_order = max(spatial_derivatives)
+            if max_spatial_order > 4:
+                raise ValueError(f"Spatial derivative order {max_spatial_order} is not supported. Maximum order is 4.")
+
+        # Ensure tensors require gradients and are on the correct device
+        x = x.detach().to(self.device).requires_grad_(True)
+        t = t.detach().to(self.device).requires_grad_(True)
+        
+        # Ensure model parameters require gradients
+        if isinstance(model, torch.nn.Module):
+            for param in model.parameters():
+                param.requires_grad_(True)
+            # Set model to training mode
+            model.train()
+            # Forward pass through the model
+            inputs = torch.cat([x, t], dim=1)
+            u = model(inputs)
+        else:
+            # If model is a tensor (for testing), use it directly
+            u = model
+
+        # Ensure output requires gradients
+        u = u.to(self.device).requires_grad_(True)
+
+        derivatives = {}
+        
+        # Compute temporal derivatives if requested
+        if temporal_derivatives:
+            u_t_prev = u
+            for i in sorted(temporal_derivatives):
+                if i == 0:
+                    continue  # Skip 0th order derivative
+                    
+                if i == 1:
+                    # First time derivative
+                    grad_outputs = torch.ones_like(u, device=self.device).requires_grad_(True)
+                    u_t = torch.autograd.grad(
+                        u, t, grad_outputs=grad_outputs,
+                        create_graph=True, allow_unused=True, retain_graph=True
+                    )[0]
+                    if u_t is None:
+                        u_t = torch.zeros_like(u, device=self.device)
+                    derivatives["dt"] = u_t.requires_grad_(True)
+                    u_t_prev = u_t
+                else:
+                    # Higher-order time derivatives
+                    key = f"dt{i}"
+                    grad_outputs = torch.ones_like(u_t_prev, device=self.device).requires_grad_(True)
+                    u_t_higher = torch.autograd.grad(
+                        u_t_prev, t, grad_outputs=grad_outputs,
+                        create_graph=True, allow_unused=True, retain_graph=True
+                    )[0]
+                    if u_t_higher is None:
+                        u_t_higher = torch.zeros_like(u, device=self.device)
+                    derivatives[key] = u_t_higher.requires_grad_(True)
+                    u_t_prev = u_t_higher
+
+        # Compute spatial derivatives if requested
+        if spatial_derivatives:
+            if self.dimension == 1:
+                u_x_prev = u
+                for i in sorted(spatial_derivatives):
+                    if i == 0:
+                        continue  # Skip 0th order derivative
+                        
+                    if i == 1:
+                        # First derivative
+                        grad_outputs = torch.ones_like(u, device=self.device).requires_grad_(True)
+                        u_x = torch.autograd.grad(
+                            u, x, grad_outputs=grad_outputs,
+                            create_graph=True, allow_unused=True, retain_graph=True
+                        )[0]
+                        if u_x is None:
+                            u_x = torch.zeros_like(u, device=self.device)
+                        derivatives["dx"] = u_x.requires_grad_(True)
+                        u_x_prev = u_x
+                    else:
+                        # Higher-order derivatives
+                        key = f"dx{i}"
+                        grad_outputs = torch.ones_like(u_x_prev, device=self.device).requires_grad_(True)
+                        u_x_higher = torch.autograd.grad(
+                            u_x_prev, x, grad_outputs=grad_outputs,
+                            create_graph=True, allow_unused=True, retain_graph=True
+                        )[0]
+                        if u_x_higher is None:
+                            u_x_higher = torch.zeros_like(u, device=self.device)
+                        derivatives[key] = u_x_higher.requires_grad_(True)
+                        u_x_prev = u_x_higher
+            else:
+                # Multi-dimensional case
+                for dim in range(self.dimension):
+                    u_x_prev = u
+                    dim_name = f"x{dim+1}" if self.dimension > 1 else "x"
+                    
+                    for order in sorted(spatial_derivatives):
+                        if order == 0:
+                            continue  # Skip 0th order derivative
+                            
+                        # Compute derivatives recursively for each dimension
+                        for i in range(1, order + 1):
+                            if i == 1:
+                                # First derivative
+                                grad_outputs = torch.ones_like(u, device=self.device).requires_grad_(True)
+                                u_x = torch.autograd.grad(
+                                    u, x[:, dim:dim+1], grad_outputs=grad_outputs,
+                                    create_graph=True, allow_unused=True, retain_graph=True
+                                )[0]
+                                if u_x is None:
+                                    u_x = torch.zeros_like(u, device=self.device)
+                                derivatives[f"d{dim_name}"] = u_x.requires_grad_(True)
+                                u_x_prev = u_x
+                            else:
+                                # Higher-order derivatives
+                                key = f"d{dim_name*i}"
+                                grad_outputs = torch.ones_like(u_x_prev, device=self.device).requires_grad_(True)
+                                u_x_higher = torch.autograd.grad(
+                                    u_x_prev, x[:, dim:dim+1], grad_outputs=grad_outputs,
+                                    create_graph=True, allow_unused=True, retain_graph=True
+                                )[0]
+                                if u_x_higher is None:
+                                    u_x_higher = torch.zeros_like(u, device=self.device)
+                                derivatives[key] = u_x_higher.requires_grad_(True)
+                                u_x_prev = u_x_higher
+
+        # Compute Laplacian (∇²u) for convenience
+        if spatial_derivatives and 2 in spatial_derivatives:
+            if self.dimension == 1:
+                # 1D Laplacian is just the second derivative
+                derivatives["laplacian"] = derivatives["dx2"]
+            else:
+                # Multi-dimensional Laplacian is the sum of second derivatives in each dimension
+                laplacian = torch.zeros_like(u, device=self.device)
+                for dim in range(self.dimension):
+                    dim_name = f"x{dim+1}" if self.dimension > 1 else "x"
+                    laplacian += derivatives[f"d{dim_name*2}"]
+                derivatives["laplacian"] = laplacian.requires_grad_(True)
+
+        return derivatives
 
     def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
@@ -166,12 +456,13 @@ class PDEBase:
             if self.dimension == 1:
                 # For 1D, domain is a list with one tuple
                 x = torch.linspace(
-                    self.domain[0][0], self.domain[0][1], int(np.sqrt(num_points))
+                    self.domain[0][0], self.domain[0][1], int(np.sqrt(num_points)), device=self.device
                 ).reshape(-1, 1)
                 t = torch.linspace(
                     self.config.time_domain[0],
                     self.config.time_domain[1],
                     int(np.sqrt(num_points)),
+                    device=self.device
                 ).reshape(-1, 1)
 
                 # Create meshgrid for even coverage
@@ -487,6 +778,55 @@ class PDEBase:
             "boundary": boundary_loss,
             "initial": initial_loss,
         }
+
+    def build_model(self, override_config=None):
+        """
+        Build a neural network model using the PDE-specific architecture settings
+        from the configuration.
+
+        :param override_config: Optional dictionary to override architecture parameters.
+        :return: Instantiated neural network model.
+        """
+        try:
+            # Import the PINNModel class.
+            from src.neural_networks import PINNModel
+
+            # Determine the current PDE type. Default to "wave" if not specified.
+            pde_type = self.config.get("pde_type", "wave")
+            # Get the PDE-specific configuration.
+            pde_conf = self.config.get("pde_configs", {})
+            pde_conf = pde_conf.get(pde_type, {})
+
+            # Build the base architecture configuration using PDE-specific input/output dimensions
+            # and the device from the class.
+            arch_config = {
+                "input_dim": pde_conf.get("input_dim", 2),
+                "output_dim": pde_conf.get("output_dim", 1),
+                "device": self.device
+            }
+
+            # Get the architecture type specified for this PDE.
+            arch_type = pde_conf.get("architecture", None)
+            if arch_type is not None:
+                # Look up the detailed architecture settings in the global "architectures" section.
+                architectures_dict = self.config.get("architectures", {})
+                if arch_type in architectures_dict:
+                    # Merge in the PDE-specific architecture details.
+                    arch_config.update(architectures_dict[arch_type])
+                else:
+                    # Fallback: if no detailed settings exist, simply store the architecture name.
+                    arch_config["architecture"] = arch_type
+
+            # Apply any user-specified override configuration.
+            if override_config:
+                arch_config.update(override_config)
+
+            # Instantiate and return the model.
+            return PINNModel(**arch_config)
+
+        except ImportError:
+            print("Could not import PINNModel. Make sure neural_networks module is available.")
+            return None
 
     def validate(
         self, model: torch.nn.Module, num_points: int = 1000

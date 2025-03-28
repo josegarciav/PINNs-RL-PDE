@@ -21,6 +21,7 @@ class FeedForwardNetwork(BaseNetwork):
                 - activation: Activation function name ('relu', 'tanh', etc.)
                 - dropout: Dropout rate
                 - layer_norm: Whether to use layer normalization
+                - device: Device to place the model on
         """
         super().__init__(config)
         self.input_dim = config["input_dim"]
@@ -28,6 +29,7 @@ class FeedForwardNetwork(BaseNetwork):
         self.output_dim = config["output_dim"]
         self.dropout_rate = config.get("dropout", 0.1)
         self.use_layer_norm = config.get("layer_norm", True)
+        self.device = config.get("device", torch.device("cpu"))
         
         # Get activation function
         activation_name = config.get("activation", "relu")
@@ -49,6 +51,9 @@ class FeedForwardNetwork(BaseNetwork):
         layers.append(nn.Linear(prev_dim, self.output_dim))
         
         self.layers = nn.Sequential(*layers)
+        
+        # Move model to device
+        self.to(self.device)
 
     def forward(self, x: InputType) -> OutputType:
         """
@@ -61,4 +66,7 @@ class FeedForwardNetwork(BaseNetwork):
             Output tensor or array
         """
         x = self._prepare_input(x)
+        # Ensure input is on the same device as the model
+        if x.device != self.device:
+            x = x.to(self.device)
         return self.layers(x) 

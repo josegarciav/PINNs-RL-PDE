@@ -16,44 +16,22 @@ class ConvectionEquation(PDEBase):
 
     def __init__(
         self,
-        velocity: Union[float, List[float]],
-        domain: Union[Tuple[float, float], List[Tuple[float, float]]],
-        time_domain: Tuple[float, float],
-        boundary_conditions: Dict[str, Dict[str, Any]],
-        initial_condition: Dict[str, Any],
-        exact_solution: Dict[str, Any],
-        dimension: int = 1,
-        device: Optional[torch.device] = None,
+        config: PDEConfig,
+        **kwargs
     ):
         """
         Initialize the Convection Equation.
 
-        :param velocity: Velocity (scalar for 1D, list for higher dimensions)
-        :param domain: Spatial domain (tuple for 1D, list of tuples for higher dimensions)
-        :param time_domain: Temporal domain
-        :param boundary_conditions: Dictionary of boundary conditions
-        :param initial_condition: Dictionary of initial condition parameters
-        :param exact_solution: Dictionary of exact solution parameters
-        :param dimension: Problem dimension (1 for 1D, 2 for 2D, etc.)
-        :param device: Device to use for computations
+        :param config: PDEConfig instance containing all necessary parameters
+        :param kwargs: Additional keyword arguments
         """
+        super().__init__(config)
+        velocity = self.config.parameters.get("velocity", 1.0)
         # Convert velocity to list if scalar
         if isinstance(velocity, (int, float)):
-            velocity = [velocity] * dimension
-
-        config = PDEConfig(
-            name="Convection Equation",
-            domain=domain,
-            time_domain=time_domain,
-            parameters={"velocity": velocity},
-            boundary_conditions=boundary_conditions,
-            initial_condition=initial_condition,
-            exact_solution=exact_solution,
-            dimension=dimension,
-            device=device,
-        )
-        super().__init__(config)
-        self.velocity = velocity
+            self.velocity = [velocity] * self.dimension
+        else:
+            self.velocity = velocity
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor

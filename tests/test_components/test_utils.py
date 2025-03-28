@@ -81,7 +81,6 @@ def load_pde_config(pde_type, device=None):
     
     return pde_config_obj, pde_class_map[pde_type]
 
-
 def create_pde_from_config(pde_type, device=None, dimension=None):
     """
     Create a PDE instance from the configuration in config.yaml.
@@ -110,5 +109,5 @@ def create_pde_from_config(pde_type, device=None, dimension=None):
         # For spatial dimensions + time, input_dim = dimension + 1
         config.input_dim = dimension + 1
     
-    # Create and return the PDE instance
-    return pde_class(config) 
+    # Create the PDE instance with the config
+    return pde_class(config=config)

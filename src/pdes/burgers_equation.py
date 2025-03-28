@@ -18,40 +18,17 @@ class BurgersEquation(PDEBase):
 
     def __init__(
         self,
-        nu: float,
-        domain: Union[Tuple[float, float], List[Tuple[float, float]]],
-        time_domain: Tuple[float, float],
-        boundary_conditions: Dict[str, Dict[str, Any]],
-        initial_condition: Dict[str, Any],
-        exact_solution: Dict[str, Any],
-        dimension: int = 1,
-        device: Optional[torch.device] = None,
+        config: PDEConfig,
+        **kwargs
     ):
         """
         Initialize the Burgers' Equation.
 
-        :param nu: Kinematic viscosity
-        :param domain: Spatial domain (tuple for 1D, list of tuples for higher dimensions)
-        :param time_domain: Temporal domain
-        :param boundary_conditions: Dictionary of boundary conditions
-        :param initial_condition: Dictionary of initial condition parameters
-        :param exact_solution: Dictionary of exact solution parameters
-        :param dimension: Problem dimension (1 for 1D, 2 for 2D, etc.)
-        :param device: Device to use for computations
+        :param config: PDEConfig instance containing all necessary parameters
+        :param kwargs: Additional keyword arguments
         """
-        config = PDEConfig(
-            name="Burgers' Equation",
-            domain=domain,
-            time_domain=time_domain,
-            parameters={"nu": nu},
-            boundary_conditions=boundary_conditions,
-            initial_condition=initial_condition,
-            exact_solution=exact_solution,
-            dimension=dimension,
-            device=device,
-        )
         super().__init__(config)
-        self.nu = nu
+        self.nu = self.config.parameters.get("nu", 0.01)
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
@@ -64,67 +41,76 @@ class BurgersEquation(PDEBase):
         :param t: Time coordinates
         :return: Residual tensor
         """
-        xt = torch.cat([x, t], dim=1)
-        xt.requires_grad_(True)
+        derivatives = self.compute_derivatives(
+            model, x, t,
+            spatial_derivatives=[1, 2],  # Need first and second spatial derivatives
+            temporal_derivatives=[1]      # Need first time derivative
+        )
 
-        # Compute derivatives
-        u = model(xt)
-        u_t = torch.autograd.grad(
-            u, t, grad_outputs=torch.ones_like(u), create_graph=True
-        )[0]
+        # Get the derivatives we need
+        u = model(torch.cat([x, t], dim=1))
+        u_t = derivatives.get("dt", torch.zeros_like(x))
+        
+        # For higher dimensions, compute convection and diffusion terms
+        convection = torch.zeros_like(x)
+        diffusion = torch.zeros_like(x)
+        for dim in range(self.dimension):
+            u_x = derivatives.get(f"dx{dim+1}", torch.zeros_like(x))
+            u_xx = derivatives.get(f"d2x{dim+1}", torch.zeros_like(x))
+            convection += u * u_x
+            diffusion += self.nu * u_xx
 
-        # Compute first and second derivatives with respect to x
-        if self.dimension == 1:
-            u_x = torch.autograd.grad(
-                u, x, grad_outputs=torch.ones_like(u), create_graph=True
-            )[0]
-            u_xx = torch.autograd.grad(
-                u_x, x, grad_outputs=torch.ones_like(u_x), create_graph=True
-            )[0]
-            convection = u * u_x
-            diffusion = self.nu * u_xx
-        else:
-            # For higher dimensions, compute derivatives for each dimension
-            convection = torch.zeros_like(u)
-            diffusion = torch.zeros_like(u)
-            for dim in range(self.dimension):
-                u_x = torch.autograd.grad(
-                    u,
-                    x[:, dim : dim + 1],
-                    grad_outputs=torch.ones_like(u),
-                    create_graph=True,
-                )[0]
-                u_xx = torch.autograd.grad(
-                    u_x,
-                    x[:, dim : dim + 1],
-                    grad_outputs=torch.ones_like(u_x),
-                    create_graph=True,
-                )[0]
-                convection += u * u_x
-                diffusion += self.nu * u_xx
-
-        # Compute residual (∂u/∂t + u∂u/∂x = ν∂²u/∂x²)
+        # Burgers' equation: ∂u/∂t + u∂u/∂x = ν∂²u/∂x²
         return u_t + convection - diffusion
 
     def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
-        Compute exact analytical solution (traveling wave).
+        Compute exact analytical solution for Burgers' equation.
 
         :param x: Spatial coordinates
         :param t: Time coordinates
         :return: Exact solution tensor
         """
-        if self.dimension == 1:
-            # 1D Burgers' solution (traveling wave)
-            c = 1.0  # Wave speed
-            return torch.tanh((x - c * t) / (2 * self.nu))
+        if not self.config.exact_solution:
+            return None
+
+        solution_type = self.config.exact_solution.get("type", "cole_hopf")
+        if solution_type == "cole_hopf":
+            # Cole-Hopf transformation solution
+            nu = self.config.exact_solution.get("viscosity", self.nu)
+            A = self.config.exact_solution.get("initial_amplitude", -1.0)
+            k = self.config.exact_solution.get("initial_frequency", 1.0)
+
+            if self.dimension == 1:
+                # Compute Cole-Hopf transformation solution
+                phi = -torch.cos(k * torch.pi * x) * torch.exp(-nu * (k * torch.pi)**2 * t)
+                phi_x = torch.autograd.grad(
+                    phi, x, grad_outputs=torch.ones_like(phi), create_graph=True
+                )[0]
+                return -2 * nu * phi_x / phi
+            else:
+                # For higher dimensions, use product solution
+                solution = torch.ones_like(x[:, 0:1])
+                for dim in range(self.dimension):
+                    phi = -torch.cos(k * torch.pi * x[:, dim:dim+1]) * torch.exp(-nu * (k * torch.pi)**2 * t)
+                    phi_x = torch.autograd.grad(
+                        phi, x[:, dim:dim+1], grad_outputs=torch.ones_like(phi), create_graph=True
+                    )[0]
+                    solution *= -2 * nu * phi_x / phi
+                return solution
+        elif solution_type == "tanh":
+            epsilon = self.config.exact_solution.get("epsilon", 0.1)
+            if self.dimension == 1:
+                # Traveling wave solution
+                return torch.tanh((x - 0.5 - self.nu * t) / epsilon)
+            else:
+                # For higher dimensions, use product of tanh waves
+                solution = torch.ones_like(x[:, 0:1])
+                for dim in range(self.dimension):
+                    solution *= torch.tanh((x[:, dim:dim+1] - 0.5 - self.nu * t) / epsilon)
+                return solution
         else:
-            # For higher dimensions, use product of traveling waves
-            solution = torch.ones_like(x[:, 0:1])
-            for dim in range(self.dimension):
-                c = 1.0  # Wave speed
-                solution *= torch.tanh((x[:, dim : dim + 1] - c * t) / (2 * self.nu))
-            return solution
+            raise ValueError(f"Unsupported exact solution type: {solution_type}")
 
     def _create_boundary_condition(
         self, bc_type: str, params: Dict[str, Any]
@@ -137,13 +123,23 @@ class BurgersEquation(PDEBase):
         :return: Boundary condition function
         """
         if bc_type == "initial":
-            ic_type = params.get("type", "tanh")
-            if ic_type == "tanh":
+            ic_type = params.get("type", "sine")
+            if ic_type == "sine":
+                A = params.get("amplitude", -1.0)
+                k = params.get("frequency", 1.0)
                 if self.dimension == 1:
-                    return lambda x, t: torch.tanh(x / (2 * self.nu))
+                    return lambda x, t: A * torch.sin(k * torch.pi * x)
                 else:
-                    return lambda x, t: torch.tanh(
-                        torch.sum(x, dim=1, keepdim=True) / (2 * self.nu)
+                    return lambda x, t: A * torch.prod(
+                        torch.sin(k * torch.pi * x), dim=1, keepdim=True
+                    )
+            elif ic_type == "tanh":
+                epsilon = params.get("epsilon", 0.1)
+                if self.dimension == 1:
+                    return lambda x, t: torch.tanh((x - 0.5) / epsilon)
+                else:
+                    return lambda x, t: torch.prod(
+                        torch.tanh((x - 0.5) / epsilon), dim=1, keepdim=True
                     )
             else:
                 raise ValueError(f"Unsupported initial condition type: {ic_type}")

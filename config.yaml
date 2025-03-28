@@ -42,7 +42,7 @@ architectures:
     dropout: 0.1
     layer_norm: true
 
-# Default PDE type to use
+# Default PDE type to train
 pde_type: "wave"  # Options: "heat", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
 
 # PDE-specific configurations
@@ -209,7 +209,13 @@ pde_configs:
         value: 0.0
       neumann:
         type: "zero"
-    # No simple exact solution for Cahn-Hilliard
+    exact_solution:
+      type: "spinodal"  # Spinodal decomposition solution
+      wavelength: 0.2  # Characteristic wavelength of the pattern
+      growth_rate: 2.0  # Growth rate of the instability
+      amplitude: 0.1  # Initial amplitude of the perturbation
+      mobility: 1.0  # Should match the PDE parameter
+      kappa: 0.01  # Should match the PDE parameter
   
   # Black-Scholes Equation Configuration
   black_scholes:
