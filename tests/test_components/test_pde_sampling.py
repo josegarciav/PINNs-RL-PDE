@@ -402,8 +402,15 @@ class TestPDESampling(unittest.TestCase):
         domain_2d = [(0.0, 1.0), (0.0, 1.0)]
         time_domain = (0.0, 1.0)
         boundary_conditions = {"dirichlet": {"value": 0.0}}
-        initial_condition = {"type": "sine", "amplitude": 1.0, "frequency": 2.0}
-        exact_solution = {"type": "sine_wave", "amplitude": 1.0, "frequency": 2.0}
+        
+        # Default initial and exact solution configurations
+        initial_condition_sine = {"type": "sine", "amplitude": 1.0, "frequency": 2.0}
+        exact_solution_sine = {"type": "sine", "amplitude": 1.0, "frequency": 2.0}
+        
+        # KdV specific configurations
+        kdv_domain = [(-15.0, 15.0)]
+        kdv_initial_condition = {"type": "soliton", "speed": 1.0}
+        kdv_exact_solution = {"type": "soliton", "speed": 1.0}
         
         # Test all PDE types with each sampling strategy
         pde_models = [
@@ -413,8 +420,8 @@ class TestPDESampling(unittest.TestCase):
                 domain=domain_1d,
                 time_domain=time_domain,
                 boundary_conditions=boundary_conditions,
-                initial_condition=initial_condition,
-                exact_solution=exact_solution,
+                initial_condition=initial_condition_sine,
+                exact_solution=exact_solution_sine,
                 dimension=1,
                 device=self.device,
             ),
@@ -424,18 +431,18 @@ class TestPDESampling(unittest.TestCase):
                 domain=domain_1d,
                 time_domain=time_domain,
                 boundary_conditions=boundary_conditions,
-                initial_condition=initial_condition,
-                exact_solution=exact_solution,
+                initial_condition=initial_condition_sine,
+                exact_solution=exact_solution_sine,
                 dimension=1,
                 device=self.device,
             ),
             # KdV equation
             KdVEquation(
-                domain=domain_1d,
+                domain=kdv_domain,
                 time_domain=time_domain,
                 boundary_conditions=boundary_conditions,
-                initial_condition=initial_condition,
-                exact_solution=exact_solution,
+                initial_condition=kdv_initial_condition,
+                exact_solution=kdv_exact_solution,
                 dimension=1,
                 device=self.device,
             ),
@@ -445,8 +452,8 @@ class TestPDESampling(unittest.TestCase):
                 domain=domain_1d,
                 time_domain=time_domain,
                 boundary_conditions=boundary_conditions,
-                initial_condition=initial_condition,
-                exact_solution=exact_solution,
+                initial_condition=initial_condition_sine,
+                exact_solution=exact_solution_sine,
                 dimension=1,
                 device=self.device,
             ),
@@ -456,8 +463,8 @@ class TestPDESampling(unittest.TestCase):
                 domain=domain_1d,
                 time_domain=time_domain,
                 boundary_conditions=boundary_conditions,
-                initial_condition=initial_condition,
-                exact_solution=exact_solution,
+                initial_condition=initial_condition_sine,
+                exact_solution=exact_solution_sine,
                 dimension=1,
                 device=self.device,
             ),
@@ -467,8 +474,8 @@ class TestPDESampling(unittest.TestCase):
                 domain=domain_1d,
                 time_domain=time_domain,
                 boundary_conditions=boundary_conditions,
-                initial_condition=initial_condition,
-                exact_solution=exact_solution,
+                initial_condition=initial_condition_sine,
+                exact_solution=exact_solution_sine,
                 dimension=1,
                 device=self.device,
             ),
@@ -478,8 +485,8 @@ class TestPDESampling(unittest.TestCase):
                 domain=domain_1d,
                 time_domain=time_domain,
                 boundary_conditions=boundary_conditions,
-                initial_condition=initial_condition,
-                exact_solution=exact_solution,
+                initial_condition=initial_condition_sine,
+                exact_solution=exact_solution_sine,
                 dimension=1,
                 device=self.device,
             ),
@@ -490,8 +497,8 @@ class TestPDESampling(unittest.TestCase):
                 domain=[(0.0, 200.0)],
                 time_domain=time_domain,
                 boundary_conditions=boundary_conditions,
-                initial_condition=initial_condition,
-                exact_solution=exact_solution,
+                initial_condition=initial_condition_sine,
+                exact_solution=exact_solution_sine,
                 dimension=1,
                 device=self.device,
             ),
@@ -504,8 +511,8 @@ class TestPDESampling(unittest.TestCase):
             time_domain=time_domain,
             parameters={"g": 9.81, "L": 1.0},
             boundary_conditions=boundary_conditions,
-            initial_condition=initial_condition,
-            exact_solution=exact_solution,
+            initial_condition=initial_condition_sine,
+            exact_solution=exact_solution_sine,
             dimension=1,
             device=self.device,
         )
@@ -556,8 +563,8 @@ class TestPDESampling(unittest.TestCase):
                     "domain": domain_2d,
                     "time_domain": time_domain,
                     "boundary_conditions": boundary_conditions,
-                    "initial_condition": initial_condition,
-                    "exact_solution": exact_solution,
+                    "initial_condition": initial_condition_sine,
+                    "exact_solution": exact_solution_sine,
                     "dimension": 2,
                     "device": self.device,
                 }
@@ -585,8 +592,8 @@ class TestPDESampling(unittest.TestCase):
                         time_domain=time_domain,
                         parameters={"g": 9.81, "L": 1.0},
                         boundary_conditions=boundary_conditions,
-                        initial_condition=initial_condition,
-                        exact_solution=exact_solution,
+                        initial_condition=initial_condition_sine,
+                        exact_solution=exact_solution_sine,
                         dimension=2,
                         device=self.device,
                     )

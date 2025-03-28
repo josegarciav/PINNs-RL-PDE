@@ -43,15 +43,27 @@ class PDEBase:
         self.domain = config.domain
         self.rl_agent = rl_agent  # Store RL agent
 
-        # Make domain always a list for uniform handling
-        if not isinstance(self.domain[0], (list, tuple)):
-            self.domain = [self.domain]  # Convert to list
+        # Handle domain configuration in both old and new formats
+        if isinstance(self.domain, list):
+            if len(self.domain) > 0 and isinstance(self.domain[0], (list, tuple)):
+                # New format: list of tuples for multi-dimensional domains
+                pass  # Keep as is
+            else:
+                # Old format: [xmin, xmax]
+                self.domain = [(self.domain[0], self.domain[1])]
+        else:
+            # Default domain if none provided
+            self.domain = [(0.0, 1.0)]
 
         # Setup device
         self.device = config.device or torch.device("cpu")
 
         # Store dimensionality
         self.dimension = config.dimension
+        
+        # Make sure parameters exist
+        if not hasattr(config, 'parameters') or config.parameters is None:
+            config.parameters = {}
 
         # Setup boundary and initial conditions
         self._setup_boundary_conditions()
@@ -65,9 +77,17 @@ class PDEBase:
     def _setup_boundary_conditions(self):
         """Set up boundary condition functions from configuration."""
         self.boundary_conditions = {}
-        for bc_type, params in self.config.boundary_conditions.items():
-            self.boundary_conditions[bc_type] = self._create_boundary_condition(
-                bc_type, params
+        
+        if hasattr(self.config, 'boundary_conditions') and self.config.boundary_conditions:
+            for bc_type, params in self.config.boundary_conditions.items():
+                self.boundary_conditions[bc_type] = self._create_boundary_condition(
+                    bc_type, params
+                )
+                
+        # Set up initial condition as a boundary condition if not already defined
+        if "initial" not in self.boundary_conditions and hasattr(self.config, 'initial_condition'):
+            self.boundary_conditions["initial"] = self._create_boundary_condition(
+                "initial", self.config.initial_condition
             )
 
     def _setup_validation_points(self):

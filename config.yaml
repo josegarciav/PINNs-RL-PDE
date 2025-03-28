@@ -1,3 +1,6 @@
+# PINN Configuration with PDE-specific settings
+# Configuration file for Physics-Informed Neural Networks
+
 # Device Configuration
 device: "mps"  # Options: "cuda", "mps", "cpu"
 
@@ -14,31 +17,189 @@ model:
   dropout: 0.1
   layer_norm: true
 
-# PDE Configuration
-pde:
-  parameters:
-    alpha: 0.01  # Thermal diffusivity coefficient
-  domain: [[0.0, 3.14159]]  # Spatial domain [[x_min, x_max]] for 1D
-  time_domain: [0.0, 3.14159]  # Temporal domain [t_min, t_max]
-  initial_condition:
-    type: "sine"
-    amplitude: 1.0
-    frequency: 2.0
-  boundary_conditions:
-    left:
-      type: "dirichlet"
-      value: 0.0
-    right:
-      type: "dirichlet"
-      value: 0.0
-    initial:
+# Default PDE type to use
+pde_type: "wave"  # Options: "heat", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
+
+# PDE-specific configurations
+pde_configs:
+  # Heat Equation Configuration
+  heat:
+    name: "Heat Equation"
+    parameters:
+      alpha: 0.01  # Thermal diffusivity coefficient
+    domain: [[0.0, 1.0]]  # Spatial domain [[x_min, x_max]] for 1D
+    time_domain: [0.0, 1.0]  # Temporal domain [t_min, t_max]
+    dimension: 1
+    initial_condition:
       type: "sine"
       amplitude: 1.0
-      frequency: 2.0
-  exact_solution:
-    type: "sine"
-    amplitude: 1.0
-    frequency: 2.0
+      frequency: 1.0
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+    exact_solution:
+      type: "sine"
+      amplitude: 1.0
+      frequency: 1.0
+  
+  # Wave Equation Configuration
+  wave:
+    name: "Wave Equation"
+    parameters:
+      c: 1.0  # Wave speed
+    domain: [[0.0, 1.0]]
+    time_domain: [0.0, 1.0]
+    dimension: 1
+    initial_condition:
+      type: "sine"
+      amplitude: 1.0
+      frequency: 1.0
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+    exact_solution:
+      type: "sine"
+      amplitude: 1.0
+      frequency: 1.0
+  
+  # Burgers Equation Configuration
+  burgers:
+    name: "Burgers Equation"
+    parameters:
+      viscosity: 0.01  # Viscosity coefficient
+    domain: [[-1.0, 1.0]]
+    time_domain: [0.0, 1.0]
+    dimension: 1
+    initial_condition:
+      type: "sine"
+      amplitude: -1.0
+      frequency: 1.0
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+    # No simple exact solution for Burgers
+  
+  # Convection Equation Configuration
+  convection:
+    name: "Convection Equation"
+    parameters:
+      velocity: [1.0]  # Convection velocity vector [vx]
+    domain: [[0.0, 2.0]]
+    time_domain: [0.0, 1.0]
+    dimension: 1
+    initial_condition:
+      type: "sine"
+      amplitude: 1.0
+      frequency: 1.0
+    boundary_conditions:
+      dirichlet:
+        type: "periodic"
+    exact_solution:
+      type: "sine"
+      amplitude: 1.0
+      frequency: 1.0
+  
+  # KdV Equation Configuration
+  kdv:
+    name: "KdV Equation"
+    parameters:
+      alpha: 6.0  # Nonlinear coefficient
+      beta: 1.0   # Dispersion coefficient
+      speed: 1.0  # Wave speed
+    domain: [[-15.0, 15.0]]
+    time_domain: [0.0, 5.0]
+    dimension: 1
+    initial_condition:
+      type: "soliton"
+      speed: 1.0
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+    exact_solution:
+      type: "soliton"
+      speed: 1.0
+  
+  # Allen-Cahn Equation Configuration
+  allen_cahn:
+    name: "Allen-Cahn Equation"
+    parameters:
+      epsilon: 0.1  # Interface width parameter
+      reaction_rate: 1.0  # Reaction rate
+    domain: [[-1.0, 1.0]]
+    time_domain: [0.0, 1.0]
+    dimension: 1
+    initial_condition:
+      type: "tanh"
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+    exact_solution:
+      type: "tanh"
+  
+  # Cahn-Hilliard Equation Configuration
+  cahn_hilliard:
+    name: "Cahn-Hilliard Equation"
+    parameters:
+      mobility: 1.0  # Mobility coefficient
+      kappa: 0.01  # Interface energy coefficient
+    domain: [[0.0, 1.0]]
+    time_domain: [0.0, 1.0]
+    dimension: 1
+    initial_condition:
+      type: "random"
+      amplitude: 0.1
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+      neumann:
+        type: "zero"
+    # No simple exact solution for Cahn-Hilliard
+  
+  # Black-Scholes Equation Configuration
+  black_scholes:
+    name: "Black-Scholes Equation"
+    parameters:
+      sigma: 0.2  # Volatility
+      r: 0.05  # Risk-free interest rate
+    domain: [[0.0, 200.0]]  # Stock price domain
+    time_domain: [0.0, 1.0]  # Time to maturity (years)
+    dimension: 1
+    initial_condition:
+      type: "option"
+      strike: 100.0
+      option_type: "call"
+    boundary_conditions:
+      dirichlet:
+        type: "custom"
+    exact_solution:
+      type: "black_scholes"
+      strike: 100.0
+      option_type: "call"
+  
+  # Pendulum Equation Configuration
+  pendulum:
+    name: "Pendulum Equation"
+    parameters:
+      g: 9.81  # Gravitational constant
+      L: 1.0   # Pendulum length
+      damping: 0.1  # Damping coefficient
+    domain: [[0.0, 2.0 * 3.14159]]  # Angle domain
+    time_domain: [0.0, 10.0]
+    dimension: 1
+    initial_condition:
+      type: "sine"
+      amplitude: 0.5
+      frequency: 1.0
+    boundary_conditions:
+      dirichlet:
+        type: "periodic"
+    # No simple exact solution for nonlinear pendulum
 
 # Training Configuration
 training:

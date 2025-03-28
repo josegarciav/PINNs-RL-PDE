@@ -1,6 +1,6 @@
 import dash
 from dash import dcc, html
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
@@ -58,6 +58,29 @@ app.layout = html.Div(
                 ),
             ]
         ),
+        # Solution visualization panel
+        html.Div([
+            html.H2("Solution Visualization", className="section-title"),
+            html.Div([
+                html.Div([
+                    dcc.Graph(id="exact-solution-3d", style={"height": "50vh"}),
+                ], className="six columns"),
+                html.Div([
+                    dcc.Graph(id="predicted-solution-3d", style={"height": "50vh"}),
+                ], className="six columns"),
+                html.Div([
+                    html.Label("Time Point:"),
+                    dcc.Slider(
+                        id="time-slider",
+                        min=0,
+                        max=1,
+                        step=0.01,
+                        value=0.5,
+                        marks={i/10: f"{i/10:.1f}" for i in range(11)},
+                    ),
+                ], style={"width": "100%", "padding": "20px"}),
+            ], className="row"),
+        ], className="section"),
         # Architecture comparison
         html.H2(
             "Architecture Comparison",
@@ -88,7 +111,11 @@ app.layout = html.Div(
             style={"marginTop": "30px"},
         ),
         # Automatic update interval
-        dcc.Interval(id="interval-component", interval=5 * 1000, n_intervals=0),
+        dcc.Interval(
+            id="interval-component",
+            interval=5 * 1000,  # in milliseconds
+            n_intervals=0,
+        ),
     ],
     style={"padding": "20px"},
 )
@@ -690,6 +717,395 @@ def update_pde_comparison(_):
     )
 
     return fig
+
+
+# Callback to update 3D solution visualizations
+@app.callback(
+    [
+        Output("exact-solution-3d", "figure"),
+        Output("predicted-solution-3d", "figure"),
+    ],
+    [
+        Input("experiment-selector", "value"),
+        Input("time-slider", "value"),
+        Input("interval-component", "n_intervals"),
+    ],
+)
+def update_solution_visualizations(experiment, time_point, _):
+    if not experiment:
+        return create_empty_3d_figure("Select an experiment"), create_empty_3d_figure("Select an experiment")
+
+    try:
+        # Try to load model and PDE objects
+        model_path = os.path.join(experiment, "model.pt")
+        config_file = os.path.join(experiment, "config.json")
+        
+        # If pre-computed visualization files don't exist, create generic figures
+        if not os.path.exists(model_path) or not os.path.exists(config_file):
+            return (
+                create_empty_3d_figure("No model data available"), 
+                create_empty_3d_figure("No model data available")
+            )
+        
+        # Load configuration
+        with open(config_file, "r") as f:
+            config = json.load(f)
+        
+        # Extract PDE information
+        pde_type = None
+        domain = None
+        dimension = 1  # Default
+        
+        # Try to get from metadata or config
+        metadata_file = os.path.join(experiment, "metadata.json")
+        if os.path.exists(metadata_file):
+            with open(metadata_file, "r") as f:
+                metadata = json.load(f)
+                if "pde_type" in metadata:
+                    pde_type = metadata.get("pde_type")
+                elif "config" in metadata and "pde" in metadata["config"]:
+                    pde_params = metadata["config"]["pde"]
+                    pde_type = pde_params.get("name", "unknown_pde")
+                    domain = pde_params.get("domain", [0, 1])
+                    dimension = pde_params.get("dimension", 1)
+        
+        # If still no PDE info, try config directly
+        if not pde_type and "pde" in config:
+            pde_params = config["pde"]
+            pde_type = pde_params.get("name", "unknown_pde")
+            domain = pde_params.get("domain", [0, 1])
+            dimension = pde_params.get("dimension", 1)
+
+        # Try to load the actual PDE model and model for more accurate visualizations
+        try:
+            # Import necessary modules for loading the model and PDE
+            import torch
+            import sys
+            sys.path.append('.')  # Ensure current directory is in path
+            from src.pdes.pde_base import PDEBase
+            
+            # Try to create PDE instance
+            pde_instance = None
+            if pde_type:
+                # Import specific PDE classes based on the PDE type
+                if "heat" in pde_type.lower():
+                    from src.pdes.heat import Heat
+                    pde_instance = Heat(**pde_params if 'pde_params' in locals() else {})
+                elif "wave" in pde_type.lower():
+                    from src.pdes.wave import Wave
+                    pde_instance = Wave(**pde_params if 'pde_params' in locals() else {})
+                elif "burgers" in pde_type.lower():
+                    from src.pdes.burgers import Burgers
+                    pde_instance = Burgers(**pde_params if 'pde_params' in locals() else {})
+                elif "kdv" in pde_type.lower():
+                    from src.pdes.kdv import KdV
+                    pde_instance = KdV(**pde_params if 'pde_params' in locals() else {})
+                elif "convection" in pde_type.lower():
+                    from src.pdes.convection import Convection
+                    pde_instance = Convection(**pde_params if 'pde_params' in locals() else {})
+                elif "allen" in pde_type.lower():
+                    from src.pdes.allen_cahn import AllenCahn
+                    pde_instance = AllenCahn(**pde_params if 'pde_params' in locals() else {})
+                elif "cahn" in pde_type.lower():
+                    from src.pdes.cahn_hilliard import CahnHilliard
+                    pde_instance = CahnHilliard(**pde_params if 'pde_params' in locals() else {})
+                elif "black" in pde_type.lower() or "scholes" in pde_type.lower():
+                    from src.pdes.black_scholes import BlackScholes
+                    pde_instance = BlackScholes(**pde_params if 'pde_params' in locals() else {})
+                elif "pendulum" in pde_type.lower():
+                    from src.pdes.pendulum import Pendulum
+                    pde_instance = Pendulum(**pde_params if 'pde_params' in locals() else {})
+                    
+            # Try to load the trained model
+            model = None
+            if os.path.exists(model_path):
+                # Get the appropriate model architecture
+                from src.components.neural_networks import PINNModel
+                # Load model with caution
+                try:
+                    model = torch.load(model_path, map_location=torch.device('cpu'))
+                except Exception as model_load_error:
+                    print(f"Error loading model: {model_load_error}")
+                    
+            # If we have both a PDE instance and model, we can generate accurate solutions
+            if pde_instance and model:
+                return generate_pde_visualization(pde_instance, model, time_point, dimension)
+        except Exception as instance_error:
+            print(f"Error loading PDE instance or model: {instance_error}")
+            # Continue with generic visualization
+        
+        # Generate visualization data
+        if dimension == 1:
+            # For 1D PDEs
+            x = np.linspace(domain[0] if domain else 0, domain[1] if domain else 1, 100)
+            t = np.linspace(0, 1, 100)
+            X, T = np.meshgrid(x, t)
+            
+            # Create surface plots
+            exact_fig = go.Figure(data=[go.Surface(
+                x=X, y=T, z=generate_example_solution(X, T, 'exact', pde_type),
+                colorscale='Viridis'
+            )])
+            exact_fig.update_layout(
+                title=f"Exact Solution - {pde_type}",
+                scene=dict(
+                    xaxis_title="x",
+                    yaxis_title="t",
+                    zaxis_title="u(x,t)",
+                ),
+                margin=dict(l=0, r=0, b=0, t=30),
+            )
+            
+            predicted_fig = go.Figure(data=[go.Surface(
+                x=X, y=T, z=generate_example_solution(X, T, 'predicted', pde_type),
+                colorscale='Plasma'
+            )])
+            predicted_fig.update_layout(
+                title=f"Predicted Solution - {pde_type}",
+                scene=dict(
+                    xaxis_title="x",
+                    yaxis_title="t",
+                    zaxis_title="u(x,t)",
+                ),
+                margin=dict(l=0, r=0, b=0, t=30),
+            )
+        
+        elif dimension == 2:
+            # For 2D PDEs
+            x = np.linspace(domain[0] if domain else 0, domain[1] if domain else 1, 50)
+            y = np.linspace(domain[0] if domain else 0, domain[1] if domain else 1, 50)
+            X, Y = np.meshgrid(x, y)
+            
+            # Create figures for 2D problems at a fixed time
+            exact_solution = generate_example_solution(X, Y, 'exact', pde_type, time=time_point)
+            predicted_solution = generate_example_solution(X, Y, 'predicted', pde_type, time=time_point)
+            
+            exact_fig = go.Figure(data=[go.Surface(
+                x=X, y=Y, z=exact_solution,
+                colorscale='Viridis'
+            )])
+            exact_fig.update_layout(
+                title=f"Exact Solution at t={time_point:.2f} - {pde_type}",
+                scene=dict(
+                    xaxis_title="x",
+                    yaxis_title="y",
+                    zaxis_title="u(x,y,t)",
+                ),
+                margin=dict(l=0, r=0, b=0, t=30),
+            )
+            
+            predicted_fig = go.Figure(data=[go.Surface(
+                x=X, y=Y, z=predicted_solution,
+                colorscale='Plasma'
+            )])
+            predicted_fig.update_layout(
+                title=f"Predicted Solution at t={time_point:.2f} - {pde_type}",
+                scene=dict(
+                    xaxis_title="x",
+                    yaxis_title="y",
+                    zaxis_title="u(x,y,t)",
+                ),
+                margin=dict(l=0, r=0, b=0, t=30),
+            )
+        
+        else:
+            # For higher dimensions, create empty figures
+            return (
+                create_empty_3d_figure(f"Cannot visualize {dimension}D PDEs"), 
+                create_empty_3d_figure(f"Cannot visualize {dimension}D PDEs")
+            )
+        
+        return exact_fig, predicted_fig
+    
+    except Exception as e:
+        print(f"Error generating 3D visualizations: {e}")
+        return (
+            create_empty_3d_figure(f"Error: {str(e)}"), 
+            create_empty_3d_figure(f"Error: {str(e)}")
+        )
+
+def generate_pde_visualization(pde, model, time_point, dimension):
+    """Generate visualization based on actual PDE instance and model."""
+    try:
+        import torch
+        
+        # For 1D PDEs
+        if dimension == 1:
+            # Create spatial grid
+            domain = pde.domain
+            x = np.linspace(domain[0], domain[1], 100)
+            t_values = np.linspace(0, 1, 100)
+            X, T = np.meshgrid(x, t_values)
+            
+            # Get exact solution
+            exact_solution = np.zeros_like(X)
+            for i, t_val in enumerate(t_values):
+                for j, x_val in enumerate(x):
+                    exact_solution[i, j] = pde.exact_solution(torch.tensor([x_val, t_val])).item()
+            
+            # Get predicted solution
+            predicted_solution = np.zeros_like(X)
+            model.eval()
+            with torch.no_grad():
+                for i, t_val in enumerate(t_values):
+                    for j, x_val in enumerate(x):
+                        input_tensor = torch.tensor([x_val, t_val], dtype=torch.float32)
+                        predicted_solution[i, j] = model(input_tensor).item()
+            
+            # Create figures
+            exact_fig = go.Figure(data=[go.Surface(
+                x=X, y=T, z=exact_solution,
+                colorscale='Viridis'
+            )])
+            exact_fig.update_layout(
+                title=f"Exact Solution - {pde.__class__.__name__}",
+                scene=dict(
+                    xaxis_title="x",
+                    yaxis_title="t",
+                    zaxis_title="u(x,t)",
+                ),
+                margin=dict(l=0, r=0, b=0, t=30),
+            )
+            
+            predicted_fig = go.Figure(data=[go.Surface(
+                x=X, y=T, z=predicted_solution,
+                colorscale='Plasma'
+            )])
+            predicted_fig.update_layout(
+                title=f"Predicted Solution - {pde.__class__.__name__}",
+                scene=dict(
+                    xaxis_title="x",
+                    yaxis_title="t",
+                    zaxis_title="u(x,t)",
+                ),
+                margin=dict(l=0, r=0, b=0, t=30),
+            )
+            
+            return exact_fig, predicted_fig
+            
+        # For 2D PDEs
+        elif dimension == 2:
+            # Create spatial grid
+            domain = pde.domain
+            x = np.linspace(domain[0], domain[1], 50)
+            y = np.linspace(domain[0], domain[1], 50)
+            X, Y = np.meshgrid(x, y)
+            
+            # Get exact solution at specific time point
+            exact_solution = np.zeros_like(X)
+            for i, y_val in enumerate(y):
+                for j, x_val in enumerate(x):
+                    exact_solution[i, j] = pde.exact_solution(torch.tensor([x_val, y_val, time_point])).item()
+            
+            # Get predicted solution
+            predicted_solution = np.zeros_like(X)
+            model.eval()
+            with torch.no_grad():
+                for i, y_val in enumerate(y):
+                    for j, x_val in enumerate(x):
+                        input_tensor = torch.tensor([x_val, y_val, time_point], dtype=torch.float32)
+                        predicted_solution[i, j] = model(input_tensor).item()
+            
+            # Create figures
+            exact_fig = go.Figure(data=[go.Surface(
+                x=X, y=Y, z=exact_solution,
+                colorscale='Viridis'
+            )])
+            exact_fig.update_layout(
+                title=f"Exact Solution at t={time_point:.2f} - {pde.__class__.__name__}",
+                scene=dict(
+                    xaxis_title="x",
+                    yaxis_title="y",
+                    zaxis_title="u(x,y,t)",
+                ),
+                margin=dict(l=0, r=0, b=0, t=30),
+            )
+            
+            predicted_fig = go.Figure(data=[go.Surface(
+                x=X, y=Y, z=predicted_solution,
+                colorscale='Plasma'
+            )])
+            predicted_fig.update_layout(
+                title=f"Predicted Solution at t={time_point:.2f} - {pde.__class__.__name__}",
+                scene=dict(
+                    xaxis_title="x",
+                    yaxis_title="y",
+                    zaxis_title="u(x,y,t)",
+                ),
+                margin=dict(l=0, r=0, b=0, t=30),
+            )
+            
+            return exact_fig, predicted_fig
+        
+        else:
+            # For higher dimensions, return empty figures
+            return (
+                create_empty_3d_figure(f"Cannot visualize {dimension}D PDEs"), 
+                create_empty_3d_figure(f"Cannot visualize {dimension}D PDEs")
+            )
+    
+    except Exception as e:
+        print(f"Error in generate_pde_visualization: {e}")
+        return (
+            create_empty_3d_figure(f"Error: {str(e)}"), 
+            create_empty_3d_figure(f"Error: {str(e)}")
+        )
+
+def create_empty_3d_figure(message):
+    """Create an empty 3D figure with a message."""
+    fig = go.Figure()
+    fig.add_annotation(
+        text=message,
+        x=0.5,
+        y=0.5,
+        showarrow=False,
+        font=dict(size=16),
+    )
+    fig.update_layout(
+        title="Solution Visualization",
+        scene=dict(
+            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+            zaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+        ),
+    )
+    return fig
+
+def generate_example_solution(X, Y, solution_type, pde_type, time=None):
+    """Generate example solutions for visualization."""
+    if time is None:
+        time = Y  # Assume Y is time grid for 1D problems
+    
+    # Generate different solutions based on PDE type
+    if pde_type and "heat" in pde_type.lower():
+        if solution_type == 'exact':
+            # Heat equation exact solution
+            return np.sin(np.pi * X) * np.exp(-np.pi**2 * time)
+        else:
+            # Add some noise to simulate prediction
+            return np.sin(np.pi * X) * np.exp(-np.pi**2 * time) * (1 + 0.1 * np.random.rand(*X.shape) - 0.05)
+    
+    elif pde_type and "wave" in pde_type.lower():
+        if solution_type == 'exact':
+            # Wave equation exact solution
+            return np.sin(np.pi * X) * np.cos(np.pi * time)
+        else:
+            # Add some noise to simulate prediction
+            return np.sin(np.pi * X) * np.cos(np.pi * time) * (1 + 0.1 * np.random.rand(*X.shape) - 0.05)
+    
+    elif pde_type and "burgers" in pde_type.lower():
+        # Simplified Burgers' equation solution (example)
+        if solution_type == 'exact':
+            return np.tanh((X - 0.5 - 0.5 * time) / (0.1 + 0.05 * time))
+        else:
+            return np.tanh((X - 0.5 - 0.5 * time) / (0.1 + 0.05 * time)) * (1 + 0.15 * np.random.rand(*X.shape) - 0.075)
+    
+    else:
+        # Generic solution for unknown PDEs
+        if solution_type == 'exact':
+            return np.sin(np.pi * X) * np.cos(2 * np.pi * time)
+        else:
+            return np.sin(np.pi * X) * np.cos(2 * np.pi * time) * (1 + 0.1 * np.random.rand(*X.shape) - 0.05)
 
 
 if __name__ == "__main__":

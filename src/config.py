@@ -121,9 +121,21 @@ class Config:
         if not os.path.exists(self.config_path):
             raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
 
+        # Load main configuration
         with open(self.config_path, "r") as f:
             config_dict = yaml.safe_load(f)
 
+        # Check if we need to load a PDE-specific configuration
+        pde_type = config_dict.get("pde_type")
+        pde_config = {}
+
+        if pde_type and "pde_configs" in config_dict and pde_type in config_dict["pde_configs"]:
+            # Extract PDE-specific configuration
+            pde_config = config_dict["pde_configs"][pde_type]
+            
+            # Use it as the PDE configuration
+            config_dict["pde"] = pde_config
+        
         # Device configuration
         self.device = self._get_device(config_dict.get("device", "mps"))
 
@@ -146,7 +158,7 @@ class Config:
         pde_config = config_dict.get("pde", {})
         self.pde = PDEConfig(
             domain=pde_config.get("domain", [0.0, 1.0]),
-            t_domain=pde_config.get("t_domain", [0.0, 1.0]),
+            t_domain=pde_config.get("time_domain", [0.0, 1.0]),
             initial_condition=pde_config.get("initial_condition", "sin(pi*x)"),
             boundary_conditions=pde_config.get(
                 "boundary_conditions", {"left": "0.0", "right": "0.0"}
@@ -154,6 +166,9 @@ class Config:
             diffusion_coefficient=pde_config.get("diffusion_coefficient", 0.01),
             source_term=pde_config.get("source_term", "0.0"),
         )
+
+        # Store the complete PDE configuration for more advanced implementations
+        self.pde_full_config = pde_config
 
         # Training configuration
         training_config = config_dict.get("training", {})
@@ -249,12 +264,22 @@ class Config:
         if self.model.activation not in ["tanh", "relu", "gelu"]:
             raise ValueError(f"Invalid activation: {self.model.activation}")
 
-        # Validate PDE configuration
-        if len(self.pde.domain) != 2:
-            raise ValueError("domain must be a list of two values")
-        if len(self.pde.t_domain) != 2:
+        # Validate PDE configuration - adapted for new structure
+        # Check domain in different formats
+        if hasattr(self.pde, 'domain'):
+            # For the traditional domain format [xmin, xmax]
+            if isinstance(self.pde.domain, list) and len(self.pde.domain) == 2 and all(isinstance(x, (int, float)) for x in self.pde.domain):
+                pass  # Valid format
+            # For the new domain format [[xmin, xmax]] or [[xmin, xmax], [ymin, ymax]]
+            elif isinstance(self.pde.domain, list) and len(self.pde.domain) > 0 and all(isinstance(d, list) and len(d) == 2 for d in self.pde.domain):
+                pass  # Valid format
+            else:
+                raise ValueError("domain must be a list of two values or a list of tuples [min, max]")
+        
+        if hasattr(self.pde, 't_domain') and len(self.pde.t_domain) != 2:
             raise ValueError("t_domain must be a list of two values")
-        if self.pde.diffusion_coefficient <= 0:
+            
+        if hasattr(self.pde, 'diffusion_coefficient') and self.pde.diffusion_coefficient <= 0:
             raise ValueError("diffusion_coefficient must be positive")
 
         # Validate training configuration
