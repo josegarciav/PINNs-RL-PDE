@@ -14,11 +14,7 @@ class WaveEquation(PDEBase):
     where c is the wave speed and ∇² is the Laplacian operator.
     """
 
-    def __init__(
-        self,
-        config: PDEConfig,
-        **kwargs
-    ):
+    def __init__(self, config: PDEConfig, **kwargs):
         """
         Initialize the Wave Equation.
 
@@ -153,7 +149,11 @@ class WaveEquation(PDEBase):
                 A = params.get("amplitude", 1.0)
                 kx = params.get("frequency_x", 2.0)
                 ky = params.get("frequency_y", 2.0)
-                return lambda x, t: A * torch.sin(kx * torch.pi * x[:, 0:1]) * torch.sin(ky * torch.pi * x[:, 1:2])
+                return (
+                    lambda x, t: A
+                    * torch.sin(kx * torch.pi * x[:, 0:1])
+                    * torch.sin(ky * torch.pi * x[:, 1:2])
+                )
             else:
                 raise ValueError(f"Unsupported initial condition type: {ic_type}")
         else:

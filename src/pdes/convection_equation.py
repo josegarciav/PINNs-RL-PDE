@@ -14,11 +14,7 @@ class ConvectionEquation(PDEBase):
     where v is the velocity vector and ∇ is the gradient operator.
     """
 
-    def __init__(
-        self,
-        config: PDEConfig,
-        **kwargs
-    ):
+    def __init__(self, config: PDEConfig, **kwargs):
         """
         Initialize the Convection Equation.
 

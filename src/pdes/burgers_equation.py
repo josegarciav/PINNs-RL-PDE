@@ -16,11 +16,7 @@ class BurgersEquation(PDEBase):
     This equation combines nonlinear convection and diffusion.
     """
 
-    def __init__(
-        self,
-        config: PDEConfig,
-        **kwargs
-    ):
+    def __init__(self, config: PDEConfig, **kwargs):
         """
         Initialize the Burgers' Equation.
 
@@ -42,15 +38,17 @@ class BurgersEquation(PDEBase):
         :return: Residual tensor
         """
         derivatives = self.compute_derivatives(
-            model, x, t,
+            model,
+            x,
+            t,
             spatial_derivatives=[1, 2],  # Need first and second spatial derivatives
-            temporal_derivatives=[1]      # Need first time derivative
+            temporal_derivatives=[1],  # Need first time derivative
         )
 
         # Get the derivatives we need
         u = model(torch.cat([x, t], dim=1))
         u_t = derivatives.get("dt", torch.zeros_like(x))
-        
+
         # For higher dimensions, compute convection and diffusion terms
         convection = torch.zeros_like(x)
         diffusion = torch.zeros_like(x)
@@ -83,7 +81,9 @@ class BurgersEquation(PDEBase):
 
             if self.dimension == 1:
                 # Compute Cole-Hopf transformation solution
-                phi = -torch.cos(k * torch.pi * x) * torch.exp(-nu * (k * torch.pi)**2 * t)
+                phi = -torch.cos(k * torch.pi * x) * torch.exp(
+                    -nu * (k * torch.pi) ** 2 * t
+                )
                 phi_x = torch.autograd.grad(
                     phi, x, grad_outputs=torch.ones_like(phi), create_graph=True
                 )[0]
@@ -92,9 +92,14 @@ class BurgersEquation(PDEBase):
                 # For higher dimensions, use product solution
                 solution = torch.ones_like(x[:, 0:1])
                 for dim in range(self.dimension):
-                    phi = -torch.cos(k * torch.pi * x[:, dim:dim+1]) * torch.exp(-nu * (k * torch.pi)**2 * t)
+                    phi = -torch.cos(k * torch.pi * x[:, dim : dim + 1]) * torch.exp(
+                        -nu * (k * torch.pi) ** 2 * t
+                    )
                     phi_x = torch.autograd.grad(
-                        phi, x[:, dim:dim+1], grad_outputs=torch.ones_like(phi), create_graph=True
+                        phi,
+                        x[:, dim : dim + 1],
+                        grad_outputs=torch.ones_like(phi),
+                        create_graph=True,
                     )[0]
                     solution *= -2 * nu * phi_x / phi
                 return solution
@@ -107,7 +112,9 @@ class BurgersEquation(PDEBase):
                 # For higher dimensions, use product of tanh waves
                 solution = torch.ones_like(x[:, 0:1])
                 for dim in range(self.dimension):
-                    solution *= torch.tanh((x[:, dim:dim+1] - 0.5 - self.nu * t) / epsilon)
+                    solution *= torch.tanh(
+                        (x[:, dim : dim + 1] - 0.5 - self.nu * t) / epsilon
+                    )
                 return solution
         else:
             raise ValueError(f"Unsupported exact solution type: {solution_type}")

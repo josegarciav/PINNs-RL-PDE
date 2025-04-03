@@ -18,33 +18,51 @@ from .autoencoder import AutoEncoder
 # Import optional architectures if available
 try:
     from .attention import AttentionNetwork, SelfAttention
+
     __all__ = [
-        'BaseNetwork', 'InputType', 'OutputType', 'NetworkConfig',
-        'FeedForwardNetwork', 'ResNet', 'ResNetBlock', 'SIREN', 'SIRENLayer',
-        'FourierNetwork', 'FourierFeatures', 'AutoEncoder',
-        'AttentionNetwork', 'SelfAttention', 'PINNModel'
+        "BaseNetwork",
+        "InputType",
+        "OutputType",
+        "NetworkConfig",
+        "FeedForwardNetwork",
+        "ResNet",
+        "ResNetBlock",
+        "SIREN",
+        "SIRENLayer",
+        "FourierNetwork",
+        "FourierFeatures",
+        "AutoEncoder",
+        "AttentionNetwork",
+        "SelfAttention",
+        "PINNModel",
     ]
 except ImportError:
     __all__ = [
-        'BaseNetwork', 'InputType', 'OutputType', 'NetworkConfig',
-        'FeedForwardNetwork', 'ResNet', 'ResNetBlock', 'SIREN', 'SIRENLayer',
-        'FourierNetwork', 'FourierFeatures', 'AutoEncoder', 'PINNModel'
+        "BaseNetwork",
+        "InputType",
+        "OutputType",
+        "NetworkConfig",
+        "FeedForwardNetwork",
+        "ResNet",
+        "ResNetBlock",
+        "SIREN",
+        "SIRENLayer",
+        "FourierNetwork",
+        "FourierFeatures",
+        "AutoEncoder",
+        "PINNModel",
     ]
 
 
 class PINNModel(BaseNetwork):
     """
     Physics-Informed Neural Network model factory.
-    
+
     This class provides a unified interface to create different neural network
     architectures suitable for Physics-Informed Neural Networks.
     """
 
-    def __init__(
-        self,
-        config: Config,
-        **kwargs
-    ):
+    def __init__(self, config: Config, **kwargs):
         """
         Initialize the PINN model.
 
@@ -54,31 +72,28 @@ class PINNModel(BaseNetwork):
         """
         # Store configuration
         self.config = config
-        
+
         # Create base NetworkConfig
         super().__init__(config.model)
-        
+
         # Store architecture type
         self.architecture = config.model.architecture
-        
+
         # Create model based on architecture
         if self.architecture == "fourier":
-            self.model = FourierNetwork(config)
+            self.model = FourierNetwork(config.model)
         elif self.architecture == "resnet":
-            self.model = ResNet(config)
+            self.model = ResNet(config.model)
         elif self.architecture == "siren":
-            self.model = SIREN(config)
+            self.model = SIREN(config.model)
         elif self.architecture == "attention":
-            try:
-                self.model = AttentionNetwork(config)
-            except NameError:
-                raise ImportError("AttentionNetwork architecture is not available. Please install the required dependencies.")
+            self.model = AttentionNetwork(config.model)
         elif self.architecture == "autoencoder":
-            self.model = AutoEncoder(config)
+            self.model = AutoEncoder(config.model)
             # Additional output projection for AutoEncoder to ensure correct output dimension
-            self.output_proj = FeedForwardNetwork(config)
+            self.output_proj = FeedForwardNetwork(config.model)
         else:  # Default to feedforward
-            self.model = FeedForwardNetwork(config)
+            self.model = FeedForwardNetwork(config.model)
 
     def forward(self, x):
         """
@@ -86,7 +101,7 @@ class PINNModel(BaseNetwork):
 
         Args:
             x: Input tensor of shape (batch_size, input_dim)
-            
+
         Returns:
             Output tensor of shape (batch_size, output_dim)
         """
@@ -95,26 +110,30 @@ class PINNModel(BaseNetwork):
             return self.output_proj(self.model(x))
         return self.model(x)
 
+
 def create_network(config: Config) -> nn.Module:
     """
     Create a neural network based on the configuration.
-    
+
     Args:
         config: Configuration object
-        
+
     Returns:
         Neural network module
     """
     architecture = config.model.architecture
-    
+
     if architecture == "feedforward":
         from .feedforward import FeedForwardNetwork
+
         return FeedForwardNetwork(config)
     elif architecture == "fourier":
         from .fourier import FourierNetwork
+
         return FourierNetwork(config)
     elif architecture == "siren":
         from .siren import SirenNetwork
+
         return SirenNetwork(config)
     else:
-        raise ValueError(f"Unknown architecture: {architecture}") 
+        raise ValueError(f"Unknown architecture: {architecture}")

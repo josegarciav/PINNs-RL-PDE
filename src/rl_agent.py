@@ -544,7 +544,7 @@ class RLAgent:
     def update_epsilon(self, epoch: int = None):
         """
         Update exploration rate based on epoch or using internal decay.
-        
+
         Args:
             epoch: Current training epoch (not used, kept for API compatibility)
         """

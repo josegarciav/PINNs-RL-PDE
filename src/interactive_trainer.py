@@ -12,17 +12,20 @@ import json
 import subprocess
 import webbrowser
 import time
+import logging
 
 # Make sure src is in the PYTHONPATH
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.neural_networks.neural_networks import PINNModel
+from src.neural_networks import PINNModel
 from src.pdes.heat_equation import HeatEquation
 from src.pdes.burgers_equation import BurgersEquation
 from src.pdes.wave_equation import WaveEquation
 from src.trainer import PDETrainer
 from src.rl_agent import RLAgent
-from src.utils.utils import setup_logging, save_model
+from src.utils.utils import save_model
+from src.pdes.pde_base import PDEConfig
+from src.config import ModelConfig, Config
 
 
 class InteractiveTrainer:
@@ -40,31 +43,71 @@ class InteractiveTrainer:
 
     def setup_variables(self):
         """Initialize application variables"""
+        # Load config to get PDE-specific architectures
+        try:
+            with open("config.yaml", "r") as f:
+                config = yaml.safe_load(f)
+                pde_configs = config.get("pde_configs", {})
+        except Exception as e:
+            print(f"Error loading config.yaml: {e}")
+            pde_configs = {}
+
         # Options for dropdown lists
         self.pde_types = [
-            "Heat Equation", 
-            "Wave Equation", 
+            "Heat Equation",  # First in list
+            "Wave Equation",
             "Burgers Equation",
             "KdV Equation",
             "Convection Equation",
             "Allen-Cahn Equation",
             "Cahn-Hilliard Equation",
             "Black-Scholes Equation",
-            "Pendulum Equation"
+            "Pendulum Equation",
         ]
-        self.architectures = [
-            "standard", 
-            "fourier", 
-            "residual", 
-            "attention",
-            "siren",
-            "autoencoder"
-        ]
+
+        # Map PDE names to their config keys
+        self.pde_name_to_key = {
+            "Heat Equation": "heat",
+            "Wave Equation": "wave",
+            "Burgers Equation": "burgers",
+            "KdV Equation": "kdv",
+            "Convection Equation": "convection",
+            "Allen-Cahn Equation": "allen_cahn",
+            "Cahn-Hilliard Equation": "cahn_hilliard",
+            "Black-Scholes Equation": "black_scholes",
+            "Pendulum Equation": "pendulum",
+        }
+
+        # Get all unique architectures from config
+        self.architectures = list(
+            set(
+                pde_config.get("architecture", "fourier")
+                for pde_config in pde_configs.values()
+            )
+        )
+        if not self.architectures:  # Fallback if config loading failed
+            self.architectures = [
+                "fourier",
+                "siren",
+                "resnet",
+                "feedforward",
+                "attention",
+                "autoencoder",
+            ]
+
         self.device_options = ["cpu", "cuda", "mps"]
 
         # Control variables
-        self.selected_pde = tk.StringVar(value=self.pde_types[0])
-        self.selected_arch = tk.StringVar(value=self.architectures[0])
+        self.selected_pde = tk.StringVar(
+            value="Heat Equation"
+        )  # Explicitly set default to Heat Equation
+
+        # Get the default architecture for the selected PDE
+        default_arch = pde_configs.get(
+            self.pde_name_to_key.get("Heat Equation", "heat"), {}
+        ).get("architecture", "fourier")
+
+        self.selected_arch = tk.StringVar(value=default_arch)
         self.selected_device = tk.StringVar(value=self.device_options[0])
         self.use_rl = tk.BooleanVar(value=False)
 
@@ -230,7 +273,7 @@ class InteractiveTrainer:
         self.epoch_label = ttk.Label(progress_frame, text="0/0")
         self.epoch_label.grid(row=0, column=1, sticky="w", padx=5, pady=5)
 
-        ttk.Label(progress_frame, text="Best Loss:").grid(
+        ttk.Label(progress_frame, text="Best Val Loss:").grid(
             row=1, column=0, sticky="w", padx=5, pady=5
         )
         self.loss_label = ttk.Label(progress_frame, text="--")
@@ -249,111 +292,117 @@ class InteractiveTrainer:
         self.status_label = ttk.Label(status_frame, text="Ready")
         self.status_label.pack(fill="x", padx=5, pady=5)
 
+        # Set default PDE and trigger update
+        pde_combo.set("Heat Equation")  # Explicitly set default value
+        self.on_pde_selected(None)  # Trigger the event to update parameters
+
     def update_pde_params(self):
-        """Update specific parameters based on selected PDE"""
-        # Clear current frame
+        """Update PDE-specific parameters based on selected PDE"""
+        # Clear current parameters
         for widget in self.pde_params_frame.winfo_children():
             widget.destroy()
 
-        # Show parameters based on selected PDE
-        if self.selected_pde.get() == "Heat Equation":
-            ttk.Label(self.pde_params_frame, text="Alpha (Diffusivity):").grid(
-                row=0, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(self.pde_params_frame, textvariable=self.alpha, width=10).grid(
-                row=0, column=1, sticky="w", padx=5, pady=5
-            )
-            ttk.Label(self.pde_params_frame, text="Frequency:").grid(
-                row=1, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(
-                self.pde_params_frame, textvariable=self.frequency, width=10
-            ).grid(row=1, column=1, sticky="w", padx=5, pady=5)
+        # Get the current PDE type
+        pde_type = self.selected_pde.get().lower().replace(" ", "_")
 
-        elif self.selected_pde.get() == "Wave Equation":
-            ttk.Label(self.pde_params_frame, text="Wave Speed:").grid(
-                row=0, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(self.pde_params_frame, textvariable=self.alpha, width=10).grid(
-                row=0, column=1, sticky="w", padx=5, pady=5
-            )
-            ttk.Label(self.pde_params_frame, text="Frequency:").grid(
-                row=1, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(
-                self.pde_params_frame, textvariable=self.frequency, width=10
-            ).grid(row=1, column=1, sticky="w", padx=5, pady=5)
+        # Load config to get PDE-specific parameters
+        try:
+            with open("config.yaml", "r") as f:
+                config = yaml.safe_load(f)
+                pde_configs = config.get("pde_configs", {})
+                pde_config = pde_configs.get(pde_type, {})
 
-        elif self.selected_pde.get() == "Burgers Equation":
-            ttk.Label(self.pde_params_frame, text="Viscosity:").grid(
-                row=0, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(
-                self.pde_params_frame, textvariable=self.viscosity, width=10
-            ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                # Update architecture based on config
+                if "architecture" in pde_config:
+                    self.selected_arch.set(pde_config["architecture"])
 
-        elif self.selected_pde.get() == "KdV Equation":
-            ttk.Label(self.pde_params_frame, text="Frequency:").grid(
-                row=0, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(
-                self.pde_params_frame, textvariable=self.frequency, width=10
-            ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                # Show parameters based on PDE type
+                if pde_type == "heat_equation":
+                    ttk.Label(self.pde_params_frame, text="Alpha:").grid(
+                        row=0, column=0, sticky="w", padx=5, pady=5
+                    )
+                    ttk.Entry(
+                        self.pde_params_frame, textvariable=self.alpha, width=10
+                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                elif pde_type == "burgers_equation":
+                    ttk.Label(self.pde_params_frame, text="Viscosity:").grid(
+                        row=0, column=0, sticky="w", padx=5, pady=5
+                    )
+                    ttk.Entry(
+                        self.pde_params_frame, textvariable=self.viscosity, width=10
+                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                elif pde_type == "wave_equation":
+                    ttk.Label(self.pde_params_frame, text="Wave Speed:").grid(
+                        row=0, column=0, sticky="w", padx=5, pady=5
+                    )
+                    ttk.Entry(
+                        self.pde_params_frame, textvariable=self.alpha, width=10
+                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                elif pde_type == "convection_equation":
+                    ttk.Label(self.pde_params_frame, text="Velocity:").grid(
+                        row=0, column=0, sticky="w", padx=5, pady=5
+                    )
+                    ttk.Entry(
+                        self.pde_params_frame, textvariable=self.velocity, width=10
+                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                elif pde_type == "allen_cahn_equation":
+                    ttk.Label(self.pde_params_frame, text="Epsilon:").grid(
+                        row=0, column=0, sticky="w", padx=5, pady=5
+                    )
+                    ttk.Entry(
+                        self.pde_params_frame, textvariable=self.epsilon, width=10
+                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                elif pde_type == "black_scholes_equation":
+                    ttk.Label(self.pde_params_frame, text="Sigma:").grid(
+                        row=0, column=0, sticky="w", padx=5, pady=5
+                    )
+                    ttk.Entry(
+                        self.pde_params_frame, textvariable=self.sigma, width=10
+                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                    ttk.Label(self.pde_params_frame, text="Risk-free Rate:").grid(
+                        row=1, column=0, sticky="w", padx=5, pady=5
+                    )
+                    ttk.Entry(
+                        self.pde_params_frame, textvariable=self.r, width=10
+                    ).grid(row=1, column=1, sticky="w", padx=5, pady=5)
+                elif pde_type == "pendulum_equation":
+                    ttk.Label(self.pde_params_frame, text="Gravity:").grid(
+                        row=0, column=0, sticky="w", padx=5, pady=5
+                    )
+                    ttk.Entry(
+                        self.pde_params_frame, textvariable=self.gravity, width=10
+                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                    ttk.Label(self.pde_params_frame, text="Length:").grid(
+                        row=1, column=0, sticky="w", padx=5, pady=5
+                    )
+                    ttk.Entry(
+                        self.pde_params_frame, textvariable=self.length, width=10
+                    ).grid(row=1, column=1, sticky="w", padx=5, pady=5)
 
-        elif self.selected_pde.get() == "Convection Equation":
-            ttk.Label(self.pde_params_frame, text="Velocity:").grid(
-                row=0, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(
-                self.pde_params_frame, textvariable=self.velocity, width=10
-            ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
-
-        elif self.selected_pde.get() == "Allen-Cahn Equation":
-            ttk.Label(self.pde_params_frame, text="Epsilon:").grid(
-                row=0, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(
-                self.pde_params_frame, textvariable=self.epsilon, width=10
-            ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
-
-        elif self.selected_pde.get() == "Cahn-Hilliard Equation":
-            ttk.Label(self.pde_params_frame, text="Epsilon:").grid(
-                row=0, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(
-                self.pde_params_frame, textvariable=self.epsilon, width=10
-            ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
-
-        elif self.selected_pde.get() == "Black-Scholes Equation":
-            ttk.Label(self.pde_params_frame, text="Volatility (σ):").grid(
-                row=0, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(
-                self.pde_params_frame, textvariable=self.sigma, width=10
-            ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
-            ttk.Label(self.pde_params_frame, text="Risk-free rate (r):").grid(
-                row=1, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(
-                self.pde_params_frame, textvariable=self.r, width=10
-            ).grid(row=1, column=1, sticky="w", padx=5, pady=5)
-
-        elif self.selected_pde.get() == "Pendulum Equation":
-            ttk.Label(self.pde_params_frame, text="Gravity (g):").grid(
-                row=0, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(
-                self.pde_params_frame, textvariable=self.gravity, width=10
-            ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
-            ttk.Label(self.pde_params_frame, text="Length (L):").grid(
-                row=1, column=0, sticky="w", padx=5, pady=5
-            )
-            ttk.Entry(
-                self.pde_params_frame, textvariable=self.length, width=10
-            ).grid(row=1, column=1, sticky="w", padx=5, pady=5)
+        except Exception as e:
+            print(f"Error updating PDE parameters: {e}")
 
     def on_pde_selected(self, event):
         """Event handler when a PDE is selected"""
+        try:
+            # Load config to get PDE-specific architecture
+            with open("config.yaml", "r") as f:
+                config = yaml.safe_load(f)
+                pde_configs = config.get("pde_configs", {})
+
+            # Get the selected PDE's config key
+            selected_pde = self.selected_pde.get()
+            pde_key = self.pde_name_to_key.get(selected_pde)
+
+            if pde_key and pde_key in pde_configs:
+                # Update architecture based on PDE configuration
+                pde_config = pde_configs[pde_key]
+                self.selected_arch.set(pde_config.get("architecture", "fourier"))
+
+        except Exception as e:
+            print(f"Error updating architecture for selected PDE: {e}")
+
+        # Update PDE parameters
         self.update_pde_params()
 
     def load_config(self, config_path="config.yaml"):
@@ -362,50 +411,50 @@ class InteractiveTrainer:
             with open(config_path, "r") as f:
                 config = yaml.safe_load(f)
 
-            # Update variables with config values
-            if "model" in config:
-                self.selected_arch.set(config["model"].get("architecture", "standard"))
-                self.hidden_dim.set(config["model"].get("hidden_dim", 64))
-                self.num_layers.set(config["model"].get("num_layers", 4))
+            # Get the default PDE type from config
+            default_pde = config.get("pde_type", "heat")
+            pde_configs = config.get("pde_configs", {})
 
-            if "training" in config:
-                self.epochs.set(config["training"].get("num_epochs", 100))
-                self.batch_size.set(config["training"].get("batch_size", 32))
-                self.num_points.set(
-                    config["training"].get("num_collocation_points", 10000)
-                )
-                if "optimizer_config" in config["training"]:
-                    self.learning_rate.set(
-                        config["training"]["optimizer_config"].get(
-                            "learning_rate", 0.001
-                        )
-                    )
+            # Map config PDE names to UI names
+            pde_name_map = {
+                "heat": "Heat Equation",
+                "wave": "Wave Equation",
+                "burgers": "Burgers Equation",
+                "convection": "Convection Equation",
+                "kdv": "KdV Equation",
+                "allen_cahn": "Allen-Cahn Equation",
+                "cahn_hilliard": "Cahn-Hilliard Equation",
+                "black_scholes": "Black-Scholes Equation",
+                "pendulum": "Pendulum Equation",
+            }
 
-            if "pde" in config and "parameters" in config["pde"]:
-                pde_type = config["pde"].get("name", "Heat Equation")
-                self.selected_pde.set(pde_type)
+            # Set the default PDE and its architecture
+            if default_pde in pde_configs:
+                pde_config = pde_configs[default_pde]
+                self.selected_pde.set(pde_name_map.get(default_pde, "Heat Equation"))
+                self.selected_arch.set(pde_config.get("architecture", "fourier"))
 
-                if pde_type == "Heat Equation":
-                    self.alpha.set(config["pde"]["parameters"].get("alpha", 0.01))
-                elif pde_type == "Burgers Equation":
-                    self.viscosity.set(
-                        config["pde"]["parameters"].get("viscosity", 0.01)
-                    )
-                elif pde_type == "Wave Equation":
-                    self.alpha.set(config["pde"]["parameters"].get("wave_speed", 1.0))
+                # Update PDE-specific parameters
+                if "parameters" in pde_config:
+                    params = pde_config["parameters"]
+                    if default_pde == "heat":
+                        self.alpha.set(params.get("alpha", 0.01))
+                    elif default_pde == "burgers":
+                        self.viscosity.set(params.get("viscosity", 0.01))
+                    elif default_pde == "wave":
+                        self.alpha.set(params.get("c", 1.0))
+                    elif default_pde == "convection":
+                        self.velocity.set(params.get("velocity", 1.0))
+                    elif default_pde == "allen_cahn":
+                        self.epsilon.set(params.get("epsilon", 0.1))
+                    elif default_pde == "black_scholes":
+                        self.sigma.set(params.get("sigma", 0.2))
+                        self.r.set(params.get("r", 0.05))
+                    elif default_pde == "pendulum":
+                        self.gravity.set(params.get("gravity", 9.81))
+                        self.length.set(params.get("length", 1.0))
 
-                if "exact_solution" in config["pde"]:
-                    self.frequency.set(
-                        config["pde"]["exact_solution"].get("frequency", 2.0)
-                    )
-
-            if "rl" in config:
-                self.use_rl.set(config["rl"].get("enabled", False))
-
-            if "device" in config:
-                self.selected_device.set(config.get("device", "cpu"))
-
-            # Update UI
+            # Update UI with loaded parameters
             self.update_pde_params()
 
         except Exception as e:
@@ -419,67 +468,64 @@ class InteractiveTrainer:
 
         # Get PDE-specific configuration from config.yaml
         pde_name = self.selected_pde.get().lower().replace(" ", "_")
-        pde_config = yaml_config["pde_configs"].get(pde_name.split("_")[0], {})
+        pde_key = pde_name.split("_")[
+            0
+        ]  # Get base name (e.g., 'heat' from 'heat_equation')
+        pde_config = yaml_config["pde_configs"].get(pde_key, {})
+
+        # Get architecture configuration with default values
+        arch_config = yaml_config.get("architectures", {}).get(
+            self.selected_arch.get(), {}
+        )
 
         config = {
             "device": self.selected_device.get(),
             "model": {
                 "architecture": self.selected_arch.get(),
-                "input_dim": 2,  # For 1D PDE + time
+                "input_dim": pde_config.get("input_dim", 2),  # Get from PDE config
                 "hidden_dim": self.hidden_dim.get(),
-                "output_dim": 1,
+                "output_dim": pde_config.get("output_dim", 1),  # Get from PDE config
                 "num_layers": self.num_layers.get(),
-                "activation": yaml_config["architectures"][self.selected_arch.get()]["activation"],
+                "activation": arch_config.get("activation", "tanh"),
                 "fourier_features": self.selected_arch.get() == "fourier",
-                "fourier_scale": yaml_config["architectures"]["fourier"]["scale"] if self.selected_arch.get() == "fourier" else None,
-                "dropout": yaml_config["architectures"][self.selected_arch.get()]["dropout"],
-                "layer_norm": yaml_config["architectures"][self.selected_arch.get()].get("layer_norm", True),
+                "fourier_scale": (
+                    arch_config.get("scale", 1.0)
+                    if self.selected_arch.get() == "fourier"
+                    else None
+                ),
+                "dropout": arch_config.get("dropout", 0.0),
+                "layer_norm": arch_config.get("layer_norm", True),
             },
-            "training": {
+            "training": yaml_config["training"],  # Use training config from yaml
+            "rl": {"enabled": self.use_rl.get(), **yaml_config["rl"]},
+            "evaluation": yaml_config["evaluation"],  # Use evaluation config from yaml
+            "paths": yaml_config["paths"],  # Use paths from yaml
+            "logging": yaml_config["logging"],  # Use logging config from yaml
+        }
+
+        # Override some training parameters from UI
+        config["training"].update(
+            {
                 "num_epochs": self.epochs.get(),
                 "batch_size": self.batch_size.get(),
                 "num_collocation_points": self.num_points.get(),
-                "validation_frequency": 10,
                 "optimizer_config": {
-                    "learning_rate": self.learning_rate.get(),
-                    "weight_decay": 1e-6,
-                    "patience": 10,
+                    **config["training"]["optimizer_config"],
+                    "lr": self.learning_rate.get(),
                 },
-            },
-            "rl": {
-                "enabled": self.use_rl.get(),
-                "state_dim": 2,
-                "action_dim": 1,
-                "hidden_dim": 64,
-                "learning_rate": 0.001,
-                "gamma": 0.99,
-                "epsilon_start": 1.0,
-                "epsilon_end": 0.01,
-                "epsilon_decay": 0.995,
-                "memory_size": 10000,
-                "batch_size": 64,
-                "target_update": 100,
-                "reward_weights": {
-                    "residual": 1.0,
-                    "boundary": 1.0,
-                    "initial": 1.0,
-                    "exploration": 0.1,
-                },
-            },
-            "evaluation": {"num_points": 1000},
-            "paths": {"results_dir": "results", "model_dir": "models"},
-        }
+            }
+        )
 
         # Add PDE-specific configuration from config.yaml
         config["pde"] = {
-            "name": pde_config["name"],
-            "parameters": pde_config["parameters"],
-            "domain": pde_config["domain"],
-            "time_domain": pde_config["time_domain"],
-            "boundary_conditions": pde_config["boundary_conditions"],
-            "initial_condition": pde_config["initial_condition"],
+            "name": pde_config.get("name", self.selected_pde.get()),
+            "parameters": pde_config.get("parameters", {}),
+            "domain": pde_config.get("domain", [[0, 1]]),
+            "time_domain": pde_config.get("time_domain", [0, 1]),
+            "boundary_conditions": pde_config.get("boundary_conditions", {}),
+            "initial_condition": pde_config.get("initial_condition", {}),
             "exact_solution": pde_config.get("exact_solution", {}),
-            "dimension": pde_config.get("dimension", 1)
+            "dimension": pde_config.get("dimension", 1),
         }
 
         return config
@@ -487,36 +533,22 @@ class InteractiveTrainer:
     def create_pde(self, config, device):
         """Create a PDE instance based on configuration"""
         pde_type = self.selected_pde.get()
+        pde_config = PDEConfig(
+            name=config["pde"]["name"],
+            domain=config["pde"]["domain"],
+            time_domain=config["pde"]["time_domain"],
+            parameters=config["pde"]["parameters"],
+            boundary_conditions=config["pde"]["boundary_conditions"],
+            initial_condition=config["pde"]["initial_condition"],
+            exact_solution=config["pde"]["exact_solution"],
+        )
 
         if pde_type == "Heat Equation":
-            return HeatEquation(
-                alpha=config["pde"]["parameters"]["alpha"],
-                domain=config["pde"]["domain"],
-                time_domain=config["pde"]["time_domain"],
-                boundary_conditions=config["pde"]["boundary_conditions"],
-                initial_condition=config["pde"]["initial_condition"],
-                exact_solution=config["pde"]["exact_solution"],
-                device=device,
-            )
+            return HeatEquation(config=pde_config, device=device)
         elif pde_type == "Burgers Equation":
-            return BurgersEquation(
-                viscosity=config["pde"]["parameters"]["viscosity"],
-                domain=config["pde"]["domain"],
-                time_domain=config["pde"]["time_domain"],
-                boundary_conditions=config["pde"]["boundary_conditions"],
-                initial_condition=config["pde"]["initial_condition"],
-                device=device,
-            )
+            return BurgersEquation(config=pde_config, device=device)
         elif pde_type == "Wave Equation":
-            return WaveEquation(
-                wave_speed=config["pde"]["parameters"]["wave_speed"],
-                domain=config["pde"]["domain"],
-                time_domain=config["pde"]["time_domain"],
-                boundary_conditions=config["pde"]["boundary_conditions"],
-                initial_condition=config["pde"]["initial_condition"],
-                exact_solution=config["pde"]["exact_solution"],
-                device=device,
-            )
+            return WaveEquation(config=pde_config, device=device)
         else:
             raise ValueError(f"Unsupported PDE: {pde_type}")
 
@@ -539,36 +571,33 @@ class InteractiveTrainer:
         self.root.after(1000, self.update_progress)
 
     def run_training(self):
-        """Main function to run training"""
+        """Run the training process in a separate thread."""
         try:
             # Create configuration
             config = self.create_config()
 
-            # Configure device
-            device_name = self.selected_device.get()
-            if device_name == "mps" and torch.backends.mps.is_available():
-                device = torch.device("mps")
-            elif device_name == "cuda" and torch.cuda.is_available():
-                device = torch.device("cuda")
-            else:
-                device = torch.device("cpu")
+            # Set device
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-            # Create experiment directory
+            # Create experiment directory with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            pde_name = self.selected_pde.get().lower().replace(" ", "_")
-            exp_name = f"{pde_name}_{config['model']['architecture']}_{'rl' if self.use_rl.get() else 'uniform'}_{timestamp}"
-            experiment_dir = Path(f"{config['paths']['results_dir']}/{exp_name}")
+            experiment_dir = Path(config["paths"]["results_dir"]) / timestamp
             experiment_dir.mkdir(parents=True, exist_ok=True)
 
+            # Create subdirectories
+            (experiment_dir / "visualizations").mkdir(exist_ok=True)
+            (experiment_dir / "models").mkdir(exist_ok=True)
+            (experiment_dir / "logs").mkdir(exist_ok=True)
+
             # Save configuration
-            with open(experiment_dir / "config.json", "w") as f:
-                json.dump(config, f, indent=2)
+            with open(experiment_dir / "config.yaml", "w") as f:
+                yaml.dump(config, f)
 
             # Create PDE
             pde = self.create_pde(config, device)
 
-            # Create model
-            model = PINNModel(
+            # Create model config
+            model_config = ModelConfig(
                 input_dim=config["model"]["input_dim"],
                 hidden_dim=config["model"]["hidden_dim"],
                 output_dim=config["model"]["output_dim"],
@@ -579,38 +608,26 @@ class InteractiveTrainer:
                 dropout=config["model"]["dropout"],
                 layer_norm=config["model"]["layer_norm"],
                 architecture=config["model"]["architecture"],
-                device=device,
-            ).to(device)
+            )
 
-            # Create RL agent if needed
-            rl_agent = None
-            if config["rl"]["enabled"]:
-                rl_agent = RLAgent(
-                    state_dim=config["rl"]["state_dim"],
-                    action_dim=config["rl"]["action_dim"],
-                    hidden_dim=config["rl"]["hidden_dim"],
-                    learning_rate=config["rl"]["learning_rate"],
-                    gamma=config["rl"]["gamma"],
-                    epsilon_start=config["rl"]["epsilon_start"],
-                    epsilon_end=config["rl"]["epsilon_end"],
-                    epsilon_decay=config["rl"]["epsilon_decay"],
-                    memory_size=config["rl"]["memory_size"],
-                    batch_size=config["rl"]["batch_size"],
-                    target_update=config["rl"]["target_update"],
-                    reward_weights=config["rl"]["reward_weights"],
-                    device=device,
-                )
+            # Create config object with model attribute
+            config_obj = Config()
+            config_obj.model = model_config
 
-                # Update PDE with RL agent
-                pde.rl_agent = rl_agent
+            # Initialize model
+            model = PINNModel(config=config_obj, device=device).to(device)
 
-            # Create trainer
+            # Initialize trainer
             trainer = PDETrainer(
                 model=model,
                 pde=pde,
                 optimizer_config=config["training"]["optimizer_config"],
                 device=device,
-                rl_agent=rl_agent,
+                rl_agent=(
+                    None if not config["rl"]["enabled"] else None
+                ),  # TODO: Implement RL agent
+                validation_frequency=config["training"]["validation_frequency"],
+                early_stopping_config=config["training"]["early_stopping"],
             )
 
             # Save trainer and configuration in attributes for access from update_progress
@@ -618,29 +635,34 @@ class InteractiveTrainer:
             self.total_epochs = config["training"]["num_epochs"]
             self.experiment_dir = experiment_dir
 
-            # Start training
+            # Run training
             history = trainer.train(
                 num_epochs=config["training"]["num_epochs"],
                 batch_size=config["training"]["batch_size"],
                 num_points=config["training"]["num_collocation_points"],
-                validation_frequency=config["training"]["validation_frequency"],
                 experiment_dir=str(experiment_dir),
             )
 
-            # Save model and results
-            model_path = experiment_dir / "final_model.pth"
-            save_model(model, str(model_path), config)
+            # Save the model
+            model_path = experiment_dir / "models" / "final_model.pt"
+            save_model(model, str(model_path))
 
-            # Update UI when training finishes
-            self.root.after(0, self.on_training_finished)
+            # Open the experiment directory
+            if sys.platform == "darwin":  # macOS
+                subprocess.run(["open", str(experiment_dir)])
+            elif sys.platform == "win32":  # Windows
+                os.startfile(str(experiment_dir))
+            else:  # Linux
+                subprocess.run(["xdg-open", str(experiment_dir)])
 
         except Exception as e:
             print(f"Error during training: {e}")
             import traceback
 
             traceback.print_exc()
-            # Update UI in case of error
-            self.root.after(0, self.on_training_finished)
+        finally:
+            self.training_running = False
+            self.root.after(0, self.on_training_complete)
 
     def update_progress(self):
         """Update training progress in the UI"""
@@ -693,9 +715,8 @@ class InteractiveTrainer:
         if self.training_running:
             self.root.after(1000, self.update_progress)
 
-    def on_training_finished(self):
-        """Method called when training finishes"""
-        self.training_running = False
+    def on_training_complete(self):
+        """Method called when training completes"""
         self.start_btn.config(state="normal")
         self.stop_btn.config(state="disabled")
 
@@ -795,7 +816,12 @@ class InteractiveTrainer:
             print(f"Error opening dashboard: {e}")
 
 
-if __name__ == "__main__":
+def main():
+    """Entry point for the interactive trainer"""
     root = tk.Tk()
     app = InteractiveTrainer(root)
     root.mainloop()
+
+
+if __name__ == "__main__":
+    main()

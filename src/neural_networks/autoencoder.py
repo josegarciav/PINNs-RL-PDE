@@ -93,4 +93,4 @@ class AutoEncoder(BaseNetwork):
             Reconstructed output
         """
         z = self.encode(x)
-        return self.decode(z) 
+        return self.decode(z)

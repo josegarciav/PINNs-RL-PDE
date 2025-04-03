@@ -30,15 +30,15 @@ class FeedForwardNetwork(BaseNetwork):
         self.dropout_rate = config.get("dropout", 0.1)
         self.use_layer_norm = config.get("layer_norm", True)
         self.device = config.get("device", torch.device("cpu"))
-        
+
         # Get activation function
         activation_name = config.get("activation", "relu")
         self.activation = self._get_activation_module(activation_name)
-        
+
         # Build layers
         layers = []
         prev_dim = self.input_dim
-        
+
         for hidden_dim in self.hidden_dims:
             layers.append(nn.Linear(prev_dim, hidden_dim))
             if self.use_layer_norm:
@@ -46,12 +46,12 @@ class FeedForwardNetwork(BaseNetwork):
             layers.append(self.activation)
             layers.append(nn.Dropout(self.dropout_rate))
             prev_dim = hidden_dim
-            
+
         # Output layer
         layers.append(nn.Linear(prev_dim, self.output_dim))
-        
+
         self.layers = nn.Sequential(*layers)
-        
+
         # Move model to device
         self.to(self.device)
 
@@ -61,7 +61,7 @@ class FeedForwardNetwork(BaseNetwork):
 
         Args:
             x: Input tensor or array
-            
+
         Returns:
             Output tensor or array
         """
@@ -69,4 +69,4 @@ class FeedForwardNetwork(BaseNetwork):
         # Ensure input is on the same device as the model
         if x.device != self.device:
             x = x.to(self.device)
-        return self.layers(x) 
+        return self.layers(x)

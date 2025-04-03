@@ -38,18 +38,57 @@ class TrainingConfig:
 
 @dataclass
 class ModelConfig:
-    """Configuration for PINN model."""
+    """Configuration for neural network models"""
 
-    input_dim: int = 2
-    hidden_dim: int = 128
-    output_dim: int = 1
-    num_layers: int = 4
-    activation: str = "tanh"
-    fourier_features: bool = True
-    fourier_scale: float = 2.0
-    dropout: float = 0.1
-    layer_norm: bool = True
-    architecture: str = "fourier"  # parameter for architecture selection
+    input_dim: int
+    hidden_dim: int
+    output_dim: int
+    num_layers: int
+    activation: str
+    fourier_features: bool
+    fourier_scale: Optional[float]
+    dropout: float
+    layer_norm: bool
+    architecture: str
+    hidden_dims: Optional[List[int]] = None
+    omega_0: Optional[float] = None  # For SIREN networks
+    num_blocks: Optional[int] = None  # For ResNet
+    num_heads: Optional[int] = None  # For attention networks
+    latent_dim: Optional[int] = None  # For autoencoder
+    mapping_size: int = 32  # Default mapping size for Fourier features
+    scale: float = 10.0  # Default scale for Fourier features
+
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_layers: int,
+        activation: str,
+        fourier_features: int = 0,
+        fourier_scale: float = 1.0,
+        dropout: float = 0.0,
+        layer_norm: bool = False,
+        architecture: str = "feedforward",
+    ):
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.num_layers = num_layers
+        self.activation = activation
+        self.fourier_features = fourier_features
+        self.fourier_scale = fourier_scale
+        self.dropout = dropout
+        self.layer_norm = layer_norm
+        self.architecture = architecture
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get the value for a given key or return the default value if the key doesn't exist."""
+        return getattr(self, key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        """Get the value for a given key, also to make it subscriptable."""
+        return getattr(self, key)
 
 
 @dataclass
@@ -104,17 +143,22 @@ class PathsConfig:
 
 
 class Config:
-    """Configuration class for PINN training."""
+    """Configuration for the PINNs-RL-PDE framework."""
 
-    def __init__(self, config_path: str = "config.yaml"):
-        """
-        Initialize configuration from YAML file.
+    def __init__(self):
+        self.model = None
+        self.pde = None
+        self.training = None
+        self.rl = None
+        self.paths = None
 
-        :param config_path: Path to the YAML configuration file
-        """
-        self.config_path = config_path
-        self._load_config()
-        self._validate_config()
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get the value for a given key or return the default value if the key doesn't exist."""
+        return getattr(self, key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        """Get the value for a given key, also to make it subscriptable."""
+        return getattr(self, key)
 
     def _load_config(self):
         """Load configuration from YAML file."""
@@ -127,17 +171,21 @@ class Config:
 
         # Store the PDE type selected in config
         self.pde_type = config_dict.get("pde_type", "heat")
-        
+
         # Check if we need to load a PDE-specific configuration
         pde_config = {}
 
-        if self.pde_type and "pde_configs" in config_dict and self.pde_type in config_dict["pde_configs"]:
+        if (
+            self.pde_type
+            and "pde_configs" in config_dict
+            and self.pde_type in config_dict["pde_configs"]
+        ):
             # Extract PDE-specific configuration
             pde_config = config_dict["pde_configs"][self.pde_type]
-            
+
             # Use it as the PDE configuration
             config_dict["pde"] = pde_config
-        
+
         # Device configuration
         self.device = self._get_device(config_dict.get("device", "mps"))
 
@@ -145,14 +193,16 @@ class Config:
         # If input_dim and output_dim are specified in PDE config, use those values
         # otherwise fall back to the general model config
         model_config = config_dict.get("model", {})
-        
+
         # Get dimensions from PDE config if available
         input_dim = pde_config.get("input_dim", model_config.get("input_dim", 2))
         output_dim = pde_config.get("output_dim", model_config.get("output_dim", 1))
-        
+
         # Get architecture from PDE config if available
-        architecture = pde_config.get("architecture", model_config.get("architecture", "fourier"))
-        
+        architecture = pde_config.get(
+            "architecture", model_config.get("architecture", "fourier")
+        )
+
         self.model = ModelConfig(
             input_dim=input_dim,
             hidden_dim=model_config.get("hidden_dim", 128),
@@ -278,20 +328,33 @@ class Config:
 
         # Validate PDE configuration - adapted for new structure
         # Check domain in different formats
-        if hasattr(self.pde, 'domain'):
+        if hasattr(self.pde, "domain"):
             # For the traditional domain format [xmin, xmax]
-            if isinstance(self.pde.domain, list) and len(self.pde.domain) == 2 and all(isinstance(x, (int, float)) for x in self.pde.domain):
+            if (
+                isinstance(self.pde.domain, list)
+                and len(self.pde.domain) == 2
+                and all(isinstance(x, (int, float)) for x in self.pde.domain)
+            ):
                 pass  # Valid format
             # For the new domain format [[xmin, xmax]] or [[xmin, xmax], [ymin, ymax]]
-            elif isinstance(self.pde.domain, list) and len(self.pde.domain) > 0 and all(isinstance(d, list) and len(d) == 2 for d in self.pde.domain):
+            elif (
+                isinstance(self.pde.domain, list)
+                and len(self.pde.domain) > 0
+                and all(isinstance(d, list) and len(d) == 2 for d in self.pde.domain)
+            ):
                 pass  # Valid format
             else:
-                raise ValueError("domain must be a list of two values or a list of tuples [min, max]")
-        
-        if hasattr(self.pde, 't_domain') and len(self.pde.t_domain) != 2:
+                raise ValueError(
+                    "domain must be a list of two values or a list of tuples [min, max]"
+                )
+
+        if hasattr(self.pde, "t_domain") and len(self.pde.t_domain) != 2:
             raise ValueError("t_domain must be a list of two values")
-            
-        if hasattr(self.pde, 'diffusion_coefficient') and self.pde.diffusion_coefficient <= 0:
+
+        if (
+            hasattr(self.pde, "diffusion_coefficient")
+            and self.pde.diffusion_coefficient <= 0
+        ):
             raise ValueError("diffusion_coefficient must be positive")
 
         # Validate training configuration

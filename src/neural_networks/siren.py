@@ -89,4 +89,4 @@ class SIREN(BaseNetwork):
         x = self._prepare_input(x)
         for layer in self.layers[:-1]:
             x = layer(x)
-        return self.layers[-1](x) 
+        return self.layers[-1](x)

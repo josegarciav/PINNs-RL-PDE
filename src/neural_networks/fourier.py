@@ -57,7 +57,7 @@ class FourierFeatures(nn.Module):
 
         Args:
             x: Input tensor
-            
+
         Returns:
             Mapped features
         """
@@ -77,7 +77,8 @@ class FourierNetwork(BaseNetwork):
             config: Network configuration dictionary containing:
                 - input_dim: Input dimension
                 - mapping_size: Size of the Fourier feature mapping
-                - hidden_dims: List of hidden layer dimensions
+                - hidden_dim: Hidden layer dimension
+                - num_layers: Number of hidden layers
                 - output_dim: Output dimension
                 - activation: Activation function name
                 - scale: Scale of the random Fourier features
@@ -85,9 +86,8 @@ class FourierNetwork(BaseNetwork):
         super().__init__(config)
         self.input_dim = config["input_dim"]
         self.mapping_size = config.get("mapping_size", 32)  # Default mapping size
-        self.hidden_dims = config.get(
-            "hidden_dims", [128, 128]
-        )  # Default hidden dimensions
+        self.hidden_dim = config["hidden_dim"]
+        self.num_layers = config.get("num_layers", 4)  # Default to 4 layers
         self.output_dim = config["output_dim"]
         activation_name = config.get("activation", "relu")
         self.activation_fn = self._get_activation_module(activation_name)
@@ -99,9 +99,15 @@ class FourierNetwork(BaseNetwork):
         )
         self.layers = nn.ModuleList()
         prev_dim = 2 * self.mapping_size  # Sine and cosine features
-        for hidden_dim in self.hidden_dims:
-            self.layers.append(nn.Linear(prev_dim, hidden_dim))
-            prev_dim = hidden_dim
+
+        # Create hidden layers
+        for _ in range(
+            self.num_layers - 1
+        ):  # -1 because we add output layer separately
+            self.layers.append(nn.Linear(prev_dim, self.hidden_dim))
+            prev_dim = self.hidden_dim
+
+        # Add output layer
         self.layers.append(nn.Linear(prev_dim, self.output_dim))
 
         # Move all layers to device
@@ -121,4 +127,4 @@ class FourierNetwork(BaseNetwork):
         x = self.fourier(x)
         for layer in self.layers[:-1]:
             x = self.activation_fn(layer(x))
-        return self.layers[-1](x) 
+        return self.layers[-1](x)

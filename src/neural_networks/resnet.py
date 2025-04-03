@@ -26,7 +26,7 @@ class ResNetBlock(nn.Module):
             dropout: Dropout rate
         """
         super().__init__()
-        
+
         # Get activation function
         if activation == "relu":
             self.activation_fn = nn.ReLU()
@@ -40,7 +40,7 @@ class ResNetBlock(nn.Module):
             self.activation_fn = nn.GELU()
         else:
             raise ValueError(f"Unsupported activation: {activation}")
-        
+
         # Build the residual block
         self.layers = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
@@ -58,7 +58,7 @@ class ResNetBlock(nn.Module):
 
         Args:
             x: Input tensor
-            
+
         Returns:
             Output tensor
         """
@@ -120,4 +120,4 @@ class ResNet(BaseNetwork):
         x = self.activation_fn(self.input_layer(x))
         for block in self.blocks:
             x = block(x)
-        return self.output_layer(x) 
+        return self.output_layer(x)

@@ -15,11 +15,7 @@ class CahnHilliardEquation(PDEBase):
     This equation describes phase separation and coarsening in binary mixtures.
     """
 
-    def __init__(
-        self,
-        config: PDEConfig,
-        **kwargs
-    ):
+    def __init__(self, config: PDEConfig, **kwargs):
         """
         Initialize the Cahn-Hilliard Equation.
 

@@ -31,7 +31,7 @@ class SelfAttention(nn.Module):
         self.value = nn.Linear(dim, dim)
         self.proj = nn.Linear(dim, dim)
         self.dropout = nn.Dropout(dropout)
-        self.scale = self.head_dim ** -0.5
+        self.scale = self.head_dim**-0.5
         self.layer_norm = nn.LayerNorm(dim)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -50,7 +50,7 @@ class SelfAttention(nn.Module):
         # Use unsqueeze to add sequence length dimension of 1
         # Shape: (batch_size, 1, dim)
         x = x.unsqueeze(1)
-        
+
         # Linear projections
         q = self.query(x).view(batch_size, 1, self.heads, self.head_dim).transpose(1, 2)
         k = self.key(x).view(batch_size, 1, self.heads, self.head_dim).transpose(1, 2)
@@ -60,15 +60,15 @@ class SelfAttention(nn.Module):
         scores = torch.matmul(q, k.transpose(-2, -1)) * self.scale
         attn = F.softmax(scores, dim=-1)
         attn = self.dropout(attn)
-        
+
         # Apply attention to values
         out = torch.matmul(attn, v)
         out = out.transpose(1, 2).contiguous().view(batch_size, 1, self.dim)
         out = self.proj(out).squeeze(1)  # Remove sequence dimension
-        
+
         # Add residual connection and apply layer norm
         out = self.layer_norm(out + residual)
-        
+
         return out
 
 
@@ -90,7 +90,7 @@ class FeedForwardBlock(nn.Module):
             nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(dim * expansion, dim),
-            nn.Dropout(dropout)
+            nn.Dropout(dropout),
         )
         self.layer_norm = nn.LayerNorm(dim)
 
@@ -136,18 +136,22 @@ class AttentionNetwork(BaseNetwork):
 
         # Input projection
         self.input_proj = nn.Linear(self.input_dim, self.hidden_dim)
-        
+
         # Attention layers
         self.layers = nn.ModuleList()
         for _ in range(self.num_layers):
-            self.layers.append(nn.ModuleList([
-                SelfAttention(self.hidden_dim, self.num_heads, self.dropout),
-                FeedForwardBlock(self.hidden_dim, dropout=self.dropout)
-            ]))
-        
+            self.layers.append(
+                nn.ModuleList(
+                    [
+                        SelfAttention(self.hidden_dim, self.num_heads, self.dropout),
+                        FeedForwardBlock(self.hidden_dim, dropout=self.dropout),
+                    ]
+                )
+            )
+
         # Output projection
         self.output_proj = nn.Linear(self.hidden_dim, self.output_dim)
-        
+
         # Initialize weights
         self.apply(self._init_weights)
 
@@ -170,10 +174,10 @@ class AttentionNetwork(BaseNetwork):
         """
         x = self._prepare_input(x)
         x = self.activation_fn(self.input_proj(x))
-        
+
         # Apply attention layers
         for attn, ff in self.layers:
             x = attn(x)
             x = ff(x)
-            
-        return self.output_proj(x) 
+
+        return self.output_proj(x)

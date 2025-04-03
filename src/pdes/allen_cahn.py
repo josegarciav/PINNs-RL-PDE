@@ -15,11 +15,7 @@ class AllenCahnEquation(PDEBase):
     This equation describes phase separation in binary alloys.
     """
 
-    def __init__(
-        self,
-        config: PDEConfig,
-        **kwargs
-    ):
+    def __init__(self, config: PDEConfig, **kwargs):
         """
         Initialize the Allen-Cahn Equation.
 

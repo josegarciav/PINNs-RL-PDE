@@ -14,11 +14,7 @@ class KdVEquation(PDEBase):
     This equation describes shallow water waves and solitons.
     """
 
-    def __init__(
-        self,
-        config: PDEConfig,
-        **kwargs
-    ):
+    def __init__(self, config: PDEConfig, **kwargs):
         """
         Initialize the KdV equation.
 
@@ -56,9 +52,11 @@ class KdVEquation(PDEBase):
 
         # Get derivatives
         derivatives = self.compute_derivatives(
-            model, x, t,
+            model,
+            x,
+            t,
             spatial_derivatives=[1, 2, 3],  # Need first, second, and third derivatives
-            temporal_derivatives=[1]
+            temporal_derivatives=[1],
         )
 
         # Get the derivatives we need
@@ -97,7 +95,7 @@ class KdVEquation(PDEBase):
         c = torch.tensor(
             self.speed, dtype=x.dtype, device=x.device
         )  # Convert speed to tensor
-        
+
         if self.dimension == 1:
             return 2 * c * (1 / torch.cosh(torch.sqrt(c) * (x - c * t))) ** 2
         else:
@@ -119,7 +117,9 @@ class KdVEquation(PDEBase):
             ic_type = params.get("type", "soliton")
             if ic_type == "soliton":
                 c = torch.tensor(
-                    params.get("speed", self.speed), dtype=torch.float32, device=self.device
+                    params.get("speed", self.speed),
+                    dtype=torch.float32,
+                    device=self.device,
                 )
                 if self.dimension == 1:
                     return lambda x, t: 2 * c * (1 / torch.cosh(torch.sqrt(c) * x)) ** 2

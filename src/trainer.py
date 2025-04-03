@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingWarmRestarts
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 import logging
 from tqdm import tqdm
 import os
@@ -22,6 +22,8 @@ class PDETrainer:
         device: Optional[torch.device] = None,
         rl_agent=None,
         viz_frequency=10,
+        validation_frequency=10,
+        early_stopping_config=None,
     ):
         """
         Initialize trainer.
@@ -32,27 +34,26 @@ class PDETrainer:
         :param device: Device to train on
         :param rl_agent: Reinforcement Learning agent
         :param viz_frequency: Frequency of visualization
+        :param validation_frequency: Frequency of validation checks
+        :param early_stopping_config: Early stopping configuration
         """
         self.device = device or torch.device(
             "mps" if torch.backends.mps.is_available() else "cpu"
         )
         self.model = model.to(self.device)
         self.pde = pde
+        self.validation_frequency = validation_frequency
 
         # Setup optimizer
         self.optimizer = optim.Adam(
             self.model.parameters(),
-            lr=optimizer_config.get("learning_rate", 0.001),
+            lr=optimizer_config.get("lr", 0.001),
             weight_decay=optimizer_config.get("weight_decay", 0.0),
         )
 
-        # Setup learning rate schedulers
+        # Setup learning rate scheduler - using only ReduceLROnPlateau
         self.scheduler = ReduceLROnPlateau(
             self.optimizer, mode="min", factor=0.5, patience=5, verbose=True
-        )
-
-        self.cosine_scheduler = CosineAnnealingWarmRestarts(
-            self.optimizer, T_0=10, T_mult=2, eta_min=1e-6
         )
 
         # Training history
@@ -65,9 +66,13 @@ class PDETrainer:
             "learning_rate": [],
         }
 
-        # Early stopping
+        # Early stopping configuration
+        if early_stopping_config is None:
+            early_stopping_config = {"enabled": True, "patience": 10}
+
+        self.early_stopping_enabled = early_stopping_config.get("enabled", True)
+        self.patience = early_stopping_config.get("patience", 10)
         self.best_val_loss = float("inf")
-        self.patience = optimizer_config.get("patience", 10)
         self.patience_counter = 0
 
         # Setup logging
@@ -118,9 +123,6 @@ class PDETrainer:
         # Update ReduceLROnPlateau scheduler
         self.scheduler.step(val_loss)
 
-        # Update cosine scheduler
-        self.cosine_scheduler.step()
-
         # Log current learning rate
         current_lr = self.optimizer.param_groups[0]["lr"]
         self.history["learning_rate"].append(current_lr)
@@ -131,48 +133,26 @@ class PDETrainer:
         num_epochs: int,
         batch_size: int,
         num_points: int,
-        validation_frequency: int = 10,
         experiment_dir: str = None,
     ):
-        """
-        Train the model.
-
-        :param num_epochs: Number of training epochs
-        :param batch_size: Batch size for training
-        :param num_points: Number of collocation points
-        :param validation_frequency: Frequency of validation
-        :param experiment_dir: Directory to save real-time training data
-        """
+        """Train the model."""
         self.logger.info("Starting training...")
 
+        # Record start time
+        start_time = datetime.now()
+
         # Create directories for visualizations and experiment data
-        os.makedirs("visualizations", exist_ok=True)
         if experiment_dir:
             os.makedirs(experiment_dir, exist_ok=True)
-
-            # Save initial metadata
-            metadata = {
-                "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "model_architecture": self.model.__class__.__name__,
-                "pde_type": self.pde.__class__.__name__,
-                "training_params": {
-                    "num_epochs": num_epochs,
-                    "batch_size": batch_size,
-                    "num_points": num_points,
-                    "validation_frequency": validation_frequency,
-                },
-            }
-
-            # Save initial metadata
-            try:
-                save_training_metrics({}, experiment_dir, metadata)
-            except Exception as e:
-                self.logger.warning(f"Error saving initial metadata: {e}")
+            viz_dir = os.path.join(experiment_dir, "visualizations")
+            os.makedirs(viz_dir, exist_ok=True)
+            self.logger.info(f"Saving visualizations to: {viz_dir}")
 
         points_history = []
         for epoch in range(num_epochs):
             self.model.train()
             epoch_losses = []
+            epoch_points = []  # Store all points for this epoch
 
             # Training loop with progress bar
             pbar = tqdm(
@@ -189,6 +169,9 @@ class PDETrainer:
                 )
                 x_batch = x_batch.to(self.device)
                 t_batch = t_batch.to(self.device)
+
+                # Store points for visualization
+                epoch_points.append(x_batch.cpu().detach().numpy())
 
                 # Forward pass
                 self.optimizer.zero_grad()
@@ -217,12 +200,15 @@ class PDETrainer:
                     }
                 )
 
+            # Store average points for this epoch
+            points_history.append(np.concatenate(epoch_points, axis=0))
+
             # Compute average epoch loss
             avg_loss = np.mean(epoch_losses)
             self.history["train_loss"].append(avg_loss)
 
             # Validation
-            if (epoch + 1) % validation_frequency == 0:
+            if (epoch + 1) % self.validation_frequency == 0:
                 val_losses = self._compute_validation_loss()
                 self.history["val_loss"].append(val_losses["total_loss"])
                 self.history["residual_loss"].append(val_losses["residual_loss"])
@@ -248,68 +234,87 @@ class PDETrainer:
                     self.patience_counter = 0
                 else:
                     self.patience_counter += 1
-                    if self.patience_counter >= self.patience:
+                    if (
+                        self.patience_counter >= self.patience
+                        and self.early_stopping_enabled
+                    ):
                         self.logger.info("Early stopping triggered!")
                         break
-
-            # Store collocation points for visualization
-            if self.rl_agent:
-                points_history.append(x_batch.cpu().numpy())
-
-            # Visualize collocation points at regular intervals
-            if epoch % self.viz_frequency == 0 and self.rl_agent:
-                self.rl_agent.visualize_collocation_evolution(points_history, epoch)
-
-            # Generate comprehensive visualization at the end of training
-            if epoch == num_epochs - 1 or (self.patience_counter >= self.patience):
-                if hasattr(self.pde, "visualize_collocation_evolution"):
-                    self.pde.visualize_collocation_evolution(
-                        save_path=f"visualizations/final_collocation_evolution_epoch_{epoch}.png"
-                    )
 
             # Save progress for real-time monitoring
             if experiment_dir:
                 try:
+                    # Calculate current training time
+                    current_time = datetime.now()
+                    training_time_minutes = (
+                        current_time - start_time
+                    ).total_seconds() / 60.0
+
                     # Update metrics
                     current_metrics = {
                         "current_epoch": epoch + 1,
                         "current_loss": avg_loss,
                         "best_val_loss": self.best_val_loss,
                         "early_stopping_counter": self.patience_counter,
+                        "training_time_minutes": training_time_minutes,
+                        "early_stopping_triggered": self.patience_counter
+                        >= self.patience
+                        and self.early_stopping_enabled,
                     }
                     save_training_metrics(self.history, experiment_dir, current_metrics)
                 except Exception as e:
                     self.logger.warning(f"Error saving training metrics: {e}")
 
-        # Save final metrics
+        # Calculate final training time
+        end_time = datetime.now()
+        training_time_minutes = (end_time - start_time).total_seconds() / 60.0
+
+        # Save final plots and metrics
         if experiment_dir:
             try:
-                # Calculate training time in minutes
-                start_time_str = metadata.get("start_time")
-                end_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                
-                # Calculate duration if start time is available
-                training_time_minutes = None
-                if start_time_str:
-                    try:
-                        start_time = datetime.strptime(start_time_str, "%Y-%m-%d %H:%M:%S")
-                        end_time = datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S")
-                        duration = end_time - start_time
-                        training_time_minutes = duration.total_seconds() / 60.0
-                    except Exception as e:
-                        self.logger.warning(f"Error calculating training time: {e}")
-                
+                # Save final metrics
                 final_metrics = {
-                    "end_time": end_time_str,
                     "total_epochs": epoch + 1,
                     "final_loss": avg_loss,
                     "best_val_loss": self.best_val_loss,
-                    "early_stopping_triggered": self.patience_counter >= self.patience,
+                    "early_stopping_triggered": self.patience_counter >= self.patience
+                    and self.early_stopping_enabled,
                     "training_time_minutes": training_time_minutes,
+                    "start_time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "end_time": end_time.strftime("%Y-%m-%d %H:%M:%S"),
                 }
                 save_training_metrics(self.history, experiment_dir, final_metrics)
+
+                # Save training history plot
+                self.plot_training_history(
+                    os.path.join(
+                        experiment_dir, "visualizations", "final_training_history.png"
+                    )
+                )
+
+                # Save solution comparison plot
+                self.plot_solution_comparison(
+                    num_points=200,  # Increased resolution for better visualization
+                    save_path=os.path.join(
+                        experiment_dir,
+                        "visualizations",
+                        "final_solution_comparison.png",
+                    ),
+                )
+
+                # Save collocation evolution plot if enough points
+                if len(points_history) > 1:
+                    if hasattr(self.pde, "visualize_collocation_evolution"):
+                        self.pde.visualize_collocation_evolution(
+                            points_history=points_history,
+                            save_path=os.path.join(
+                                experiment_dir,
+                                "visualizations",
+                                "final_collocation_evolution.png",
+                            ),
+                        )
             except Exception as e:
-                self.logger.warning(f"Error saving final metrics: {e}")
+                self.logger.warning(f"Error saving plots: {e}")
 
         return self.history
 
@@ -321,8 +326,11 @@ class PDETrainer:
         """
         return self.history
 
-    def plot_training_history(self):
+    def plot_training_history(self, save_path=None):
         """Plot training history."""
+        import matplotlib
+
+        matplotlib.use("Agg")  # Use non-interactive backend
         import matplotlib.pyplot as plt
 
         plt.figure(figsize=(15, 10))
@@ -330,30 +338,177 @@ class PDETrainer:
         # Plot losses
         plt.subplot(2, 2, 1)
         plt.plot(self.history["train_loss"], label="Train Loss")
-        plt.plot(self.history["val_loss"], label="Val Loss")
+        if self.history["val_loss"]:
+            # Fill missing validation loss values with None
+            val_loss_full = []
+            val_idx = 0
+            for i in range(len(self.history["train_loss"])):
+                if (i + 1) % self.validation_frequency == 0 and val_idx < len(
+                    self.history["val_loss"]
+                ):
+                    val_loss_full.append(self.history["val_loss"][val_idx])
+                    val_idx += 1
+                else:
+                    val_loss_full.append(None)
+            # Plot only non-None values
+            epochs = range(1, len(self.history["train_loss"]) + 1)
+            val_epochs = [i for i, v in enumerate(val_loss_full, 1) if v is not None]
+            val_values = [v for v in val_loss_full if v is not None]
+            plt.plot(val_epochs, val_values, label="Val Loss")
         plt.title("Training and Validation Loss")
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
+        plt.yscale("log")  # Use log scale for better visualization
         plt.legend()
 
         # Plot component losses
         plt.subplot(2, 2, 2)
-        plt.plot(self.history["residual_loss"], label="Residual Loss")
-        plt.plot(self.history["boundary_loss"], label="Boundary Loss")
-        plt.plot(self.history["initial_loss"], label="Initial Loss")
+        if self.history["residual_loss"]:
+            plt.plot(val_epochs, self.history["residual_loss"], label="Residual Loss")
+        if self.history["boundary_loss"]:
+            plt.plot(val_epochs, self.history["boundary_loss"], label="Boundary Loss")
+        if self.history["initial_loss"]:
+            plt.plot(val_epochs, self.history["initial_loss"], label="Initial Loss")
         plt.title("Component Losses")
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
+        plt.yscale("log")  # Use log scale for better visualization
         plt.legend()
 
         # Plot learning rate
         plt.subplot(2, 2, 3)
-        plt.plot(self.history["learning_rate"], label="Learning Rate")
+        if self.history["learning_rate"]:
+            plt.plot(val_epochs, self.history["learning_rate"], label="Learning Rate")
         plt.title("Learning Rate")
         plt.xlabel("Epoch")
         plt.ylabel("Learning Rate")
+        plt.yscale("log")  # Use log scale for better visualization
         plt.legend()
 
         plt.tight_layout()
-        plt.savefig("training_history.png")
+        if save_path:
+            plt.savefig(save_path)
+        else:
+            plt.savefig("training_history.png")
+        plt.close()
+
+    def plot_solution_comparison(self, num_points=100, save_path=None):
+        """Plot comparison between exact and predicted solutions."""
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        import numpy as np
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+
+        # Generate grid points
+        x_domain = self.pde.config.domain[0]
+        t_domain = self.pde.config.time_domain
+        x = np.linspace(x_domain[0], x_domain[1], num_points)
+        t = np.linspace(t_domain[0], t_domain[1], num_points)
+        X, T = np.meshgrid(x, t)
+
+        # Convert to torch tensors
+        X_torch = torch.from_numpy(X.flatten()).float().to(self.device)
+        T_torch = torch.from_numpy(T.flatten()).float().to(self.device)
+
+        # Get predictions
+        self.model.eval()
+        with torch.no_grad():
+            inputs = torch.stack([X_torch, T_torch], dim=1)
+            predicted = self.model(inputs).cpu().numpy()
+
+        # Reshape predictions
+        predicted = predicted.reshape(X.shape)
+
+        # Get exact solution
+        X_tensor = torch.from_numpy(X).float().to(self.device)
+        T_tensor = torch.from_numpy(T).float().to(self.device)
+        exact = self.pde.exact_solution(X_tensor, T_tensor).cpu().numpy()
+
+        # Calculate error
+        error = np.abs(exact - predicted)
+
+        # Create interactive Plotly figure
+        fig = make_subplots(
+            rows=1,
+            cols=3,
+            specs=[[{"type": "surface"}, {"type": "surface"}, {"type": "surface"}]],
+            subplot_titles=("Exact Solution", "Predicted Solution", "Absolute Error"),
+        )
+
+        # Add surfaces
+        fig.add_trace(
+            go.Surface(x=X, y=T, z=exact, colorscale="viridis", name="Exact"),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Surface(x=X, y=T, z=predicted, colorscale="viridis", name="Predicted"),
+            row=1,
+            col=2,
+        )
+        fig.add_trace(
+            go.Surface(x=X, y=T, z=error, colorscale="viridis", name="Error"),
+            row=1,
+            col=3,
+        )
+
+        # Update layout
+        fig.update_layout(
+            title="Solution Comparison",
+            scene=dict(xaxis_title="x", yaxis_title="t", zaxis_title="u(x,t)"),
+            scene2=dict(xaxis_title="x", yaxis_title="t", zaxis_title="u(x,t)"),
+            scene3=dict(
+                xaxis_title="x", yaxis_title="t", zaxis_title="|u_exact - u_pred|"
+            ),
+            width=1800,
+            height=600,
+        )
+
+        # Save both static and interactive plots
+        if save_path:
+            # Save static matplotlib plot
+            plt_save_path = save_path
+            # Save interactive HTML
+            html_save_path = save_path.rsplit(".", 1)[0] + ".html"
+            fig.write_html(html_save_path)
+        else:
+            plt_save_path = "solution_comparison.png"
+            fig.write_html("solution_comparison.html")
+
+        # Also create and save static plot for compatibility
+        fig_static = plt.figure(figsize=(20, 6))
+
+        # Plot exact solution
+        ax1 = fig_static.add_subplot(131, projection="3d")
+        surf1 = ax1.plot_surface(X, T, exact, cmap="viridis")
+        ax1.set_title("Exact Solution")
+        ax1.set_xlabel("x")
+        ax1.set_ylabel("t")
+        ax1.set_zlabel("u(x,t)")
+        plt.colorbar(surf1, ax=ax1)
+
+        # Plot predicted solution
+        ax2 = fig_static.add_subplot(132, projection="3d")
+        surf2 = ax2.plot_surface(X, T, predicted, cmap="viridis")
+        ax2.set_title("Predicted Solution")
+        ax2.set_xlabel("x")
+        ax2.set_ylabel("t")
+        ax2.set_zlabel("u(x,t)")
+        plt.colorbar(surf2, ax=ax2)
+
+        # Plot error
+        ax3 = fig_static.add_subplot(133, projection="3d")
+        surf3 = ax3.plot_surface(X, T, error, cmap="viridis")
+        ax3.set_title("Absolute Error")
+        ax3.set_xlabel("x")
+        ax3.set_ylabel("t")
+        ax3.set_zlabel("|u_exact - u_pred|")
+        plt.colorbar(surf3, ax=ax3)
+
+        plt.tight_layout()
+        plt.savefig(plt_save_path)
         plt.close()

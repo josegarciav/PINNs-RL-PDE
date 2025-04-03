@@ -19,7 +19,7 @@ ENV/
 # Results and logs
 *.log
 logs/
-results/
+experiments/
 visualizations/
 checkpoints/
 

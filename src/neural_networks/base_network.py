@@ -50,10 +50,10 @@ class BaseNetwork(nn.Module):
             x = torch.tensor(x, dtype=torch.float32, device=self.device)
         elif not isinstance(x, torch.Tensor):
             x = torch.tensor(x, dtype=torch.float32, device=self.device)
-        
+
         if x.device != self.device:
             x = x.to(self.device)
-            
+
         return x
 
     def save_state(self, path: str) -> None:
@@ -86,7 +86,7 @@ class BaseNetwork(nn.Module):
             "device": str(self.device),
             "memory_usage": f"{sum(p.numel() * p.element_size() for p in self.parameters()) / 1024**2:.2f} MB",
         }
-        
+
     def _get_activation_module(self, activation_name: str) -> nn.Module:
         """Convert activation function name to module."""
         if activation_name == "relu":

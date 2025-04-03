@@ -20,11 +20,7 @@ class PendulumEquation(PDEBase):
     - L is the length of the pendulum
     """
 
-    def __init__(
-        self,
-        config: PDEConfig,
-        **kwargs
-    ):
+    def __init__(self, config: PDEConfig, **kwargs):
         """Initialize the Pendulum Equation.
 
         Args:
@@ -32,8 +28,10 @@ class PendulumEquation(PDEBase):
             kwargs: Additional keyword arguments
         """
         super().__init__(config)
-        self.g = self.config.parameters.get("g", 9.81)  # Default gravitational acceleration
-        self.L = self.config.parameters.get("L", 1.0)   # Default pendulum length
+        self.g = self.config.parameters.get(
+            "g", 9.81
+        )  # Default gravitational acceleration
+        self.L = self.config.parameters.get("L", 1.0)  # Default pendulum length
 
     def compute_residual(
         self,
@@ -64,9 +62,11 @@ class PendulumEquation(PDEBase):
 
         # Get derivatives
         derivatives = self.compute_derivatives(
-            model, x, t,
+            model,
+            x,
+            t,
             temporal_derivatives=[1, 2],  # Need first and second time derivatives
-            spatial_derivatives=set()  # No spatial derivatives needed for pendulum equation
+            spatial_derivatives=set(),  # No spatial derivatives needed for pendulum equation
         )
 
         # Get solution and derivatives
@@ -92,18 +92,18 @@ class PendulumEquation(PDEBase):
             return None
 
         solution_type = self.config.exact_solution.get("type", "small_angle")
-        
+
         if solution_type == "small_angle":
             # Small angle approximation: θ(t) = θ₀cos(ωt)
             theta_0 = self.config.exact_solution.get("initial_angle", 0.1)
             omega = torch.sqrt(self.g / self.L)
             return theta_0 * torch.cos(omega * t)
-        
+
         elif solution_type == "sine":
             amplitude = self.config.exact_solution.get("amplitude", 1.0)
             frequency = self.config.exact_solution.get("frequency", 1.0)
             return amplitude * torch.sin(frequency * (x + t))
-        
+
         else:
             raise ValueError(f"Unknown exact solution type: {solution_type}")
 
@@ -121,24 +121,24 @@ class PendulumEquation(PDEBase):
         """
         if bc_type == "initial":
             ic_type = params.get("type", "small_angle")
-            
+
             if ic_type == "small_angle":
                 theta_0 = params.get("initial_angle", 0.1)
                 return lambda x, t: torch.full_like(x, theta_0)
-            
+
             elif ic_type == "sine":
                 amplitude = params.get("amplitude", 1.0)
                 frequency = params.get("frequency", 1.0)
                 return lambda x, t: amplitude * torch.sin(frequency * x)
-            
+
             elif ic_type == "gaussian":
                 amplitude = params.get("amplitude", 1.0)
                 center = params.get("center", 0.0)
                 sigma = params.get("sigma", 0.1)
                 return lambda x, t: amplitude * torch.exp(
-                    -((x - center) ** 2) / (2 * sigma ** 2)
+                    -((x - center) ** 2) / (2 * sigma**2)
                 )
-            
+
             else:
                 raise ValueError(f"Unknown initial condition type: {ic_type}")
         else:
@@ -162,20 +162,18 @@ class PendulumEquation(PDEBase):
         """
         # Get solution and its time derivative
         derivatives = self.compute_derivatives(
-            model, x, t,
-            temporal_derivatives=[1],
-            spatial_derivatives=set()
+            model, x, t, temporal_derivatives=[1], spatial_derivatives=set()
         )
-        
+
         # Get the solution
         u = model(torch.cat([x, t], dim=1))
-        
+
         # Kinetic energy: (1/2) * m * L^2 * (du/dt)^2
         kinetic = 0.5 * self.L * self.L * derivatives["dt"].pow(2)
-        
+
         # Potential energy: m * g * L * (1 - cos(u))
         potential = self.g * self.L * (1 - torch.cos(u))
-        
+
         # Total energy is the sum of kinetic and potential
         return kinetic + potential
 
@@ -196,10 +194,7 @@ class PendulumEquation(PDEBase):
             Tuple of (angular displacement, angular velocity)
         """
         # Get solution and its time derivative
-        derivatives = self.compute_derivatives(
-            model, x, t,
-            temporal_derivatives=[1]
-        )
+        derivatives = self.compute_derivatives(model, x, t, temporal_derivatives=[1])
         u = model(torch.cat([x, t], dim=1))
         u_t = derivatives["dt"]
 
@@ -238,28 +233,28 @@ class PendulumEquation(PDEBase):
             return None
 
         ic_type = self.config.initial_condition.get("type", "small_angle")
-        
+
         if ic_type == "small_angle":
             theta_0 = self.config.initial_condition.get("initial_angle", 0.1)
             return torch.full_like(x, theta_0)
-        
+
         elif ic_type == "sine":
             amplitude = self.config.initial_condition.get("amplitude", 1.0)
             frequency = self.config.initial_condition.get("frequency", 1.0)
             return amplitude * torch.sin(frequency * x)
-        
+
         elif ic_type == "gaussian":
             amplitude = self.config.initial_condition.get("amplitude", 1.0)
             center = self.config.initial_condition.get("center", 0.0)
             sigma = self.config.initial_condition.get("sigma", 0.1)
-            return amplitude * torch.exp(
-                -((x - center) ** 2) / (2 * sigma ** 2)
-            )
-        
+            return amplitude * torch.exp(-((x - center) ** 2) / (2 * sigma**2))
+
         else:
             raise ValueError(f"Unknown initial condition type: {ic_type}")
 
-    def compute_boundary_condition(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def compute_boundary_condition(
+        self, x: torch.Tensor, t: torch.Tensor
+    ) -> torch.Tensor:
         """Compute the boundary condition.
 
         Args:
@@ -272,14 +267,16 @@ class PendulumEquation(PDEBase):
         if not self.config.boundary_conditions:
             return None
 
-        bc_type = self.config.boundary_conditions.get("dirichlet", {}).get("type", "fixed")
-        
+        bc_type = self.config.boundary_conditions.get("dirichlet", {}).get(
+            "type", "fixed"
+        )
+
         if bc_type == "fixed":
             value = self.config.boundary_conditions["dirichlet"].get("value", 0.0)
             return torch.full_like(x, value)
-        
+
         elif bc_type == "periodic":
             return torch.sin(2 * np.pi * x)
-        
+
         else:
             raise ValueError(f"Unknown boundary condition type: {bc_type}")

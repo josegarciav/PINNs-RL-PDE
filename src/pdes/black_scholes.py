@@ -14,11 +14,7 @@ class BlackScholesEquation(PDEBase):
     where V is the option price, S is the stock price, σ is volatility, and r is the risk-free rate.
     """
 
-    def __init__(
-        self,
-        config: PDEConfig,
-        **kwargs
-    ):
+    def __init__(self, config: PDEConfig, **kwargs):
         """
         Initialize the Black-Scholes Equation.
 
@@ -26,7 +22,9 @@ class BlackScholesEquation(PDEBase):
         :param kwargs: Additional keyword arguments
         """
         super().__init__(config)
-        self.sigma = self.config.parameters.get("sigma", 0.2)  # Default volatility of 20%
+        self.sigma = self.config.parameters.get(
+            "sigma", 0.2
+        )  # Default volatility of 20%
         self.r = self.config.parameters.get("r", 0.05)  # Default risk-free rate of 5%
 
     def compute_residual(
@@ -56,9 +54,7 @@ class BlackScholesEquation(PDEBase):
 
         # Get derivatives
         derivatives = self.compute_derivatives(
-            model, x, t,
-            spatial_derivatives=[1, 2],
-            temporal_derivatives=[1]
+            model, x, t, spatial_derivatives=[1, 2], temporal_derivatives=[1]
         )
 
         # Get the derivatives we need
@@ -68,7 +64,7 @@ class BlackScholesEquation(PDEBase):
 
         # Black-Scholes equation: V_t + (1/2)σ²S²V_SS + rSV_S - rV = 0
         V = model(torch.cat([x, t], dim=1))
-        
+
         if self.dimension == 1:
             residual = (
                 V_t + 0.5 * self.sigma**2 * x**2 * V_SS + self.r * x * V_S - self.r * V
@@ -81,7 +77,7 @@ class BlackScholesEquation(PDEBase):
                 + self.r * torch.sum(x * V_S, dim=1, keepdim=True)
                 - self.r * V
             )
-        
+
         return residual
 
     def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:

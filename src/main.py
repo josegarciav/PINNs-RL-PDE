@@ -5,21 +5,25 @@ import webbrowser
 from time import sleep
 import argparse
 
+
 def run_interactive_trainer():
     """Run the interactive trainer module"""
     from src.interactive_trainer import main as trainer_main
+
     trainer_main()
+
 
 def run_dashboard(port=8050):
     """Run the dashboard module"""
     from src.dashboard import app
+
     print(f"\n🚀 Starting PINNs-RL-PDE Dashboard on port {port}")
     print(f"📊 Open http://127.0.0.1:{port}/ in your browser")
-    
+
     # Try different ports if the specified one is in use
     max_retries = 3
     current_port = port
-    
+
     for attempt in range(max_retries):
         try:
             app.run(debug=False, port=current_port)
@@ -29,12 +33,15 @@ def run_dashboard(port=8050):
                 print(f"Port {current_port} is in use. Trying port {current_port+1}...")
                 current_port += 1
                 if attempt == max_retries - 1:
-                    print(f"Could not find available port after {max_retries} attempts.")
+                    print(
+                        f"Could not find available port after {max_retries} attempts."
+                    )
                     print("Please close any running dashboards and try again.")
                     sys.exit(1)
             else:
                 print(f"Error starting dashboard: {e}")
                 sys.exit(1)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -53,39 +60,40 @@ Examples:
   
   Specify dashboard port:
     python src/main.py --port 8051
-        """
+        """,
     )
     parser.add_argument(
-        "--port", 
-        type=int, 
-        default=8050, 
-        help="Port to run the dashboard on (default: 8050)"
+        "--port",
+        type=int,
+        default=8050,
+        help="Port to run the dashboard on (default: 8050)",
     )
     parser.add_argument(
         "--dashboard-only",
         action="store_true",
-        help="Run only the dashboard viewer for existing experiments"
+        help="Run only the dashboard viewer for existing experiments",
     )
     parser.add_argument(
         "--trainer-only",
         action="store_true",
-        help="Run only the interactive trainer without dashboard"
+        help="Run only the interactive trainer without dashboard",
     )
     return parser.parse_args()
+
 
 def main():
     # Parse command line arguments
     args = parse_args()
-    
+
     # Print welcome message
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("🧠 Welcome to PINNs-RL-PDE Framework")
-    print("="*50 + "\n")
-    
+    print("=" * 50 + "\n")
+
     if args.dashboard_only and args.trainer_only:
         print("Error: Cannot specify both --dashboard-only and --trainer-only")
         sys.exit(1)
-    
+
     if args.dashboard_only:
         # Run only the dashboard viewer
         print("📊 Starting Dashboard Viewer...")
@@ -99,17 +107,19 @@ def main():
         print("🎯 Starting Interactive Trainer...")
         trainer_process = multiprocessing.Process(target=run_interactive_trainer)
         trainer_process.start()
-        
+
         # Wait a bit to let the trainer initialize
         sleep(2)
-        
+
         print("\n📊 Starting Dashboard...")
-        dashboard_process = multiprocessing.Process(target=run_dashboard, args=(args.port,))
+        dashboard_process = multiprocessing.Process(
+            target=run_dashboard, args=(args.port,)
+        )
         dashboard_process.start()
-        
+
         # Open the dashboard in the default web browser
-        webbrowser.open(f'http://127.0.0.1:{args.port}/')
-        
+        webbrowser.open(f"http://127.0.0.1:{args.port}/")
+
         try:
             # Wait for both processes to complete
             trainer_process.join()
@@ -122,6 +132,7 @@ def main():
             dashboard_process.join()
             print("✅ Shutdown complete")
             sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

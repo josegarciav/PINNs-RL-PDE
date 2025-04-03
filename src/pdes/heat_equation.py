@@ -14,11 +14,7 @@ class HeatEquation(PDEBase):
     where α is the thermal diffusivity and ∇² is the Laplacian operator.
     """
 
-    def __init__(
-        self,
-        config: PDEConfig,
-        **kwargs
-    ):
+    def __init__(self, config: PDEConfig, **kwargs):
         """
         Initialize the Heat Equation.
 
@@ -36,7 +32,7 @@ class HeatEquation(PDEBase):
     ) -> torch.Tensor:
         """
         Compute the residual of the heat equation.
-        
+
         :param model: Neural network model
         :param x: Spatial coordinates
         :param t: Time coordinates
@@ -55,15 +51,13 @@ class HeatEquation(PDEBase):
 
         # Get derivatives
         derivatives = self.compute_derivatives(
-            model, x, t,
-            spatial_derivatives=[2],
-            temporal_derivatives=[1]
+            model, x, t, spatial_derivatives=[2], temporal_derivatives=[1]
         )
 
         # Heat equation residual: u_t - α∇²u = 0
         u_t = derivatives["dt"]
         laplacian = derivatives["laplacian"]
-        
+
         residual = u_t - self.alpha * laplacian
         return residual
 
@@ -95,16 +89,20 @@ class HeatEquation(PDEBase):
                 solution = torch.ones_like(x[:, 0:1])
                 for dim in range(self.dimension):
                     time_factor = torch.exp(-self.alpha * (k * torch.pi) ** 2 * t)
-                    space_factor = torch.sin(k * torch.pi * x[:, dim:dim+1])
+                    space_factor = torch.sin(k * torch.pi * x[:, dim : dim + 1])
                     solution *= A * time_factor * space_factor
                 return solution
         elif solution_type == "sine_2d" and self.dimension == 2:
             A = self.config.exact_solution.get("amplitude", 1.0)
             kx = self.config.exact_solution.get("frequency_x", 1.0)
             ky = self.config.exact_solution.get("frequency_y", 1.0)
-            
-            time_factor = torch.exp(-self.alpha * ((kx * torch.pi) ** 2 + (ky * torch.pi) ** 2) * t)
-            space_factor = torch.sin(kx * torch.pi * x[:, 0:1]) * torch.sin(ky * torch.pi * x[:, 1:2])
+
+            time_factor = torch.exp(
+                -self.alpha * ((kx * torch.pi) ** 2 + (ky * torch.pi) ** 2) * t
+            )
+            space_factor = torch.sin(kx * torch.pi * x[:, 0:1]) * torch.sin(
+                ky * torch.pi * x[:, 1:2]
+            )
             return A * time_factor * space_factor
         else:
             raise ValueError(f"Unsupported exact solution type: {solution_type}")
@@ -134,7 +132,11 @@ class HeatEquation(PDEBase):
                 A = params.get("amplitude", 1.0)
                 kx = params.get("frequency_x", 1.0)
                 ky = params.get("frequency_y", 1.0)
-                return lambda x, t: A * torch.sin(kx * torch.pi * x[:, 0:1]) * torch.sin(ky * torch.pi * x[:, 1:2])
+                return (
+                    lambda x, t: A
+                    * torch.sin(kx * torch.pi * x[:, 0:1])
+                    * torch.sin(ky * torch.pi * x[:, 1:2])
+                )
             else:
                 raise ValueError(f"Unsupported initial condition type: {ic_type}")
         else:
