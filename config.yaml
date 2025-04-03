@@ -23,12 +23,13 @@ architectures:
     omega_0: 30.0  # Frequency parameter for sine activation
   
   fourier:
-    mapping_size: 256  # Increased from 124
-    hidden_dims: [256, 256, 256, 256]  # Wider but fewer layers
-    scale: 20.0  # Increased scale for better frequency coverage
-    activation: "gelu"  # Changed to gelu for better gradient flow
-    dropout: 0.0  # Removed dropout for this problem
-    layer_norm: true  # Added layer normalization
+    mapping_size: 512  # Increased for more capacity
+    hidden_dims: [512, 512, 512, 512]  # Wider layers
+    scale: 30.0  # Increased scale for better high-frequency capture
+    activation: "gelu"
+    dropout: 0.0
+    layer_norm: true
+    periodic: true  # Enable periodic features
   
   attention:
     hidden_dim: 124
@@ -45,7 +46,7 @@ architectures:
     layer_norm: true
 
 # Default PDE type to train
-pde_type: "heat"  # Options: "heat", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
+pde_type: "heat_2d"  # Options: "heat", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
 
 # PDE-specific configurations
 pde_configs:
@@ -53,22 +54,23 @@ pde_configs:
   heat:
     name: "Heat Equation"
     architecture: "fourier"  # Good for smooth diffusion problems
-    input_dim: 2  # (x, t) 
+    input_dim: 2  # (x, t)
     output_dim: 1  # u(x,t)
     parameters:
-      alpha: 0.01  # Thermal diffusivity coefficient
-    domain: [[0.0, 6.28318530718]]  # Spatial domain [0, 2π]
-    time_domain: [0.0, 6.28318530718]  # Increased time domain for better visualization
-    dimension: 1 # 1D or 2D
+      alpha: 0.001  # Thermal diffusivity
+    domain: [[0, 3.14159]]  # [0, π]
+    time_domain: [0, 1]
+    dimension: 1
     initial_condition:
-      type: "sine"
+      type: "sin"
       amplitude: 1.0
       frequency: 1.0
     boundary_conditions:
       dirichlet:
-        type: "periodic"  # Changed to periodic for consistency with 2π domain
+        type: "fixed"
+        value: 0.0
     exact_solution:
-      type: "sine"
+      type: "sin"
       amplitude: 1.0
       frequency: 1.0
 
@@ -271,48 +273,52 @@ pde_configs:
   # Heat Equation 2D Configuration
   heat_2d:
     name: "Heat Equation 2D"
-    architecture: "fourier"  # Excellent for multidimensional problems
+    architecture: "fourier"  # Good for smooth diffusion problems
     input_dim: 3  # (x, y, t)
     output_dim: 1  # u(x,y,t)
     parameters:
       alpha: 0.01  # Thermal diffusivity coefficient
-    domain: [[0.0, 1.0], [0.0, 1.0]]  # 2D spatial domain
-    time_domain: [0.0, 1.0]
+    domain: [[0.0, 3.14159], [0.0, 3.14159]]  # [0, π] × [0, π]
+    time_domain: [0.0, 1.0]  # Simulate for 1 time unit
     dimension: 2
     initial_condition:
-      type: "sine_2d"
-      amplitude: 1.0
-      frequency_x: 1.0
-      frequency_y: 1.0
+      type: "random"  # Random initial heat distribution
+      min_value: 0.0
+      max_value: 1.0
+      num_modes: 5  # Number of Fourier modes for random initialization
     boundary_conditions:
       dirichlet:
         type: "fixed"
-        value: 0.0
+        value: 0.0  # Fixed zero temperature at boundaries
     exact_solution:
-      type: "sine_2d"
-      amplitude: 1.0
-      frequency_x: 1.0
-      frequency_y: 1.0
+      type: "fourier_series"
+      num_modes: 5  # Number of modes in the Fourier series solution
+      coefficients: "random"  # Random coefficients for the modes
 
 # Training Configuration
 training:
   device: "mps"
-  num_epochs: 500  # Increased from 100
-  batch_size: 128  # Increased from 32
-  num_collocation_points: 50000  # Increased from 10000
+  num_epochs: 1000
+  batch_size: 128
+  num_collocation_points: 50000
   validation_frequency: 10
   early_stopping:
-    enabled: true
-    patience: 20  # Increased patience since we have more epochs
+    enabled: false
+    patience: 50
+    min_delta: 1e-6
   optimizer_config:
     name: "adam"
     learning_rate: 0.001
-    weight_decay: 1.0e-5
+    weight_decay: 1.0e-6  # Reduced weight decay
   scheduler_config:
-    reduce_factor: 0.5
-    patience: 10
-    min_lr: 1.0e-6
+    type: "StepLR"
+    step_size: 100
+    gamma: 0.5
   rl_update_frequency: 10  # Update RL agent every N epochs
+  loss_weights:
+    pde: 1.0
+    boundary: 1.0
+    initial: 1.0
 
 # Reinforcement Learning Configuration
 rl:

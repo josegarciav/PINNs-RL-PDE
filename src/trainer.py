@@ -9,6 +9,7 @@ from tqdm import tqdm
 import os
 from datetime import datetime
 from src.utils.utils import save_training_metrics
+import plotly.graph_objects as go
 
 
 class PDETrainer:
@@ -392,123 +393,151 @@ class PDETrainer:
             plt.savefig("training_history.png")
         plt.close()
 
-    def plot_solution_comparison(self, num_points=100, save_path=None):
-        """Plot comparison between exact and predicted solutions."""
-        import matplotlib
-
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
-        import numpy as np
-        import plotly.graph_objects as go
-        from plotly.subplots import make_subplots
-
-        # Generate grid points
-        x_domain = self.pde.config.domain[0]
-        t_domain = self.pde.config.time_domain
-        x = np.linspace(x_domain[0], x_domain[1], num_points)
-        t = np.linspace(t_domain[0], t_domain[1], num_points)
-        X, T = np.meshgrid(x, t)
-
-        # Convert to torch tensors
-        X_torch = torch.from_numpy(X.flatten()).float().to(self.device)
-        T_torch = torch.from_numpy(T.flatten()).float().to(self.device)
-
-        # Get predictions
-        self.model.eval()
-        with torch.no_grad():
-            inputs = torch.stack([X_torch, T_torch], dim=1)
-            predicted = self.model(inputs).cpu().numpy()
-
-        # Reshape predictions
-        predicted = predicted.reshape(X.shape)
-
-        # Get exact solution
-        X_tensor = torch.from_numpy(X).float().to(self.device)
-        T_tensor = torch.from_numpy(T).float().to(self.device)
-        exact = self.pde.exact_solution(X_tensor, T_tensor).cpu().numpy()
-
-        # Calculate error
-        error = np.abs(exact - predicted)
-
-        # Create interactive Plotly figure
-        fig = make_subplots(
-            rows=1,
-            cols=3,
-            specs=[[{"type": "surface"}, {"type": "surface"}, {"type": "surface"}]],
-            subplot_titles=("Exact Solution", "Predicted Solution", "Absolute Error"),
-        )
-
-        # Add surfaces
-        fig.add_trace(
-            go.Surface(x=X, y=T, z=exact, colorscale="viridis", name="Exact"),
-            row=1,
-            col=1,
-        )
-        fig.add_trace(
-            go.Surface(x=X, y=T, z=predicted, colorscale="viridis", name="Predicted"),
-            row=1,
-            col=2,
-        )
-        fig.add_trace(
-            go.Surface(x=X, y=T, z=error, colorscale="viridis", name="Error"),
-            row=1,
-            col=3,
-        )
-
-        # Update layout
-        fig.update_layout(
-            title="Solution Comparison",
-            scene=dict(xaxis_title="x", yaxis_title="t", zaxis_title="u(x,t)"),
-            scene2=dict(xaxis_title="x", yaxis_title="t", zaxis_title="u(x,t)"),
-            scene3=dict(
-                xaxis_title="x", yaxis_title="t", zaxis_title="|u_exact - u_pred|"
-            ),
-            width=1800,
-            height=600,
-        )
-
-        # Save both static and interactive plots
-        if save_path:
-            # Save static matplotlib plot
-            plt_save_path = save_path
-            # Save interactive HTML
-            html_save_path = save_path.rsplit(".", 1)[0] + ".html"
-            fig.write_html(html_save_path)
-        else:
-            plt_save_path = "solution_comparison.png"
-            fig.write_html("solution_comparison.html")
-
-        # Also create and save static plot for compatibility
-        fig_static = plt.figure(figsize=(20, 6))
-
-        # Plot exact solution
-        ax1 = fig_static.add_subplot(131, projection="3d")
-        surf1 = ax1.plot_surface(X, T, exact, cmap="viridis")
-        ax1.set_title("Exact Solution")
-        ax1.set_xlabel("x")
-        ax1.set_ylabel("t")
-        ax1.set_zlabel("u(x,t)")
-        plt.colorbar(surf1, ax=ax1)
-
-        # Plot predicted solution
-        ax2 = fig_static.add_subplot(132, projection="3d")
-        surf2 = ax2.plot_surface(X, T, predicted, cmap="viridis")
-        ax2.set_title("Predicted Solution")
-        ax2.set_xlabel("x")
-        ax2.set_ylabel("t")
-        ax2.set_zlabel("u(x,t)")
-        plt.colorbar(surf2, ax=ax2)
-
-        # Plot error
-        ax3 = fig_static.add_subplot(133, projection="3d")
-        surf3 = ax3.plot_surface(X, T, error, cmap="viridis")
-        ax3.set_title("Absolute Error")
-        ax3.set_xlabel("x")
-        ax3.set_ylabel("t")
-        ax3.set_zlabel("|u_exact - u_pred|")
-        plt.colorbar(surf3, ax=ax3)
-
-        plt.tight_layout()
-        plt.savefig(plt_save_path)
-        plt.close()
+    def plot_solution_comparison(self, num_points=50, save_path=None):
+        """Plot comparison between exact and predicted solutions"""
+        if self.pde.dimension == 2:
+            # Generate grid points for x and y
+            x = torch.linspace(self.pde.domain[0][0], self.pde.domain[0][1], num_points, device=self.device)
+            y = torch.linspace(self.pde.domain[1][0], self.pde.domain[1][1], num_points, device=self.device)
+            X, Y = torch.meshgrid(x, y, indexing='ij')
+            
+            # Generate frames for different time points
+            frames = []
+            times = torch.linspace(self.pde.time_domain[0], self.pde.time_domain[1], 10, device=self.device)
+            
+            for t in times:
+                # Prepare input for the model
+                t_repeated = t.repeat(num_points * num_points)
+                points = torch.stack([X.flatten(), Y.flatten(), t_repeated], dim=1)
+                
+                # Get predictions and exact solutions
+                with torch.no_grad():
+                    pred = self.model(points).reshape(num_points, num_points).cpu().numpy()
+                    exact = self.pde.exact_solution(points).reshape(num_points, num_points).cpu().numpy()
+                    error = np.abs(pred - exact)
+                
+                # Create frame with both plots
+                frame = go.Frame(
+                    data=[
+                        go.Surface(x=X.cpu().numpy(), y=Y.cpu().numpy(), z=pred,
+                                 colorscale='viridis', name='Predicted'),
+                        go.Surface(x=X.cpu().numpy(), y=Y.cpu().numpy(), z=exact,
+                                 colorscale='viridis', name='Exact'),
+                        go.Surface(x=X.cpu().numpy(), y=Y.cpu().numpy(), z=error,
+                                 colorscale='viridis', name='Error')
+                    ],
+                    name=f't={t.item():.2f}'
+                )
+                frames.append(frame)
+            
+            # Create figure with animation
+            fig = go.Figure(
+                data=[frames[0].data[0], frames[0].data[1], frames[0].data[2]],
+                frames=frames
+            )
+            
+            # Add play button and slider
+            fig.update_layout(
+                updatemenus=[{
+                    'type': 'buttons',
+                    'showactive': False,
+                    'buttons': [{
+                        'label': 'Play',
+                        'method': 'animate',
+                        'args': [None, {'frame': {'duration': 500, 'redraw': True}, 'fromcurrent': True}]
+                    }]
+                }],
+                sliders=[{
+                    'currentvalue': {'prefix': 't='},
+                    'steps': [{'args': [[f.name], {'frame': {'duration': 0, 'redraw': True}, 'mode': 'immediate'}],
+                              'label': f.name,
+                              'method': 'animate'} for f in frames]
+                }]
+            )
+            
+            # Update layout
+            fig.update_layout(
+                scene=dict(
+                    camera=dict(
+                        up=dict(x=0, y=0, z=1),
+                        center=dict(x=0, y=0, z=0),
+                        eye=dict(x=1.5, y=1.5, z=1.5)
+                    ),
+                    xaxis_title='x',
+                    yaxis_title='y',
+                    zaxis_title='u(x,y,t)'
+                ),
+                title='Solution Comparison (2D Heat Equation)'
+            )
+            
+            # Save both interactive and static plots
+            if save_path:
+                # Save interactive HTML
+                html_path = save_path.replace('.png', '.html')
+                fig.write_html(html_path)
+                
+                # Save static PNG for each time step
+                for i, t in enumerate(times):
+                    static_fig = go.Figure(data=frames[i].data)
+                    static_fig.update_layout(
+                        scene=dict(
+                            camera=dict(
+                                up=dict(x=0, y=0, z=1),
+                                center=dict(x=0, y=0, z=0),
+                                eye=dict(x=1.5, y=1.5, z=1.5)
+                            ),
+                            xaxis_title='x',
+                            yaxis_title='y',
+                            zaxis_title='u(x,y,t)'
+                        ),
+                        title=f'Solution at t={t.item():.2f}'
+                    )
+                    png_path = save_path.replace('.png', f'_t{i}.png')
+                    static_fig.write_image(png_path)
+            
+        else:  # 1D case
+            # Generate points
+            x = torch.linspace(self.pde.domain[0][0], self.pde.domain[0][1], num_points, device=self.device)
+            t = torch.linspace(self.pde.time_domain[0], self.pde.time_domain[1], num_points, device=self.device)
+            X, T = torch.meshgrid(x, t, indexing='ij')
+            points = torch.stack([X.flatten(), T.flatten()], dim=1)
+            
+            # Get predictions and exact solutions
+            with torch.no_grad():
+                pred = self.model(points).reshape(num_points, num_points).cpu().numpy()
+                exact = self.pde.exact_solution(points).reshape(num_points, num_points).cpu().numpy()
+                error = np.abs(pred - exact)
+            
+            # Create interactive plot
+            fig = go.Figure()
+            
+            # Add surfaces for predicted, exact, and error
+            fig.add_trace(go.Surface(x=X.cpu().numpy(), y=T.cpu().numpy(), z=pred,
+                                   colorscale='viridis', name='Predicted'))
+            fig.add_trace(go.Surface(x=X.cpu().numpy(), y=T.cpu().numpy(), z=exact,
+                                   colorscale='viridis', name='Exact'))
+            fig.add_trace(go.Surface(x=X.cpu().numpy(), y=T.cpu().numpy(), z=error,
+                                   colorscale='viridis', name='Error'))
+            
+            # Update layout
+            fig.update_layout(
+                scene=dict(
+                    camera=dict(
+                        up=dict(x=0, y=0, z=1),
+                        center=dict(x=0, y=0, z=0),
+                        eye=dict(x=1.5, y=1.5, z=1.5)
+                    ),
+                    xaxis_title='x',
+                    yaxis_title='t',
+                    zaxis_title='u(x,t)'
+                ),
+                title='Solution Comparison (1D)'
+            )
+            
+            if save_path:
+                # Save interactive HTML
+                html_path = save_path.replace('.png', '.html')
+                fig.write_html(html_path)
+                
+                # Save static PNG
+                fig.write_image(save_path)

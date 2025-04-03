@@ -37,17 +37,36 @@ class InteractiveTrainer:
         # Initial configuration
         self.setup_variables()
         self.create_ui()
-
+        
         # Load configuration
         self.load_config("config.yaml")
 
     def setup_variables(self):
         """Initialize application variables"""
-        # Load config to get PDE-specific architectures
+        # Load config to get default values
         try:
             with open("config.yaml", "r") as f:
                 config = yaml.safe_load(f)
-                pde_configs = config.get("pde_configs", {})
+                training_config = config.get("training", {})
+                arch_config = config.get("architectures", {}).get("fourier", {})
+        except Exception as e:
+            print(f"Error loading config.yaml: {e}")
+            training_config = {}
+            arch_config = {}
+
+        # Training parameters with defaults from config.yaml
+        self.epochs = tk.IntVar(value=training_config.get("num_epochs", 100))
+        self.batch_size = tk.IntVar(value=training_config.get("batch_size", 32))
+        self.num_points = tk.IntVar(value=training_config.get("num_collocation_points", 10000))
+        self.learning_rate = tk.DoubleVar(
+            value=training_config.get("optimizer_config", {}).get("learning_rate", 0.001)
+        )
+        self.hidden_dim = tk.IntVar(value=arch_config.get("hidden_dims", [124])[0] if isinstance(arch_config.get("hidden_dims"), list) else 64)
+        self.num_layers = tk.IntVar(value=len(arch_config.get("hidden_dims", [])) if isinstance(arch_config.get("hidden_dims"), list) else 4)
+
+        # Load PDE-specific architectures
+        try:
+            pde_configs = config.get("pde_configs", {})
         except Exception as e:
             print(f"Error loading config.yaml: {e}")
             pde_configs = {}
@@ -110,14 +129,6 @@ class InteractiveTrainer:
         self.selected_arch = tk.StringVar(value=default_arch)
         self.selected_device = tk.StringVar(value=self.device_options[0])
         self.use_rl = tk.BooleanVar(value=False)
-
-        # Training parameters
-        self.epochs = tk.IntVar(value=100)
-        self.batch_size = tk.IntVar(value=32)
-        self.num_points = tk.IntVar(value=10000)
-        self.learning_rate = tk.DoubleVar(value=0.001)
-        self.hidden_dim = tk.IntVar(value=64)
-        self.num_layers = tk.IntVar(value=4)
 
         # PDE-specific parameters
         self.alpha = tk.DoubleVar(value=0.01)  # Heat/Wave equation
@@ -465,58 +476,53 @@ class InteractiveTrainer:
         # Load config.yaml
         with open("config.yaml", "r") as f:
             yaml_config = yaml.safe_load(f)
-
+            
         # Get PDE-specific configuration from config.yaml
         pde_name = self.selected_pde.get().lower().replace(" ", "_")
-        pde_key = pde_name.split("_")[
-            0
-        ]  # Get base name (e.g., 'heat' from 'heat_equation')
-        pde_config = yaml_config["pde_configs"].get(pde_key, {})
+        pde_key = pde_name.split("_")[0]  # Get base name (e.g., 'heat' from 'heat_equation')
+        pde_config = yaml_config.get(pde_key, {})  # Changed from yaml_config["pde_configs"] to direct access
 
-        # Get architecture configuration with default values
+        # Get architecture configuration
         arch_config = yaml_config.get("architectures", {}).get(
             self.selected_arch.get(), {}
         )
 
+        # Use global device from config
+        device = yaml_config.get("device", "cpu")
+
         config = {
-            "device": self.selected_device.get(),
+            "device": device,  # Use global device setting
             "model": {
                 "architecture": self.selected_arch.get(),
-                "input_dim": pde_config.get("input_dim", 2),  # Get from PDE config
+                "input_dim": pde_config.get("input_dim", 2),
                 "hidden_dim": self.hidden_dim.get(),
-                "output_dim": pde_config.get("output_dim", 1),  # Get from PDE config
+                "output_dim": pde_config.get("output_dim", 1),
                 "num_layers": self.num_layers.get(),
                 "activation": arch_config.get("activation", "tanh"),
                 "fourier_features": self.selected_arch.get() == "fourier",
-                "fourier_scale": (
-                    arch_config.get("scale", 1.0)
-                    if self.selected_arch.get() == "fourier"
-                    else None
-                ),
+                "fourier_scale": arch_config.get("scale", 1.0) if self.selected_arch.get() == "fourier" else None,
                 "dropout": arch_config.get("dropout", 0.0),
                 "layer_norm": arch_config.get("layer_norm", True),
             },
-            "training": yaml_config["training"],  # Use training config from yaml
-            "rl": {"enabled": self.use_rl.get(), **yaml_config["rl"]},
-            "evaluation": yaml_config["evaluation"],  # Use evaluation config from yaml
-            "paths": yaml_config["paths"],  # Use paths from yaml
-            "logging": yaml_config["logging"],  # Use logging config from yaml
+            "training": yaml_config.get("training", {}),  # Get full training config
+            "rl": {"enabled": self.use_rl.get(), **yaml_config.get("rl", {})},
+            "evaluation": yaml_config.get("evaluation", {}),
+            "paths": yaml_config.get("paths", {}),
+            "logging": yaml_config.get("logging", {}),
         }
 
-        # Override some training parameters from UI
-        config["training"].update(
-            {
-                "num_epochs": self.epochs.get(),
-                "batch_size": self.batch_size.get(),
-                "num_collocation_points": self.num_points.get(),
-                "optimizer_config": {
-                    **config["training"]["optimizer_config"],
-                    "lr": self.learning_rate.get(),
-                },
+        # Only override specific training parameters that can be set in UI
+        config["training"].update({
+            "num_epochs": self.epochs.get(),
+            "batch_size": self.batch_size.get(),
+            "num_collocation_points": self.num_points.get(),
+            "optimizer_config": {
+                **config["training"].get("optimizer_config", {}),
+                "learning_rate": self.learning_rate.get(),
             }
-        )
+        })
 
-        # Add PDE-specific configuration from config.yaml
+        # Add PDE-specific configuration
         config["pde"] = {
             "name": pde_config.get("name", self.selected_pde.get()),
             "parameters": pde_config.get("parameters", {}),
@@ -786,12 +792,12 @@ class InteractiveTrainer:
 
             # Start the dashboard process
             proc = subprocess.Popen(
-                dashboard_cmd,
+                    dashboard_cmd,
                 shell=True,
                 cwd=os.getcwd(),
                 env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
             )
 
             # Give dashboard time to start
