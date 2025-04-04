@@ -68,6 +68,9 @@ class HeatEquation(PDEBase):
         The solution is of the form:
         u(x,t) = A * exp(-alpha * k^2 * pi^2 * t) * sin(k * pi * x)
 
+        For 2D:
+        u(x,y,t) = A * exp(-alpha * (kx^2 + ky^2) * pi^2 * t) * sin(kx * pi * x) * sin(ky * pi * y)
+
         :param x: Spatial coordinates
         :param t: Time coordinates
         :return: Exact solution tensor
@@ -76,36 +79,62 @@ class HeatEquation(PDEBase):
             return None
 
         solution_type = self.config.exact_solution.get("type", "sine")
-        if solution_type == "sine":
+        if solution_type == "sin_exp_decay":
             A = self.config.exact_solution.get("amplitude", 1.0)
             k = self.config.exact_solution.get("frequency", 1.0)
+            decay_rate = self.config.exact_solution.get("decay_rate", 0.1)
 
             if self.dimension == 1:
+                # Correct heat equation solution with exponential decay
                 time_factor = torch.exp(-self.alpha * (k * torch.pi) ** 2 * t)
                 space_factor = torch.sin(k * torch.pi * x)
                 return A * time_factor * space_factor
             else:
-                # For higher dimensions, use product of sine waves
+                # For higher dimensions, use product of sine waves with proper decay
                 solution = torch.ones_like(x[:, 0:1])
+                decay_factor = 0.0
                 for dim in range(self.dimension):
-                    time_factor = torch.exp(-self.alpha * (k * torch.pi) ** 2 * t)
+                    decay_factor += (k * torch.pi) ** 2
                     space_factor = torch.sin(k * torch.pi * x[:, dim : dim + 1])
-                    solution *= A * time_factor * space_factor
-                return solution
+                    solution *= space_factor
+                time_factor = torch.exp(-self.alpha * decay_factor * t)
+                return A * time_factor * solution
+
         elif solution_type == "sine_2d" and self.dimension == 2:
             A = self.config.exact_solution.get("amplitude", 1.0)
             kx = self.config.exact_solution.get("frequency_x", 1.0)
             ky = self.config.exact_solution.get("frequency_y", 1.0)
 
-            time_factor = torch.exp(
-                -self.alpha * ((kx * torch.pi) ** 2 + (ky * torch.pi) ** 2) * t
-            )
+            # Correct 2D heat equation solution
+            decay_factor = (kx * torch.pi) ** 2 + (ky * torch.pi) ** 2
+            time_factor = torch.exp(-self.alpha * decay_factor * t)
             space_factor = torch.sin(kx * torch.pi * x[:, 0:1]) * torch.sin(
                 ky * torch.pi * x[:, 1:2]
             )
             return A * time_factor * space_factor
+
+        elif solution_type == "sine":
+            # Legacy support for old config format
+            return self.exact_solution_sine(x, t)
         else:
             raise ValueError(f"Unsupported exact solution type: {solution_type}")
+
+    def exact_solution_sine(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        """Legacy support for old sine solution format"""
+        A = self.config.exact_solution.get("amplitude", 1.0)
+        k = self.config.exact_solution.get("frequency", 1.0)
+
+        if self.dimension == 1:
+            time_factor = torch.exp(-self.alpha * (k * torch.pi) ** 2 * t)
+            space_factor = torch.sin(k * torch.pi * x)
+            return A * time_factor * space_factor
+        else:
+            solution = torch.ones_like(x[:, 0:1])
+            for dim in range(self.dimension):
+                time_factor = torch.exp(-self.alpha * (k * torch.pi) ** 2 * t)
+                space_factor = torch.sin(k * torch.pi * x[:, dim : dim + 1])
+                solution *= A * time_factor * space_factor
+            return solution
 
     def _create_boundary_condition(
         self, bc_type: str, params: Dict[str, Any]
@@ -142,12 +171,12 @@ class HeatEquation(PDEBase):
         else:
             return super()._create_boundary_condition(bc_type, params)
 
-    def validate(self, model, num_points=1000):
+    def validate(self, model, num_points=5000):
         """
         Validate the model's solution against exact solution.
 
         :param model: Neural network model
-        :param num_points: Number of validation points
+        :param num_points: Number of validation points (default increased to 5000 for better resolution)
         :return: Dictionary of error metrics
         """
         x, t = self.generate_collocation_points(num_points)

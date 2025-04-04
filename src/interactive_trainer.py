@@ -508,12 +508,8 @@ class InteractiveTrainer:
 
         # Get PDE-specific configuration from config.yaml
         pde_name = self.selected_pde.get().lower().replace(" ", "_")
-        pde_key = pde_name.split("_")[
-            0
-        ]  # Get base name (e.g., 'heat' from 'heat_equation')
-        pde_config = yaml_config.get(
-            pde_key, {}
-        )  # Changed from yaml_config["pde_configs"] to direct access
+        pde_key = pde_name.split("_")[0]  # Get base name (e.g., 'heat' from 'heat_equation')
+        pde_config = yaml_config.get("pde_configs", {}).get(pde_key, {})
 
         # Get architecture configuration
         arch_config = yaml_config.get("architectures", {}).get(
@@ -573,6 +569,12 @@ class InteractiveTrainer:
             "dimension": pde_config.get("dimension", 1),
         }
 
+        # Ensure paths exist
+        if "paths" not in config:
+            config["paths"] = {}
+        if "results_dir" not in config["paths"]:
+            config["paths"]["results_dir"] = "experiments"
+
         return config
 
     def create_pde(self, config, device):
@@ -586,14 +588,16 @@ class InteractiveTrainer:
             boundary_conditions=config["pde"]["boundary_conditions"],
             initial_condition=config["pde"]["initial_condition"],
             exact_solution=config["pde"]["exact_solution"],
+            dimension=config["pde"]["dimension"],
+            device=device
         )
 
         if pde_type == "Heat Equation":
-            return HeatEquation(config=pde_config, device=device)
+            return HeatEquation(config=pde_config)
         elif pde_type == "Burgers Equation":
-            return BurgersEquation(config=pde_config, device=device)
+            return BurgersEquation(config=pde_config)
         elif pde_type == "Wave Equation":
-            return WaveEquation(config=pde_config, device=device)
+            return WaveEquation(config=pde_config)
         else:
             raise ValueError(f"Unsupported PDE: {pde_type}")
 

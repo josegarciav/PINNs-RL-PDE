@@ -13,6 +13,7 @@ import argparse
 import sys
 import base64
 from pathlib import Path
+import yaml
 
 
 # Parse command line arguments for port
@@ -182,18 +183,48 @@ app.layout = html.Div(
 def update_experiments(_):
     # Get list of experiment directories
     experiment_dirs = []
-    for results_dir in [
-        "results",
-        "experiments",
-    ]:  # Check both possible result directories
-        if os.path.exists(results_dir):
-            experiment_dirs.extend(
-                [
-                    {"label": d, "value": os.path.join(results_dir, d)}
-                    for d in os.listdir(results_dir)
-                    if os.path.isdir(os.path.join(results_dir, d))
-                ]
-            )
+    if os.path.exists("experiments"):
+        for d in os.listdir("experiments"):
+            exp_dir = os.path.join("experiments", d)
+            if os.path.isdir(exp_dir):
+                # Check if the experiment has a final_model.pt file in its models directory
+                model_path = os.path.join(exp_dir, "models", "final_model.pt")
+                config_path = os.path.join(exp_dir, "config.yaml")
+                
+                if os.path.exists(model_path) and os.path.exists(config_path):
+                    # Get PDE name and type from config
+                    pde_name = "Unknown PDE"
+                    try:
+                        with open(config_path, "r") as f:
+                            config = yaml.safe_load(f)
+                            # Try different possible locations for pde name and type
+                            pde_type = None
+                            
+                            # First try to get the PDE type
+                            if "pde_type" in config:
+                                pde_type = config["pde_type"]
+                            elif "pde" in config and "type" in config["pde"]:
+                                pde_type = config["pde"]["type"]
+                            elif "pde_configs" in config:
+                                # Get first key from pde_configs as type
+                                pde_type = next(iter(config["pde_configs"].keys()))
+                            
+                            # Now try to get the name based on the PDE type
+                            if pde_type and "pde_configs" in config and pde_type in config["pde_configs"]:
+                                pde_name = config["pde_configs"][pde_type].get("name", f"{pde_type.title()} Equation")
+                            elif "pde" in config and "name" in config["pde"]:
+                                pde_name = config["pde"]["name"]
+                    except Exception as e:
+                        print(f"Error reading config for {exp_dir}: {e}")
+                        pde_name = "Unknown PDE"
+
+                    experiment_dirs.append({
+                        "label": f"{pde_name} - {d}",
+                        "value": exp_dir
+                    })
+
+    # Sort experiments by name in descending order (most recent first)
+    experiment_dirs.sort(key=lambda x: x["label"], reverse=True)
     return experiment_dirs
 
 
@@ -250,15 +281,12 @@ def update_graphs(experiment, _):
                 # Check if training is marked as completed
                 training_completed = "end_time" in metadata
         else:
-            # Create basic metadata from config if available
-            config_file = os.path.join(experiment, "config.json")
+            # Create basic metadata from config
+            config_file = os.path.join(experiment, "config.yaml")
             if os.path.exists(config_file):
                 with open(config_file, "r") as f:
-                    config = json.load(f)
+                    config = yaml.safe_load(f)
                     experiment_details = f"Experiment: {os.path.basename(experiment)}\nConfiguration:\n{json.dumps(config, indent=2)}"
-
-        # Loss figure
-        loss_fig = go.Figure()
 
         # Get data for x-axis (epochs)
         train_epochs = list(range(1, len(history["train_loss"]) + 1))
@@ -277,15 +305,16 @@ def update_graphs(experiment, _):
                 ):
                     total_epochs = metadata["training_params"]["num_epochs"]
         else:
-            # Try to get from config if available
-            config_file = os.path.join(experiment, "config.json")
+            # Try to get from config
+            config_file = os.path.join(experiment, "config.yaml")
             if os.path.exists(config_file):
                 with open(config_file, "r") as f:
-                    config = json.load(f)
+                    config = yaml.safe_load(f)
                     if "training" in config and "num_epochs" in config["training"]:
                         total_epochs = config["training"]["num_epochs"]
 
         # Create training loss trace
+        loss_fig = go.Figure()
         loss_fig.add_trace(
             go.Scatter(x=train_epochs, y=history["train_loss"], name="Training Loss")
         )
@@ -298,20 +327,20 @@ def update_graphs(experiment, _):
             # Try to get validation frequency from metadata or config
             if os.path.exists(metadata_file):
                 with open(metadata_file, "r") as f:
-                    metadata_data = json.load(f)
+                    metadata = json.load(f)
                     if (
-                        "training_params" in metadata_data
-                        and "validation_frequency" in metadata_data["training_params"]
+                        "training_params" in metadata
+                        and "validation_frequency" in metadata["training_params"]
                     ):
-                        val_frequency = metadata_data["training_params"][
+                        val_frequency = metadata["training_params"][
                             "validation_frequency"
                         ]
             else:
-                # Try to get from config if available
-                config_file = os.path.join(experiment, "config.json")
+                # Try to get from config
+                config_file = os.path.join(experiment, "config.yaml")
                 if os.path.exists(config_file):
                     with open(config_file, "r") as f:
-                        config = json.load(f)
+                        config = yaml.safe_load(f)
                         if (
                             "training" in config
                             and "validation_frequency" in config["training"]
@@ -497,18 +526,14 @@ def update_architecture_comparison(_):
 
     # Search for experiment directories
     experiment_dirs = []
-    for results_dir in [
-        "results",
-        "experiments",
-    ]:  # Check both possible result directories
-        if os.path.exists(results_dir):
-            experiment_dirs.extend(
-                [
-                    os.path.join(results_dir, d)
-                    for d in os.listdir(results_dir)
-                    if os.path.isdir(os.path.join(results_dir, d))
-                ]
-            )
+    if os.path.exists("experiments"):
+        experiment_dirs.extend(
+            [
+                os.path.join("experiments", d)
+                for d in os.listdir("experiments")
+                if os.path.isdir(os.path.join("experiments", d))
+            ]
+        )
 
     # Group experiments by architecture
     for exp_dir in experiment_dirs:
@@ -528,29 +553,17 @@ def update_architecture_comparison(_):
             except:
                 pass
 
-        # If not found, check config.json
+        # If not found, check config.yaml
         if not architecture:
-            config_file = os.path.join(exp_dir, "config.json")
+            config_file = os.path.join(exp_dir, "config.yaml")
             if os.path.exists(config_file):
                 try:
                     with open(config_file, "r") as f:
-                        config = json.load(f)
+                        config = yaml.safe_load(f)
                         if "model" in config and "architecture" in config["model"]:
                             architecture = config["model"]["architecture"]
                 except:
                     pass
-
-            # Try model_config.json as well
-            if not architecture:
-                config_file = os.path.join(exp_dir, "model_config.json")
-                if os.path.exists(config_file):
-                    try:
-                        with open(config_file, "r") as f:
-                            config = json.load(f)
-                            if "model" in config and "architecture" in config["model"]:
-                                architecture = config["model"]["architecture"]
-                    except:
-                        pass
 
         # If still not found, try to infer from directory name
         if not architecture:
@@ -643,21 +656,18 @@ def update_architecture_comparison(_):
 def update_pde_comparison(_):
     # Find all experiments and group by PDE type
     pdes = {}
+    computation_times = {}
 
     # Search for experiment directories
     experiment_dirs = []
-    for results_dir in [
-        "results",
-        "experiments",
-    ]:  # Check both possible result directories
-        if os.path.exists(results_dir):
-            experiment_dirs.extend(
-                [
-                    os.path.join(results_dir, d)
-                    for d in os.listdir(results_dir)
-                    if os.path.isdir(os.path.join(results_dir, d))
-                ]
-            )
+    if os.path.exists("experiments"):
+        experiment_dirs.extend(
+            [
+                os.path.join("experiments", d)
+                for d in os.listdir("experiments")
+                if os.path.isdir(os.path.join("experiments", d))
+            ]
+        )
 
     # Group experiments by PDE type
     for exp_dir in experiment_dirs:
@@ -680,7 +690,26 @@ def update_pde_comparison(_):
             except:
                 pass
 
-        # If not found, try to infer from directory name
+        # If not found, check config.yaml
+        if not pde_type:
+            config_file = os.path.join(exp_dir, "config.yaml")
+            if os.path.exists(config_file):
+                try:
+                    with open(config_file, "r") as f:
+                        config = yaml.safe_load(f)
+                        if "pde_type" in config:
+                            pde_type = config["pde_type"]
+                        elif "pde" in config:
+                            # Try to construct PDE type from config
+                            pde_params = config["pde"]
+                            if "diffusion_coefficient" in pde_params:
+                                pde_type = (
+                                    f"heat_eq_a{pde_params['diffusion_coefficient']}"
+                                )
+                except:
+                    pass
+
+        # If still not found, try to infer from directory name
         if not pde_type:
             dir_name = os.path.basename(exp_dir)
             parts = dir_name.split("_")
@@ -688,8 +717,8 @@ def update_pde_comparison(_):
                 pde_type = (
                     f"{parts[0]}_{parts[1]}"  # Assuming PDE type is in first two parts
                 )
-        else:
-            pde_type = dir_name  # Use directory name as fallback
+            else:
+                pde_type = dir_name  # Use directory name as fallback
 
         # Load history.json
         history_file = os.path.join(exp_dir, "history.json")
@@ -709,6 +738,7 @@ def update_pde_comparison(_):
 
             # Load computation time if available
             comp_time = None
+            hover_text = f"Experiment: {os.path.basename(exp_dir)}"
             if os.path.exists(metadata_file):
                 try:
                     with open(metadata_file, "r") as f:
@@ -717,8 +747,6 @@ def update_pde_comparison(_):
                         if comp_time:
                             computation_times[pde_type] = comp_time
                             hover_text = f"Experiment: {os.path.basename(exp_dir)}<br>Training time: {comp_time:.2f} minutes"
-                        else:
-                            hover_text = f"Experiment: {os.path.basename(exp_dir)}"
                 except:
                     pass
 
@@ -758,6 +786,7 @@ def update_pde_comparison(_):
                         y=exp["train_loss"],
                         name=name,
                         line=dict(color=colors[color_idx % len(colors)]),
+                        hovertext=exp["hover_text"],
                     )
                 )
 
@@ -788,373 +817,147 @@ def update_pde_comparison(_):
 )
 def update_solution_visualizations(experiment, time_point, _):
     if not experiment:
-        return create_empty_3d_figure("Select an experiment"), create_empty_3d_figure(
-            "Select an experiment"
-        )
+        return create_empty_3d_figure("Select an experiment"), create_empty_3d_figure("Select an experiment")
 
     try:
-        # Try to load model and PDE objects
-        model_path = os.path.join(experiment, "model.pt")
-        config_file = os.path.join(experiment, "config.json")
+        print(f"\nAttempting to visualize solution for experiment: {experiment}")
+        print(f"Time point: {time_point}")
+        
+        # Import necessary modules
+        import torch
+        import sys
+        sys.path.append(".")
+        from src.utils.utils import plot_solution
+        from src.neural_networks import PINNModel
+        from src.pdes.pde_base import PDEConfig
 
-        # If pre-computed visualization files don't exist, create generic figures
-        if not os.path.exists(model_path) or not os.path.exists(config_file):
-            return (
-                create_empty_3d_figure("No model data available"),
-                create_empty_3d_figure("No model data available"),
-            )
+        # Look for model in the models directory
+        model_path = os.path.join(experiment, "models", "final_model.pt")
+        config_path = os.path.join(experiment, "config.yaml")
+        
+        print(f"Model path: {model_path}")
+        print(f"Config path: {config_path}")
+        
+        if not os.path.exists(model_path) or not os.path.exists(config_path):
+            print("Error: Model or config file not found")
+            return create_empty_3d_figure("No model data available"), create_empty_3d_figure("No model data available")
 
         # Load configuration
-        with open(config_file, "r") as f:
-            config = json.load(f)
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+            print(f"Loaded config: {json.dumps(config, indent=2)}")
 
-        # Extract PDE information
-        pde_type = None
-        domain = None
-        dimension = 1  # Default
+        # Create PDE configuration
+        pde_type = config.get("pde_type", "unknown").lower()
+        print(f"PDE type: {pde_type}")
 
-        # Try to get from metadata or config
-        metadata_file = os.path.join(experiment, "metadata.json")
-        if os.path.exists(metadata_file):
-            with open(metadata_file, "r") as f:
-                metadata = json.load(f)
-                if "pde_type" in metadata:
-                    pde_type = metadata.get("pde_type")
-                elif "config" in metadata and "pde" in metadata["config"]:
-                    pde_params = metadata["config"]["pde"]
-                    pde_type = pde_params.get("name", "unknown_pde")
-                    domain = pde_params.get("domain", [0, 1])
-                    dimension = pde_params.get("dimension", 1)
+        # Extract PDE-specific configuration
+        pde_config = config.get("pde_configs", {}).get(pde_type, {})
+        if not pde_config:
+            print(f"Error: No configuration found for PDE type {pde_type}")
+            return create_empty_3d_figure(f"No configuration for PDE type: {pde_type}"), create_empty_3d_figure(f"No configuration for PDE type: {pde_type}")
 
-        # If still no PDE info, try config directly
-        if not pde_type and "pde" in config:
-            pde_params = config["pde"]
-            pde_type = pde_params.get("name", "unknown_pde")
-            domain = pde_params.get("domain", [0, 1])
-            dimension = pde_params.get("dimension", 1)
+        # Create PDEConfig instance with the correct configuration
+        pde_config = PDEConfig(
+            name=pde_config.get("name", pde_type),
+            dimension=pde_config.get("dimension", 1),
+            domain=pde_config.get("domain", [[0, 1]]),
+            time_domain=pde_config.get("time_domain", [0, 1]),
+            initial_condition=pde_config.get("initial_condition", {}),
+            boundary_conditions=pde_config.get("boundary_conditions", {}),
+            parameters=pde_config.get("parameters", {}),
+            exact_solution=pde_config.get("exact_solution", {})
+        )
 
-        # Try to load the actual PDE model and model for more accurate visualizations
+        # Import and create appropriate PDE instance
+        if "heat" in pde_type:
+            from src.pdes.heat_equation import HeatEquation
+            pde = HeatEquation(config=pde_config)
+            print(f"Created HeatEquation instance with dimension {pde_config.dimension}")
+        elif "wave" in pde_type:
+            from src.pdes.wave_equation import WaveEquation
+            pde = WaveEquation(config=pde_config)
+            print("Created WaveEquation instance")
+        elif "burgers" in pde_type:
+            from src.pdes.burgers_equation import BurgersEquation
+            pde = BurgersEquation(config=pde_config)
+            print("Created BurgersEquation instance")
+        elif "convection" in pde_type:
+            from src.pdes.convection_equation import ConvectionEquation
+            pde = ConvectionEquation(config=pde_config)
+            print("Created ConvectionEquation instance")
+        elif "kdv" in pde_type:
+            from src.pdes.kdv_equation import KdVEquation
+            pde = KdVEquation(config=pde_config)
+            print("Created KdVEquation instance")
+        elif "allen" in pde_type and "cahn" in pde_type:
+            from src.pdes.allen_cahn import AllenCahnEquation
+            pde = AllenCahnEquation(config=pde_config)
+            print("Created AllenCahnEquation instance")
+        elif "cahn" in pde_type and "hilliard" in pde_type:
+            from src.pdes.cahn_hilliard import CahnHilliardEquation
+            pde = CahnHilliardEquation(config=pde_config)
+            print("Created CahnHilliardEquation instance")
+        elif "black" in pde_type or "scholes" in pde_type:
+            from src.pdes.black_scholes import BlackScholesEquation
+            pde = BlackScholesEquation(config=pde_config)
+            print("Created BlackScholesEquation instance")
+        elif "pendulum" in pde_type:
+            from src.pdes.pendulum_equation import PendulumEquation
+            pde = PendulumEquation(config=pde_config)
+            print("Created PendulumEquation instance")
+        else:
+            print(f"Error: Unsupported PDE type: {pde_type}")
+            return create_empty_3d_figure(f"Unsupported PDE type: {pde_type}"), create_empty_3d_figure(f"Unsupported PDE type: {pde_type}")
+
+        # Load model
+        device = torch.device("cpu")  # Use CPU for visualization
+        print(f"Using device: {device}")
+        
+        # Create model configuration
+        model_config = {
+            "architecture": config.get("architectures", {}).get(pde_config.get("architecture", "feedforward"), {}),
+            "device": device,
+            "pde_type": pde_type,
+            "input_dim": 2 if pde_config.dimension == 1 else 3,  # x,t for 1D or x,y,t for 2D
+            "output_dim": 1
+        }
+        
+        print(f"Model config: {model_config}")
+        
         try:
-            # Import necessary modules for loading the model and PDE
-            import torch
-            import sys
+            model = PINNModel(config=model_config, device=device)
+            print("Successfully created PINNModel instance")
+            model.load_state_dict(torch.load(model_path, map_location=device))
+            print("Successfully loaded model state")
+            model.eval()
+            print("Model set to eval mode")
+        except Exception as e:
+            print(f"Error creating/loading model: {e}")
+            return create_empty_3d_figure(f"Error loading model: {str(e)}"), create_empty_3d_figure(f"Error loading model: {str(e)}")
 
-            sys.path.append(".")  # Ensure current directory is in path
-            from src.pdes.pde_base import PDEBase
-
-            # Try to create PDE instance
-            pde_instance = None
-            if pde_type:
-                # Import specific PDE classes based on the PDE type
-                if "heat" in pde_type.lower():
-                    from src.pdes.heat_equation import HeatEquation
-
-                    pde_instance = HeatEquation(
-                        **pde_params if "pde_params" in locals() else {}
-                    )
-                elif "wave" in pde_type.lower():
-                    from src.pdes.wave_equation import WaveEquation
-
-                    pde_instance = WaveEquation(
-                        **pde_params if "pde_params" in locals() else {}
-                    )
-                elif "burgers" in pde_type.lower():
-                    from src.pdes.burgers_equation import BurgersEquation
-
-                    pde_instance = BurgersEquation(
-                        **pde_params if "pde_params" in locals() else {}
-                    )
-                elif "kdv" in pde_type.lower():
-                    from src.pdes.kdv_equation import KdVEquation
-
-                    pde_instance = KdVEquation(
-                        **pde_params if "pde_params" in locals() else {}
-                    )
-                elif "convection" in pde_type.lower():
-                    from src.pdes.convection_equation import ConvectionEquation
-
-                    pde_instance = ConvectionEquation(
-                        **pde_params if "pde_params" in locals() else {}
-                    )
-                elif "allen" in pde_type.lower():
-                    from src.pdes.allen_cahn import AllenCahnEquation
-
-                    pde_instance = AllenCahnEquation(
-                        **pde_params if "pde_params" in locals() else {}
-                    )
-                elif "cahn" in pde_type.lower():
-                    from src.pdes.cahn_hilliard import CahnHilliardEquation
-
-                    pde_instance = CahnHilliardEquation(
-                        **pde_params if "pde_params" in locals() else {}
-                    )
-                elif "black" in pde_type.lower() or "scholes" in pde_type.lower():
-                    from src.pdes.black_scholes import BlackScholesEquation
-
-                    pde_instance = BlackScholesEquation(
-                        **pde_params if "pde_params" in locals() else {}
-                    )
-                elif "pendulum" in pde_type.lower():
-                    from src.pdes.pendulum_equation import PendulumEquation
-
-                    pde_instance = PendulumEquation(
-                        **pde_params if "pde_params" in locals() else {}
-                    )
-
-            # Try to load the trained model
-            model = None
-            if os.path.exists(model_path):
-                # Get the appropriate model architecture
-                from src.components.neural_networks import PINNModel
-
-                # Load model with caution
-                try:
-                    model = torch.load(model_path, map_location=torch.device("cpu"))
-                except Exception as model_load_error:
-                    print(f"Error loading model: {model_load_error}")
-
-            # If we have both a PDE instance and model, we can generate accurate solutions
-            if pde_instance and model:
-                return generate_pde_visualization(
-                    pde_instance, model, time_point, dimension
-                )
-        except Exception as instance_error:
-            print(f"Error loading PDE instance or model: {instance_error}")
-            # Continue with generic visualization
-
-        # Generate visualization data
-        if dimension == 1:
-            # For 1D PDEs
-            x = np.linspace(domain[0] if domain else 0, domain[1] if domain else 1, 100)
-            t = np.linspace(0, 1, 100)
-            X, T = np.meshgrid(x, t)
-
-            # Create surface plots
-            exact_fig = go.Figure(
-                data=[
-                    go.Surface(
-                        x=X,
-                        y=T,
-                        z=generate_example_solution(X, T, "exact", pde_type),
-                        colorscale="Viridis",
-                    )
-                ]
+        # Generate visualization data using plot_solution
+        print("Generating visualization...")
+        num_points = 1000  # Increased for better resolution
+        try:
+            exact_fig, predicted_fig = plot_solution(
+                model=model,
+                pde=pde,
+                num_points=num_points,
+                time_point=time_point,  # Pass the current time point
+                return_figs=True  # Return figures instead of showing them
             )
-            exact_fig.update_layout(
-                title=f"Exact Solution - {pde_type}",
-                scene=dict(
-                    xaxis_title="x",
-                    yaxis_title="t",
-                    zaxis_title="u(x,t)",
-                ),
-                margin=dict(l=0, r=0, b=0, t=30),
-            )
-
-            predicted_fig = go.Figure(
-                data=[
-                    go.Surface(
-                        x=X,
-                        y=T,
-                        z=generate_example_solution(X, T, "predicted", pde_type),
-                        colorscale="Plasma",
-                    )
-                ]
-            )
-            predicted_fig.update_layout(
-                title=f"Predicted Solution - {pde_type}",
-                scene=dict(
-                    xaxis_title="x",
-                    yaxis_title="t",
-                    zaxis_title="u(x,t)",
-                ),
-                margin=dict(l=0, r=0, b=0, t=30),
-            )
-
-        elif dimension == 2:
-            # For 2D PDEs
-            x = np.linspace(domain[0] if domain else 0, domain[1] if domain else 1, 50)
-            y = np.linspace(domain[0] if domain else 0, domain[1] if domain else 1, 50)
-            X, Y = np.meshgrid(x, y)
-
-            # Create figures for 2D problems at a fixed time
-            exact_solution = generate_example_solution(
-                X, Y, "exact", pde_type, time=time_point
-            )
-            predicted_solution = generate_example_solution(
-                X, Y, "predicted", pde_type, time=time_point
-            )
-
-            exact_fig = go.Figure(
-                data=[go.Surface(x=X, y=Y, z=exact_solution, colorscale="Viridis")]
-            )
-            exact_fig.update_layout(
-                title=f"Exact Solution at t={time_point:.2f} - {pde_type}",
-                scene=dict(
-                    xaxis_title="x",
-                    yaxis_title="y",
-                    zaxis_title="u(x,y,t)",
-                ),
-                margin=dict(l=0, r=0, b=0, t=30),
-            )
-
-            predicted_fig = go.Figure(
-                data=[go.Surface(x=X, y=Y, z=predicted_solution, colorscale="Plasma")]
-            )
-            predicted_fig.update_layout(
-                title=f"Predicted Solution at t={time_point:.2f} - {pde_type}",
-                scene=dict(
-                    xaxis_title="x",
-                    yaxis_title="y",
-                    zaxis_title="u(x,y,t)",
-                ),
-                margin=dict(l=0, r=0, b=0, t=30),
-            )
-
-        else:
-            # For higher dimensions, create empty figures
-            return (
-                create_empty_3d_figure(f"Cannot visualize {dimension}D PDEs"),
-                create_empty_3d_figure(f"Cannot visualize {dimension}D PDEs"),
-            )
-
-        return exact_fig, predicted_fig
+            print("Visualization generated successfully")
+            return exact_fig, predicted_fig
+        except Exception as e:
+            print(f"Error generating visualization: {e}")
+            return create_empty_3d_figure(f"Error generating visualization: {str(e)}"), create_empty_3d_figure(f"Error generating visualization: {str(e)}")
 
     except Exception as e:
-        print(f"Error generating 3D visualizations: {e}")
-        return (
-            create_empty_3d_figure(f"Error: {str(e)}"),
-            create_empty_3d_figure(f"Error: {str(e)}"),
-        )
-
-
-def generate_pde_visualization(pde, model, time_point, dimension):
-    """Generate visualization based on actual PDE instance and model."""
-    try:
-        import torch
-
-        # For 1D PDEs
-        if dimension == 1:
-            # Create spatial grid
-            domain = pde.domain
-            x = np.linspace(domain[0], domain[1], 100)
-            t_values = np.linspace(0, 1, 100)
-            X, T = np.meshgrid(x, t_values)
-
-            # Get exact solution
-            exact_solution = np.zeros_like(X)
-            for i, t_val in enumerate(t_values):
-                for j, x_val in enumerate(x):
-                    exact_solution[i, j] = pde.exact_solution(
-                        torch.tensor([x_val, t_val])
-                    ).item()
-
-            # Get predicted solution
-            predicted_solution = np.zeros_like(X)
-            model.eval()
-            with torch.no_grad():
-                for i, t_val in enumerate(t_values):
-                    for j, x_val in enumerate(x):
-                        input_tensor = torch.tensor([x_val, t_val], dtype=torch.float32)
-                        predicted_solution[i, j] = model(input_tensor).item()
-
-            # Create figures
-            exact_fig = go.Figure(
-                data=[go.Surface(x=X, y=T, z=exact_solution, colorscale="Viridis")]
-            )
-            exact_fig.update_layout(
-                title=f"Exact Solution - {pde.__class__.__name__}",
-                scene=dict(
-                    xaxis_title="x",
-                    yaxis_title="t",
-                    zaxis_title="u(x,t)",
-                ),
-                margin=dict(l=0, r=0, b=0, t=30),
-            )
-
-            predicted_fig = go.Figure(
-                data=[go.Surface(x=X, y=T, z=predicted_solution, colorscale="Plasma")]
-            )
-            predicted_fig.update_layout(
-                title=f"Predicted Solution - {pde.__class__.__name__}",
-                scene=dict(
-                    xaxis_title="x",
-                    yaxis_title="t",
-                    zaxis_title="u(x,t)",
-                ),
-                margin=dict(l=0, r=0, b=0, t=30),
-            )
-
-            return exact_fig, predicted_fig
-
-        # For 2D PDEs
-        elif dimension == 2:
-            # Create spatial grid
-            domain = pde.domain
-            x = np.linspace(domain[0], domain[1], 50)
-            y = np.linspace(domain[0], domain[1], 50)
-            X, Y = np.meshgrid(x, y)
-
-            # Get exact solution at specific time point
-            exact_solution = np.zeros_like(X)
-            for i, y_val in enumerate(y):
-                for j, x_val in enumerate(x):
-                    exact_solution[i, j] = pde.exact_solution(
-                        torch.tensor([x_val, y_val, time_point])
-                    ).item()
-
-            # Get predicted solution
-            predicted_solution = np.zeros_like(X)
-            model.eval()
-            with torch.no_grad():
-                for i, y_val in enumerate(y):
-                    for j, x_val in enumerate(x):
-                        input_tensor = torch.tensor(
-                            [x_val, y_val, time_point], dtype=torch.float32
-                        )
-                        predicted_solution[i, j] = model(input_tensor).item()
-
-            # Create figures
-            exact_fig = go.Figure(
-                data=[go.Surface(x=X, y=Y, z=exact_solution, colorscale="Viridis")]
-            )
-            exact_fig.update_layout(
-                title=f"Exact Solution at t={time_point:.2f} - {pde.__class__.__name__}",
-                scene=dict(
-                    xaxis_title="x",
-                    yaxis_title="y",
-                    zaxis_title="u(x,y,t)",
-                ),
-                margin=dict(l=0, r=0, b=0, t=30),
-            )
-
-            predicted_fig = go.Figure(
-                data=[go.Surface(x=X, y=Y, z=predicted_solution, colorscale="Plasma")]
-            )
-            predicted_fig.update_layout(
-                title=f"Predicted Solution at t={time_point:.2f} - {pde.__class__.__name__}",
-                scene=dict(
-                    xaxis_title="x",
-                    yaxis_title="y",
-                    zaxis_title="u(x,y,t)",
-                ),
-                margin=dict(l=0, r=0, b=0, t=30),
-            )
-
-            return exact_fig, predicted_fig
-
-        else:
-            # For higher dimensions, return empty figures
-            return (
-                create_empty_3d_figure(f"Cannot visualize {dimension}D PDEs"),
-                create_empty_3d_figure(f"Cannot visualize {dimension}D PDEs"),
-            )
-
-    except Exception as e:
-        print(f"Error in generate_pde_visualization: {e}")
-        return (
-            create_empty_3d_figure(f"Error: {str(e)}"),
-            create_empty_3d_figure(f"Error: {str(e)}"),
-        )
+        print(f"Error in solution visualization: {e}")
+        import traceback
+        traceback.print_exc()
+        return create_empty_3d_figure(f"Error: {str(e)}"), create_empty_3d_figure(f"Error: {str(e)}")
 
 
 def create_empty_3d_figure(message):

@@ -160,6 +160,8 @@ def plot_solution(
     save_path: Optional[str] = None,
     use_rl: bool = False,
     rl_agent: Optional["RLAgent"] = None,
+    return_figs: bool = False,
+    time_point: Optional[float] = None,
 ):
     """Plot the solution of a PDE using the trained model with interactive 3D visualization.
 
@@ -170,80 +172,167 @@ def plot_solution(
         save_path: Optional path to save the plot
         use_rl: Whether to use RL agent for adaptive sampling
         rl_agent: The RL agent for adaptive sampling
+        return_figs: Whether to return the figures instead of showing/saving them
+        time_point: Optional specific time point for 2D visualization
     """
-    # Generate grid points
-    x = torch.linspace(
-        pde.domain[0], pde.domain[1], int(np.sqrt(num_points)), device=model.device
-    )
-    t = torch.linspace(
-        pde.config.time_domain[0],
-        pde.config.time_domain[1],
-        int(np.sqrt(num_points)),
-        device=model.device,
-    )
-    X, T = torch.meshgrid(x, t, indexing="ij")
+    if pde.dimension == 2:
+        # 2D PDE case (x, y, t)
+        x = torch.linspace(
+            pde.domain[0][0], pde.domain[0][1], 
+            int(np.sqrt(num_points)), device=model.device
+        )
+        y = torch.linspace(
+            pde.domain[1][0], pde.domain[1][1],
+            int(np.sqrt(num_points)), device=model.device
+        )
+        
+        if time_point is not None:
+            t = torch.tensor([time_point], device=model.device)
+        else:
+            t = torch.linspace(
+                pde.config.time_domain[0], pde.config.time_domain[1],
+                int(np.sqrt(num_points)), device=model.device
+            )
 
-    # Flatten and stack coordinates
-    xt = torch.stack([X.flatten(), T.flatten()], dim=1).to(model.device)
+        X, Y = torch.meshgrid(x, y, indexing="ij")
+        points = []
+        predictions = []
+        exact_solutions = []
 
-    # Get model predictions
-    with torch.no_grad():
-        u_pred = model(xt)
+        for t_val in t:
+            # Create grid for current time
+            t_grid = torch.full_like(X, t_val)
+            xyz = torch.stack([X.flatten(), Y.flatten(), t_grid.flatten()], dim=1)
+            
+            # Get predictions and exact solutions
+            with torch.no_grad():
+                pred = model(xyz).reshape(X.shape)
+                exact = pde.exact_solution(xyz).reshape(X.shape)
+            
+            points.append(xyz)
+            predictions.append(pred)
+            exact_solutions.append(exact)
 
-    # Move tensors to CPU for plotting
-    X = X.cpu()
-    T = T.cpu()
-    U_pred = u_pred.reshape(X.shape).cpu().numpy()
+        # Convert to numpy arrays
+        X = X.cpu().numpy()
+        Y = Y.cpu().numpy()
+        T = t.cpu().numpy()
+        predictions = torch.stack(predictions).cpu().numpy()
+        exact_solutions = torch.stack(exact_solutions).cpu().numpy()
 
-    # Get exact solution
-    x_exact = X.flatten().to(model.device).reshape(-1, 1)
-    t_exact = T.flatten().to(model.device).reshape(-1, 1)
-    U_exact = pde.exact_solution(x_exact, t_exact).reshape(X.shape).cpu().numpy()
+        # Create exact solution figure
+        exact_fig = go.Figure(data=[
+            go.Surface(
+                x=X, y=Y, z=exact_solutions[0],
+                colorscale="viridis",
+                name="Exact",
+                showscale=False,
+                hoverinfo="x+y+z"
+            )
+        ])
 
-    # Create subplots vertically with just two plots
-    fig = make_subplots(
-        rows=2,
-        cols=1,
-        subplot_titles=("Exact Solution", "PINN Prediction"),
-        specs=[[{"type": "scene"}], [{"type": "scene"}]],
-        vertical_spacing=0.05,
-    )
+        # Create predicted solution figure
+        predicted_fig = go.Figure(data=[
+            go.Surface(
+                x=X, y=Y, z=predictions[0],
+                colorscale="plasma",
+                name="PINN",
+                showscale=False,
+                hoverinfo="x+y+z"
+            )
+        ])
 
-    # Plot exact solution
-    fig.add_trace(
-        go.Surface(
-            x=X.numpy(),
-            y=T.numpy(),
-            z=U_exact,
-            colorscale="viridis",
-            name="Exact",
-            showscale=False,
-            hoverinfo="x+y+z",
-        ),
-        row=1,
-        col=1,
-    )
+        # Add time slider if multiple time points
+        if len(t) > 1:
+            frames_exact = [
+                go.Frame(
+                    data=[go.Surface(x=X, y=Y, z=exact_solutions[i])],
+                    name=f"t={T[i]:.2f}"
+                )
+                for i in range(len(t))
+            ]
+            frames_pred = [
+                go.Frame(
+                    data=[go.Surface(x=X, y=Y, z=predictions[i])],
+                    name=f"t={T[i]:.2f}"
+                )
+                for i in range(len(t))
+            ]
+            exact_fig.frames = frames_exact
+            predicted_fig.frames = frames_pred
 
-    # Plot PINN prediction
-    fig.add_trace(
-        go.Surface(
-            x=X.numpy(),
-            y=T.numpy(),
-            z=U_pred,
-            colorscale="viridis",
-            name="PINN",
-            showscale=False,
-            hoverinfo="x+y+z",
-        ),
-        row=2,
-        col=1,
-    )
+            # Add slider
+            sliders = [dict(
+                steps=[
+                    dict(
+                        method="animate",
+                        args=[[f"t={T[i]:.2f}"]],
+                        label=f"t={T[i]:.2f}"
+                    )
+                    for i in range(len(t))
+                ],
+                currentvalue=dict(visible=True, prefix="Time: "),
+                len=0.9
+            )]
+            exact_fig.update_layout(sliders=sliders)
+            predicted_fig.update_layout(sliders=sliders)
+
+    else:
+        # 1D PDE case (x, t)
+        x = torch.linspace(
+            pde.domain[0][0], pde.domain[0][1],
+            int(np.sqrt(num_points)), device=model.device
+        )
+
+        if time_point is not None:
+            t = torch.tensor([time_point], device=model.device)
+        else:
+            t = torch.linspace(
+                pde.config.time_domain[0], pde.config.time_domain[1],
+                int(np.sqrt(num_points)), device=model.device
+            )
+
+        X, T = torch.meshgrid(x, t, indexing="ij")
+        xt = torch.stack([X.flatten(), T.flatten()], dim=1)
+
+        # Get predictions and exact solutions
+        with torch.no_grad():
+            u_pred = model(xt).reshape(X.shape)
+            u_exact = pde.exact_solution(xt).reshape(X.shape)
+
+        # Move tensors to CPU for plotting
+        X = X.cpu().numpy()
+        T = T.cpu().numpy()
+        U_pred = u_pred.cpu().numpy()
+        U_exact = u_exact.cpu().numpy()
+
+        # Create exact solution figure
+        exact_fig = go.Figure(data=[
+            go.Surface(
+                x=X, y=T, z=U_exact,
+                colorscale="viridis",
+                name="Exact",
+                showscale=False,
+                hoverinfo="x+y+z"
+            )
+        ])
+
+        # Create predicted solution figure
+        predicted_fig = go.Figure(data=[
+            go.Surface(
+                x=X, y=T, z=U_pred,
+                colorscale="plasma",
+                name="PINN",
+                showscale=False,
+                hoverinfo="x+y+z"
+            )
+        ])
 
     # Common camera settings
     camera = dict(
         up=dict(x=0, y=0, z=1),
         center=dict(x=0, y=0, z=0),
-        eye=dict(x=1.5, y=1.5, z=1.5),
+        eye=dict(x=1.5, y=1.5, z=1.5)
     )
 
     # Common axis settings
@@ -254,45 +343,46 @@ def plot_solution(
         showticklabels=True,
         showspikes=False,
         showbackground=True,
-        backgroundcolor="rgba(240, 240, 240, 0.5)",
+        backgroundcolor="rgba(240, 240, 240, 0.5)"
     )
 
-    # Scene settings for each subplot
-    scene1 = dict(
-        xaxis=dict(title="x", **axis_settings),
-        yaxis=dict(title="t", **axis_settings),
-        zaxis=dict(title="u(x,t)", **axis_settings),
-        camera=camera,
-        dragmode="turntable",
-        aspectmode="cube",
+    # Update layout for exact solution
+    exact_fig.update_layout(
+        title="Exact Solution",
+        scene=dict(
+            xaxis=dict(title="x", **axis_settings),
+            yaxis=dict(title="t" if pde.dimension == 1 else "y", **axis_settings),
+            zaxis=dict(title="u(x,t)" if pde.dimension == 1 else "u(x,y,t)", **axis_settings),
+            camera=camera,
+            dragmode="turntable",
+            aspectmode="cube"
+        ),
+        margin=dict(l=0, r=0, b=0, t=30)
     )
 
-    scene2 = dict(
-        xaxis=dict(title="x", **axis_settings),
-        yaxis=dict(title="t", **axis_settings),
-        zaxis=dict(title="u(x,t)", **axis_settings),
-        camera=camera,
-        dragmode="turntable",
-        aspectmode="cube",
+    # Update layout for predicted solution
+    predicted_fig.update_layout(
+        title="PINN Prediction",
+        scene=dict(
+            xaxis=dict(title="x", **axis_settings),
+            yaxis=dict(title="t" if pde.dimension == 1 else "y", **axis_settings),
+            zaxis=dict(title="u(x,t)" if pde.dimension == 1 else "u(x,y,t)", **axis_settings),
+            camera=camera,
+            dragmode="turntable",
+            aspectmode="cube"
+        ),
+        margin=dict(l=0, r=0, b=0, t=30)
     )
 
-    # Update layout
-    fig.update_layout(
-        title="Heat Equation Solutions Comparison",
-        scene=scene1,
-        scene2=scene2,
-        height=1200,
-        width=800,
-        showlegend=True,
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
-        margin=dict(l=0, r=0, t=50, b=0),
-    )
-
-    # Save or show
-    if save_path:
-        fig.write_html(save_path)
+    if return_figs:
+        return exact_fig, predicted_fig
     else:
-        fig.show()
+        if save_path:
+            exact_fig.write_html(save_path.replace(".html", "_exact.html"))
+            predicted_fig.write_html(save_path.replace(".html", "_predicted.html"))
+        else:
+            exact_fig.show()
+            predicted_fig.show()
 
 
 def plot_architecture_comparison(
