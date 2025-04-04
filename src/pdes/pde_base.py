@@ -7,6 +7,9 @@ from typing import Dict, Any, Optional, Tuple, List, Union, Set
 import numpy as np
 from scipy.stats import qmc
 from src.rl_agent import RLAgent
+import matplotlib.pyplot as plt
+import logging
+import os
 
 
 @dataclass
@@ -947,8 +950,6 @@ class PDEBase:
         :param num_points: Number of points for plotting
         :param save_path: Optional path to save the plot
         """
-        import matplotlib.pyplot as plt
-
         x, t = self.generate_collocation_points(num_points)
         u_pred = model(torch.cat([x, t], dim=1))
         u_exact = self.exact_solution(x, t)
@@ -1032,18 +1033,31 @@ class PDEBase:
         return x, t, actions
 
     def visualize_collocation_evolution(
-        self, save_path: Optional[str] = None, num_snapshots: int = 5
+        self,
+        points_history=None,
+        epoch=None,
+        save_path: Optional[str] = None,
+        num_snapshots: int = 5,
     ):
         """
         Visualize the evolution of collocation points during training.
 
+        :param points_history: History of collocation points
+        :param epoch: Current epoch number
         :param save_path: Path to save the visualization
         :param num_snapshots: Number of snapshots to visualize
         """
-        if not self.collocation_history or len(self.collocation_history) < 2:
+        # Use provided points_history or class attribute
+        history = points_history if points_history is not None else self.collocation_history
+
+        if not history or len(history) < 2:
             print("Not enough collocation history to visualize evolution")
             return
 
+        import matplotlib
+        # Use 'Agg' backend if running in a non-main thread
+        if not matplotlib.is_interactive():
+            matplotlib.use('Agg')
         import matplotlib.pyplot as plt
         from matplotlib.colors import LinearSegmentedColormap
         import os
@@ -1053,23 +1067,28 @@ class PDEBase:
 
         # Create figure
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-        plt.suptitle("Evolution of Collocation Points Network", fontsize=16)
+        plt.suptitle(
+            (
+                f"Evolution of Collocation Points (Epoch {epoch})"
+                if epoch
+                else "Evolution of Collocation Points"
+            ),
+            fontsize=16,
+        )
 
         # Define custom colormap for evolution
         colors = ["#0d3b66", "#1b9aaa", "#ef476f", "#ffc43d"]
         cmap = LinearSegmentedColormap.from_list(
-            "evolution_cmap", colors, N=len(self.collocation_history)
+            "evolution_cmap", colors, N=len(history)
         )
 
         # Select snapshots to visualize
-        indices = np.linspace(
-            0, len(self.collocation_history) - 1, num_snapshots
-        ).astype(int)
+        indices = np.linspace(0, len(history) - 1, num_snapshots).astype(int)
 
         # First plot: Progression of points over time
         ax = axes[0, 0]
         for i, idx in enumerate(indices):
-            points = self.collocation_history[idx]
+            points = history[idx]
             if self.dimension == 1:
                 x_pts = points[:, 0]
                 y_pts = points[:, 1]  # time dimension
@@ -1096,23 +1115,22 @@ class PDEBase:
         ax.grid(alpha=0.3)
 
         # Second plot: Density evolution (first snapshot)
-        points = self.collocation_history[0]
+        points = history[0]
         self._plot_density_snapshot(
             axes[0, 1], points, "Initial Distribution", cmap="Blues"
         )
 
         # Third plot: Density evolution (middle snapshot)
-        mid_idx = len(self.collocation_history) // 2
-        points = self.collocation_history[mid_idx]
+        mid_idx = len(history) // 2
+        points = history[mid_idx]
         self._plot_density_snapshot(
             axes[1, 0],
             points,
             f"Intermediate Distribution (Snapshot {mid_idx})",
             cmap="Greens",
         )
-
         # Fourth plot: Density evolution (last snapshot)
-        points = self.collocation_history[-1]
+        points = history[-1]
         self._plot_density_snapshot(
             axes[1, 1], points, "Final Distribution", cmap="Reds"
         )
@@ -1121,13 +1139,18 @@ class PDEBase:
         if save_path:
             plt.savefig(save_path, dpi=300)
         else:
-            plt.savefig("visualizations/collocation_evolution.png", dpi=300)
+            save_name = (
+                f"collocation_evolution_epoch_{epoch}.png"
+                if epoch
+                else "collocation_evolution.png"
+            )
+            plt.savefig(f"visualizations/{save_name}", dpi=300)
+            # Also save as latest for real-time viewing
+            plt.savefig("visualizations/latest_collocation_evolution.png", dpi=300)
         plt.close()
 
     def _plot_density_snapshot(self, ax, points, title, cmap="viridis"):
-        """Helper method to plot density snapshot."""
-        from scipy.stats import gaussian_kde
-
+        """Helper method to plot density snapshot with clearer visualization."""
         if self.dimension == 1:
             x_pts = points[:, 0]
             y_pts = points[:, 1]  # time dimension
@@ -1149,41 +1172,33 @@ class PDEBase:
         ymin -= y_padding
         ymax += y_padding
 
-        # Create meshgrid
-        x_grid, y_grid = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
-        positions = np.vstack([x_grid.ravel(), y_grid.ravel()])
+        # Create a simple 2D histogram
+        hist, xedges, yedges = np.histogram2d(
+            x_pts, 
+            y_pts,
+            bins=(20, 20),  # Reduced number of bins for clearer visualization
+            range=[[xmin, xmax], [ymin, ymax]]
+        )
 
-        try:
-            # Kernel density estimation
-            values = np.vstack([x_pts, y_pts])
-            kernel = gaussian_kde(values)
-            density = np.reshape(kernel(positions), x_grid.shape)
+        # Plot heatmap
+        im = ax.imshow(
+            hist.T,
+            origin='lower',
+            extent=[xmin, xmax, ymin, ymax],
+            aspect='auto',
+            cmap=cmap,
+            interpolation='nearest'  # Sharp transitions between density levels
+        )
 
-            # Plot density heatmap
-            im = ax.imshow(
-                density.T,
-                origin="lower",
-                extent=[xmin, xmax, ymin, ymax],
-                aspect="auto",
-                cmap=cmap,
-                alpha=0.8,
-            )
+        # Add colorbar with simplified labels
+        cbar = plt.colorbar(im, ax=ax)
+        cbar.set_label('Number of Points', fontsize=10)
 
-            # Add contour lines
-            contour = ax.contour(
-                x_grid, y_grid, density, colors="white", alpha=0.3, levels=5
-            )
-
-            plt.colorbar(im, ax=ax, label="Density")
-        except Exception as e:
-            # Fallback to histogram
-            h = ax.hist2d(x_pts, y_pts, bins=50, cmap=cmap)
-            plt.colorbar(h[3], ax=ax, label="Count")
-
-        # Add points overlay
-        ax.scatter(x_pts, y_pts, s=3, c="white", alpha=0.2)
+        # Overlay scatter plot of actual points with increased visibility
+        ax.scatter(x_pts, y_pts, s=10, c='white', alpha=0.5, marker='.')
 
         ax.set_xlabel("x", fontsize=12)
         ax.set_ylabel("t", fontsize=12)
         ax.set_title(title, fontsize=14)
-        ax.grid(alpha=0.3)
+        ax.grid(True, alpha=0.3, linestyle='--')
+

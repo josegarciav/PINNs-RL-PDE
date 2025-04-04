@@ -198,7 +198,9 @@ class PDETrainer:
                 t_batch = t_batch.to(self.device)
 
                 # Store points for visualization
-                points = torch.cat([x_batch, t_batch], dim=1)  # t_batch is already [N, 1]
+                points = torch.cat(
+                    [x_batch, t_batch], dim=1
+                )  # t_batch is already [N, 1]
                 epoch_points.append(points.cpu().detach().numpy())
 
                 # Forward pass
@@ -410,7 +412,10 @@ class PDETrainer:
                 # Generate frames for different time points
                 frames = []
                 times = torch.linspace(
-                    self.pde.config.time_domain[0], self.pde.config.time_domain[1], 10, device=self.device
+                    self.pde.config.time_domain[0],
+                    self.pde.config.time_domain[1],
+                    10,
+                    device=self.device,
                 )
 
                 for t in times:
@@ -420,15 +425,22 @@ class PDETrainer:
 
                     # Get predictions and exact solutions
                     with torch.no_grad():
-                        pred = self.model(points).reshape(num_points, num_points).cpu().numpy()
-                        
+                        pred = (
+                            self.model(points)
+                            .reshape(num_points, num_points)
+                            .cpu()
+                            .numpy()
+                        )
+
                         # Add logging and error checking for exact solution
                         logging.info(f"Computing exact solution for t={t.item()}")
                         exact = self.pde.exact_solution(X.flatten(), Y.flatten(), t)
                         if exact is None:
                             raise ValueError("exact_solution returned None")
-                            
-                        logging.info(f"Exact solution shape before reshape: {exact.shape}")
+
+                        logging.info(
+                            f"Exact solution shape before reshape: {exact.shape}"
+                        )
                         exact = exact.reshape(num_points, num_points).cpu().numpy()
                         error = np.abs(pred - exact)
 
@@ -442,7 +454,7 @@ class PDETrainer:
                                 colorscale="viridis",
                                 name="Predicted",
                                 showscale=True,
-                                subplot="scene1"
+                                subplot="scene1",
                             ),
                             go.Surface(
                                 x=X.cpu().numpy(),
@@ -451,7 +463,7 @@ class PDETrainer:
                                 colorscale="viridis",
                                 name="Exact",
                                 showscale=True,
-                                subplot="scene2"
+                                subplot="scene2",
                             ),
                             go.Surface(
                                 x=X.cpu().numpy(),
@@ -460,7 +472,7 @@ class PDETrainer:
                                 colorscale="viridis",
                                 name="Error",
                                 showscale=True,
-                                subplot="scene3"
+                                subplot="scene3",
                             ),
                         ],
                         name=f"t={t.item():.2f}",
@@ -563,23 +575,28 @@ class PDETrainer:
 
                 # Get predictions and exact solutions
                 with torch.no_grad():
-                    pred = self.model(points).reshape(num_points, num_points).cpu().numpy()
-                    
+                    pred = (
+                        self.model(points).reshape(num_points, num_points).cpu().numpy()
+                    )
+
                     # Add logging and error checking for exact solution
                     logging.info("Computing exact solution for 1D case")
                     exact = self.pde.exact_solution(X.flatten(), t=T.flatten())
                     if exact is None:
                         raise ValueError("exact_solution returned None")
-                        
+
                     logging.info(f"Exact solution shape before reshape: {exact.shape}")
                     exact = exact.reshape(num_points, num_points).cpu().numpy()
                     error = np.abs(pred - exact)
 
                 # Create figure with subplots
                 fig = make_subplots(
-                    rows=1, cols=3,
+                    rows=1,
+                    cols=3,
                     subplot_titles=("Exact", "Predicted", "Absolute Error"),
-                    specs=[[{"type": "surface"}, {"type": "surface"}, {"type": "surface"}]]
+                    specs=[
+                        [{"type": "surface"}, {"type": "surface"}, {"type": "surface"}]
+                    ],
                 )
 
                 # Add surfaces for exact, predicted, and error
@@ -590,9 +607,10 @@ class PDETrainer:
                         z=exact,
                         colorscale="viridis",
                         name="Exact",
-                        showscale=True
+                        showscale=True,
                     ),
-                    row=1, col=1
+                    row=1,
+                    col=1,
                 )
                 fig.add_trace(
                     go.Surface(
@@ -601,9 +619,10 @@ class PDETrainer:
                         z=pred,
                         colorscale="viridis",
                         name="Predicted",
-                        showscale=True
+                        showscale=True,
                     ),
-                    row=1, col=2
+                    row=1,
+                    col=2,
                 )
                 fig.add_trace(
                     go.Surface(
@@ -612,9 +631,10 @@ class PDETrainer:
                         z=error,
                         colorscale="viridis",
                         name="Error",
-                        showscale=True
+                        showscale=True,
                     ),
-                    row=1, col=3
+                    row=1,
+                    col=3,
                 )
 
                 # Update layout
@@ -636,7 +656,7 @@ class PDETrainer:
                         xaxis_title="x",
                         yaxis_title="t",
                         zaxis_title="u(x,t)",
-                    )
+                    ),
                 )
 
                 if save_path:
@@ -667,8 +687,7 @@ class PDETrainer:
             # Save solution comparison plot
             solution_path = os.path.join(save_dir, "final_solution_comparison.html")
             self.plot_solution_comparison(
-                num_points=100,  # Reduced for faster generation
-                save_path=solution_path
+                num_points=100, save_path=solution_path  # Reduced for faster generation
             )
             logging.info("Solution comparison plots saved successfully")
 
@@ -681,6 +700,7 @@ class PDETrainer:
             logging.info(f"All plots saved successfully to {save_dir}")
         except Exception as e:
             import traceback
+
             logging.error(f"Error saving plots: {str(e)}")
             logging.error(f"Traceback: {traceback.format_exc()}")
 
@@ -705,7 +725,11 @@ class PDETrainer:
                             go.Scatter3d(
                                 x=points[:, 0],
                                 y=points[:, 1],
-                                z=(points[:, 2] if points.shape[1] > 2 else np.zeros_like(points[:, 0])),
+                                z=(
+                                    points[:, 2]
+                                    if points.shape[1] > 2
+                                    else np.zeros_like(points[:, 0])
+                                ),
                                 mode="markers",
                                 marker=dict(size=2),
                             )
@@ -717,7 +741,11 @@ class PDETrainer:
                         data=[
                             go.Scatter(
                                 x=points[:, 0],
-                                y=points[:, 1] if points.shape[1] > 1 else np.zeros_like(points[:, 0]),
+                                y=(
+                                    points[:, 1]
+                                    if points.shape[1] > 1
+                                    else np.zeros_like(points[:, 0])
+                                ),
                                 mode="markers",
                                 marker=dict(size=2),
                             )

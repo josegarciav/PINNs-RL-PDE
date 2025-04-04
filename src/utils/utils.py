@@ -178,20 +178,26 @@ def plot_solution(
     if pde.dimension == 2:
         # 2D PDE case (x, y, t)
         x = torch.linspace(
-            pde.domain[0][0], pde.domain[0][1], 
-            int(np.sqrt(num_points)), device=model.device
+            pde.domain[0][0],
+            pde.domain[0][1],
+            int(np.sqrt(num_points)),
+            device=model.device,
         )
         y = torch.linspace(
-            pde.domain[1][0], pde.domain[1][1],
-            int(np.sqrt(num_points)), device=model.device
+            pde.domain[1][0],
+            pde.domain[1][1],
+            int(np.sqrt(num_points)),
+            device=model.device,
         )
-        
+
         if time_point is not None:
             t = torch.tensor([time_point], device=model.device)
         else:
             t = torch.linspace(
-                pde.config.time_domain[0], pde.config.time_domain[1],
-                int(np.sqrt(num_points)), device=model.device
+                pde.config.time_domain[0],
+                pde.config.time_domain[1],
+                int(np.sqrt(num_points)),
+                device=model.device,
             )
 
         X, Y = torch.meshgrid(x, y, indexing="ij")
@@ -203,12 +209,12 @@ def plot_solution(
             # Create grid for current time
             t_grid = torch.full_like(X, t_val)
             xyz = torch.stack([X.flatten(), Y.flatten(), t_grid.flatten()], dim=1)
-            
+
             # Get predictions and exact solutions
             with torch.no_grad():
                 pred = model(xyz).reshape(X.shape)
                 exact = pde.exact_solution(xyz).reshape(X.shape)
-            
+
             points.append(xyz)
             predictions.append(pred)
             exact_solutions.append(exact)
@@ -221,40 +227,47 @@ def plot_solution(
         exact_solutions = torch.stack(exact_solutions).cpu().numpy()
 
         # Create exact solution figure
-        exact_fig = go.Figure(data=[
-            go.Surface(
-                x=X, y=Y, z=exact_solutions[0],
-                colorscale="viridis",
-                name="Exact",
-                showscale=False,
-                hoverinfo="x+y+z"
-            )
-        ])
+        exact_fig = go.Figure(
+            data=[
+                go.Surface(
+                    x=X,
+                    y=Y,
+                    z=exact_solutions[0],
+                    colorscale="viridis",
+                    name="Exact",
+                    showscale=False,
+                    hoverinfo="x+y+z",
+                )
+            ]
+        )
 
         # Create predicted solution figure
-        predicted_fig = go.Figure(data=[
-            go.Surface(
-                x=X, y=Y, z=predictions[0],
-                colorscale="plasma",
-                name="PINN",
-                showscale=False,
-                hoverinfo="x+y+z"
-            )
-        ])
+        predicted_fig = go.Figure(
+            data=[
+                go.Surface(
+                    x=X,
+                    y=Y,
+                    z=predictions[0],
+                    colorscale="plasma",
+                    name="PINN",
+                    showscale=False,
+                    hoverinfo="x+y+z",
+                )
+            ]
+        )
 
         # Add time slider if multiple time points
         if len(t) > 1:
             frames_exact = [
                 go.Frame(
                     data=[go.Surface(x=X, y=Y, z=exact_solutions[i])],
-                    name=f"t={T[i]:.2f}"
+                    name=f"t={T[i]:.2f}",
                 )
                 for i in range(len(t))
             ]
             frames_pred = [
                 go.Frame(
-                    data=[go.Surface(x=X, y=Y, z=predictions[i])],
-                    name=f"t={T[i]:.2f}"
+                    data=[go.Surface(x=X, y=Y, z=predictions[i])], name=f"t={T[i]:.2f}"
                 )
                 for i in range(len(t))
             ]
@@ -262,34 +275,40 @@ def plot_solution(
             predicted_fig.frames = frames_pred
 
             # Add slider
-            sliders = [dict(
-                steps=[
-                    dict(
-                        method="animate",
-                        args=[[f"t={T[i]:.2f}"]],
-                        label=f"t={T[i]:.2f}"
-                    )
-                    for i in range(len(t))
-                ],
-                currentvalue=dict(visible=True, prefix="Time: "),
-                len=0.9
-            )]
+            sliders = [
+                dict(
+                    steps=[
+                        dict(
+                            method="animate",
+                            args=[[f"t={T[i]:.2f}"]],
+                            label=f"t={T[i]:.2f}",
+                        )
+                        for i in range(len(t))
+                    ],
+                    currentvalue=dict(visible=True, prefix="Time: "),
+                    len=0.9,
+                )
+            ]
             exact_fig.update_layout(sliders=sliders)
             predicted_fig.update_layout(sliders=sliders)
 
     else:
         # 1D PDE case (x, t)
         x = torch.linspace(
-            pde.domain[0][0], pde.domain[0][1],
-            int(np.sqrt(num_points)), device=model.device
+            pde.domain[0][0],
+            pde.domain[0][1],
+            int(np.sqrt(num_points)),
+            device=model.device,
         )
 
         if time_point is not None:
             t = torch.tensor([time_point], device=model.device)
         else:
             t = torch.linspace(
-                pde.config.time_domain[0], pde.config.time_domain[1],
-                int(np.sqrt(num_points)), device=model.device
+                pde.config.time_domain[0],
+                pde.config.time_domain[1],
+                int(np.sqrt(num_points)),
+                device=model.device,
             )
 
         X, T = torch.meshgrid(x, t, indexing="ij")
@@ -307,32 +326,40 @@ def plot_solution(
         U_exact = u_exact.cpu().numpy()
 
         # Create exact solution figure
-        exact_fig = go.Figure(data=[
-            go.Surface(
-                x=X, y=T, z=U_exact,
-                colorscale="viridis",
-                name="Exact",
-                showscale=False,
-                hoverinfo="x+y+z"
-            )
-        ])
+        exact_fig = go.Figure(
+            data=[
+                go.Surface(
+                    x=X,
+                    y=T,
+                    z=U_exact,
+                    colorscale="viridis",
+                    name="Exact",
+                    showscale=False,
+                    hoverinfo="x+y+z",
+                )
+            ]
+        )
 
         # Create predicted solution figure
-        predicted_fig = go.Figure(data=[
-            go.Surface(
-                x=X, y=T, z=U_pred,
-                colorscale="plasma",
-                name="PINN",
-                showscale=False,
-                hoverinfo="x+y+z"
-            )
-        ])
+        predicted_fig = go.Figure(
+            data=[
+                go.Surface(
+                    x=X,
+                    y=T,
+                    z=U_pred,
+                    colorscale="plasma",
+                    name="PINN",
+                    showscale=False,
+                    hoverinfo="x+y+z",
+                )
+            ]
+        )
 
     # Common camera settings
     camera = dict(
         up=dict(x=0, y=0, z=1),
         center=dict(x=0, y=0, z=0),
-        eye=dict(x=1.5, y=1.5, z=1.5)
+        eye=dict(x=1.5, y=1.5, z=1.5),
     )
 
     # Common axis settings
@@ -343,7 +370,7 @@ def plot_solution(
         showticklabels=True,
         showspikes=False,
         showbackground=True,
-        backgroundcolor="rgba(240, 240, 240, 0.5)"
+        backgroundcolor="rgba(240, 240, 240, 0.5)",
     )
 
     # Update layout for exact solution
@@ -352,12 +379,14 @@ def plot_solution(
         scene=dict(
             xaxis=dict(title="x", **axis_settings),
             yaxis=dict(title="t" if pde.dimension == 1 else "y", **axis_settings),
-            zaxis=dict(title="u(x,t)" if pde.dimension == 1 else "u(x,y,t)", **axis_settings),
+            zaxis=dict(
+                title="u(x,t)" if pde.dimension == 1 else "u(x,y,t)", **axis_settings
+            ),
             camera=camera,
             dragmode="turntable",
-            aspectmode="cube"
+            aspectmode="cube",
         ),
-        margin=dict(l=0, r=0, b=0, t=30)
+        margin=dict(l=0, r=0, b=0, t=30),
     )
 
     # Update layout for predicted solution
@@ -366,12 +395,14 @@ def plot_solution(
         scene=dict(
             xaxis=dict(title="x", **axis_settings),
             yaxis=dict(title="t" if pde.dimension == 1 else "y", **axis_settings),
-            zaxis=dict(title="u(x,t)" if pde.dimension == 1 else "u(x,y,t)", **axis_settings),
+            zaxis=dict(
+                title="u(x,t)" if pde.dimension == 1 else "u(x,y,t)", **axis_settings
+            ),
             camera=camera,
             dragmode="turntable",
-            aspectmode="cube"
+            aspectmode="cube",
         ),
-        margin=dict(l=0, r=0, b=0, t=30)
+        margin=dict(l=0, r=0, b=0, t=30),
     )
 
     if return_figs:

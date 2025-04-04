@@ -170,6 +170,7 @@ app.layout = html.Div(
             id="interval-component",
             interval=5 * 1000,  # in milliseconds
             n_intervals=0,
+            disabled=True,
         ),
     ],
     style={"padding": "20px"},
@@ -178,54 +179,11 @@ app.layout = html.Div(
 
 # Callback to update experiment list
 @app.callback(
-    Output("experiment-selector", "options"), Input("interval-component", "n_intervals")
+    Output("experiment-selector", "options"),
+    Input("interval-component", "n_intervals")
 )
 def update_experiments(_):
-    # Get list of experiment directories
-    experiment_dirs = []
-    if os.path.exists("experiments"):
-        for d in os.listdir("experiments"):
-            exp_dir = os.path.join("experiments", d)
-            if os.path.isdir(exp_dir):
-                # Check if the experiment has a final_model.pt file in its models directory
-                model_path = os.path.join(exp_dir, "models", "final_model.pt")
-                config_path = os.path.join(exp_dir, "config.yaml")
-                
-                if os.path.exists(model_path) and os.path.exists(config_path):
-                    # Get PDE name and type from config
-                    pde_name = "Unknown PDE"
-                    try:
-                        with open(config_path, "r") as f:
-                            config = yaml.safe_load(f)
-                            # Try different possible locations for pde name and type
-                            pde_type = None
-                            
-                            # First try to get the PDE type
-                            if "pde_type" in config:
-                                pde_type = config["pde_type"]
-                            elif "pde" in config and "type" in config["pde"]:
-                                pde_type = config["pde"]["type"]
-                            elif "pde_configs" in config:
-                                # Get first key from pde_configs as type
-                                pde_type = next(iter(config["pde_configs"].keys()))
-                            
-                            # Now try to get the name based on the PDE type
-                            if pde_type and "pde_configs" in config and pde_type in config["pde_configs"]:
-                                pde_name = config["pde_configs"][pde_type].get("name", f"{pde_type.title()} Equation")
-                            elif "pde" in config and "name" in config["pde"]:
-                                pde_name = config["pde"]["name"]
-                    except Exception as e:
-                        print(f"Error reading config for {exp_dir}: {e}")
-                        pde_name = "Unknown PDE"
-
-                    experiment_dirs.append({
-                        "label": f"{pde_name} - {d}",
-                        "value": exp_dir
-                    })
-
-    # Sort experiments by name in descending order (most recent first)
-    experiment_dirs.sort(key=lambda x: x["label"], reverse=True)
-    return experiment_dirs
+    return get_experiments()
 
 
 # Callback to update main graphs
@@ -817,15 +775,18 @@ def update_pde_comparison(_):
 )
 def update_solution_visualizations(experiment, time_point, _):
     if not experiment:
-        return create_empty_3d_figure("Select an experiment"), create_empty_3d_figure("Select an experiment")
+        return create_empty_3d_figure("Select an experiment"), create_empty_3d_figure(
+            "Select an experiment"
+        )
 
     try:
         print(f"\nAttempting to visualize solution for experiment: {experiment}")
         print(f"Time point: {time_point}")
-        
+
         # Import necessary modules
         import torch
         import sys
+
         sys.path.append(".")
         from src.utils.utils import plot_solution
         from src.neural_networks import PINNModel
@@ -834,13 +795,15 @@ def update_solution_visualizations(experiment, time_point, _):
         # Look for model in the models directory
         model_path = os.path.join(experiment, "models", "final_model.pt")
         config_path = os.path.join(experiment, "config.yaml")
-        
+
         print(f"Model path: {model_path}")
         print(f"Config path: {config_path}")
-        
+
         if not os.path.exists(model_path) or not os.path.exists(config_path):
             print("Error: Model or config file not found")
-            return create_empty_3d_figure("No model data available"), create_empty_3d_figure("No model data available")
+            return create_empty_3d_figure(
+                "No model data available"
+            ), create_empty_3d_figure("No model data available")
 
         # Load configuration
         with open(config_path, "r") as f:
@@ -855,7 +818,9 @@ def update_solution_visualizations(experiment, time_point, _):
         pde_config = config.get("pde_configs", {}).get(pde_type, {})
         if not pde_config:
             print(f"Error: No configuration found for PDE type {pde_type}")
-            return create_empty_3d_figure(f"No configuration for PDE type: {pde_type}"), create_empty_3d_figure(f"No configuration for PDE type: {pde_type}")
+            return create_empty_3d_figure(
+                f"No configuration for PDE type: {pde_type}"
+            ), create_empty_3d_figure(f"No configuration for PDE type: {pde_type}")
 
         # Create PDEConfig instance with the correct configuration
         pde_config = PDEConfig(
@@ -866,65 +831,82 @@ def update_solution_visualizations(experiment, time_point, _):
             initial_condition=pde_config.get("initial_condition", {}),
             boundary_conditions=pde_config.get("boundary_conditions", {}),
             parameters=pde_config.get("parameters", {}),
-            exact_solution=pde_config.get("exact_solution", {})
+            exact_solution=pde_config.get("exact_solution", {}),
         )
 
         # Import and create appropriate PDE instance
         if "heat" in pde_type:
             from src.pdes.heat_equation import HeatEquation
+
             pde = HeatEquation(config=pde_config)
-            print(f"Created HeatEquation instance with dimension {pde_config.dimension}")
+            print(
+                f"Created HeatEquation instance with dimension {pde_config.dimension}"
+            )
         elif "wave" in pde_type:
             from src.pdes.wave_equation import WaveEquation
+
             pde = WaveEquation(config=pde_config)
             print("Created WaveEquation instance")
         elif "burgers" in pde_type:
             from src.pdes.burgers_equation import BurgersEquation
+
             pde = BurgersEquation(config=pde_config)
             print("Created BurgersEquation instance")
         elif "convection" in pde_type:
             from src.pdes.convection_equation import ConvectionEquation
+
             pde = ConvectionEquation(config=pde_config)
             print("Created ConvectionEquation instance")
         elif "kdv" in pde_type:
             from src.pdes.kdv_equation import KdVEquation
+
             pde = KdVEquation(config=pde_config)
             print("Created KdVEquation instance")
         elif "allen" in pde_type and "cahn" in pde_type:
             from src.pdes.allen_cahn import AllenCahnEquation
+
             pde = AllenCahnEquation(config=pde_config)
             print("Created AllenCahnEquation instance")
         elif "cahn" in pde_type and "hilliard" in pde_type:
             from src.pdes.cahn_hilliard import CahnHilliardEquation
+
             pde = CahnHilliardEquation(config=pde_config)
             print("Created CahnHilliardEquation instance")
         elif "black" in pde_type or "scholes" in pde_type:
             from src.pdes.black_scholes import BlackScholesEquation
+
             pde = BlackScholesEquation(config=pde_config)
             print("Created BlackScholesEquation instance")
         elif "pendulum" in pde_type:
             from src.pdes.pendulum_equation import PendulumEquation
+
             pde = PendulumEquation(config=pde_config)
             print("Created PendulumEquation instance")
         else:
             print(f"Error: Unsupported PDE type: {pde_type}")
-            return create_empty_3d_figure(f"Unsupported PDE type: {pde_type}"), create_empty_3d_figure(f"Unsupported PDE type: {pde_type}")
+            return create_empty_3d_figure(
+                f"Unsupported PDE type: {pde_type}"
+            ), create_empty_3d_figure(f"Unsupported PDE type: {pde_type}")
 
         # Load model
         device = torch.device("cpu")  # Use CPU for visualization
         print(f"Using device: {device}")
-        
+
         # Create model configuration
         model_config = {
-            "architecture": config.get("architectures", {}).get(pde_config.get("architecture", "feedforward"), {}),
+            "architecture": config.get("architectures", {}).get(
+                pde_config.get("architecture", "feedforward"), {}
+            ),
             "device": device,
             "pde_type": pde_type,
-            "input_dim": 2 if pde_config.dimension == 1 else 3,  # x,t for 1D or x,y,t for 2D
-            "output_dim": 1
+            "input_dim": (
+                2 if pde_config.dimension == 1 else 3
+            ),  # x,t for 1D or x,y,t for 2D
+            "output_dim": 1,
         }
-        
+
         print(f"Model config: {model_config}")
-        
+
         try:
             model = PINNModel(config=model_config, device=device)
             print("Successfully created PINNModel instance")
@@ -934,7 +916,9 @@ def update_solution_visualizations(experiment, time_point, _):
             print("Model set to eval mode")
         except Exception as e:
             print(f"Error creating/loading model: {e}")
-            return create_empty_3d_figure(f"Error loading model: {str(e)}"), create_empty_3d_figure(f"Error loading model: {str(e)}")
+            return create_empty_3d_figure(
+                f"Error loading model: {str(e)}"
+            ), create_empty_3d_figure(f"Error loading model: {str(e)}")
 
         # Generate visualization data using plot_solution
         print("Generating visualization...")
@@ -945,19 +929,24 @@ def update_solution_visualizations(experiment, time_point, _):
                 pde=pde,
                 num_points=num_points,
                 time_point=time_point,  # Pass the current time point
-                return_figs=True  # Return figures instead of showing them
+                return_figs=True,  # Return figures instead of showing them
             )
             print("Visualization generated successfully")
             return exact_fig, predicted_fig
         except Exception as e:
             print(f"Error generating visualization: {e}")
-            return create_empty_3d_figure(f"Error generating visualization: {str(e)}"), create_empty_3d_figure(f"Error generating visualization: {str(e)}")
+            return create_empty_3d_figure(
+                f"Error generating visualization: {str(e)}"
+            ), create_empty_3d_figure(f"Error generating visualization: {str(e)}")
 
     except Exception as e:
         print(f"Error in solution visualization: {e}")
         import traceback
+
         traceback.print_exc()
-        return create_empty_3d_figure(f"Error: {str(e)}"), create_empty_3d_figure(f"Error: {str(e)}")
+        return create_empty_3d_figure(f"Error: {str(e)}"), create_empty_3d_figure(
+            f"Error: {str(e)}"
+        )
 
 
 def create_empty_3d_figure(message):
@@ -1032,55 +1021,133 @@ def generate_example_solution(X, Y, solution_type, pde_type, time=None):
             )
 
 
-def generate_html_report(experiment_path, figures, metadata):
-    """Generate an interactive HTML report for the experiment."""
-    html_template = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>PINNs-RL-PDE Experiment Report</title>
-        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-        <style>
-            body {{ font-family: Arial, sans-serif; margin: 40px; }}
-            .container {{ max-width: 1200px; margin: 0 auto; }}
-            .section {{ margin-bottom: 40px; }}
-            .plot {{ width: 100%; height: 600px; }}
-            pre {{ background-color: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>PINNs-RL-PDE Experiment Report</h1>
-            <div class="section">
-                <h2>Experiment Details</h2>
-                <pre>{json.dumps(metadata, indent=2)}</pre>
-            </div>
-            <div class="section">
-                <h2>Training Progress</h2>
-                <div id="loss-plot" class="plot"></div>
-            </div>
-            <div class="section">
-                <h2>Collocation Points Distribution</h2>
-                <div id="collocation-plot" class="plot"></div>
-            </div>
-            <div class="section">
-                <h2>Solution Visualization</h2>
-                <div class="row">
-                    <div id="exact-solution" class="plot"></div>
-                    <div id="predicted-solution" class="plot"></div>
-                </div>
-            </div>
-        </div>
-        <script>
-            {figures['loss_plot']}
-            {figures['collocation_plot']}
-            {figures['exact_solution']}
-            {figures['predicted_solution']}
-        </script>
-    </body>
-    </html>
-    """
-    return html_template
+def get_experiment_details(experiment_path):
+    """Get experiment details from config file."""
+    try:
+        config_path = os.path.join(experiment_path, "config.yaml")
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+
+        # Extract basic details
+        pde_type = config.get("pde", {}).get("name", "Unknown")
+        architecture = config.get("model", {}).get("architecture", "Unknown")
+        hidden_dim = config.get("model", {}).get("hidden_dim", "Unknown")
+        num_layers = config.get("model", {}).get("num_layers", "Unknown")
+        learning_rate = (
+            config.get("training", {})
+            .get("optimizer_config", {})
+            .get("learning_rate", "Unknown")
+        )
+        batch_size = config.get("training", {}).get("batch_size", "Unknown")
+        num_epochs = config.get("training", {}).get("num_epochs", "Unknown")
+        rl_enabled = config.get("rl", {}).get("enabled", False)
+
+        # Add RL status to metadata for HTML report
+        metadata = {
+            "pde_type": pde_type,
+            "architecture": architecture,
+            "hidden_dim": hidden_dim,
+            "num_layers": num_layers,
+            "learning_rate": learning_rate,
+            "batch_size": batch_size,
+            "num_epochs": num_epochs,
+            "rl_enabled": rl_enabled,
+        }
+
+        details = f"""
+        **PDE Type:** {pde_type}
+        **Architecture:** {architecture}
+        **Hidden Dimension:** {hidden_dim}
+        **Number of Layers:** {num_layers}
+        **Learning Rate:** {learning_rate}
+        **Batch Size:** {batch_size}
+        **Number of Epochs:** {num_epochs}
+        **RL Enabled:** {rl_enabled}
+        """
+
+        return details, metadata
+    except Exception as e:
+        return f"Error loading experiment details: {str(e)}", {}
+
+
+def get_experiment_name(experiment_path):
+    """Extract a readable name from the experiment path."""
+    try:
+        # Get the last part of the path
+        name = os.path.basename(experiment_path)
+
+        # Try to parse the components (timestamp_architecture_rl-status)
+        parts = name.split("_")
+        if len(parts) >= 3:
+            timestamp = parts[0]
+            arch = parts[1]
+            rl_status = parts[2]
+
+            # Format timestamp
+            timestamp = f"{timestamp[:4]}-{timestamp[4:6]}-{timestamp[6:8]} {timestamp[9:11]}:{timestamp[11:13]}"
+
+            return f"{timestamp} ({arch}, {rl_status})"
+        else:
+            return name
+    except:
+        return name
+
+
+def generate_report(experiment_path):
+    """Generate a detailed report for the experiment."""
+    try:
+        config_path = os.path.join(experiment_path, "config.yaml")
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+
+        # Get experiment name
+        exp_name = get_experiment_name(experiment_path)
+
+        # Basic configuration
+        pde_type = config.get("pde", {}).get("name", "Unknown")
+        architecture = config.get("model", {}).get("architecture", "Unknown")
+        hidden_dim = config.get("model", {}).get("hidden_dim", "Unknown")
+        num_layers = config.get("model", {}).get("num_layers", "Unknown")
+        learning_rate = (
+            config.get("training", {})
+            .get("optimizer_config", {})
+            .get("learning_rate", "Unknown")
+        )
+        batch_size = config.get("training", {}).get("batch_size", "Unknown")
+        num_epochs = config.get("training", {}).get("num_epochs", "Unknown")
+        rl_enabled = config.get("rl", {}).get("enabled", False)
+
+        report = f"""# Experiment Report: {exp_name}
+
+## Configuration
+- **PDE Type:** {pde_type}
+- **Architecture:** {architecture}
+- **Hidden Dimension:** {hidden_dim}
+- **Number of Layers:** {num_layers}
+- **Learning Rate:** {learning_rate}
+- **Batch Size:** {batch_size}
+- **Number of Epochs:** {num_epochs}
+- **RL Enabled:** {rl_enabled}
+
+## Training Results
+"""
+        # Add training results if available
+        history_path = os.path.join(experiment_path, "history.json")
+        if os.path.exists(history_path):
+            with open(history_path, "r") as f:
+                history = json.load(f)
+
+            final_epoch = len(history.get("train_loss", []))
+            best_val_loss = min(history.get("val_loss", [float("inf")]))
+
+            report += f"""
+- **Completed Epochs:** {final_epoch}
+- **Best Validation Loss:** {best_val_loss:.6f}
+"""
+
+        return report
+    except Exception as e:
+        return f"Error generating report: {str(e)}"
 
 
 @app.callback(
@@ -1129,6 +1196,207 @@ def generate_report(n_clicks, experiment):
     except Exception as e:
         print(f"Error generating report: {e}")
         return None
+
+
+def get_experiments():
+    """Get list of all experiments with their details."""
+    experiments = []
+    experiments_dir = "experiments"
+
+    if os.path.exists(experiments_dir):
+        for exp_dir in os.listdir(experiments_dir):
+            # Skip .DS_Store and other hidden files
+            if exp_dir.startswith('.'):
+                continue
+                
+            exp_path = os.path.join(experiments_dir, exp_dir)
+            if os.path.isdir(exp_path):
+                # Check if this is a running experiment
+                is_running = os.path.exists(os.path.join(exp_path, ".running"))
+                
+                # Get experiment details from directory name
+                parts = exp_dir.split('_')
+                if len(parts) >= 2:
+                    # Try to extract meaningful information from directory name
+                    timestamp = parts[0]
+                    if len(parts) >= 4:
+                        pde_name = parts[1] + " " + parts[2]
+                        arch_name = parts[3]
+                    else:
+                        pde_name = "Unknown PDE"
+                        arch_name = parts[1] if len(parts) > 1 else "unknown"
+                    
+                    # Format the display name
+                    display_name = f"{timestamp} - {pde_name} ({arch_name})"
+                else:
+                    display_name = exp_dir
+                
+                if is_running:
+                    display_name += " (Running)"
+                
+                experiments.append({"label": display_name, "value": exp_path})
+
+    # Sort experiments by name (which includes timestamp) in reverse order
+    experiments.sort(key=lambda x: x["label"], reverse=True)
+    return experiments
+
+
+def update_plots(experiment_path):
+    """Update all plots for the selected experiment."""
+    plots = {}
+
+    # Check if experiment is running
+    is_running = os.path.exists(os.path.join(experiment_path, ".running"))
+
+    try:
+        # Load history
+        history_path = os.path.join(experiment_path, "history.json")
+        if os.path.exists(history_path):
+            with open(history_path, "r") as f:
+                history = json.load(f)
+
+            # Training progress plot
+            plots["training_progress"] = create_training_plot(history)
+
+            # Load latest collocation plot if available
+            latest_coll_plot = os.path.join(
+                experiment_path, "visualizations", "latest_collocation_evolution.png"
+            )
+            if os.path.exists(latest_coll_plot):
+                plots["collocation_points"] = latest_coll_plot
+
+            # Load latest solution plots if available
+            latest_solution = os.path.join(
+                experiment_path, "visualizations", "latest_solution.png"
+            )
+            if os.path.exists(latest_solution):
+                plots["solution"] = latest_solution
+
+        # If experiment is running, set auto-refresh
+        if is_running:
+            plots["refresh"] = True
+    except Exception as e:
+        print(f"Error updating plots: {e}")
+
+    return plots
+
+
+@app.callback(
+    [
+        Output("experiment-details", "children"),
+        Output("training-plot", "figure"),
+        Output("collocation-plot", "src"),
+        Output("solution-plot", "src"),
+        Output("interval-component", "disabled"),
+    ],
+    [Input("experiment-dropdown", "value"), Input("interval-component", "n_intervals")],
+)
+def update_experiment_view(selected_experiment, n_intervals):
+    """Update all components of the dashboard based on selected experiment."""
+    if not selected_experiment:
+        return "No experiment selected", {}, "", "", True
+
+    # Get experiment details
+    details, metadata = get_experiment_details(selected_experiment)
+
+    # Update plots
+    plots = update_plots(selected_experiment)
+
+    # Check if experiment is running
+    is_running = os.path.exists(os.path.join(selected_experiment, ".running"))
+
+    return (
+        details,
+        plots.get("training_progress", {}),
+        plots.get("collocation_points", ""),
+        plots.get("solution", ""),
+        not is_running,  # Enable auto-refresh only for running experiments
+    )
+
+
+def generate_html_report(experiment_path, figures, metadata):
+    """Generate an interactive HTML report for the experiment."""
+    # Get experiment details
+    config_path = os.path.join(experiment_path, "config.yaml")
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    # Get experiment name with architecture and RL status
+    exp_name = get_experiment_name(experiment_path)
+
+    # Extract RL status
+    rl_enabled = config.get("rl", {}).get("enabled", False)
+    architecture = config.get("model", {}).get("architecture", "Unknown")
+
+    html_template = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>PINNs-RL-PDE Experiment Report: {exp_name}</title>
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 40px; }}
+            .container {{ max-width: 1200px; margin: 0 auto; }}
+            .section {{ margin-bottom: 40px; }}
+            .plot {{ width: 100%; height: 600px; }}
+            pre {{ background-color: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }}
+            .header {{ background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
+            .status-badge {{ 
+                display: inline-block;
+                padding: 5px 10px;
+                border-radius: 15px;
+                margin: 5px;
+                color: white;
+                font-weight: bold;
+            }}
+            .rl-enabled {{ background-color: #28a745; }}
+            .rl-disabled {{ background-color: #dc3545; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>PINNs-RL-PDE Experiment Report</h1>
+                <h2>{exp_name}</h2>
+                <div>
+                    <span class="status-badge {('rl-enabled' if rl_enabled else 'rl-disabled')}">
+                        RL {('Enabled' if rl_enabled else 'Disabled')}
+                    </span>
+                    <span class="status-badge" style="background-color: #007bff;">
+                        {architecture}
+                    </span>
+                </div>
+            </div>
+            <div class="section">
+                <h2>Experiment Details</h2>
+                <pre>{json.dumps(metadata, indent=2)}</pre>
+            </div>
+            <div class="section">
+                <h2>Training Progress</h2>
+                <div id="loss-plot" class="plot"></div>
+            </div>
+            <div class="section">
+                <h2>Collocation Points Distribution</h2>
+                <div id="collocation-plot" class="plot"></div>
+            </div>
+            <div class="section">
+                <h2>Solution Visualization</h2>
+                <div class="row">
+                    <div id="exact-solution" class="plot"></div>
+                    <div id="predicted-solution" class="plot"></div>
+                </div>
+            </div>
+        </div>
+        <script>
+            {figures['loss_plot']}
+            {figures['collocation_plot']}
+            {figures['exact_solution']}
+            {figures['predicted_solution']}
+        </script>
+    </body>
+    </html>
+    """
+    return html_template
 
 
 if __name__ == "__main__":

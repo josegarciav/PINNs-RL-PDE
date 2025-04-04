@@ -57,14 +57,14 @@ pde_configs:
     input_dim: 2  # (x, t)
     output_dim: 1  # u(x,t)
     parameters:
-      alpha: 0.1  # Thermal diffusivity
-    domain: [[0, 3.14159]]  # [0, π]
-    time_domain: [0, 1]
+      alpha: 0.08  # Thermal diffusivity
+    domain: [[0, 2]]  # [0, π] 3.14159 6.28318
+    time_domain: [0, 5]
     dimension: 1
     initial_condition:
       type: "sine"
       amplitude: 1.0
-      frequency: 1.0
+      frequency: 2.0
     boundary_conditions:
       dirichlet:
         type: "fixed"
@@ -72,7 +72,7 @@ pde_configs:
     exact_solution:
       type: "sin_exp_decay" # sin(x) * e^(-0.1t) or sine simply
       amplitude: 1.0
-      frequency: 1.0
+      frequency: 2.0
       decay_rate: 0.1  # e^(-0.1t) factor
 
   # Wave Equation Configuration
@@ -334,7 +334,7 @@ training:
 
 # Reinforcement Learning Configuration
 rl:
-  enabled: false
+  enabled: true
   state_dim: 2  # (x, t)
   action_dim: 1  # Sampling probability
   hidden_dim: 64

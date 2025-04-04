@@ -508,7 +508,9 @@ class InteractiveTrainer:
 
         # Get PDE-specific configuration from config.yaml
         pde_name = self.selected_pde.get().lower().replace(" ", "_")
-        pde_key = pde_name.split("_")[0]  # Get base name (e.g., 'heat' from 'heat_equation')
+        pde_key = pde_name.split("_")[
+            0
+        ]  # Get base name (e.g., 'heat' from 'heat_equation')
         pde_config = yaml_config.get("pde_configs", {}).get(pde_key, {})
 
         # Get architecture configuration
@@ -589,7 +591,7 @@ class InteractiveTrainer:
             initial_condition=config["pde"]["initial_condition"],
             exact_solution=config["pde"]["exact_solution"],
             dimension=config["pde"]["dimension"],
-            device=device
+            device=device,
         )
 
         if pde_type == "Heat Equation":
@@ -630,8 +632,16 @@ class InteractiveTrainer:
 
             # Create experiment directory with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            experiment_dir = Path(config["paths"]["results_dir"]) / timestamp
+            arch_name = config["model"]["architecture"]
+            pde_name = config["pde"]["name"]
+            rl_status = "rl" if config["rl"]["enabled"] else "no_rl"
+            experiment_name = f"{timestamp}_{pde_name}_{arch_name}_{rl_status}"
+            experiment_dir = Path(config["paths"]["results_dir"]) / experiment_name
             experiment_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create .running file
+            running_file = experiment_dir / ".running"
+            running_file.touch()
 
             # Create subdirectories
             (experiment_dir / "visualizations").mkdir(exist_ok=True)
@@ -642,60 +652,86 @@ class InteractiveTrainer:
             with open(experiment_dir / "config.yaml", "w") as f:
                 yaml.dump(config, f)
 
-            # Create PDE
-            pde = self.create_pde(config, device)
+            try:
+                # Create PDE
+                pde = self.create_pde(config, device)
 
-            # Create model config
-            model_config = ModelConfig(
-                input_dim=config["model"]["input_dim"],
-                hidden_dim=config["model"]["hidden_dim"],
-                output_dim=config["model"]["output_dim"],
-                num_layers=config["model"]["num_layers"],
-                activation=config["model"]["activation"],
-                fourier_features=config["model"]["fourier_features"],
-                fourier_scale=config["model"]["fourier_scale"],
-                dropout=config["model"]["dropout"],
-                layer_norm=config["model"]["layer_norm"],
-                architecture=config["model"]["architecture"],
-            )
+                # Create model config
+                model_config = ModelConfig(
+                    input_dim=config["model"]["input_dim"],
+                    hidden_dim=config["model"]["hidden_dim"],
+                    output_dim=config["model"]["output_dim"],
+                    num_layers=config["model"]["num_layers"],
+                    activation=config["model"]["activation"],
+                    fourier_features=config["model"]["fourier_features"],
+                    fourier_scale=config["model"]["fourier_scale"],
+                    dropout=config["model"]["dropout"],
+                    layer_norm=config["model"]["layer_norm"],
+                    architecture=config["model"]["architecture"],
+                )
 
-            # Create config object with model attribute
-            config_obj = Config()
-            config_obj.model = model_config
+                # Create config object with model attribute
+                config_obj = Config()
+                config_obj.model = model_config
 
-            # Initialize model
-            model = PINNModel(config=config_obj, device=device).to(device)
+                # Initialize model
+                model = PINNModel(config=config_obj, device=device).to(device)
 
-            # Initialize trainer
-            trainer = PDETrainer(
-                model=model,
-                pde=pde,
-                optimizer_config=config["training"]["optimizer_config"],
-                config=config,
-                device=device,
-                rl_agent=(
-                    None if not config["rl"]["enabled"] else None
-                ),  # TODO: Implement RL agent
-                validation_frequency=config["training"]["validation_frequency"],
-                early_stopping_config=config["training"]["early_stopping"],
-            )
+                # Initialize trainer
+                trainer = PDETrainer(
+                    model=model,
+                    pde=pde,
+                    optimizer_config=config["training"]["optimizer_config"],
+                    config=config,
+                    device=device,
+                    rl_agent=(
+                        RLAgent(
+                            state_dim=config["rl"][
+                                "state_dim"
+                            ],  # Input dimension (spatial + temporal)
+                            action_dim=config["rl"][
+                                "action_dim"
+                            ],  # Output dimension (sampling probability)
+                            hidden_dim=config["rl"]["hidden_dim"],
+                            learning_rate=config["rl"]["learning_rate"],
+                            gamma=config["rl"]["gamma"],
+                            epsilon_start=config["rl"]["epsilon_start"],
+                            epsilon_end=config["rl"]["epsilon_end"],
+                            epsilon_decay=config["rl"]["epsilon_decay"],
+                            memory_size=config["rl"]["memory_size"],
+                            batch_size=config["rl"]["batch_size"],
+                            target_update=config["rl"]["target_update"],
+                            reward_weights=config["rl"]["reward_weights"],
+                            device=device,
+                        )
+                        if config["rl"]["enabled"]
+                        else None
+                    ),
+                    validation_frequency=config["training"]["validation_frequency"],
+                    early_stopping_config=config["training"]["early_stopping"],
+                )
 
-            # Save trainer and configuration in attributes for access from update_progress
-            self.current_trainer = trainer
-            self.total_epochs = config["training"]["num_epochs"]
-            self.experiment_dir = experiment_dir
+                # Save trainer and configuration in attributes for access from update_progress
+                self.current_trainer = trainer
+                self.total_epochs = config["training"]["num_epochs"]
+                self.experiment_dir = experiment_dir
 
-            # Run training
-            history = trainer.train(
-                num_epochs=config["training"]["num_epochs"],
-                batch_size=config["training"]["batch_size"],
-                num_points=config["training"]["num_collocation_points"],
-                experiment_dir=str(experiment_dir),
-            )
+                # Run training
+                history = trainer.train(
+                    num_epochs=config["training"]["num_epochs"],
+                    batch_size=config["training"]["batch_size"],
+                    num_points=config["training"]["num_collocation_points"],
+                    experiment_dir=str(experiment_dir),
+                )
 
-            # Save the model
-            model_path = experiment_dir / "models" / "final_model.pt"
-            save_model(model, str(model_path))
+                # Save the model
+                model_path = experiment_dir / "models" / "final_model.pt"
+                save_model(model, str(model_path))
+
+            finally:
+                # Remove .running file
+                if running_file.exists():
+                    running_file.unlink()
 
             # Open the experiment directory
             if sys.platform == "darwin":  # macOS
@@ -707,9 +743,7 @@ class InteractiveTrainer:
 
         except Exception as e:
             print(f"Error during training: {e}")
-            import traceback
 
-            traceback.print_exc()
         finally:
             self.training_running = False
             self.root.after(0, self.on_training_complete)
