@@ -39,7 +39,7 @@ app.layout = html.Div(
                 html.Div(
                     [
                         html.Label("Select Experiment:"),
-                    dcc.Dropdown(
+                        dcc.Dropdown(
                             id="experiment-selector", placeholder="Select experiment..."
                         ),
                     ],
@@ -51,10 +51,10 @@ app.layout = html.Div(
                 ),
                 html.Div(
                     [
-                html.Button(
+                        html.Button(
                             "Download Report",
                             id="download-report-button",
-                    style={
+                            style={
                                 "backgroundColor": "#4CAF50",
                                 "color": "white",
                                 "padding": "10px 20px",
@@ -67,7 +67,7 @@ app.layout = html.Div(
                         ),
                         dcc.Download(id="download-report"),
                     ],
-                                style={
+                    style={
                         "width": "30%",
                         "display": "inline-block",
                         "textAlign": "right",
@@ -118,12 +118,12 @@ app.layout = html.Div(
                         html.Div(
                             [
                                 html.Label("Time Point:"),
-                    dcc.Slider(
+                                dcc.Slider(
                                     id="time-slider",
-                        min=0,
-                        max=1,
-                        step=0.01,
-                        value=0.5,
+                                    min=0,
+                                    max=1,
+                                    step=0.01,
+                                    value=0.5,
                                     marks={i / 10: f"{i/10:.1f}" for i in range(11)},
                                 ),
                             ],
@@ -231,175 +231,219 @@ def update_graphs(experiment, _):
         early_stopping_triggered = False
         training_completed = False
 
-    if os.path.exists(metadata_file):
-        with open(metadata_file, "r") as f:
-            metadata = json.load(f)
-
-            # Add training time in minutes to the display if available
-            if "training_time_minutes" in metadata:
-                time_in_minutes = metadata["training_time_minutes"]
-                if time_in_minutes is not None:
-                    formatted_time = f"{time_in_minutes:.2f} minutes"
-                    metadata["formatted_training_time"] = formatted_time
-
-            experiment_details = json.dumps(metadata, indent=2)
-            # Check if early stopping was triggered
-            early_stopping_triggered = metadata.get(
-                "early_stopping_triggered", False
-            )
-            # Check if training is marked as completed
-            training_completed = "end_time" in metadata
-    else:
-        # Create basic metadata from config if available
-        config_file = os.path.join(experiment, "config.json")
-        if os.path.exists(config_file):
-            with open(config_file, "r") as f:
-                config = json.load(f)
-                experiment_details = f"Experiment: {os.path.basename(experiment)}\nConfiguration:\n{json.dumps(config, indent=2)}"
-
-    # Loss figure
-    loss_fig = go.Figure()
-
-    # Get data for x-axis (epochs)
-    train_epochs = list(range(1, len(history["train_loss"]) + 1))
-
-    # Determine if training has finished - check for both early stopping and natural completion
-    final_epoch = len(history["train_loss"])
-    total_epochs = final_epoch  # Default to final_epoch
-
-    # Try to get total epochs from metadata if available
-    if os.path.exists(metadata_file):
-        with open(metadata_file, "r") as f:
-            metadata = json.load(f)
-            if (
-                "training_params" in metadata
-                and "num_epochs" in metadata["training_params"]
-            ):
-                total_epochs = metadata["training_params"]["num_epochs"]
-    else:
-        # Try to get from config if available
-        config_file = os.path.join(experiment, "config.json")
-        if os.path.exists(config_file):
-            with open(config_file, "r") as f:
-                config = json.load(f)
-                if "training" in config and "num_epochs" in config["training"]:
-                    total_epochs = config["training"]["num_epochs"]
-
-    # Create training loss trace
-    loss_fig.add_trace(
-        go.Scatter(x=train_epochs, y=history["train_loss"], name="Training Loss")
-    )
-
-    # Add validation loss if available
-    if "val_loss" in history and history["val_loss"]:
-        # For validation, we need to account for validation frequency
-        val_frequency = 10  # Default validation frequency
-
-        # Try to get validation frequency from metadata or config
         if os.path.exists(metadata_file):
             with open(metadata_file, "r") as f:
-                metadata_data = json.load(f)
+                metadata = json.load(f)
+
+                # Add training time in minutes to the display if available
+                if "training_time_minutes" in metadata:
+                    time_in_minutes = metadata["training_time_minutes"]
+                    if time_in_minutes is not None:
+                        formatted_time = f"{time_in_minutes:.2f} minutes"
+                        metadata["formatted_training_time"] = formatted_time
+
+                experiment_details = json.dumps(metadata, indent=2)
+                # Check if early stopping was triggered
+                early_stopping_triggered = metadata.get(
+                    "early_stopping_triggered", False
+                )
+                # Check if training is marked as completed
+                training_completed = "end_time" in metadata
+        else:
+            # Create basic metadata from config if available
+            config_file = os.path.join(experiment, "config.json")
+            if os.path.exists(config_file):
+                with open(config_file, "r") as f:
+                    config = json.load(f)
+                    experiment_details = f"Experiment: {os.path.basename(experiment)}\nConfiguration:\n{json.dumps(config, indent=2)}"
+
+        # Loss figure
+        loss_fig = go.Figure()
+
+        # Get data for x-axis (epochs)
+        train_epochs = list(range(1, len(history["train_loss"]) + 1))
+
+        # Determine if training has finished - check for both early stopping and natural completion
+        final_epoch = len(history["train_loss"])
+        total_epochs = final_epoch  # Default to final_epoch
+
+        # Try to get total epochs from metadata if available
+        if os.path.exists(metadata_file):
+            with open(metadata_file, "r") as f:
+                metadata = json.load(f)
                 if (
-                    "training_params" in metadata_data
-                    and "validation_frequency" in metadata_data["training_params"]
+                    "training_params" in metadata
+                    and "num_epochs" in metadata["training_params"]
                 ):
-                    val_frequency = metadata_data["training_params"][
-                        "validation_frequency"
-                    ]
+                    total_epochs = metadata["training_params"]["num_epochs"]
         else:
             # Try to get from config if available
             config_file = os.path.join(experiment, "config.json")
             if os.path.exists(config_file):
                 with open(config_file, "r") as f:
                     config = json.load(f)
-                    if (
-                        "training" in config
-                        and "validation_frequency" in config["training"]
-                    ):
-                        val_frequency = config["training"]["validation_frequency"]
+                    if "training" in config and "num_epochs" in config["training"]:
+                        total_epochs = config["training"]["num_epochs"]
 
-        val_epochs = list(
-            range(
-                val_frequency,
-                len(history["val_loss"]) * val_frequency + 1,
-                val_frequency,
-            )
-        )
-        val_epochs = val_epochs[
-            : len(history["val_loss"])
-        ]  # Make sure we don't exceed the number of validation points
-
+        # Create training loss trace
         loss_fig.add_trace(
-            go.Scatter(x=val_epochs, y=history["val_loss"], name="Validation Loss")
+            go.Scatter(x=train_epochs, y=history["train_loss"], name="Training Loss")
         )
 
-    # Add component losses if available
-    for component in ["residual_loss", "boundary_loss", "initial_loss"]:
-        if component in history and history[component]:
-            # Use the same x-axis values as validation loss
-            if "val_loss" in history and history["val_loss"]:
-                component_epochs = val_epochs[: len(history[component])]
-            else:
-                component_epochs = list(range(1, len(history[component]) + 1))
+        # Add validation loss if available
+        if "val_loss" in history and history["val_loss"]:
+            # For validation, we need to account for validation frequency
+            val_frequency = 10  # Default validation frequency
 
-            loss_fig.add_trace(
-                go.Scatter(
-                    x=component_epochs,
-                    y=history[component],
-                    name=component.replace("_", " ").title(),
+            # Try to get validation frequency from metadata or config
+            if os.path.exists(metadata_file):
+                with open(metadata_file, "r") as f:
+                    metadata_data = json.load(f)
+                    if (
+                        "training_params" in metadata_data
+                        and "validation_frequency" in metadata_data["training_params"]
+                    ):
+                        val_frequency = metadata_data["training_params"][
+                            "validation_frequency"
+                        ]
+            else:
+                # Try to get from config if available
+                config_file = os.path.join(experiment, "config.json")
+                if os.path.exists(config_file):
+                    with open(config_file, "r") as f:
+                        config = json.load(f)
+                        if (
+                            "training" in config
+                            and "validation_frequency" in config["training"]
+                        ):
+                            val_frequency = config["training"]["validation_frequency"]
+
+            val_epochs = list(
+                range(
+                    val_frequency,
+                    len(history["val_loss"]) * val_frequency + 1,
+                    val_frequency,
                 )
             )
+            val_epochs = val_epochs[
+                : len(history["val_loss"])
+            ]  # Make sure we don't exceed the number of validation points
 
-    # Add training status annotation
-    status_text = ""
-    if early_stopping_triggered:
-        status_text = (
-            f"Early stopping triggered at epoch {final_epoch}/{total_epochs}"
-        )
-    elif training_completed:
-        status_text = f"Training completed ({final_epoch} epochs)"
-
-    if status_text:
-        loss_fig.add_annotation(
-            text=status_text,
-            x=0.5,
-            y=0.05,
-            xref="paper",
-            yref="paper",
-            showarrow=False,
-            font=dict(size=12, color="red"),
-            bordercolor="red",
-            borderwidth=1,
-            borderpad=4,
-            bgcolor="white",
-        )
-
-    loss_fig.update_layout(
-        title="Training Progress",
-        xaxis_title="Epoch",
-        yaxis_title="Loss",
-        legend=dict(
-            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
-        ),
-    )
-
-    # Find the most recent collocation visualization
-    vis_dir = "visualizations"
-    if not os.path.exists(vis_dir):
-        # Check if visualizations are stored in experiment directory
-        vis_dir = os.path.join(experiment, "visualizations")
-        if not os.path.exists(vis_dir):
-            # Try to find any visualization files in the experiment directory
-            vis_files = glob.glob(
-                os.path.join(experiment, "**", "*collocation*.png"), recursive=True
+            loss_fig.add_trace(
+                go.Scatter(x=val_epochs, y=history["val_loss"], name="Validation Loss")
             )
-            if vis_files:
-                # Use the most recent one
-                vis_files.sort(key=os.path.getmtime, reverse=True)
-                vis_path = vis_files[0]
 
-                # Create a figure with the image
+        # Add component losses if available
+        for component in ["residual_loss", "boundary_loss", "initial_loss"]:
+            if component in history and history[component]:
+                # Use the same x-axis values as validation loss
+                if "val_loss" in history and history["val_loss"]:
+                    component_epochs = val_epochs[: len(history[component])]
+                else:
+                    component_epochs = list(range(1, len(history[component]) + 1))
+
+                loss_fig.add_trace(
+                    go.Scatter(
+                        x=component_epochs,
+                        y=history[component],
+                        name=component.replace("_", " ").title(),
+                    )
+                )
+
+        # Add training status annotation
+        status_text = ""
+        if early_stopping_triggered:
+            status_text = (
+                f"Early stopping triggered at epoch {final_epoch}/{total_epochs}"
+            )
+        elif training_completed:
+            status_text = f"Training completed ({final_epoch} epochs)"
+
+        if status_text:
+            loss_fig.add_annotation(
+                text=status_text,
+                x=0.5,
+                y=0.05,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                font=dict(size=12, color="red"),
+                bordercolor="red",
+                borderwidth=1,
+                borderpad=4,
+                bgcolor="white",
+            )
+
+        loss_fig.update_layout(
+            title="Training Progress",
+            xaxis_title="Epoch",
+            yaxis_title="Loss",
+            legend=dict(
+                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+            ),
+        )
+
+        # Find the most recent collocation visualization
+        vis_dir = "visualizations"
+        if not os.path.exists(vis_dir):
+            # Check if visualizations are stored in experiment directory
+            vis_dir = os.path.join(experiment, "visualizations")
+            if not os.path.exists(vis_dir):
+                # Try to find any visualization files in the experiment directory
+                vis_files = glob.glob(
+                    os.path.join(experiment, "**", "*collocation*.png"), recursive=True
+                )
+                if vis_files:
+                    # Use the most recent one
+                    vis_files.sort(key=os.path.getmtime, reverse=True)
+                    vis_path = vis_files[0]
+
+                    # Create a figure with the image
+                    try:
+                        from PIL import Image
+
+                        img = np.array(Image.open(vis_path))
+                        colloc_fig = px.imshow(img)
+                        colloc_fig.update_layout(
+                            title="Collocation Points Distribution",
+                            coloraxis_showscale=False,
+                        )
+                        # Remove axis labels and ticks
+                        colloc_fig.update_xaxes(
+                            showticklabels=False, showgrid=False, zeroline=False
+                        )
+                        colloc_fig.update_yaxes(
+                            showticklabels=False, showgrid=False, zeroline=False
+                        )
+
+                        return loss_fig, colloc_fig, experiment_details
+                    except Exception as e:
+                        print(f"Error loading visualization image: {e}")
+
+        # Look for visualization files in the visualization directory
+        if os.path.exists(vis_dir):
+            latest_vis = sorted(
+                [
+                    f
+                    for f in os.listdir(vis_dir)
+                    if f.endswith(".png")
+                    and (
+                        f.startswith("latest_collocation_evolution")
+                        or f.startswith("latest_density_heatmap")
+                        or f.startswith("collocation_evolution_epoch")
+                        or f.startswith("final_collocation_evolution")
+                    )
+                ],
+                key=lambda x: os.path.getmtime(os.path.join(vis_dir, x)),
+                reverse=True,
+            )
+
+            if latest_vis:
+                # Use the most recent visualization
+                vis_path = os.path.join(vis_dir, latest_vis[0])
+
                 try:
+                    # Create a figure with the image
                     from PIL import Image
 
                     img = np.array(Image.open(vis_path))
@@ -420,50 +464,6 @@ def update_graphs(experiment, _):
                 except Exception as e:
                     print(f"Error loading visualization image: {e}")
 
-    # Look for visualization files in the visualization directory
-    if os.path.exists(vis_dir):
-        latest_vis = sorted(
-            [
-                f
-                for f in os.listdir(vis_dir)
-                if f.endswith(".png")
-                and (
-                    f.startswith("latest_collocation_evolution")
-                    or f.startswith("latest_density_heatmap")
-                    or f.startswith("collocation_evolution_epoch")
-                    or f.startswith("final_collocation_evolution")
-                )
-            ],
-            key=lambda x: os.path.getmtime(os.path.join(vis_dir, x)),
-            reverse=True,
-        )
-
-        if latest_vis:
-            # Use the most recent visualization
-            vis_path = os.path.join(vis_dir, latest_vis[0])
-
-            try:
-                # Create a figure with the image
-                from PIL import Image
-
-                img = np.array(Image.open(vis_path))
-                colloc_fig = px.imshow(img)
-                colloc_fig.update_layout(
-                    title="Collocation Points Distribution",
-                    coloraxis_showscale=False,
-                )
-                # Remove axis labels and ticks
-                colloc_fig.update_xaxes(
-                    showticklabels=False, showgrid=False, zeroline=False
-                )
-                colloc_fig.update_yaxes(
-                    showticklabels=False, showgrid=False, zeroline=False
-                )
-
-                return loss_fig, colloc_fig, experiment_details
-    except Exception as e:
-                    print(f"Error loading visualization image: {e}")
-
         # Create empty figure if no visualization available
         colloc_fig = go.Figure()
         colloc_fig.add_annotation(
@@ -480,6 +480,7 @@ def update_graphs(experiment, _):
         )
 
         return loss_fig, colloc_fig, experiment_details
+
     except Exception as e:
         print(f"Error loading data: {e}")
         return {}, {}, f"Error loading experiment data: {str(e)}"
@@ -686,9 +687,9 @@ def update_pde_comparison(_):
             if len(parts) >= 2:
                 pde_type = (
                     f"{parts[0]}_{parts[1]}"  # Assuming PDE type is in first two parts
-            )
+                )
         else:
-                pde_type = dir_name  # Use directory name as fallback
+            pde_type = dir_name  # Use directory name as fallback
 
         # Load history.json
         history_file = os.path.join(exp_dir, "history.json")
@@ -705,7 +706,7 @@ def update_pde_comparison(_):
         try:
             with open(history_file, "r") as f:
                 history = json.load(f)
-            
+
             # Load computation time if available
             comp_time = None
             if os.path.exists(metadata_file):
@@ -736,13 +737,13 @@ def update_pde_comparison(_):
                 }
             )
         except:
-                    continue
+            continue
 
     # Create comparison graph
     fig = go.Figure()
 
     colors = px.colors.qualitative.Plotly
-        color_idx = 0
+    color_idx = 0
 
     for pde_type, experiments in pdes.items():
         for i, exp in enumerate(experiments):
@@ -846,55 +847,57 @@ def update_solution_visualizations(experiment, time_point, _):
             if pde_type:
                 # Import specific PDE classes based on the PDE type
                 if "heat" in pde_type.lower():
-                    from src.pdes.heat import Heat
+                    from src.pdes.heat_equation import HeatEquation
 
-                    pde_instance = Heat(
+                    pde_instance = HeatEquation(
                         **pde_params if "pde_params" in locals() else {}
                     )
                 elif "wave" in pde_type.lower():
-                    from src.pdes.wave import Wave
+                    from src.pdes.wave_equation import WaveEquation
 
-                    pde_instance = Wave(
+                    pde_instance = WaveEquation(
                         **pde_params if "pde_params" in locals() else {}
                     )
                 elif "burgers" in pde_type.lower():
-                    from src.pdes.burgers import Burgers
+                    from src.pdes.burgers_equation import BurgersEquation
 
-                    pde_instance = Burgers(
+                    pde_instance = BurgersEquation(
                         **pde_params if "pde_params" in locals() else {}
                     )
                 elif "kdv" in pde_type.lower():
-                    from src.pdes.kdv import KdV
+                    from src.pdes.kdv_equation import KdVEquation
 
-                    pde_instance = KdV(**pde_params if "pde_params" in locals() else {})
+                    pde_instance = KdVEquation(
+                        **pde_params if "pde_params" in locals() else {}
+                    )
                 elif "convection" in pde_type.lower():
-                    from src.pdes.convection import Convection
+                    from src.pdes.convection_equation import ConvectionEquation
 
-                    pde_instance = Convection(
+                    pde_instance = ConvectionEquation(
                         **pde_params if "pde_params" in locals() else {}
                     )
                 elif "allen" in pde_type.lower():
-                    from src.pdes.allen_cahn import AllenCahn
+                    from src.pdes.allen_cahn import AllenCahnEquation
 
-                    pde_instance = AllenCahn(
+                    pde_instance = AllenCahnEquation(
                         **pde_params if "pde_params" in locals() else {}
                     )
                 elif "cahn" in pde_type.lower():
-                    from src.pdes.cahn_hilliard import CahnHilliard
+                    from src.pdes.cahn_hilliard import CahnHilliardEquation
 
-                    pde_instance = CahnHilliard(
+                    pde_instance = CahnHilliardEquation(
                         **pde_params if "pde_params" in locals() else {}
                     )
                 elif "black" in pde_type.lower() or "scholes" in pde_type.lower():
-                    from src.pdes.black_scholes import BlackScholes
+                    from src.pdes.black_scholes import BlackScholesEquation
 
-                    pde_instance = BlackScholes(
+                    pde_instance = BlackScholesEquation(
                         **pde_params if "pde_params" in locals() else {}
                     )
                 elif "pendulum" in pde_type.lower():
-                    from src.pdes.pendulum import Pendulum
+                    from src.pdes.pendulum_equation import PendulumEquation
 
-                    pde_instance = Pendulum(
+                    pde_instance = PendulumEquation(
                         **pde_params if "pde_params" in locals() else {}
                     )
 

@@ -8,11 +8,9 @@ import threading
 from datetime import datetime
 from pathlib import Path
 import numpy as np
-import json
 import subprocess
 import webbrowser
 import time
-import logging
 
 # Make sure src is in the PYTHONPATH
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -37,7 +35,7 @@ class InteractiveTrainer:
         # Initial configuration
         self.setup_variables()
         self.create_ui()
-        
+
         # Load configuration
         self.load_config("config.yaml")
 
@@ -49,20 +47,51 @@ class InteractiveTrainer:
                 config = yaml.safe_load(f)
                 training_config = config.get("training", {})
                 arch_config = config.get("architectures", {}).get("fourier", {})
+                device_config = config.get("device", "mps")  # Get device from config
+                rl_config = config.get("rl", {})  # Get RL config
         except Exception as e:
             print(f"Error loading config.yaml: {e}")
             training_config = {}
             arch_config = {}
+            device_config = "cpu"
+            rl_config = {}
 
         # Training parameters with defaults from config.yaml
         self.epochs = tk.IntVar(value=training_config.get("num_epochs", 100))
         self.batch_size = tk.IntVar(value=training_config.get("batch_size", 32))
-        self.num_points = tk.IntVar(value=training_config.get("num_collocation_points", 10000))
-        self.learning_rate = tk.DoubleVar(
-            value=training_config.get("optimizer_config", {}).get("learning_rate", 0.001)
+        self.num_points = tk.IntVar(
+            value=training_config.get("num_collocation_points", 10000)
         )
-        self.hidden_dim = tk.IntVar(value=arch_config.get("hidden_dims", [124])[0] if isinstance(arch_config.get("hidden_dims"), list) else 64)
-        self.num_layers = tk.IntVar(value=len(arch_config.get("hidden_dims", [])) if isinstance(arch_config.get("hidden_dims"), list) else 4)
+        self.learning_rate = tk.DoubleVar(
+            value=training_config.get("optimizer_config", {}).get(
+                "learning_rate", 0.001
+            )
+        )
+        self.hidden_dim = tk.IntVar(
+            value=(
+                arch_config.get("hidden_dims", [124])[0]
+                if isinstance(arch_config.get("hidden_dims"), list)
+                else 64
+            )
+        )
+        self.num_layers = tk.IntVar(
+            value=(
+                len(arch_config.get("hidden_dims", []))
+                if isinstance(arch_config.get("hidden_dims"), list)
+                else 4
+            )
+        )
+
+        # Device options and default from config
+        self.device_options = ["cpu", "cuda", "mps"]
+        self.selected_device = tk.StringVar(
+            value=device_config
+        )  # Use device from config
+
+        # RL enabled from config
+        self.use_rl = tk.BooleanVar(
+            value=rl_config.get("enabled", False)
+        )  # Use RL enabled from config
 
         # Load PDE-specific architectures
         try:
@@ -73,7 +102,7 @@ class InteractiveTrainer:
 
         # Options for dropdown lists
         self.pde_types = [
-            "Heat Equation",  # First in list
+            "Heat Equation",
             "Wave Equation",
             "Burgers Equation",
             "KdV Equation",
@@ -114,8 +143,6 @@ class InteractiveTrainer:
                 "autoencoder",
             ]
 
-        self.device_options = ["cpu", "cuda", "mps"]
-
         # Control variables
         self.selected_pde = tk.StringVar(
             value="Heat Equation"
@@ -127,8 +154,6 @@ class InteractiveTrainer:
         ).get("architecture", "fourier")
 
         self.selected_arch = tk.StringVar(value=default_arch)
-        self.selected_device = tk.StringVar(value=self.device_options[0])
-        self.use_rl = tk.BooleanVar(value=False)
 
         # PDE-specific parameters
         self.alpha = tk.DoubleVar(value=0.01)  # Heat/Wave equation
@@ -246,13 +271,17 @@ class InteractiveTrainer:
             state="readonly",
         )
         device_combo.grid(row=4, column=1, sticky="ew", padx=5, pady=5)
+        device_combo.bind("<<ComboboxSelected>>", self.on_device_selected)
 
         # RL option
         rl_frame = ttk.LabelFrame(main_frame, text="Reinforcement Learning")
         rl_frame.pack(fill="x", padx=5, pady=5)
 
         ttk.Checkbutton(
-            rl_frame, text="Use RL for adaptive sampling", variable=self.use_rl
+            rl_frame,
+            text="Use RL for adaptive sampling",
+            variable=self.use_rl,
+            command=self.on_rl_toggled,
         ).pack(padx=5, pady=5, anchor="w")
 
         # Buttons
@@ -476,11 +505,15 @@ class InteractiveTrainer:
         # Load config.yaml
         with open("config.yaml", "r") as f:
             yaml_config = yaml.safe_load(f)
-            
+
         # Get PDE-specific configuration from config.yaml
         pde_name = self.selected_pde.get().lower().replace(" ", "_")
-        pde_key = pde_name.split("_")[0]  # Get base name (e.g., 'heat' from 'heat_equation')
-        pde_config = yaml_config.get(pde_key, {})  # Changed from yaml_config["pde_configs"] to direct access
+        pde_key = pde_name.split("_")[
+            0
+        ]  # Get base name (e.g., 'heat' from 'heat_equation')
+        pde_config = yaml_config.get(
+            pde_key, {}
+        )  # Changed from yaml_config["pde_configs"] to direct access
 
         # Get architecture configuration
         arch_config = yaml_config.get("architectures", {}).get(
@@ -500,7 +533,11 @@ class InteractiveTrainer:
                 "num_layers": self.num_layers.get(),
                 "activation": arch_config.get("activation", "tanh"),
                 "fourier_features": self.selected_arch.get() == "fourier",
-                "fourier_scale": arch_config.get("scale", 1.0) if self.selected_arch.get() == "fourier" else None,
+                "fourier_scale": (
+                    arch_config.get("scale", 1.0)
+                    if self.selected_arch.get() == "fourier"
+                    else None
+                ),
                 "dropout": arch_config.get("dropout", 0.0),
                 "layer_norm": arch_config.get("layer_norm", True),
             },
@@ -512,15 +549,17 @@ class InteractiveTrainer:
         }
 
         # Only override specific training parameters that can be set in UI
-        config["training"].update({
-            "num_epochs": self.epochs.get(),
-            "batch_size": self.batch_size.get(),
-            "num_collocation_points": self.num_points.get(),
-            "optimizer_config": {
-                **config["training"].get("optimizer_config", {}),
-                "learning_rate": self.learning_rate.get(),
+        config["training"].update(
+            {
+                "num_epochs": self.epochs.get(),
+                "batch_size": self.batch_size.get(),
+                "num_collocation_points": self.num_points.get(),
+                "optimizer_config": {
+                    **config["training"].get("optimizer_config", {}),
+                    "learning_rate": self.learning_rate.get(),
+                },
             }
-        })
+        )
 
         # Add PDE-specific configuration
         config["pde"] = {
@@ -771,55 +810,79 @@ class InteractiveTrainer:
         self.stop_btn.config(state="disabled")
 
     def open_dashboard(self):
-        """Opens the training monitor dashboard in a web browser"""
+        """Open the training monitoring dashboard"""
         try:
-            self.status_label.config(text="Starting dashboard...")
+            import webbrowser
+            import subprocess
+            import sys
+            import os
 
-            # Kill any existing dashboard process first
-            try:
-                subprocess.run("pkill -f 'python dashboard.py' || true", shell=True)
-            except Exception:
-                pass
+            # Get the path to the dashboard script
+            dashboard_script = os.path.join(os.path.dirname(__file__), "dashboard.py")
 
-            # Run the dashboard on port 8051 (different from the default 8050)
-            # to avoid conflict with the GUI
-            dashboard_cmd = f"python dashboard.py --port 8051"
-
-            # Set environment variable to ensure PYTHONPATH is correct
-            env = os.environ.copy()
-            if "PYTHONPATH" not in env:
-                env["PYTHONPATH"] = os.getcwd()
-
-            # Start the dashboard process
-            proc = subprocess.Popen(
-                    dashboard_cmd,
-                shell=True,
-                cwd=os.getcwd(),
-                env=env,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+            # Start the dashboard server in a separate process
+            port = 8050  # Default port for Dash
+            dashboard_process = subprocess.Popen(
+                [sys.executable, dashboard_script, "--port", str(port)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
 
-            # Give dashboard time to start
+            # Wait a bit for the server to start
             time.sleep(2)
 
-            # Check if the process is still running
-            if proc.poll() is None:
-                # Process is running, open browser
-                webbrowser.open("http://127.0.0.1:8051/")
-                self.status_label.config(text="Dashboard opened in browser (port 8051)")
-            else:
-                # Process failed, get error message
-                stderr = proc.stderr.read().decode("utf-8")
-                if "ModuleNotFoundError: No module named 'dash'" in stderr:
-                    self.status_label.config(
-                        text="Error: Package 'dash' not found. Install with 'pip install dash'"
-                    )
-                else:
-                    self.status_label.config(text=f"Error starting dashboard: {stderr}")
+            # Open the dashboard in the default web browser
+            webbrowser.open(f"http://127.0.0.1:{port}")
+
+            self.status_label.config(
+                text=f"Dashboard opened at http://127.0.0.1:{port}"
+            )
+
         except Exception as e:
-            self.status_label.config(text=f"Error opening dashboard: {e}")
             print(f"Error opening dashboard: {e}")
+            self.status_label.config(text=f"Error opening dashboard: {e}")
+
+    def on_rl_toggled(self):
+        """Handle RL checkbox toggle and update config.yaml"""
+        try:
+            # Read current config
+            with open("config.yaml", "r") as f:
+                config = yaml.safe_load(f)
+
+            # Update RL enabled status
+            config["rl"]["enabled"] = self.use_rl.get()
+
+            # Write updated config
+            with open("config.yaml", "w") as f:
+                yaml.dump(config, f)
+
+            self.status_label.config(
+                text=f"RL {'enabled' if self.use_rl.get() else 'disabled'} and config updated"
+            )
+        except Exception as e:
+            print(f"Error updating RL config: {e}")
+            self.status_label.config(text=f"Error updating RL config: {e}")
+
+    def on_device_selected(self, event):
+        """Handle device selection and update config.yaml"""
+        try:
+            # Read current config
+            with open("config.yaml", "r") as f:
+                config = yaml.safe_load(f)
+
+            # Update device
+            config["device"] = self.selected_device.get()
+
+            # Write updated config
+            with open("config.yaml", "w") as f:
+                yaml.dump(config, f)
+
+            self.status_label.config(
+                text=f"Device changed to {self.selected_device.get()} and config updated"
+            )
+        except Exception as e:
+            print(f"Error updating device config: {e}")
+            self.status_label.config(text=f"Error updating device config: {e}")
 
 
 def main():

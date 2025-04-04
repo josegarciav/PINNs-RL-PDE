@@ -2,7 +2,7 @@
 # Configuration file for Physics-Informed Neural Networks
 
 # Device Configuration
-device: "mps"  # Options: "cuda", "mps", "cpu"
+device: "mps"  # Options: "mps", "cpu" (cpu is slower for deep networks)
 
 # Architecture-specific configurations
 architectures:
@@ -20,14 +20,14 @@ architectures:
   
   siren:
     hidden_dims: [124, 124, 124, 124, 124, 124, 124]
-    omega_0: 30.0  # Frequency parameter for sine activation
+    omega_0: 30.0  # Frequency parameter for sin activation
   
   fourier:
     mapping_size: 512  # Increased for more capacity
     hidden_dims: [512, 512, 512, 512]  # Wider layers
     scale: 30.0  # Increased scale for better high-frequency capture
     activation: "gelu"
-    dropout: 0.0
+    dropout: 0.1
     layer_norm: true
     periodic: true  # Enable periodic features
   
@@ -86,7 +86,7 @@ pde_configs:
     time_domain: [0.0, 1.0]
     dimension: 1
     initial_condition:
-      type: "sine"
+      type: "sin"
       amplitude: 1.0
       frequency: 1.0
     boundary_conditions:
@@ -94,7 +94,7 @@ pde_configs:
         type: "fixed"
         value: 0.0
     exact_solution:
-      type: "sine"
+      type: "sin"
       amplitude: 1.0
       frequency: 1.0
   
@@ -110,7 +110,7 @@ pde_configs:
     time_domain: [0.0, 1.0]
     dimension: 1
     initial_condition:
-      type: "sine"
+      type: "sin"
       amplitude: -1.0
       frequency: 1.0
     boundary_conditions:
@@ -135,14 +135,14 @@ pde_configs:
     time_domain: [0.0, 1.0]
     dimension: 1
     initial_condition:
-      type: "sine"
+      type: "sin"
       amplitude: 1.0
       frequency: 1.0
     boundary_conditions:
       dirichlet:
         type: "periodic"
     exact_solution:
-      type: "sine"
+      type: "sin"
       amplitude: 1.0
       frequency: 1.0
   
@@ -258,7 +258,7 @@ pde_configs:
     time_domain: [0.0, 10.0]
     dimension: 1
     initial_condition:
-      type: "sine"
+      type: "sin"
       amplitude: 0.5
       frequency: 1.0
     boundary_conditions:
@@ -298,9 +298,9 @@ pde_configs:
 # Training Configuration
 training:
   device: "mps"
-  num_epochs: 1000
-  batch_size: 128
-  num_collocation_points: 50000
+  num_epochs: 250
+  batch_size: 256
+  num_collocation_points: 20000
   validation_frequency: 10
   early_stopping:
     enabled: false

@@ -329,153 +329,177 @@ class PDETrainer:
 
     def plot_training_history(self, save_path=None):
         """Plot training history."""
-        import matplotlib
+        try:
+            # Create parent directory if it doesn't exist
+            if save_path:
+                os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
-        matplotlib.use("Agg")  # Use non-interactive backend
-        import matplotlib.pyplot as plt
+            fig = go.Figure()
 
-        plt.figure(figsize=(15, 10))
+            # Add traces for each loss component
+            for key in self.history.keys():
+                if key != "lr":  # Skip learning rate
+                    fig.add_trace(
+                        go.Scatter(y=self.history[key], name=key, mode="lines")
+                    )
 
-        # Plot losses
-        plt.subplot(2, 2, 1)
-        plt.plot(self.history["train_loss"], label="Train Loss")
-        if self.history["val_loss"]:
-            # Fill missing validation loss values with None
-            val_loss_full = []
-            val_idx = 0
-            for i in range(len(self.history["train_loss"])):
-                if (i + 1) % self.validation_frequency == 0 and val_idx < len(
-                    self.history["val_loss"]
-                ):
-                    val_loss_full.append(self.history["val_loss"][val_idx])
-                    val_idx += 1
-                else:
-                    val_loss_full.append(None)
-            # Plot only non-None values
-            epochs = range(1, len(self.history["train_loss"]) + 1)
-            val_epochs = [i for i, v in enumerate(val_loss_full, 1) if v is not None]
-            val_values = [v for v in val_loss_full if v is not None]
-            plt.plot(val_epochs, val_values, label="Val Loss")
-        plt.title("Training and Validation Loss")
-        plt.xlabel("Epoch")
-        plt.ylabel("Loss")
-        plt.yscale("log")  # Use log scale for better visualization
-        plt.legend()
+            # Update layout
+            fig.update_layout(
+                title="Training History",
+                xaxis_title="Epoch",
+                yaxis_title="Loss",
+                yaxis_type="log",  # Use log scale for loss
+            )
 
-        # Plot component losses
-        plt.subplot(2, 2, 2)
-        if self.history["residual_loss"]:
-            plt.plot(val_epochs, self.history["residual_loss"], label="Residual Loss")
-        if self.history["boundary_loss"]:
-            plt.plot(val_epochs, self.history["boundary_loss"], label="Boundary Loss")
-        if self.history["initial_loss"]:
-            plt.plot(val_epochs, self.history["initial_loss"], label="Initial Loss")
-        plt.title("Component Losses")
-        plt.xlabel("Epoch")
-        plt.ylabel("Loss")
-        plt.yscale("log")  # Use log scale for better visualization
-        plt.legend()
+            if save_path:
+                # Save both interactive HTML and static PNG
+                html_path = save_path.replace(".png", ".html")
+                fig.write_html(html_path)
+                fig.write_image(save_path)
 
-        # Plot learning rate
-        plt.subplot(2, 2, 3)
-        if self.history["learning_rate"]:
-            plt.plot(val_epochs, self.history["learning_rate"], label="Learning Rate")
-        plt.title("Learning Rate")
-        plt.xlabel("Epoch")
-        plt.ylabel("Learning Rate")
-        plt.yscale("log")  # Use log scale for better visualization
-        plt.legend()
-
-        plt.tight_layout()
-        if save_path:
-            plt.savefig(save_path)
-        else:
-            plt.savefig("training_history.png")
-        plt.close()
+        except Exception as e:
+            logging.warning(f"Error plotting training history: {e}")
 
     def plot_solution_comparison(self, num_points=50, save_path=None):
         """Plot comparison between exact and predicted solutions"""
         if self.pde.dimension == 2:
             # Generate grid points for x and y
-            x = torch.linspace(self.pde.domain[0][0], self.pde.domain[0][1], num_points, device=self.device)
-            y = torch.linspace(self.pde.domain[1][0], self.pde.domain[1][1], num_points, device=self.device)
-            X, Y = torch.meshgrid(x, y, indexing='ij')
-            
+            x = torch.linspace(
+                self.pde.domain[0][0],
+                self.pde.domain[0][1],
+                num_points,
+                device=self.device,
+            )
+            y = torch.linspace(
+                self.pde.domain[1][0],
+                self.pde.domain[1][1],
+                num_points,
+                device=self.device,
+            )
+            X, Y = torch.meshgrid(x, y, indexing="ij")
+
             # Generate frames for different time points
             frames = []
-            times = torch.linspace(self.pde.time_domain[0], self.pde.time_domain[1], 10, device=self.device)
-            
+            times = torch.linspace(
+                self.pde.time_domain[0], self.pde.time_domain[1], 10, device=self.device
+            )
+
             for t in times:
                 # Prepare input for the model
                 t_repeated = t.repeat(num_points * num_points)
                 points = torch.stack([X.flatten(), Y.flatten(), t_repeated], dim=1)
-                
+
                 # Get predictions and exact solutions
                 with torch.no_grad():
-                    pred = self.model(points).reshape(num_points, num_points).cpu().numpy()
-                    exact = self.pde.exact_solution(points).reshape(num_points, num_points).cpu().numpy()
+                    pred = (
+                        self.model(points).reshape(num_points, num_points).cpu().numpy()
+                    )
+                    exact = (
+                        self.pde.exact_solution(points)
+                        .reshape(num_points, num_points)
+                        .cpu()
+                        .numpy()
+                    )
                     error = np.abs(pred - exact)
-                
+
                 # Create frame with both plots
                 frame = go.Frame(
                     data=[
-                        go.Surface(x=X.cpu().numpy(), y=Y.cpu().numpy(), z=pred,
-                                 colorscale='viridis', name='Predicted'),
-                        go.Surface(x=X.cpu().numpy(), y=Y.cpu().numpy(), z=exact,
-                                 colorscale='viridis', name='Exact'),
-                        go.Surface(x=X.cpu().numpy(), y=Y.cpu().numpy(), z=error,
-                                 colorscale='viridis', name='Error')
+                        go.Surface(
+                            x=X.cpu().numpy(),
+                            y=Y.cpu().numpy(),
+                            z=pred,
+                            colorscale="viridis",
+                            name="Predicted",
+                        ),
+                        go.Surface(
+                            x=X.cpu().numpy(),
+                            y=Y.cpu().numpy(),
+                            z=exact,
+                            colorscale="viridis",
+                            name="Exact",
+                        ),
+                        go.Surface(
+                            x=X.cpu().numpy(),
+                            y=Y.cpu().numpy(),
+                            z=error,
+                            colorscale="viridis",
+                            name="Error",
+                        ),
                     ],
-                    name=f't={t.item():.2f}'
+                    name=f"t={t.item():.2f}",
                 )
                 frames.append(frame)
-            
+
             # Create figure with animation
             fig = go.Figure(
                 data=[frames[0].data[0], frames[0].data[1], frames[0].data[2]],
-                frames=frames
+                frames=frames,
             )
-            
+
             # Add play button and slider
             fig.update_layout(
-                updatemenus=[{
-                    'type': 'buttons',
-                    'showactive': False,
-                    'buttons': [{
-                        'label': 'Play',
-                        'method': 'animate',
-                        'args': [None, {'frame': {'duration': 500, 'redraw': True}, 'fromcurrent': True}]
-                    }]
-                }],
-                sliders=[{
-                    'currentvalue': {'prefix': 't='},
-                    'steps': [{'args': [[f.name], {'frame': {'duration': 0, 'redraw': True}, 'mode': 'immediate'}],
-                              'label': f.name,
-                              'method': 'animate'} for f in frames]
-                }]
+                updatemenus=[
+                    {
+                        "type": "buttons",
+                        "showactive": False,
+                        "buttons": [
+                            {
+                                "label": "Play",
+                                "method": "animate",
+                                "args": [
+                                    None,
+                                    {
+                                        "frame": {"duration": 500, "redraw": True},
+                                        "fromcurrent": True,
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                ],
+                sliders=[
+                    {
+                        "currentvalue": {"prefix": "t="},
+                        "steps": [
+                            {
+                                "args": [
+                                    [f.name],
+                                    {
+                                        "frame": {"duration": 0, "redraw": True},
+                                        "mode": "immediate",
+                                    },
+                                ],
+                                "label": f.name,
+                                "method": "animate",
+                            }
+                            for f in frames
+                        ],
+                    }
+                ],
             )
-            
+
             # Update layout
             fig.update_layout(
                 scene=dict(
                     camera=dict(
                         up=dict(x=0, y=0, z=1),
                         center=dict(x=0, y=0, z=0),
-                        eye=dict(x=1.5, y=1.5, z=1.5)
+                        eye=dict(x=1.5, y=1.5, z=1.5),
                     ),
-                    xaxis_title='x',
-                    yaxis_title='y',
-                    zaxis_title='u(x,y,t)'
+                    xaxis_title="x",
+                    yaxis_title="y",
+                    zaxis_title="u(x,y,t)",
                 ),
-                title='Solution Comparison (2D Heat Equation)'
+                title="Solution Comparison (2D Heat Equation)",
             )
-            
+
             # Save both interactive and static plots
             if save_path:
                 # Save interactive HTML
-                html_path = save_path.replace('.png', '.html')
+                html_path = save_path.replace(".png", ".html")
                 fig.write_html(html_path)
-                
+
                 # Save static PNG for each time step
                 for i, t in enumerate(times):
                     static_fig = go.Figure(data=frames[i].data)
@@ -484,60 +508,211 @@ class PDETrainer:
                             camera=dict(
                                 up=dict(x=0, y=0, z=1),
                                 center=dict(x=0, y=0, z=0),
-                                eye=dict(x=1.5, y=1.5, z=1.5)
+                                eye=dict(x=1.5, y=1.5, z=1.5),
                             ),
-                            xaxis_title='x',
-                            yaxis_title='y',
-                            zaxis_title='u(x,y,t)'
+                            xaxis_title="x",
+                            yaxis_title="y",
+                            zaxis_title="u(x,y,t)",
                         ),
-                        title=f'Solution at t={t.item():.2f}'
+                        title=f"Solution at t={t.item():.2f}",
                     )
-                    png_path = save_path.replace('.png', f'_t{i}.png')
+                    png_path = save_path.replace(".png", f"_t{i}.png")
                     static_fig.write_image(png_path)
-            
+
         else:  # 1D case
             # Generate points
-            x = torch.linspace(self.pde.domain[0][0], self.pde.domain[0][1], num_points, device=self.device)
-            t = torch.linspace(self.pde.time_domain[0], self.pde.time_domain[1], num_points, device=self.device)
-            X, T = torch.meshgrid(x, t, indexing='ij')
+            x = torch.linspace(
+                self.pde.domain[0][0],
+                self.pde.domain[0][1],
+                num_points,
+                device=self.device,
+            )
+            t = torch.linspace(
+                self.pde.time_domain[0],
+                self.pde.time_domain[1],
+                num_points,
+                device=self.device,
+            )
+            X, T = torch.meshgrid(x, t, indexing="ij")
             points = torch.stack([X.flatten(), T.flatten()], dim=1)
-            
+
             # Get predictions and exact solutions
             with torch.no_grad():
                 pred = self.model(points).reshape(num_points, num_points).cpu().numpy()
-                exact = self.pde.exact_solution(points).reshape(num_points, num_points).cpu().numpy()
+                exact = (
+                    self.pde.exact_solution(points)
+                    .reshape(num_points, num_points)
+                    .cpu()
+                    .numpy()
+                )
                 error = np.abs(pred - exact)
-            
+
             # Create interactive plot
             fig = go.Figure()
-            
+
             # Add surfaces for predicted, exact, and error
-            fig.add_trace(go.Surface(x=X.cpu().numpy(), y=T.cpu().numpy(), z=pred,
-                                   colorscale='viridis', name='Predicted'))
-            fig.add_trace(go.Surface(x=X.cpu().numpy(), y=T.cpu().numpy(), z=exact,
-                                   colorscale='viridis', name='Exact'))
-            fig.add_trace(go.Surface(x=X.cpu().numpy(), y=T.cpu().numpy(), z=error,
-                                   colorscale='viridis', name='Error'))
-            
+            fig.add_trace(
+                go.Surface(
+                    x=X.cpu().numpy(),
+                    y=T.cpu().numpy(),
+                    z=pred,
+                    colorscale="viridis",
+                    name="Predicted",
+                )
+            )
+            fig.add_trace(
+                go.Surface(
+                    x=X.cpu().numpy(),
+                    y=T.cpu().numpy(),
+                    z=exact,
+                    colorscale="viridis",
+                    name="Exact",
+                )
+            )
+            fig.add_trace(
+                go.Surface(
+                    x=X.cpu().numpy(),
+                    y=T.cpu().numpy(),
+                    z=error,
+                    colorscale="viridis",
+                    name="Error",
+                )
+            )
+
             # Update layout
             fig.update_layout(
                 scene=dict(
                     camera=dict(
                         up=dict(x=0, y=0, z=1),
                         center=dict(x=0, y=0, z=0),
-                        eye=dict(x=1.5, y=1.5, z=1.5)
+                        eye=dict(x=1.5, y=1.5, z=1.5),
                     ),
-                    xaxis_title='x',
-                    yaxis_title='t',
-                    zaxis_title='u(x,t)'
+                    xaxis_title="x",
+                    yaxis_title="t",
+                    zaxis_title="u(x,t)",
                 ),
-                title='Solution Comparison (1D)'
+                title="Solution Comparison (1D)",
             )
-            
+
             if save_path:
                 # Save interactive HTML
-                html_path = save_path.replace('.png', '.html')
+                html_path = save_path.replace(".png", ".html")
                 fig.write_html(html_path)
-                
+
                 # Save static PNG
                 fig.write_image(save_path)
+
+    def save_plots(self, save_dir):
+        """Save training plots"""
+        try:
+            # Create visualization directory if it doesn't exist
+            os.makedirs(save_dir, exist_ok=True)
+
+            # Save training history plot
+            history_path = os.path.join(save_dir, "final_training_history.png")
+            self.plot_training_history(save_path=history_path)
+
+            # Save solution comparison plot
+            solution_path = os.path.join(save_dir, "final_solution_comparison.png")
+            self.plot_solution_comparison(save_path=solution_path)
+
+            # Save collocation points evolution if available
+            if (
+                hasattr(self, "collocation_points_history")
+                and self.collocation_points_history
+            ):
+                collocation_path = os.path.join(save_dir, "collocation_evolution.png")
+                self.visualize_collocation_evolution(save_path=collocation_path)
+
+            logging.info(f"Plots saved successfully to {save_dir}")
+        except Exception as e:
+            logging.warning(f"Error saving plots: {e}")
+
+    def visualize_collocation_evolution(self, save_path=None):
+        """Visualize the evolution of collocation points"""
+        try:
+            if (
+                not hasattr(self, "collocation_points_history")
+                or not self.collocation_points_history
+            ):
+                logging.warning("No collocation points history available")
+                return
+
+            # Create parent directory if it doesn't exist
+            if save_path:
+                os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+            # Create animation frames
+            frames = []
+            for i, points in enumerate(self.collocation_points_history):
+                if self.pde.dimension == 2:
+                    frame = go.Frame(
+                        data=[
+                            go.Scatter3d(
+                                x=points[:, 0].cpu().numpy(),
+                                y=points[:, 1].cpu().numpy(),
+                                z=(
+                                    points[:, 2].cpu().numpy()
+                                    if points.shape[1] > 2
+                                    else np.zeros_like(points[:, 0].cpu().numpy())
+                                ),
+                                mode="markers",
+                                marker=dict(size=2),
+                            )
+                        ],
+                        name=f"Epoch {i*10}",
+                    )
+                else:
+                    frame = go.Frame(
+                        data=[
+                            go.Scatter(
+                                x=points[:, 0].cpu().numpy(),
+                                y=points[:, 1].cpu().numpy(),
+                                mode="markers",
+                                marker=dict(size=2),
+                            )
+                        ],
+                        name=f"Epoch {i*10}",
+                    )
+                frames.append(frame)
+
+            # Create figure with animation
+            fig = go.Figure(data=frames[0].data, frames=frames)
+
+            # Add play button
+            fig.update_layout(
+                updatemenus=[
+                    {
+                        "type": "buttons",
+                        "showactive": False,
+                        "buttons": [
+                            {
+                                "label": "Play",
+                                "method": "animate",
+                                "args": [
+                                    None,
+                                    {
+                                        "frame": {"duration": 500, "redraw": True},
+                                        "fromcurrent": True,
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                ],
+                title="Collocation Points Evolution",
+            )
+
+            if save_path:
+                # Save both interactive HTML and static PNG
+                html_path = save_path.replace(".png", ".html")
+                fig.write_html(html_path)
+
+                # Save static PNG for first and last frame
+                static_fig = go.Figure(data=frames[0].data)
+                static_fig.write_image(save_path.replace(".png", "_initial.png"))
+                static_fig = go.Figure(data=frames[-1].data)
+                static_fig.write_image(save_path.replace(".png", "_final.png"))
+
+        except Exception as e:
+            logging.warning(f"Error visualizing collocation evolution: {e}")
