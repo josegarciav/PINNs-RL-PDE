@@ -19,6 +19,7 @@ from src.neural_networks import PINNModel
 from src.pdes.heat_equation import HeatEquation
 from src.pdes.burgers_equation import BurgersEquation
 from src.pdes.wave_equation import WaveEquation
+from src.pdes.pendulum_equation import PendulumEquation
 from src.trainer import PDETrainer
 from src.rl_agent import RLAgent
 from src.utils.utils import save_model
@@ -600,6 +601,8 @@ class InteractiveTrainer:
             return BurgersEquation(config=pde_config)
         elif pde_type == "Wave Equation":
             return WaveEquation(config=pde_config)
+        elif pde_type == "Pendulum Equation":
+            return PendulumEquation(config=pde_config)
         else:
             raise ValueError(f"Unsupported PDE: {pde_type}")
 

@@ -291,6 +291,13 @@ class PDETrainer:
                         "early_stopping_triggered": self.patience_counter
                         >= self.patience
                         and self.early_stopping_enabled,
+                        "rl_enabled": self.rl_agent is not None,
+                        "training_params": {
+                            "num_epochs": num_epochs,
+                            "batch_size": batch_size,
+                            "num_points": num_points,
+                            "validation_frequency": self.validation_frequency
+                        }
                     }
                     save_training_metrics(self.history, experiment_dir, current_metrics)
                 except Exception as e:
@@ -313,6 +320,13 @@ class PDETrainer:
                     "training_time_minutes": training_time_minutes,
                     "start_time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
                     "end_time": end_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "rl_enabled": self.rl_agent is not None,
+                    "training_params": {
+                        "num_epochs": num_epochs,
+                        "batch_size": batch_size,
+                        "num_points": num_points,
+                        "validation_frequency": self.validation_frequency
+                    }
                 }
                 save_training_metrics(self.history, experiment_dir, final_metrics)
 

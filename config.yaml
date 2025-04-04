@@ -46,7 +46,7 @@ architectures:
     layer_norm: true
 
 # Default PDE type to train
-pde_type: "heat"  # Options: "heat", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
+pde_type: "pendulum"  # Options: "heat", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
 
 # PDE-specific configurations
 pde_configs:
@@ -57,14 +57,15 @@ pde_configs:
     input_dim: 2  # (x, t)
     output_dim: 1  # u(x,t)
     parameters:
-      alpha: 0.08  # Thermal diffusivity
+      alpha: 0.1  # Thermal diffusivity
     domain: [[0, 2]]  # [0, π] 3.14159 6.28318
-    time_domain: [0, 5]
+    time_domain: [0, 10]
     dimension: 1
     initial_condition:
-      type: "sine"
+      type: "sin_exp_decay"
       amplitude: 1.0
       frequency: 2.0
+      decay_rate: 0.1
     boundary_conditions:
       dirichlet:
         type: "fixed"
@@ -255,21 +256,18 @@ pde_configs:
       g: 9.81  # Gravitational constant
       L: 1.0   # Pendulum length
       damping: 0.1  # Damping coefficient
-    domain: [[0.0, 2.0 * 3.14159]]  # Angle domain
+    domain: [[0.0, 3.14159]]  # Angle domain
     time_domain: [0.0, 10.0]
     dimension: 1
     initial_condition:
-      type: "sin"
-      amplitude: 0.5
-      frequency: 1.0
+      type: "small_angle"  # Changed from "sine" to "small_angle"
+      initial_angle: 0.5   # Changed from amplitude to initial_angle
     boundary_conditions:
       dirichlet:
         type: "periodic"
     exact_solution:
-      type: "damped_oscillation"  # Approximate solution for small-angle pendulum with damping
-      initial_amplitude: 0.5
-      natural_frequency: 3.132  # sqrt(g/L)
-      damping_coefficient: 0.1
+      type: "small_angle"  # Changed from "damped_oscillation" to "small_angle"
+      initial_angle: 0.5   # Initial angle (in radians)
 
   # Heat Equation 2D Configuration
   heat_2d:
@@ -280,13 +278,13 @@ pde_configs:
     parameters:
       alpha: 0.01  # Thermal diffusivity
     domain: [[0, 3.14159], [0, 3.14159]]  # [0, π] × [0, π]
-    time_domain: [0, 1]
+    time_domain: [0, 5]
     dimension: 2
     initial_condition:
       type: "sine_2d"
       amplitude: 1.0
-      frequency_x: 1.0
-      frequency_y: 1.0
+      frequency_x: 2.0
+      frequency_y: 2.0
     boundary_conditions:
       dirichlet:
         type: "fixed"
@@ -294,8 +292,8 @@ pde_configs:
     exact_solution:
       type: "sine_2d"
       amplitude: 1.0
-      frequency_x: 1.0
-      frequency_y: 1.0
+      frequency_x: 2.0
+      frequency_y: 2.0
 
 # Training Configuration
 training:
@@ -329,12 +327,12 @@ training:
     min_lr: 1.0e-6
   # Parameters for CosineAnnealingLR
   cosine_params:
-    T_max: 100
+    T_max: 50
     eta_min: 1.0e-6
 
 # Reinforcement Learning Configuration
 rl:
-  enabled: true
+  enabled: false
   state_dim: 2  # (x, t)
   action_dim: 1  # Sampling probability
   hidden_dim: 64
