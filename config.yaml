@@ -319,6 +319,16 @@ training:
     pde: 1.0
     boundary: 1.0
     initial: 1.0
+  scheduler_type: "cosine"  # Options: "reduce_lr" or "cosine"
+  # Parameters for ReduceLROnPlateau
+  reduce_lr_params:
+    factor: 0.5
+    patience: 50
+    min_lr: 1.0e-6
+  # Parameters for CosineAnnealingLR
+  cosine_params:
+    T_max: 100
+    eta_min: 1.0e-6
 
 # Reinforcement Learning Configuration
 rl:

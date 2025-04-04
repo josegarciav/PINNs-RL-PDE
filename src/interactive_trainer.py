@@ -667,6 +667,7 @@ class InteractiveTrainer:
                 model=model,
                 pde=pde,
                 optimizer_config=config["training"]["optimizer_config"],
+                config=config,
                 device=device,
                 rl_agent=(
                     None if not config["rl"]["enabled"] else None

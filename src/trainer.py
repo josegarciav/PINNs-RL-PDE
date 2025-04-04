@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
 import numpy as np
 from typing import Dict, List, Optional
 import logging
@@ -20,6 +20,7 @@ class PDETrainer:
         model: nn.Module,
         pde: "PDEBase",
         optimizer_config: Dict,
+        config: Dict,
         device: Optional[torch.device] = None,
         rl_agent=None,
         viz_frequency=10,
@@ -32,6 +33,7 @@ class PDETrainer:
         :param model: PINN model
         :param pde: PDE instance
         :param optimizer_config: Optimizer configuration
+        :param config: Full configuration dictionary
         :param device: Device to train on
         :param rl_agent: Reinforcement Learning agent
         :param viz_frequency: Frequency of visualization
@@ -43,19 +45,11 @@ class PDETrainer:
         )
         self.model = model.to(self.device)
         self.pde = pde
+        self.config = config
         self.validation_frequency = validation_frequency
 
         # Setup optimizer
-        self.optimizer = optim.Adam(
-            self.model.parameters(),
-            lr=optimizer_config.get("lr", 0.001),
-            weight_decay=optimizer_config.get("weight_decay", 0.0),
-        )
-
-        # Setup learning rate scheduler - using only ReduceLROnPlateau
-        self.scheduler = ReduceLROnPlateau(
-            self.optimizer, mode="min", factor=0.5, patience=5, verbose=True
-        )
+        self._initialize_optimizer_and_scheduler()
 
         # Training history
         self.history = {
@@ -115,19 +109,51 @@ class PDETrainer:
             "initial_loss": losses["initial"].item(),
         }
 
-    def _update_learning_rate(self, val_loss: float):
-        """
-        Update learning rate based on validation loss.
+    def _update_scheduler(self, val_loss=None):
+        """Update the learning rate scheduler."""
+        if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+            self.scheduler.step(val_loss if val_loss is not None else self.train_loss)
+        else:
+            self.scheduler.step()
 
-        :param val_loss: Current validation loss
-        """
-        # Update ReduceLROnPlateau scheduler
-        self.scheduler.step(val_loss)
+    def _initialize_optimizer_and_scheduler(self):
+        """Initialize optimizer and learning rate scheduler."""
+        # Initialize optimizer
+        self.optimizer = optim.Adam(
+            self.model.parameters(),
+            lr=self.config["training"]["learning_rate"],
+            weight_decay=self.config["training"]["weight_decay"]
+        )
 
-        # Log current learning rate
-        current_lr = self.optimizer.param_groups[0]["lr"]
-        self.history["learning_rate"].append(current_lr)
-        self.logger.info(f"Current learning rate: {current_lr:.6f}")
+        # Initialize scheduler based on type
+        scheduler_type = self.config["training"].get("scheduler_type", "reduce_lr")
+        
+        if scheduler_type == "reduce_lr":
+            reduce_lr_params = self.config["training"].get("reduce_lr_params", {
+                "factor": 0.5,
+                "patience": 50,
+                "min_lr": 1e-6
+            })
+            self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+                self.optimizer,
+                mode='min',
+                factor=reduce_lr_params["factor"],
+                patience=reduce_lr_params["patience"],
+                min_lr=reduce_lr_params["min_lr"],
+                verbose=True
+            )
+        elif scheduler_type == "cosine":
+            cosine_params = self.config["training"].get("cosine_params", {
+                "T_max": 100,
+                "eta_min": 1e-6
+            })
+            self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer,
+                T_max=cosine_params["T_max"],
+                eta_min=cosine_params["eta_min"]
+            )
+        else:
+            raise ValueError(f"Unknown scheduler type: {scheduler_type}")
 
     def train(
         self,
@@ -217,7 +243,7 @@ class PDETrainer:
                 self.history["initial_loss"].append(val_losses["initial_loss"])
 
                 # Update learning rate
-                self._update_learning_rate(val_losses["total_loss"])
+                self._update_scheduler(val_losses["total_loss"])
 
                 # Log validation metrics
                 self.logger.info(
