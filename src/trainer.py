@@ -121,8 +121,8 @@ class PDETrainer:
         # Initialize optimizer
         self.optimizer = optim.Adam(
             self.model.parameters(),
-            lr=self.config["training"]["learning_rate"],
-            weight_decay=self.config["training"]["weight_decay"]
+            lr=self.config["training"]["optimizer_config"]["learning_rate"],
+            weight_decay=self.config["training"]["optimizer_config"]["weight_decay"]
         )
 
         # Initialize scheduler based on type
