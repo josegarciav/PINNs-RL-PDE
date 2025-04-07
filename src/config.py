@@ -34,6 +34,35 @@ class TrainingConfig:
     gradient_clipping: float
     early_stopping: EarlyStoppingConfig
     learning_rate_scheduler: LearningRateSchedulerConfig
+    loss_weights: Dict[str, float] = None
+
+    def __post_init__(self):
+        if self.loss_weights is None:
+            self.loss_weights = {
+                "residual": 1.0,
+                "boundary": 1.0,
+                "initial": 1.0
+            }
+
+    @property
+    def optimizer_config(self) -> Dict[str, Any]:
+        """Get optimizer configuration."""
+        return {
+            "learning_rate": self.learning_rate,
+            "weight_decay": self.weight_decay
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        """Get the value for a given key, also to make it subscriptible."""
+        if key == "optimizer_config":
+            return self.optimizer_config
+        return getattr(self, key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get the value for a given key or return the default value if the key doesn't exist."""
+        if key == "optimizer_config":
+            return self.optimizer_config
+        return getattr(self, key, default)
 
 
 @dataclass
@@ -258,6 +287,7 @@ class Config:
                 factor=lr_scheduler_config.get("factor", 0.5),
                 patience=lr_scheduler_config.get("patience", 50),
             ),
+            loss_weights=training_config.get("loss_weights", None),
         )
 
         # RL configuration
@@ -436,6 +466,7 @@ class Config:
                     "factor": self.training.learning_rate_scheduler.factor,
                     "patience": self.training.learning_rate_scheduler.patience,
                 },
+                "loss_weights": self.training.loss_weights,
             },
             "rl": {
                 "enabled": self.rl.enabled,

@@ -23,11 +23,11 @@ architectures:
     omega_0: 30.0  # Frequency parameter for sin activation
   
   fourier:
-    mapping_size: 124  # Increased for more capacity
-    hidden_dims: [512, 512, 512, 512]  # Wider layers
-    scale: 30.0  # Increased scale for better high-frequency capture
+    mapping_size: 256  # Increased for better frequency resolution
+    hidden_dims: [512, 512, 512, 512]  # Keep wide layers
+    scale: 10.0  # Reduced scale to prevent high-frequency artifacts
     activation: "gelu"
-    dropout: 0.1
+    dropout: 0.05  # Reduced dropout
     layer_norm: true
     periodic: true  # Enable periodic features
   
@@ -46,7 +46,7 @@ architectures:
     layer_norm: true
 
 # Default PDE type to train
-pde_type: "pendulum"  # Options: "heat", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
+pde_type: "heat"  # Options: "heat", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
 
 # PDE-specific configurations
 pde_configs:
@@ -57,24 +57,21 @@ pde_configs:
     input_dim: 2  # (x, t)
     output_dim: 1  # u(x,t)
     parameters:
-      alpha: 0.1  # Thermal diffusivity
+      alpha: 0.01  # Thermal diffusivity
     domain: [[0, 2]]  # [0, π] 3.14159 6.28318
-    time_domain: [0, 10]
+    time_domain: [0, 5]
     dimension: 1
     initial_condition:
       type: "sin_exp_decay"
       amplitude: 1.0
-      frequency: 2.0
-      decay_rate: 0.1
+      frequency: 2.0  # Number of periods in [0,1]
     boundary_conditions:
-      dirichlet:
-        type: "fixed"
-        value: 0.0
+      periodic: {}  # Periodic boundary conditions
+      # dirichlet: { value: 0.0 }
     exact_solution:
-      type: "sin_exp_decay" # sin(x) * e^(-0.1t) or sine simply
+      type: "sin_exp_decay"
       amplitude: 1.0
       frequency: 2.0
-      decay_rate: 0.1  # e^(-0.1t) factor
 
   # Wave Equation Configuration
   wave:
@@ -298,28 +295,21 @@ pde_configs:
 # Training Configuration
 training:
   device: "mps"
-  num_epochs: 100
-  batch_size: 256
-  num_collocation_points: 50000
+  num_epochs: 500
+  batch_size: 1024
+  num_collocation_points: 6000
+  num_boundary_points: 2000  # Number of points for boundary conditions
+  num_initial_points: 4000   # Number of points for initial conditions
   validation_frequency: 10
   early_stopping:
     enabled: true
-    patience: 50
-    min_delta: 1e-6
+    patience: 10
+    min_delta: 1.0e-6
   optimizer_config:
     name: "adam"
     learning_rate: 0.001
-    weight_decay: 1.0e-6  # Reduced weight decay
-  scheduler_config:
-    type: "StepLR"
-    step_size: 100
-    gamma: 0.5
-  rl_update_frequency: 10  # Update RL agent every N epochs
-  loss_weights:
-    pde: 1.0
-    boundary: 1.0
-    initial: 1.0
-  scheduler_type: "cosine"  # Options: "reduce_lr" or "cosine"
+    weight_decay: 1.0e-8  # Reduced weight decay
+  scheduler_type: "reduce_lr"  # Options: "reduce_lr" or "cosine"
   # Parameters for ReduceLROnPlateau
   reduce_lr_params:
     factor: 0.5
@@ -329,20 +319,26 @@ training:
   cosine_params:
     T_max: 50
     eta_min: 1.0e-6
+  rl_update_frequency: 10  # Update RL agent every N epochs
+  loss_weights:
+    pde: 1.0
+    boundary: 20.0
+    initial: 20.0
+    smoothness: 0.05  # Weight for smoothness regularization
 
 # Reinforcement Learning Configuration
 rl:
   enabled: false
   state_dim: 2  # (x, t)
   action_dim: 1  # Sampling probability
-  hidden_dim: 64
+  hidden_dim: 512
   learning_rate: 0.001
   gamma: 0.99
   epsilon_start: 1.0
   epsilon_end: 0.01
   epsilon_decay: 0.995
   memory_size: 10000
-  batch_size: 64
+  batch_size: 124
   target_update: 100
   reward_weights:
     residual: 1.0
@@ -352,7 +348,7 @@ rl:
 
 # Evaluation Configuration
 evaluation:
-  num_points: 5000
+  num_points: 1000
   metrics:
     - "l2_error"
     - "max_error"

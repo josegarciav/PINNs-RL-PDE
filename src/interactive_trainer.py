@@ -11,6 +11,7 @@ import numpy as np
 import subprocess
 import webbrowser
 import time
+import logging
 
 # Make sure src is in the PYTHONPATH
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,7 +25,7 @@ from src.trainer import PDETrainer
 from src.rl_agent import RLAgent
 from src.utils.utils import save_model
 from src.pdes.pde_base import PDEConfig
-from src.config import ModelConfig, Config
+from src.config import ModelConfig, Config, TrainingConfig, EarlyStoppingConfig, LearningRateSchedulerConfig
 
 
 class InteractiveTrainer:
@@ -33,12 +34,33 @@ class InteractiveTrainer:
         self.root.title("PINN Training Interface")
         self.root.geometry("800x800")
 
+        # Initialize logger
+        self.logger = self.setup_logger()
+
         # Initial configuration
         self.setup_variables()
         self.create_ui()
 
         # Load configuration
         self.load_config("config.yaml")
+
+    def setup_logger(self):
+        """Initialize and configure logger"""
+        logger = logging.getLogger('InteractiveTrainer')
+        logger.setLevel(logging.INFO)
+        
+        # Create console handler
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        
+        # Create formatter
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        ch.setFormatter(formatter)
+        
+        # Add handler to logger
+        logger.addHandler(ch)
+        
+        return logger
 
     def setup_variables(self):
         """Initialize application variables"""
@@ -509,90 +531,96 @@ class InteractiveTrainer:
 
         # Get PDE-specific configuration from config.yaml
         pde_name = self.selected_pde.get().lower().replace(" ", "_")
-        pde_key = pde_name.split("_")[
-            0
-        ]  # Get base name (e.g., 'heat' from 'heat_equation')
+        pde_key = pde_name.split("_")[0]  # Get base name (e.g., 'heat' from 'heat_equation')
         pde_config = yaml_config.get("pde_configs", {}).get(pde_key, {})
 
         # Get architecture configuration
-        arch_config = yaml_config.get("architectures", {}).get(
-            self.selected_arch.get(), {}
-        )
+        arch_type = pde_config.get("architecture", "fourier")
+        arch_config = yaml_config.get("architectures", {}).get(arch_type, {})
 
-        # Use global device from config
-        device = yaml_config.get("device", "cpu")
+        # Create a copy of the yaml_config to modify
+        config = yaml_config.copy()
 
-        config = {
-            "device": device,  # Use global device setting
-            "model": {
-                "architecture": self.selected_arch.get(),
-                "input_dim": pde_config.get("input_dim", 2),
-                "hidden_dim": self.hidden_dim.get(),
-                "output_dim": pde_config.get("output_dim", 1),
-                "num_layers": self.num_layers.get(),
-                "activation": arch_config.get("activation", "tanh"),
-                "fourier_features": self.selected_arch.get() == "fourier",
-                "fourier_scale": (
-                    arch_config.get("scale", 1.0)
-                    if self.selected_arch.get() == "fourier"
-                    else None
-                ),
-                "dropout": arch_config.get("dropout", 0.0),
-                "layer_norm": arch_config.get("layer_norm", True),
+        # Update training parameters that can be set in UI
+        config["training"].update({
+            "num_epochs": self.epochs.get(),
+            "batch_size": self.batch_size.get(),
+            "num_collocation_points": self.num_points.get(),
+            "optimizer_config": {
+                **config["training"].get("optimizer_config", {}),
+                "learning_rate": self.learning_rate.get(),
             },
-            "training": yaml_config.get("training", {}),  # Get full training config
-            "rl": {"enabled": self.use_rl.get(), **yaml_config.get("rl", {})},
-            "evaluation": yaml_config.get("evaluation", {}),
-            "paths": yaml_config.get("paths", {}),
-            "logging": yaml_config.get("logging", {}),
-        }
+        })
 
-        # Only override specific training parameters that can be set in UI
-        config["training"].update(
-            {
-                "num_epochs": self.epochs.get(),
-                "batch_size": self.batch_size.get(),
-                "num_collocation_points": self.num_points.get(),
-                "optimizer_config": {
-                    **config["training"].get("optimizer_config", {}),
-                    "learning_rate": self.learning_rate.get(),
-                },
-            }
-        )
+        # Update device
+        config["device"] = self.selected_device.get()
 
-        # Add PDE-specific configuration
+        # Update RL configuration
+        config["rl"]["enabled"] = self.use_rl.get()
+
+        # Update PDE configuration with a deep copy of pde_config
         config["pde"] = {
-            "name": pde_config.get("name", self.selected_pde.get()),
-            "parameters": pde_config.get("parameters", {}),
-            "domain": pde_config.get("domain", [[0, 1]]),
-            "time_domain": pde_config.get("time_domain", [0, 1]),
+            "name": self.selected_pde.get(),
+            "domain": pde_config.get("domain"),
+            "time_domain": pde_config.get("time_domain"),
+            "parameters": pde_config.get("parameters", {}),  # Ensure parameters are copied
             "boundary_conditions": pde_config.get("boundary_conditions", {}),
             "initial_condition": pde_config.get("initial_condition", {}),
             "exact_solution": pde_config.get("exact_solution", {}),
             "dimension": pde_config.get("dimension", 1),
+            "input_dim": pde_config.get("input_dim", 2),
+            "output_dim": pde_config.get("output_dim", 1),
+            "architecture": arch_type
         }
 
-        # Ensure paths exist
-        if "paths" not in config:
-            config["paths"] = {}
-        if "results_dir" not in config["paths"]:
-            config["paths"]["results_dir"] = "experiments"
+        # Update model configuration based on PDE and architecture settings
+        config["model"] = {
+            "architecture": arch_type,
+            "input_dim": pde_config.get("input_dim", 2),
+            "hidden_dim": self.hidden_dim.get(),
+            "output_dim": pde_config.get("output_dim", 1),
+            "num_layers": self.num_layers.get(),
+            **arch_config  # Include all architecture-specific settings
+        }
 
         return config
 
-    def create_pde(self, config, device):
+    def create_pde(self, config_dict, device):
         """Create a PDE instance based on configuration"""
         pde_type = self.selected_pde.get()
         pde_config = PDEConfig(
-            name=config["pde"]["name"],
-            domain=config["pde"]["domain"],
-            time_domain=config["pde"]["time_domain"],
-            parameters=config["pde"]["parameters"],
-            boundary_conditions=config["pde"]["boundary_conditions"],
-            initial_condition=config["pde"]["initial_condition"],
-            exact_solution=config["pde"]["exact_solution"],
-            dimension=config["pde"]["dimension"],
+            name=config_dict["pde"]["name"],
+            domain=config_dict["pde"]["domain"],
+            time_domain=config_dict["pde"]["time_domain"],
+            parameters=config_dict["pde"].get("parameters", {}),  # Ensure parameters are passed
+            boundary_conditions=config_dict["pde"]["boundary_conditions"],
+            initial_condition=config_dict["pde"]["initial_condition"],
+            exact_solution=config_dict["pde"]["exact_solution"],
+            dimension=config_dict["pde"]["dimension"],
             device=device,
+            training=TrainingConfig(
+                num_epochs=config_dict["training"]["num_epochs"],
+                batch_size=config_dict["training"]["batch_size"],
+                num_collocation_points=config_dict["training"]["num_collocation_points"],
+                num_boundary_points=config_dict["training"]["num_boundary_points"],
+                num_initial_points=config_dict["training"]["num_initial_points"],
+                learning_rate=config_dict["training"]["optimizer_config"]["learning_rate"],
+                weight_decay=config_dict["training"]["optimizer_config"]["weight_decay"],
+                gradient_clipping=config_dict["training"].get("gradient_clipping", 1.0),
+                early_stopping=EarlyStoppingConfig(
+                    enabled=config_dict["training"]["early_stopping"]["enabled"],
+                    patience=config_dict["training"]["early_stopping"]["patience"],
+                    min_delta=config_dict["training"]["early_stopping"]["min_delta"],
+                ),
+                learning_rate_scheduler=LearningRateSchedulerConfig(
+                    type=config_dict["training"]["scheduler_type"],
+                    warmup_epochs=config_dict["training"].get("warmup_epochs", 0),
+                    min_lr=config_dict["training"]["reduce_lr_params"]["min_lr"],
+                    factor=config_dict["training"]["reduce_lr_params"]["factor"],
+                    patience=config_dict["training"]["reduce_lr_params"]["patience"],
+                ),
+                loss_weights=config_dict["training"].get("loss_weights", None)
+            )
         )
 
         if pde_type == "Heat Equation":
@@ -628,18 +656,64 @@ class InteractiveTrainer:
         """Run the training process in a separate thread."""
         try:
             # Create configuration
-            config = self.create_config()
+            config_dict = self.create_config()
+
+            # Create Config object
+            config_obj = Config()
+            config_obj.device = config_dict["device"]
+            
+            # Get architecture configuration
+            arch_type = config_dict["model"]["architecture"]
+            arch_config = config_dict["architectures"][arch_type]
+
+            # Create model config using PDE-specific parameters
+            config_obj.model = ModelConfig(
+                input_dim=config_dict["model"]["input_dim"],
+                hidden_dim=self.hidden_dim.get(),  # From UI
+                output_dim=config_dict["model"]["output_dim"],
+                num_layers=self.num_layers.get(),  # From UI
+                activation=arch_config.get("activation", "tanh"),
+                fourier_features=arch_type == "fourier",
+                fourier_scale=arch_config.get("scale", 1.0) if arch_type == "fourier" else None,
+                dropout=arch_config.get("dropout", 0.0),
+                layer_norm=arch_config.get("layer_norm", True),
+                architecture=arch_type
+            )
+
+            # Create training config
+            config_obj.training = TrainingConfig(
+                num_epochs=config_dict["training"]["num_epochs"],
+                batch_size=config_dict["training"]["batch_size"],
+                num_collocation_points=config_dict["training"]["num_collocation_points"],
+                num_boundary_points=config_dict["training"]["num_boundary_points"],
+                num_initial_points=config_dict["training"]["num_initial_points"],
+                learning_rate=config_dict["training"]["optimizer_config"]["learning_rate"],
+                weight_decay=config_dict["training"]["optimizer_config"]["weight_decay"],
+                gradient_clipping=config_dict["training"].get("gradient_clipping", 1.0),
+                early_stopping=EarlyStoppingConfig(
+                    enabled=config_dict["training"]["early_stopping"]["enabled"],
+                    patience=config_dict["training"]["early_stopping"]["patience"],
+                    min_delta=config_dict["training"]["early_stopping"]["min_delta"],
+                ),
+                learning_rate_scheduler=LearningRateSchedulerConfig(
+                    type=config_dict["training"]["scheduler_type"],
+                    warmup_epochs=config_dict["training"].get("warmup_epochs", 0),
+                    min_lr=config_dict["training"]["reduce_lr_params"]["min_lr"],
+                    factor=config_dict["training"]["reduce_lr_params"]["factor"],
+                    patience=config_dict["training"]["reduce_lr_params"]["patience"],
+                ),
+            )
 
             # Set device
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
             # Create experiment directory with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            arch_name = config["model"]["architecture"]
-            pde_name = config["pde"]["name"]
-            rl_status = "rl" if config["rl"]["enabled"] else "no_rl"
+            arch_name = arch_type
+            pde_name = config_dict["pde"]["name"]
+            rl_status = "rl" if config_dict["rl"]["enabled"] else "no_rl"
             experiment_name = f"{timestamp}_{pde_name}_{arch_name}_{rl_status}"
-            experiment_dir = Path(config["paths"]["results_dir"]) / experiment_name
+            experiment_dir = Path(config_dict["paths"]["results_dir"]) / experiment_name
             experiment_dir.mkdir(parents=True, exist_ok=True)
 
             # Create .running file
@@ -653,29 +727,11 @@ class InteractiveTrainer:
 
             # Save configuration
             with open(experiment_dir / "config.yaml", "w") as f:
-                yaml.dump(config, f)
+                yaml.dump(config_dict, f)
 
             try:
                 # Create PDE
-                pde = self.create_pde(config, device)
-
-                # Create model config
-                model_config = ModelConfig(
-                    input_dim=config["model"]["input_dim"],
-                    hidden_dim=config["model"]["hidden_dim"],
-                    output_dim=config["model"]["output_dim"],
-                    num_layers=config["model"]["num_layers"],
-                    activation=config["model"]["activation"],
-                    fourier_features=config["model"]["fourier_features"],
-                    fourier_scale=config["model"]["fourier_scale"],
-                    dropout=config["model"]["dropout"],
-                    layer_norm=config["model"]["layer_norm"],
-                    architecture=config["model"]["architecture"],
-                )
-
-                # Create config object with model attribute
-                config_obj = Config()
-                config_obj.model = model_config
+                pde = self.create_pde(config_dict, device)
 
                 # Initialize model
                 model = PINNModel(config=config_obj, device=device).to(device)
@@ -684,72 +740,63 @@ class InteractiveTrainer:
                 trainer = PDETrainer(
                     model=model,
                     pde=pde,
-                    optimizer_config=config["training"]["optimizer_config"],
-                    config=config,
+                    optimizer_config=config_dict["training"]["optimizer_config"],
+                    config=config_obj,
                     device=device,
                     rl_agent=(
                         RLAgent(
-                            state_dim=config["rl"][
+                            state_dim=config_dict["rl"][
                                 "state_dim"
                             ],  # Input dimension (spatial + temporal)
-                            action_dim=config["rl"][
+                            action_dim=config_dict["rl"][
                                 "action_dim"
                             ],  # Output dimension (sampling probability)
-                            hidden_dim=config["rl"]["hidden_dim"],
-                            learning_rate=config["rl"]["learning_rate"],
-                            gamma=config["rl"]["gamma"],
-                            epsilon_start=config["rl"]["epsilon_start"],
-                            epsilon_end=config["rl"]["epsilon_end"],
-                            epsilon_decay=config["rl"]["epsilon_decay"],
-                            memory_size=config["rl"]["memory_size"],
-                            batch_size=config["rl"]["batch_size"],
-                            target_update=config["rl"]["target_update"],
-                            reward_weights=config["rl"]["reward_weights"],
+                            hidden_dim=config_dict["rl"]["hidden_dim"],
+                            learning_rate=config_dict["rl"]["learning_rate"],
+                            gamma=config_dict["rl"]["gamma"],
+                            epsilon_start=config_dict["rl"]["epsilon_start"],
+                            epsilon_end=config_dict["rl"]["epsilon_end"],
+                            epsilon_decay=config_dict["rl"]["epsilon_decay"],
+                            memory_size=config_dict["rl"]["memory_size"],
+                            batch_size=config_dict["rl"]["batch_size"],
+                            target_update=config_dict["rl"]["target_update"],
+                            reward_weights=config_dict["rl"]["reward_weights"],
                             device=device,
                         )
-                        if config["rl"]["enabled"]
+                        if config_dict["rl"]["enabled"]
                         else None
                     ),
-                    validation_frequency=config["training"]["validation_frequency"],
-                    early_stopping_config=config["training"]["early_stopping"],
+                    validation_frequency=config_dict["training"]["validation_frequency"],
+                    early_stopping_config=config_dict["training"]["early_stopping"],
                 )
 
                 # Save trainer and configuration in attributes for access from update_progress
                 self.current_trainer = trainer
-                self.total_epochs = config["training"]["num_epochs"]
+                self.total_epochs = config_obj.training.num_epochs
                 self.experiment_dir = experiment_dir
 
-                # Run training
-                history = trainer.train(
-                    num_epochs=config["training"]["num_epochs"],
-                    batch_size=config["training"]["batch_size"],
-                    num_points=config["training"]["num_collocation_points"],
+                # Start training
+                self.logger.info("Starting training...")
+                self.logger.info(
+                    f"Saving visualizations to: {experiment_dir}/visualizations"
+                )
+
+                trainer.train(
+                    num_epochs=config_obj.training.num_epochs,
+                    batch_size=config_obj.training.batch_size,
+                    num_points=config_obj.training.num_collocation_points,
                     experiment_dir=str(experiment_dir),
                 )
 
-                # Save the model
-                model_path = experiment_dir / "models" / "final_model.pt"
-                save_model(model, str(model_path))
-
-            finally:
-                # Remove .running file
-                if running_file.exists():
-                    running_file.unlink()
-
-            # Open the experiment directory
-            if sys.platform == "darwin":  # macOS
-                subprocess.run(["open", str(experiment_dir)])
-            elif sys.platform == "win32":  # Windows
-                os.startfile(str(experiment_dir))
-            else:  # Linux
-                subprocess.run(["xdg-open", str(experiment_dir)])
+            except Exception as e:
+                self.logger.error(f"Error during training: {str(e)}")
+                self.training_running = False
+                self.on_training_complete()
 
         except Exception as e:
-            print(f"Error during training: {e}")
-
-        finally:
+            self.logger.error(f"Error setting up training: {str(e)}")
             self.training_running = False
-            self.root.after(0, self.on_training_complete)
+            self.on_training_complete()
 
     def update_progress(self):
         """Update training progress in the UI"""
@@ -837,7 +884,7 @@ class InteractiveTrainer:
                 and self.current_trainer.history["val_loss"]
             ):
                 self.best_loss = min(self.current_trainer.history["val_loss"])
-                self.loss_label.config(text=f"{self.best_loss:.6f}")
+                self.loss_label.config(text=f"{self.best_loss:.4f}")
 
         # Show final message
         if hasattr(self, "experiment_dir"):

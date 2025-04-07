@@ -21,7 +21,7 @@ class PDETrainer:
         model: nn.Module,
         pde: "PDEBase",
         optimizer_config: Dict,
-        config: Dict,
+        config: "Config",
         device: Optional[torch.device] = None,
         rl_agent=None,
         viz_frequency=10,
@@ -34,7 +34,7 @@ class PDETrainer:
         :param model: PINN model
         :param pde: PDE instance
         :param optimizer_config: Optimizer configuration
-        :param config: Full configuration dictionary
+        :param config: Full configuration object
         :param device: Device to train on
         :param rl_agent: Reinforcement Learning agent
         :param viz_frequency: Frequency of visualization
@@ -122,33 +122,27 @@ class PDETrainer:
         # Initialize optimizer
         self.optimizer = optim.Adam(
             self.model.parameters(),
-            lr=self.config["training"]["optimizer_config"]["learning_rate"],
-            weight_decay=self.config["training"]["optimizer_config"]["weight_decay"],
+            lr=self.config.training.learning_rate,
+            weight_decay=self.config.training.weight_decay,
         )
 
         # Initialize scheduler based on type
-        scheduler_type = self.config["training"].get("scheduler_type", "reduce_lr")
+        scheduler_type = self.config.training.learning_rate_scheduler.type
 
         if scheduler_type == "reduce_lr":
-            reduce_lr_params = self.config["training"].get(
-                "reduce_lr_params", {"factor": 0.5, "patience": 50, "min_lr": 1e-6}
-            )
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer,
                 mode="min",
-                factor=reduce_lr_params["factor"],
-                patience=reduce_lr_params["patience"],
-                min_lr=reduce_lr_params["min_lr"],
+                factor=self.config.training.learning_rate_scheduler.factor,
+                patience=self.config.training.learning_rate_scheduler.patience,
+                min_lr=self.config.training.learning_rate_scheduler.min_lr,
                 verbose=True,
             )
         elif scheduler_type == "cosine":
-            cosine_params = self.config["training"].get(
-                "cosine_params", {"T_max": 100, "eta_min": 1e-6}
-            )
             self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer,
-                T_max=cosine_params["T_max"],
-                eta_min=cosine_params["eta_min"],
+                T_max=self.config.training.num_epochs,
+                eta_min=self.config.training.learning_rate_scheduler.min_lr,
             )
         else:
             raise ValueError(f"Unknown scheduler type: {scheduler_type}")
@@ -214,7 +208,7 @@ class PDETrainer:
                 total_loss.backward()
 
                 # Gradient clipping
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.gradient_clipping)
 
                 # Optimize
                 self.optimizer.step()
@@ -601,13 +595,22 @@ class PDETrainer:
 
                     logging.info(f"Exact solution shape before reshape: {exact.shape}")
                     exact = exact.reshape(num_points, num_points).cpu().numpy()
-                    error = np.abs(pred - exact)
+                    
+                    # Calculate both absolute and relative errors
+                    abs_error = np.abs(pred - exact)
+                    rel_error = np.abs((pred - exact) / (exact + 1e-10))  # Add small constant to avoid division by zero
+                    
+                    # Take the minimum between absolute and relative errors
+                    error = np.minimum(abs_error, rel_error)
+                    
+                    # Apply log scale to error
+                    error = np.log10(error + 1e-10)  # Add small constant to avoid log(0)
 
                 # Create figure with subplots
                 fig = make_subplots(
                     rows=1,
                     cols=3,
-                    subplot_titles=("Exact", "Predicted", "Absolute Error"),
+                    subplot_titles=("Exact", "Predicted", "Log Min(Abs,Rel) Error"),
                     specs=[
                         [{"type": "surface"}, {"type": "surface"}, {"type": "surface"}]
                     ],
@@ -621,7 +624,7 @@ class PDETrainer:
                         z=exact,
                         colorscale="viridis",
                         name="Exact",
-                        showscale=True,
+                        showscale=False,  # Hide colorscale for exact solution
                     ),
                     row=1,
                     col=1,
@@ -633,7 +636,7 @@ class PDETrainer:
                         z=pred,
                         colorscale="viridis",
                         name="Predicted",
-                        showscale=True,
+                        showscale=False,  # Hide colorscale for predicted solution
                     ),
                     row=1,
                     col=2,
@@ -644,8 +647,13 @@ class PDETrainer:
                         y=T.cpu().numpy(),
                         z=error,
                         colorscale="viridis",
-                        name="Error",
-                        showscale=True,
+                        name="Log Min(Abs,Rel) Error",
+                        showscale=True,  # Only show colorscale for error
+                        colorbar=dict(
+                            title="Log Error",
+                            x=0.98,  # Position colorbar at the right edge
+                            y=0.5,   # Center colorbar vertically
+                        ),
                     ),
                     row=1,
                     col=3,
@@ -683,7 +691,6 @@ class PDETrainer:
 
         except Exception as e:
             logging.error(f"Error in plot_solution_comparison: {str(e)}")
-            logging.error(f"Traceback: {traceback.format_exc()}")
             raise  # Re-raise the exception after logging
 
     def save_plots(self, save_dir):
@@ -713,10 +720,7 @@ class PDETrainer:
 
             logging.info(f"All plots saved successfully to {save_dir}")
         except Exception as e:
-            import traceback
-
             logging.error(f"Error saving plots: {str(e)}")
-            logging.error(f"Traceback: {traceback.format_exc()}")
 
     def visualize_collocation_evolution(self, save_path=None):
         """Visualize the evolution of collocation points"""

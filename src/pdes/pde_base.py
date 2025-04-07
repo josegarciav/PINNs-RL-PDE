@@ -32,6 +32,7 @@ class PDEConfig:
     )
     architecture: Optional[str] = None  # Neural network architecture for this PDE
     device: Optional[torch.device] = None
+    training: Optional[Dict[str, Any]] = None  # Training configuration
 
 
 class PDEBase:
@@ -107,6 +108,7 @@ class PDEBase:
                             "output_dim": kwargs.pop("output_dim", None),
                             "architecture": kwargs.pop("architecture", None),
                             "device": kwargs.pop("device", None),
+                            "training": kwargs.pop("training", None),
                         }
                         config = PDEConfig(**config_params)
 
@@ -161,8 +163,10 @@ class PDEBase:
         # Store dimensionality
         self.dimension = config.dimension
 
-        # Make sure parameters exist
-        if not hasattr(config, "parameters") or config.parameters is None:
+        # Make sure parameters exist but preserve any existing parameters
+        if not hasattr(config, "parameters"):
+            config.parameters = {}
+        elif config.parameters is None:
             config.parameters = {}
 
         # Setup boundary and initial conditions
