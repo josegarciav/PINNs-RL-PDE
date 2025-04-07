@@ -321,10 +321,10 @@ class InteractiveTrainer:
         )
         self.stop_btn.pack(side="left", padx=5)
 
-        self.dashboard_btn = ttk.Button(
-            btn_frame, text="Open Dashboard", command=self.open_dashboard
-        )
-        self.dashboard_btn.pack(side="right", padx=5)
+        # self.dashboard_btn = ttk.Button(
+        #     btn_frame, text="Open Dashboard", command=self.open_dashboard
+        # )
+        # self.dashboard_btn.pack(side="right", padx=5)
 
         # Progress indicators
         progress_frame = ttk.LabelFrame(main_frame, text="Progress")

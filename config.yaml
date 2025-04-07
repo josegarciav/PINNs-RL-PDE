@@ -23,11 +23,11 @@ architectures:
     omega_0: 30.0  # Frequency parameter for sin activation
   
   fourier:
-    mapping_size: 256  # Increased for better frequency resolution
-    hidden_dims: [512, 512, 512, 512]  # Keep wide layers
-    scale: 10.0  # Reduced scale to prevent high-frequency artifacts
+    mapping_size: 512  # Increased for better frequency resolution
+    hidden_dims: [512, 512, 512, 512, 512]  # Added more layers and increased width
+    scale: 5.0  # Adjusted scale for better feature representation
     activation: "gelu"
-    dropout: 0.05  # Reduced dropout
+    dropout: 0.1  # Increased dropout for better regularization
     layer_norm: true
     periodic: true  # Enable periodic features
   
@@ -58,7 +58,7 @@ pde_configs:
     output_dim: 1  # u(x,t)
     parameters:
       alpha: 0.01  # Thermal diffusivity
-    domain: [[0, 2]]  # [0, π] 3.14159 6.28318
+    domain: [[0, 1]]  # [0, π] 3.14159 6.28318
     time_domain: [0, 5]
     dimension: 1
     initial_condition:
@@ -66,8 +66,8 @@ pde_configs:
       amplitude: 1.0
       frequency: 2.0  # Number of periods in [0,1]
     boundary_conditions:
-      periodic: {}  # Periodic boundary conditions
-      # dirichlet: { value: 0.0 }
+      #periodic: {}  # Periodic boundary conditions
+      dirichlet: { value: 0.0 }
     exact_solution:
       type: "sin_exp_decay"
       amplitude: 1.0
@@ -295,20 +295,23 @@ pde_configs:
 # Training Configuration
 training:
   device: "mps"
-  num_epochs: 500
-  batch_size: 1024
-  num_collocation_points: 6000
-  num_boundary_points: 2000  # Number of points for boundary conditions
-  num_initial_points: 4000   # Number of points for initial conditions
+  num_epochs: 500  # Increased training time
+  batch_size: 2048  # Larger batch size
+  num_collocation_points: 5000  # More collocation points
+  num_boundary_points: 2000  # More boundary points
+  num_initial_points: 4000  # More initial points
   validation_frequency: 10
   early_stopping:
     enabled: true
-    patience: 10
-    min_delta: 1.0e-6
+    patience: 50     # More patience for convergence
+    min_delta: 1e-7  # Stricter improvement threshold
+    monitor: "val_loss"
   optimizer_config:
     name: "adam"
-    learning_rate: 0.001
-    weight_decay: 1.0e-8  # Reduced weight decay
+    learning_rate: 0.0005  # Lower learning rate for better convergence
+    beta1: 0.9
+    beta2: 0.999
+    weight_decay: 0.0001  # Added weight decay for regularization
   scheduler_type: "reduce_lr"  # Options: "reduce_lr" or "cosine"
   # Parameters for ReduceLROnPlateau
   reduce_lr_params:
@@ -322,9 +325,9 @@ training:
   rl_update_frequency: 10  # Update RL agent every N epochs
   loss_weights:
     pde: 1.0
-    boundary: 20.0
-    initial: 20.0
-    smoothness: 0.05  # Weight for smoothness regularization
+    boundary: 20.0  # Increased boundary condition weight
+    initial: 20.0   # Increased initial condition weight
+    smoothness: 0.05  # Added smoothness regularization
 
 # Reinforcement Learning Configuration
 rl:

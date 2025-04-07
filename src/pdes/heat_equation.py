@@ -125,7 +125,7 @@ class HeatEquation(PDEBase):
         solution_type = self.config.exact_solution.get("type", "sine")
         if solution_type == "sin_exp_decay":
             A = self.config.exact_solution.get("amplitude", 1.0)
-            k = self.config.exact_solution.get("frequency", 1.0)
+            k = self.config.exact_solution.get("frequency", 2.0)
             decay_rate = self._calculate_decay_rate(k)
 
             if self.dimension == 1:
@@ -164,7 +164,7 @@ class HeatEquation(PDEBase):
     def exact_solution_sine(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """Legacy support for old sine solution format"""
         A = self.config.exact_solution.get("amplitude", 1.0)
-        k = self.config.exact_solution.get("frequency", 1.0)
+        k = self.config.exact_solution.get("frequency", 2.0)
 
         if self.dimension == 1:
             time_factor = torch.exp(-self.alpha * (k * torch.pi) ** 2 * t)
