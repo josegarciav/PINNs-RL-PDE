@@ -62,19 +62,27 @@ class PINNModel(BaseNetwork):
     architectures suitable for Physics-Informed Neural Networks.
     """
 
-    def __init__(self, config: Config, **kwargs):
+    def __init__(self, config: Config, device=None, **kwargs):
         """
         Initialize the PINN model.
 
         Args:
             config: Configuration object with model settings
+            device: Optional device to override config device
             **kwargs: Additional architecture-specific parameters
         """
         # Store configuration
         self.config = config
-
+        
+        # Use provided device or get from config
+        self.device = device if device is not None else config.device
+        
+        # Override device in config with the determined device
+        config_with_device = config.model
+        config_with_device.device = self.device
+        
         # Create base NetworkConfig
-        super().__init__(config.model)
+        super().__init__(config_with_device)
 
         # Store architecture type
         self.architecture = config.model.architecture
@@ -84,19 +92,43 @@ class PINNModel(BaseNetwork):
 
         # Create model based on architecture
         if self.architecture == "fourier":
-            self.model = FourierNetwork(config.model)
+            self.model = FourierNetwork(config_with_device)
         elif self.architecture == "resnet":
-            self.model = ResNet(config.model)
+            # Create a specific configuration dictionary for ResNet
+            resnet_config = {
+                "input_dim": config.model.input_dim,
+                "hidden_dim": config.model.hidden_dim,
+                "output_dim": config.model.output_dim,
+                "activation": config.model.activation,
+                "dropout": config.model.dropout,
+                "device": self.device,
+            }
+            
+            # Make sure num_blocks is defined, using num_layers as fallback
+            if hasattr(config.model, "num_blocks") and config.model.num_blocks is not None:
+                resnet_config["num_blocks"] = config.model.num_blocks
+            else:
+                resnet_config["num_blocks"] = config.model.num_layers
+                
+            # Add hidden_dims if defined
+            if hasattr(config.model, "hidden_dims") and config.model.hidden_dims is not None:
+                resnet_config["hidden_dims"] = config.model.hidden_dims
+                
+            self.model = ResNet(resnet_config)
         elif self.architecture == "siren":
-            self.model = SIREN(config.model)
+            self.model = SIREN(config_with_device)
         elif self.architecture == "attention":
-            self.model = AttentionNetwork(config.model)
+            self.model = AttentionNetwork(config_with_device)
         elif self.architecture == "autoencoder":
-            self.model = AutoEncoder(config.model)
+            self.model = AutoEncoder(config_with_device)
             # Additional output projection for AutoEncoder to ensure correct output dimension
-            self.output_proj = FeedForwardNetwork(config.model)
+            self.output_proj = FeedForwardNetwork(config_with_device)
         else:  # Default to feedforward
-            self.model = FeedForwardNetwork(config.model)
+            self.model = FeedForwardNetwork(config_with_device)
+        
+        # Explicitly move the model to the specified device
+        self.model = self.model.to(self.device)
+        self.to(self.device)
 
     def forward(self, x):
         """

@@ -471,22 +471,47 @@ class HeatEquationFDM(FiniteDifferenceSolver):
             except Exception as e:
                 logger.warning(f"Error using PDE's initial condition function: {e}")
 
-                # Fall back to sine function
-                def initial_condition(x):
-                    return ic_amplitude * np.sin(ic_frequency * np.pi * x)
+                # Check for sin_exp_decay type
+                if hasattr(pde.config, "initial_condition") and isinstance(pde.config.initial_condition, dict):
+                    ic_type = pde.config.initial_condition.get("type", "sine")
+                    if ic_type == "sin_exp_decay":
+                        # For sin_exp_decay, only the spatial part is used for t=0
+                        # The time-decay happens during the simulation
+                        def initial_condition(x):
+                            return ic_amplitude * np.sin(ic_frequency * np.pi * x)
+                    else:
+                        # Default sine function
+                        def initial_condition(x):
+                            return ic_amplitude * np.sin(ic_frequency * np.pi * x)
+                else:
+                    # Default sine function
+                    def initial_condition(x):
+                        return ic_amplitude * np.sin(ic_frequency * np.pi * x)
 
                 fdm_solver.set_initial_condition(initial_condition)
                 logger.info(
                     f"Falling back to sine wave with amplitude={ic_amplitude}, frequency={ic_frequency}"
                 )
         else:
-            # Define initial condition function
-            def initial_condition(x):
-                return ic_amplitude * np.sin(ic_frequency * np.pi * x)
+            # Define initial condition function based on the type
+            if hasattr(pde.config, "initial_condition") and isinstance(pde.config.initial_condition, dict):
+                ic_type = pde.config.initial_condition.get("type", "sine")
+                if ic_type == "sin_exp_decay":
+                    # For sin_exp_decay at t=0, it's just a sine wave (no decay at t=0)
+                    def initial_condition(x):
+                        return ic_amplitude * np.sin(ic_frequency * np.pi * x)
+                else:
+                    # Default sine function
+                    def initial_condition(x):
+                        return ic_amplitude * np.sin(ic_frequency * np.pi * x)
+            else:
+                # Default sine function
+                def initial_condition(x):
+                    return ic_amplitude * np.sin(ic_frequency * np.pi * x)
 
             fdm_solver.set_initial_condition(initial_condition)
             logger.info(
-                f"Using sine initial condition with amplitude={ic_amplitude} and frequency={ic_frequency}"
+                f"Using {ic_type if 'ic_type' in locals() else 'sine'} initial condition with amplitude={ic_amplitude}, frequency={ic_frequency}"
             )
 
         # Solve the equation
@@ -518,13 +543,37 @@ class HeatEquationFDM(FiniteDifferenceSolver):
                         torch.tensor(x, dtype=torch.float32).reshape(-1, 1).to(device)
                     )
                     t_tensor = torch.tensor(t, dtype=torch.float32).to(device)
-                    result = (
-                        pde.exact_solution(x_tensor, t=t_tensor).cpu().numpy().flatten()
-                    )
+                    t_repeated = torch.full_like(x_tensor, t).to(device)
+                    
+                    # Use pde's exact_solution method
+                    result = pde.exact_solution(x_tensor, t_repeated).cpu().numpy().flatten()
                     return result
                 except Exception as e:
                     logger.warning(f"Error computing analytical solution: {e}")
-                    return np.zeros_like(x)
+                    
+                    # Fallback to manual implementation
+                    try:
+                        # Check if using sin_exp_decay solution
+                        if (hasattr(pde.config, "exact_solution") and 
+                            isinstance(pde.config.exact_solution, dict) and
+                            pde.config.exact_solution.get("type") == "sin_exp_decay"):
+                            
+                            # Get parameters for sin_exp_decay solution
+                            A = pde.config.exact_solution.get("amplitude", 1.0)
+                            k = pde.config.exact_solution.get("frequency", 2.0)
+                            decay_rate = alpha * (k * np.pi) ** 2
+                            
+                            # Compute sin_exp_decay solution
+                            return A * np.sin(k * np.pi * x) * np.exp(-decay_rate * t)
+                        else:
+                            # Default sine solution with decay
+                            A = 1.0
+                            k = 2.0
+                            decay_rate = alpha * (k * np.pi) ** 2
+                            return A * np.sin(k * np.pi * x) * np.exp(-decay_rate * t)
+                    except Exception as inner_e:
+                        logger.warning(f"Error in fallback analytical solution: {inner_e}")
+                        return np.zeros_like(x)
 
             fdm_analytical_path = os.path.join(viz_dir, "fdm_vs_analytical.png")
             try:

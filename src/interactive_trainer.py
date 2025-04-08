@@ -8,8 +8,6 @@ import threading
 from datetime import datetime
 from pathlib import Path
 import numpy as np
-import subprocess
-import webbrowser
 import time
 import logging
 
@@ -31,6 +29,7 @@ from src.config import (
     TrainingConfig,
     EarlyStoppingConfig,
     LearningRateSchedulerConfig,
+    AdaptiveWeightsConfig,
 )
 
 
@@ -641,7 +640,13 @@ class InteractiveTrainer:
                     factor=config_dict["training"]["reduce_lr_params"]["factor"],
                     patience=config_dict["training"]["reduce_lr_params"]["patience"],
                 ),
-                loss_weights=config_dict["training"].get("loss_weights", None),
+                adaptive_weights=AdaptiveWeightsConfig(
+                    enabled=config_dict["training"]["adaptive_weights"]["enabled"],
+                    strategy=config_dict["training"]["adaptive_weights"]["strategy"],
+                    alpha=config_dict["training"]["adaptive_weights"]["alpha"],
+                    eps=config_dict["training"]["adaptive_weights"]["eps"],
+                ),
+                loss_weights=config_dict["training"]["loss_weights"],
             ),
         )
 
@@ -682,7 +687,7 @@ class InteractiveTrainer:
 
             # Create Config object
             config_obj = Config()
-            config_obj.device = config_dict["device"]
+            config_obj.device = torch.device(config_dict["device"])
 
             # Get architecture configuration
             arch_type = config_dict["model"]["architecture"]
@@ -703,6 +708,11 @@ class InteractiveTrainer:
                 layer_norm=arch_config.get("layer_norm", True),
                 architecture=arch_type,
             )
+
+            # Add specific parameters for ResNet if needed
+            if arch_type == "resnet":
+                config_obj.model.hidden_dim = self.hidden_dim.get()
+                config_obj.model.num_blocks = self.num_layers.get()  # For ResNet, num_layers corresponds to num_blocks
 
             # Create training config
             config_obj.training = TrainingConfig(
@@ -732,10 +742,17 @@ class InteractiveTrainer:
                     factor=config_dict["training"]["reduce_lr_params"]["factor"],
                     patience=config_dict["training"]["reduce_lr_params"]["patience"],
                 ),
+                adaptive_weights=AdaptiveWeightsConfig(
+                    enabled=config_dict["training"]["adaptive_weights"]["enabled"],
+                    strategy=config_dict["training"]["adaptive_weights"]["strategy"],
+                    alpha=config_dict["training"]["adaptive_weights"]["alpha"],
+                    eps=config_dict["training"]["adaptive_weights"]["eps"],
+                ),
+                loss_weights=config_dict["training"]["loss_weights"],
             )
 
-            # Set device
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            # Setup device
+            device = torch.device(config_dict["device"])
 
             # Create experiment directory with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

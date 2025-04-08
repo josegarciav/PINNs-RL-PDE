@@ -160,8 +160,27 @@ class PDEBase:
         if isinstance(self.time_domain, list):
             self.time_domain = tuple(self.time_domain)
 
-        # Setup device
-        self.device = config.device or torch.device("cpu")
+        # Setup device - Handle device explicitly and carefully
+        if hasattr(config, 'device') and config.device is not None:
+            # If config.device is already a torch.device object, use it directly
+            if isinstance(config.device, torch.device):
+                self.device = config.device
+            else:
+                # Try to convert string to torch.device
+                try:
+                    self.device = torch.device(str(config.device))
+                except:
+                    print(f"Warning: Invalid device '{config.device}', falling back to CPU")
+                    self.device = torch.device("cpu")
+        else:
+            # Fallback to CPU if no device specified
+            self.device = torch.device("cpu")
+            
+        # Log the device being used
+        print(f"PDE initialized with device: {self.device}")
+        
+        # Ensure config has the same device
+        self.config.device = self.device
 
         # Store dimensionality
         self.dimension = config.dimension
@@ -806,7 +825,11 @@ class PDEBase:
         else:
             raise ValueError(f"Unknown sampling strategy: {strategy}")
 
-        return x.to(self.device), t.to(self.device)
+        # Ensure the points are on the correct device before returning
+        x = x.to(self.device)
+        t = t.to(self.device)
+        
+        return x, t
 
     def compute_loss(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
@@ -887,16 +910,53 @@ class PDEBase:
                 u_target = temp_bc(x_initial, t_initial)
 
         initial_loss = torch.mean((u_initial - u_target) ** 2)
-
-        # Total loss
-        total_loss = residual_loss + boundary_loss + initial_loss
-
-        return {
-            "total": total_loss,
+        
+        # Initialize smoothness loss
+        smoothness_loss = torch.tensor(0.0, device=self.device)
+        
+        # Get smoothness weight from config if available
+        if hasattr(self.config.training, "loss_weights") and self.config.training.loss_weights:
+            smoothness_weight = self.config.training.loss_weights.get("smoothness", 0.0)
+        else:
+            smoothness_weight = 0.0
+        
+        # Create dictionary of losses
+        losses = {
             "residual": residual_loss,
             "boundary": boundary_loss,
             "initial": initial_loss,
+            "smoothness": smoothness_loss
         }
+
+        # Use adaptive weights if enabled
+        if (
+            hasattr(self.config.training, "adaptive_weights")
+            and self.config.training.adaptive_weights.enabled
+        ):
+            # The total loss will be computed by the trainer using adaptive weights
+            # We just return the individual components
+            losses["total"] = (
+                residual_loss
+                + boundary_loss
+                + initial_loss
+                + smoothness_weight * smoothness_loss
+            )
+        else:
+            # Otherwise use fixed weights from config
+            # Map 'pde' key to 'residual' for backward compatibility
+            residual_weight = self.config.training.loss_weights.get("pde", self.config.training.loss_weights.get("residual", 1.0))
+            boundary_weight = self.config.training.loss_weights.get("boundary", 10.0)
+            initial_weight = self.config.training.loss_weights.get("initial", 10.0)
+            
+            total_loss = (
+                residual_weight * residual_loss
+                + boundary_weight * boundary_loss
+                + initial_weight * initial_loss
+                + smoothness_weight * smoothness_loss
+            )
+            losses["total"] = total_loss
+
+        return losses
 
     def build_model(self, override_config=None):
         """

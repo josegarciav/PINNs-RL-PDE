@@ -115,6 +115,13 @@ class ModelConfig:
         self.dropout = dropout
         self.layer_norm = layer_norm
         self.architecture = architecture
+        
+        # Configure hidden_dims as a list based on hidden_dim when not explicitly set
+        self.hidden_dims = [hidden_dim] * num_layers
+        
+        # For ResNet, set num_blocks to be the same as num_layers
+        if architecture == "resnet":
+            self.num_blocks = num_layers
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get the value for a given key or return the default value if the key doesn't exist."""
@@ -185,6 +192,7 @@ class Config:
         self.training = None
         self.rl = None
         self.paths = None
+        self.device = torch.device("cpu")  # Default to CPU, will be overridden by config
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get the value for a given key or return the default value if the key doesn't exist."""
@@ -373,7 +381,8 @@ class Config:
     def _validate_config(self):
         """Validate configuration parameters."""
         # Validate device
-        if self.device not in ["cuda", "mps", "cpu"]:
+        valid_devices = [torch.device("cuda"), torch.device("mps"), torch.device("cpu")]
+        if not any(str(self.device) == str(d) for d in valid_devices):
             raise ValueError(f"Invalid device: {self.device}")
 
         # Validate model configuration
@@ -436,18 +445,18 @@ class Config:
             if not 0 <= self.rl.gamma <= 1:
                 raise ValueError("gamma must be between 0 and 1")
 
-    def _get_device(self, device_str: str) -> str:
+    def _get_device(self, device_str: str) -> torch.device:
         """
         Get the appropriate device based on availability.
 
         :param device_str: Desired device string
-        :return: Available device string
+        :return: Available device as torch.device
         """
         if device_str == "cuda" and torch.cuda.is_available():
-            return "cuda"
+            return torch.device("cuda")
         elif device_str == "mps" and torch.backends.mps.is_available():
-            return "mps"
-        return "cpu"
+            return torch.device("mps")
+        return torch.device("cpu")
 
     def to_dict(self) -> Dict[str, Any]:
         """

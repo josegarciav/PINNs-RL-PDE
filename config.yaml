@@ -13,7 +13,7 @@ architectures:
     layer_norm: true
 
   resnet:
-    hidden_dim: 124
+    hidden_dim: 512
     num_blocks: 7  # 7 residual blocks by default
     activation: "tanh"
     dropout: 0.1
@@ -53,7 +53,7 @@ pde_configs:
   # Heat Equation Configuration
   heat:
     name: "Heat Equation"
-    architecture: "fourier"  # Good for smooth diffusion problems
+    architecture: "resnet"  # Changed from "fourier" to "resnet" for better capturing of exponential decay
     input_dim: 2  # (x, t)
     output_dim: 1  # u(x,t)
     parameters:
@@ -66,8 +66,8 @@ pde_configs:
       amplitude: 1.0
       frequency: 2.0  # Number of periods in [0,1]
     boundary_conditions:
-      periodic: {}  # Periodic boundary conditions
-      #dirichlet: { value: 0.0 }
+      #periodic: {}  # Periodic boundary conditions
+      dirichlet: { value: 0.0 }
     exact_solution:
       type: "sin_exp_decay"
       amplitude: 1.0
@@ -294,12 +294,11 @@ pde_configs:
 
 # Training Configuration
 training:
-  device: "mps"
-  num_epochs: 1000  # Increased training time
+  num_epochs: 2000  # Increased from 500 to 2000 for better convergence
   batch_size: 2048  # Larger batch size
-  num_collocation_points: 20000  # More collocation points
-  num_boundary_points: 2000  # More boundary points
-  num_initial_points: 4000  # More initial points
+  num_collocation_points: 10000  # Increased from 7000 for better coverage
+  num_boundary_points: 3000  # Increased from 2000 for better boundary enforcement
+  num_initial_points: 5000  # Increased from 4000 for better initial condition representation
   collocation_distribution: "uniform"  # Options: "uniform", "latin_hypercube", "sobol", "adaptive" (requires RL agent)
   adaptive_weights:
     enabled: true  # Whether to use adaptive weights for loss terms
@@ -309,16 +308,16 @@ training:
   validation_frequency: 10
   early_stopping:
     enabled: true
-    patience: 50     # More patience for convergence
+    patience: 100  # Increased from 50 to allow more time for convergence
     min_delta: 1e-7  # Stricter improvement threshold
     monitor: "val_loss"
   optimizer_config:
     name: "adam"
-    learning_rate: 0.005  # Lower learning rate for better convergence
+    learning_rate: 0.001  # Increased from 0.0005 to 0.001 for faster convergence
     beta1: 0.9
     beta2: 0.999
-    weight_decay: 0.0001  # Added weight decay for regularization
-  scheduler_type: "reduce_lr"  # Options: "reduce_lr" or "cosine"
+    weight_decay: 0.001  # Added weight decay for regularization
+  scheduler_type: "cosine"  # Options: "reduce_lr" or "cosine"
   # Parameters for ReduceLROnPlateau
   reduce_lr_params:
     factor: 0.5
@@ -326,18 +325,18 @@ training:
     min_lr: 1.0e-6
   # Parameters for CosineAnnealingLR
   cosine_params:
-    T_max: 50
+    T_max: 100  # Increased from 50 to match longer training
     eta_min: 1.0e-6
   rl_update_frequency: 10  # Update RL agent every N epochs
   loss_weights:
     pde: 1.0
     boundary: 20.0  # Increased boundary condition weight
     initial: 20.0   # Increased initial condition weight
-    smoothness: 0.05  # Added smoothness regularization
+    smoothness: 0.1  # Added smoothness regularization
 
 # Reinforcement Learning Configuration
 rl:
-  enabled: true
+  enabled: false
   state_dim: 2  # (x, t)
   action_dim: 1  # Sampling probability
   hidden_dim: 512
@@ -374,5 +373,3 @@ logging:
 # Paths
 paths:
   results_dir: "experiments"
-  log_dir: "experiments/logs"  # Single source of truth for log directory
-  model_dir: "experiments/models"
