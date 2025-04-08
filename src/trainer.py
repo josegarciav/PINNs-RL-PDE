@@ -11,9 +11,9 @@ from datetime import datetime
 from src.utils.utils import save_training_metrics
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import matplotlib.pyplot as plt
 import matplotlib
-matplotlib.use('agg')
+
+matplotlib.use("agg")
 import matplotlib.pyplot as plt
 
 
@@ -93,7 +93,7 @@ class PDETrainer:
     def setup_experiment_logging(self, experiment_dir=None):
         """
         Setup experiment-specific logging if experiment_dir is provided.
-        
+
         :param experiment_dir: Directory for the experiment
         """
         if experiment_dir:
@@ -101,11 +101,13 @@ class PDETrainer:
             for handler in self.logger.handlers[:]:
                 if isinstance(handler, logging.FileHandler):
                     self.logger.removeHandler(handler)
-            
+
             # Add experiment-specific log file handler
             log_file = os.path.join(experiment_dir, "experiment.log")
             file_handler = logging.FileHandler(log_file)
-            file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+            file_handler.setFormatter(
+                logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+            )
             self.logger.addHandler(file_handler)
             self.logger.info(f"Experiment logs will be saved to {log_file}")
 
@@ -180,18 +182,18 @@ class PDETrainer:
         """Train the model."""
         # Record start time
         start_time = datetime.now()
-        
+
         # Create directories for visualizations and experiment data
         if experiment_dir:
             os.makedirs(experiment_dir, exist_ok=True)
-            
+
             # Setup experiment-specific logging
             self.setup_experiment_logging(experiment_dir)
-            
+
             # Create visualization directory
             viz_dir = os.path.join(experiment_dir, "visualizations")
             os.makedirs(viz_dir, exist_ok=True)
-        
+
         self.logger.info("Starting training...")
 
         # Initialize points history
@@ -210,8 +212,10 @@ class PDETrainer:
                 # Generate batch of collocation points
                 # Use adaptive sampling if RL agent is available
                 sampling_strategy = (
-                    "adaptive" if self.rl_agent is not None else "latin_hypercube"
-                    #"uniform", "latin_hypercube", "sobol"
+                    "adaptive"
+                    if self.rl_agent is not None
+                    else "latin_hypercube"
+                    # "uniform", "latin_hypercube", "sobol"
                 )
                 x_batch, t_batch = self.pde.generate_collocation_points(
                     batch_size, strategy=sampling_strategy
@@ -284,13 +288,13 @@ class PDETrainer:
                 #     try:
                 #         viz_dir = os.path.join(experiment_dir, "visualizations")
                 #         os.makedirs(viz_dir, exist_ok=True)
-                        
+
                 #         viz_path = os.path.join(viz_dir, f"solution_epoch_{epoch}.png")
                 #         self.plot_solution_comparison(num_points=50, save_path=viz_path)
-                        
+
                 #         history_path = os.path.join(viz_dir, f"history_epoch_{epoch}.png")
                 #         self.plot_training_history(save_path=history_path)
-                        
+
                 #         self.logger.info(f"Created visualizations for epoch {epoch}")
                 #     except Exception as e:
                 #         self.logger.warning(f"Error creating training visualizations: {e}")
@@ -327,41 +331,77 @@ class PDETrainer:
             metadata = {
                 "training_time_minutes": train_time,
                 "total_epochs": num_epochs,
-                "final_loss": float(self.history["train_loss"][-1]) if self.history["train_loss"] else None,
-                "best_val_loss": float(self.best_val_loss) if self.best_val_loss != float("inf") else None,
-                "early_stopping_triggered": self.patience_counter >= self.patience if self.early_stopping_enabled else False,
+                "final_loss": (
+                    float(self.history["train_loss"][-1])
+                    if self.history["train_loss"]
+                    else None
+                ),
+                "best_val_loss": (
+                    float(self.best_val_loss)
+                    if self.best_val_loss != float("inf")
+                    else None
+                ),
+                "early_stopping_triggered": (
+                    self.patience_counter >= self.patience
+                    if self.early_stopping_enabled
+                    else False
+                ),
                 "current_epoch": len(self.history["train_loss"]),
                 "training_params": {
                     "num_epochs": num_epochs,
                     "batch_size": batch_size,
                     "num_points": num_points,
-                    "validation_frequency": self.validation_frequency
+                    "validation_frequency": self.validation_frequency,
                 },
                 "rl_enabled": self.rl_agent is not None,
                 "start_time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
                 "end_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 # PDE information
-                "pde_type": getattr(self.pde, 'pde_type', getattr(self.pde, 'name', type(self.pde).__name__)),
-                "pde_name": getattr(self.pde.config, 'name', getattr(self.pde, 'name', "")),
+                "pde_type": getattr(
+                    self.pde,
+                    "pde_type",
+                    getattr(self.pde, "name", type(self.pde).__name__),
+                ),
+                "pde_name": getattr(
+                    self.pde.config, "name", getattr(self.pde, "name", "")
+                ),
+                # PDE parameters and conditions
+                "domain": getattr(self.pde, "domain", []),
+                "time_domain": getattr(self.pde, "time_domain", []),
+                "boundary_conditions": getattr(
+                    self.pde.config, "boundary_conditions", {}
+                ),
+                "initial_condition": getattr(self.pde.config, "initial_condition", {}),
+                "pde_parameters": getattr(self.pde.config, "parameters", {}),
                 # Architecture information
-                "architecture": getattr(self.model, 'architecture_name', 
-                                        getattr(self.config, 'architecture', 
-                                               getattr(self.config.model, 'architecture', "unknown") if hasattr(self.config, 'model') else "unknown"))
+                "architecture": getattr(
+                    self.model,
+                    "architecture_name",
+                    getattr(
+                        self.config,
+                        "architecture",
+                        (
+                            getattr(self.config.model, "architecture", "unknown")
+                            if hasattr(self.config, "model")
+                            else "unknown"
+                        ),
+                    ),
+                ),
             }
-            
+
             # Save training history as metrics.json and history.json
             self.logger.info("Saving training metrics...")
             save_training_metrics(self.history, experiment_dir, metadata=metadata)
-            
+
             # Save the model directly in the experiment directory
             self.logger.info("Saving model...")
             model_path = os.path.join(experiment_dir, "final_model.pt")
             torch.save(self.model.state_dict(), model_path)
-            
+
             # Save all plots using the save_plots method
             self.logger.info("Generating and saving all plots...")
             self.save_plots(viz_dir)
-            
+
             # Generate FDM comparison plots explicitly
             self.logger.info("Generating FDM comparison plots...")
             try:
@@ -369,8 +409,9 @@ class PDETrainer:
             except Exception as e:
                 self.logger.error(f"Error generating FDM comparison: {str(e)}")
                 import traceback
+
                 traceback.print_exc()
-            
+
         return self.history
 
     def get_training_history(self) -> Dict[str, List[float]]:
@@ -467,13 +508,17 @@ class PDETrainer:
                         )
                         exact = exact.reshape(num_points, num_points).cpu().numpy()
                         abs_error = np.abs(pred - exact)
-                        rel_error = np.abs((pred - exact) / (exact + 1e-10))  # Add small constant to avoid division by zero
-                        
+                        rel_error = np.abs(
+                            (pred - exact) / (exact + 1e-10)
+                        )  # Add small constant to avoid division by zero
+
                         # Take the minimum between absolute and relative errors
                         error = np.minimum(abs_error, rel_error)
-                        
+
                         # Apply log scale to error
-                        error = np.log10(error + 1e-10)  # Add small constant to avoid log(0)
+                        error = np.log10(
+                            error + 1e-10
+                        )  # Add small constant to avoid log(0)
 
                     # Create frame with both plots side by side and error
                     frame = go.Frame(
@@ -572,14 +617,16 @@ class PDETrainer:
                     try:
                         # First save the requested format (png, jpg, etc.)
                         fig.write_image(save_path)
-                        
+
                         # Then try to save HTML format as well
                         base_path = os.path.splitext(save_path)[0]
                         html_path = base_path + ".html"
                         fig.write_html(html_path)
-                        
+
                         # Remove individual time step saving to simplify output
-                        logging.info(f"Saved visualizations to {save_path} and {html_path}")
+                        logging.info(
+                            f"Saved visualizations to {save_path} and {html_path}"
+                        )
                     except Exception as e:
                         logging.warning(f"Error saving visualization: {e}")
 
@@ -614,16 +661,20 @@ class PDETrainer:
 
                     logging.info(f"Exact solution shape before reshape: {exact.shape}")
                     exact = exact.reshape(num_points, num_points).cpu().numpy()
-                    
+
                     # Calculate both absolute and relative errors
                     abs_error = np.abs(pred - exact)
-                    rel_error = np.abs((pred - exact) / (exact + 1e-10))  # Add small constant to avoid division by zero
-                    
+                    rel_error = np.abs(
+                        (pred - exact) / (exact + 1e-10)
+                    )  # Add small constant to avoid division by zero
+
                     # Take the minimum between absolute and relative errors
                     error = np.minimum(abs_error, rel_error)
-                    
+
                     # Apply log scale to error
-                    error = np.log10(error + 1e-10)  # Add small constant to avoid log(0)
+                    error = np.log10(
+                        error + 1e-10
+                    )  # Add small constant to avoid log(0)
 
                 # Create figure with subplots
                 fig = make_subplots(
@@ -671,7 +722,7 @@ class PDETrainer:
                         colorbar=dict(
                             title="Log Min Error",
                             x=0.98,  # Position colorbar at the right edge
-                            y=0.5,   # Center colorbar vertically
+                            y=0.5,  # Center colorbar vertically
                         ),
                     ),
                     row=1,
@@ -704,14 +755,16 @@ class PDETrainer:
                     try:
                         # First save the requested format (png, jpg, etc.)
                         fig.write_image(save_path)
-                        
+
                         # Then try to save HTML format as well
                         base_path = os.path.splitext(save_path)[0]
                         html_path = base_path + ".html"
                         fig.write_html(html_path)
-                        
+
                         # Remove individual time step saving to simplify output
-                        logging.info(f"Saved visualizations to {save_path} and {html_path}")
+                        logging.info(
+                            f"Saved visualizations to {save_path} and {html_path}"
+                        )
                     except Exception as e:
                         logging.warning(f"Error saving visualization: {e}")
 
@@ -733,9 +786,7 @@ class PDETrainer:
 
             # Save solution comparison plot
             solution_path = os.path.join(save_dir, "final_solution_comparison.png")
-            self.plot_solution_comparison(
-                num_points=100, save_path=solution_path
-            )
+            self.plot_solution_comparison(num_points=100, save_path=solution_path)
             logging.info("Solution comparison plots saved successfully")
 
             # Save collocation points evolution if available
@@ -759,252 +810,318 @@ class PDETrainer:
             # Create parent directory if it doesn't exist
             if save_path:
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            
+
             # We'll use matplotlib for this visualization to create a 2x2 grid
             import matplotlib.pyplot as plt
             from matplotlib.colors import LinearSegmentedColormap
             import numpy as np
-            
+
             # Create a figure with 2x2 subplots
             fig, axs = plt.subplots(2, 2, figsize=(16, 14))
-            fig.suptitle('Evolution of Collocation Points', fontsize=20)
-            
+            fig.suptitle("Evolution of Collocation Points", fontsize=20)
+
             # Define custom colormaps for each subplot
             colors = {
-                'initial': plt.cm.Blues,  # Blue for initial
-                'mid': plt.cm.Greens,     # Green for mid-training
-                'final': plt.cm.Reds      # Red for final
+                "initial": plt.cm.Blues,  # Blue for initial
+                "mid": plt.cm.Greens,  # Green for mid-training
+                "final": plt.cm.Reds,  # Red for final
             }
-            
+
             # Extract domain information
             if self.pde.dimension == 1:
                 x_domain = self.pde.domain[0]
                 t_domain = self.pde.config.time_domain
-                
+
                 # Determine indices for snapshots
                 num_snapshots = len(self.points_history)
                 initial_idx = 0
                 mid_idx = num_snapshots // 2
                 final_idx = num_snapshots - 1
-                
+
                 # Top-left: Evolution of points over time (superimpose snapshots)
                 ax = axs[0, 0]
-                ax.set_title('Progression of Points', fontsize=16)
-                
+                ax.set_title("Progression of Points", fontsize=16)
+
                 # Plot multiple snapshots with different colors
                 snapshot_indices = []
                 if num_snapshots >= 5:
                     # Choose 5 evenly spaced snapshots
                     step = num_snapshots // 5
-                    snapshot_indices = [i*step for i in range(5)] 
+                    snapshot_indices = [i * step for i in range(5)]
                     if snapshot_indices[-1] != num_snapshots - 1:
                         snapshot_indices[-1] = num_snapshots - 1
                 else:
                     # Use all available snapshots
                     snapshot_indices = list(range(num_snapshots))
-                
+
                 for i, idx in enumerate(snapshot_indices):
                     points = self.points_history[idx]
                     label = f"Snapshot {idx}"
                     # Use different markers and colors for different snapshots
-                    ax.scatter(points[:, 0], points[:, 1], s=3, alpha=0.5, 
-                             label=label, marker='.', edgecolors='none')
-                
+                    ax.scatter(
+                        points[:, 0],
+                        points[:, 1],
+                        s=3,
+                        alpha=0.5,
+                        label=label,
+                        marker=".",
+                        edgecolors="none",
+                    )
+
                 # Add legend and labels
                 ax.legend(fontsize=10)
-                ax.set_xlabel('x', fontsize=14)
-                ax.set_ylabel('t', fontsize=14)
+                ax.set_xlabel("x", fontsize=14)
+                ax.set_ylabel("t", fontsize=14)
                 ax.set_xlim(x_domain)
                 ax.set_ylim(t_domain)
                 ax.grid(alpha=0.3)
-                
+
                 # Top-right: Initial distribution (heatmap)
                 ax = axs[0, 1]
                 initial_points = self.points_history[initial_idx]
-                self._plot_density_heatmap(ax, initial_points, colors['initial'], 
-                                         'Initial Distribution', x_domain, t_domain)
-                
+                self._plot_density_heatmap(
+                    ax,
+                    initial_points,
+                    colors["initial"],
+                    "Initial Distribution",
+                    x_domain,
+                    t_domain,
+                )
+
                 # Bottom-left: Intermediate distribution (heatmap)
                 ax = axs[1, 0]
                 mid_points = self.points_history[mid_idx]
-                self._plot_density_heatmap(ax, mid_points, colors['mid'], 
-                                         f'Intermediate Distribution (Snapshot {mid_idx})', 
-                                         x_domain, t_domain)
-                
+                self._plot_density_heatmap(
+                    ax,
+                    mid_points,
+                    colors["mid"],
+                    f"Intermediate Distribution (Snapshot {mid_idx})",
+                    x_domain,
+                    t_domain,
+                )
+
                 # Bottom-right: Final distribution (heatmap)
                 ax = axs[1, 1]
                 final_points = self.points_history[final_idx]
-                self._plot_density_heatmap(ax, final_points, colors['final'], 
-                                         'Final Distribution', x_domain, t_domain)
-            
+                self._plot_density_heatmap(
+                    ax,
+                    final_points,
+                    colors["final"],
+                    "Final Distribution",
+                    x_domain,
+                    t_domain,
+                )
+
             else:  # 2D case
                 # Similar structure but with 3D plots for spatial+time dimensions
-                logging.warning("2D visualization not fully implemented, showing basic scatter plots")
-                
+                logging.warning(
+                    "2D visualization not fully implemented, showing basic scatter plots"
+                )
+
                 # Simplified version for 2D: Just show scatter plots
                 x_domain = self.pde.domain[0]
                 y_domain = self.pde.domain[1]
                 t_domain = self.pde.config.time_domain
-                
+
                 # Determine indices for snapshots
                 num_snapshots = len(self.points_history)
                 initial_idx = 0
                 mid_idx = num_snapshots // 2
                 final_idx = num_snapshots - 1
-                
+
                 # Top-left: Multiple snapshots
                 ax = axs[0, 0]
-                ax.set_title('Progression of Points (x-y projection)', fontsize=16)
-                
+                ax.set_title("Progression of Points (x-y projection)", fontsize=16)
+
                 snapshot_indices = []
                 if num_snapshots >= 5:
                     step = num_snapshots // 5
-                    snapshot_indices = [i*step for i in range(5)]
+                    snapshot_indices = [i * step for i in range(5)]
                     if snapshot_indices[-1] != num_snapshots - 1:
                         snapshot_indices[-1] = num_snapshots - 1
                 else:
                     snapshot_indices = list(range(num_snapshots))
-                
+
                 for i, idx in enumerate(snapshot_indices):
                     points = self.points_history[idx]
                     label = f"Snapshot {idx}"
-                    ax.scatter(points[:, 0], points[:, 1], s=3, alpha=0.5, 
-                             label=label, marker='.', edgecolors='none')
-                
+                    ax.scatter(
+                        points[:, 0],
+                        points[:, 1],
+                        s=3,
+                        alpha=0.5,
+                        label=label,
+                        marker=".",
+                        edgecolors="none",
+                    )
+
                 ax.legend(fontsize=10)
-                ax.set_xlabel('x', fontsize=14)
-                ax.set_ylabel('y', fontsize=14)
+                ax.set_xlabel("x", fontsize=14)
+                ax.set_ylabel("y", fontsize=14)
                 ax.set_xlim(x_domain)
                 ax.set_ylim(y_domain)
                 ax.grid(alpha=0.3)
-                
+
                 # Other three plots: show density plots
                 # Top-right: Initial
                 ax = axs[0, 1]
                 initial_points = self.points_history[initial_idx]
-                self._plot_density_heatmap_2d(ax, initial_points, colors['initial'], 
-                                           'Initial Distribution', x_domain, y_domain)
-                
+                self._plot_density_heatmap_2d(
+                    ax,
+                    initial_points,
+                    colors["initial"],
+                    "Initial Distribution",
+                    x_domain,
+                    y_domain,
+                )
+
                 # Bottom-left: Mid-training
                 ax = axs[1, 0]
                 mid_points = self.points_history[mid_idx]
-                self._plot_density_heatmap_2d(ax, mid_points, colors['mid'], 
-                                           f'Intermediate Distribution (Snapshot {mid_idx})', 
-                                           x_domain, y_domain)
-                
+                self._plot_density_heatmap_2d(
+                    ax,
+                    mid_points,
+                    colors["mid"],
+                    f"Intermediate Distribution (Snapshot {mid_idx})",
+                    x_domain,
+                    y_domain,
+                )
+
                 # Bottom-right: Final
                 ax = axs[1, 1]
                 final_points = self.points_history[final_idx]
-                self._plot_density_heatmap_2d(ax, final_points, colors['final'], 
-                                           'Final Distribution', x_domain, y_domain)
-            
+                self._plot_density_heatmap_2d(
+                    ax,
+                    final_points,
+                    colors["final"],
+                    "Final Distribution",
+                    x_domain,
+                    y_domain,
+                )
+
             # Adjust layout and save
             plt.tight_layout()
-            
+
             # Save the figure
             if save_path:
-                plt.savefig(save_path, dpi=300, bbox_inches='tight')
+                plt.savefig(save_path, dpi=300, bbox_inches="tight")
                 plt.close()
                 logging.info(f"Collocation evolution saved to {save_path}")
             else:
                 plt.show()
-                
+
         except Exception as e:
             logging.warning(f"Error visualizing collocation evolution: {e}")
             import traceback
+
             traceback.print_exc()
-    
-    def _plot_density_heatmap(self, ax, points, colormap, title, x_domain, t_domain, bins=50):
+
+    def _plot_density_heatmap(
+        self, ax, points, colormap, title, x_domain, t_domain, bins=50
+    ):
         """Helper method to plot density heatmap for 1D PDE collocation points"""
         # Create 2D histogram
         counts, xedges, yedges = np.histogram2d(
-            points[:, 0], points[:, 1], 
-            bins=bins, 
-            range=[x_domain, t_domain]
+            points[:, 0], points[:, 1], bins=bins, range=[x_domain, t_domain]
         )
-        
+
         # Display heatmap
-        im = ax.imshow(counts.T, origin='lower', aspect='auto', 
-                     extent=[x_domain[0], x_domain[1], t_domain[0], t_domain[1]], 
-                     cmap=colormap)
-        
+        im = ax.imshow(
+            counts.T,
+            origin="lower",
+            aspect="auto",
+            extent=[x_domain[0], x_domain[1], t_domain[0], t_domain[1]],
+            cmap=colormap,
+        )
+
         # Add colorbar
         cbar = plt.colorbar(im, ax=ax)
-        cbar.set_label('Number of Points', fontsize=12)
-        
+        cbar.set_label("Number of Points", fontsize=12)
+
         # Set labels and title
         ax.set_title(title, fontsize=16)
-        ax.set_xlabel('x', fontsize=14)
-        ax.set_ylabel('t', fontsize=14)
-        
-    def _plot_density_heatmap_2d(self, ax, points, colormap, title, x_domain, y_domain, bins=50):
+        ax.set_xlabel("x", fontsize=14)
+        ax.set_ylabel("t", fontsize=14)
+
+    def _plot_density_heatmap_2d(
+        self, ax, points, colormap, title, x_domain, y_domain, bins=50
+    ):
         """Helper method to plot density heatmap for 2D PDE collocation points"""
         # Create 2D histogram (using x and y coordinates)
         counts, xedges, yedges = np.histogram2d(
-            points[:, 0], points[:, 1], 
-            bins=bins, 
-            range=[x_domain, y_domain]
+            points[:, 0], points[:, 1], bins=bins, range=[x_domain, y_domain]
         )
-        
+
         # Display heatmap
-        im = ax.imshow(counts.T, origin='lower', aspect='auto', 
-                     extent=[x_domain[0], x_domain[1], y_domain[0], y_domain[1]], 
-                     cmap=colormap)
-        
+        im = ax.imshow(
+            counts.T,
+            origin="lower",
+            aspect="auto",
+            extent=[x_domain[0], x_domain[1], y_domain[0], y_domain[1]],
+            cmap=colormap,
+        )
+
         # Add colorbar
         cbar = plt.colorbar(im, ax=ax)
-        cbar.set_label('Number of Points', fontsize=12)
-        
+        cbar.set_label("Number of Points", fontsize=12)
+
         # Set labels and title
         ax.set_title(title, fontsize=16)
-        ax.set_xlabel('x', fontsize=14)
-        ax.set_ylabel('y', fontsize=14)
+        ax.set_xlabel("x", fontsize=14)
+        ax.set_ylabel("y", fontsize=14)
 
     def generate_fdm_comparison(self, experiment_dir):
         """
         Generate comparison plots with finite difference method solutions.
-        
+
         Args:
             experiment_dir: Directory to save visualizations
         """
         try:
             # Import required components
             from src.numerical_solvers.finite_difference_base import FDMConfig
-            
+
             # Check if the PDE type is supported
-            pde_type = getattr(self.pde, 'pde_type', None)
-            if pde_type is None and hasattr(self.pde, 'config'):
-                pde_type = getattr(self.pde.config, 'type', None)
-            
+            pde_type = getattr(self.pde, "pde_type", None)
+            if pde_type is None and hasattr(self.pde, "config"):
+                pde_type = getattr(self.pde.config, "type", None)
+
             if pde_type is None:
-                self.logger.info("Could not determine PDE type, skipping FDM comparison")
+                self.logger.info(
+                    "Could not determine PDE type, skipping FDM comparison"
+                )
                 return
-                
+
             # Set up visualization directory
             viz_dir = os.path.join(experiment_dir, "visualizations")
             os.makedirs(viz_dir, exist_ok=True)
-            
+
             # Create FDM solver based on PDE type
-            if pde_type.lower() == 'heat':
+            if pde_type.lower() == "heat":
                 self.logger.info("Generating FDM comparison for Heat Equation")
                 from src.numerical_solvers.heat_equation_fdm import HeatEquationFDM
-                
+
                 # Llamar al método estático que hemos movido a heat_equation_fdm.py
                 fdm_solver = HeatEquationFDM.generate_fdm_comparison_plots(
                     pde=self.pde,
                     model=self.model,
                     device=self.device,
                     viz_dir=viz_dir,
-                    logger=self.logger
+                    logger=self.logger,
                 )
-                
+
                 self.logger.info("FDM comparison completed successfully")
             else:
-                self.logger.info(f"FDM comparison not implemented for PDE type: {pde_type}")
-        
+                self.logger.info(
+                    f"FDM comparison not implemented for PDE type: {pde_type}"
+                )
+
         except ImportError as e:
-            self.logger.warning(f"Could not import required packages for FDM comparison: {e}")
+            self.logger.warning(
+                f"Could not import required packages for FDM comparison: {e}"
+            )
         except Exception as e:
             self.logger.error(f"Error generating FDM comparison: {e}")
             import traceback
+
             traceback.print_exc()

@@ -149,9 +149,9 @@ class PDEBase:
         self.config.domain = self.domain
 
         # Handle time_domain/t_domain property
-        if hasattr(config, 'time_domain'):
+        if hasattr(config, "time_domain"):
             self.time_domain = config.time_domain
-        elif hasattr(config, 't_domain'):
+        elif hasattr(config, "t_domain"):
             self.time_domain = config.t_domain
         else:
             self.time_domain = [0.0, 1.0]
@@ -549,17 +549,13 @@ class PDEBase:
 
                 # Add some noise for better training
                 x_noise = (self.domain[0][1] - self.domain[0][0]) * 0.01
-                t_noise = (
-                    self.time_domain[1] - self.time_domain[0]
-                ) * 0.01
+                t_noise = (self.time_domain[1] - self.time_domain[0]) * 0.01
                 x = x + torch.randn_like(x) * x_noise
                 t = t + torch.randn_like(t) * t_noise
 
                 # Clip to domain
                 x = torch.clamp(x, self.domain[0][0], self.domain[0][1])
-                t = torch.clamp(
-                    t, self.time_domain[0], self.time_domain[1]
-                )
+                t = torch.clamp(t, self.time_domain[0], self.time_domain[1])
 
             else:
                 # For multi-dimensional domains
@@ -735,8 +731,7 @@ class PDEBase:
                             for d in range(self.dimension)
                         ]
                     ),
-                    (self.time_domain[1] - self.time_domain[0])
-                    / grid_size,
+                    (self.time_domain[1] - self.time_domain[0]) / grid_size,
                 )
                 noise = torch.randn_like(selected_points) * noise_scale
                 selected_points = selected_points + noise
@@ -1055,16 +1050,19 @@ class PDEBase:
         :param num_snapshots: Number of snapshots to visualize
         """
         # Use provided points_history or class attribute
-        history = points_history if points_history is not None else self.collocation_history
+        history = (
+            points_history if points_history is not None else self.collocation_history
+        )
 
         if not history or len(history) < 2:
             print("Not enough collocation history to visualize evolution")
             return
 
         import matplotlib
+
         # Use 'Agg' backend if running in a non-main thread
         if not matplotlib.is_interactive():
-            matplotlib.use('Agg')
+            matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from matplotlib.colors import LinearSegmentedColormap
         import os
@@ -1181,31 +1179,30 @@ class PDEBase:
 
         # Create a simple 2D histogram
         hist, xedges, yedges = np.histogram2d(
-            x_pts, 
+            x_pts,
             y_pts,
             bins=(20, 20),  # Reduced number of bins for clearer visualization
-            range=[[xmin, xmax], [ymin, ymax]]
+            range=[[xmin, xmax], [ymin, ymax]],
         )
 
         # Plot heatmap
         im = ax.imshow(
             hist.T,
-            origin='lower',
+            origin="lower",
             extent=[xmin, xmax, ymin, ymax],
-            aspect='auto',
+            aspect="auto",
             cmap=cmap,
-            interpolation='nearest'  # Sharp transitions between density levels
+            interpolation="nearest",  # Sharp transitions between density levels
         )
 
         # Add colorbar with simplified labels
         cbar = plt.colorbar(im, ax=ax)
-        cbar.set_label('Number of Points', fontsize=10)
+        cbar.set_label("Number of Points", fontsize=10)
 
         # Overlay scatter plot of actual points with increased visibility
-        ax.scatter(x_pts, y_pts, s=10, c='white', alpha=0.5, marker='.')
+        ax.scatter(x_pts, y_pts, s=10, c="white", alpha=0.5, marker=".")
 
         ax.set_xlabel("x", fontsize=12)
         ax.set_ylabel("t", fontsize=12)
         ax.set_title(title, fontsize=14)
-        ax.grid(True, alpha=0.3, linestyle='--')
-
+        ax.grid(True, alpha=0.3, linestyle="--")

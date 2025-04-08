@@ -25,7 +25,13 @@ from src.trainer import PDETrainer
 from src.rl_agent import RLAgent
 from src.utils.utils import save_model
 from src.pdes.pde_base import PDEConfig
-from src.config import ModelConfig, Config, TrainingConfig, EarlyStoppingConfig, LearningRateSchedulerConfig
+from src.config import (
+    ModelConfig,
+    Config,
+    TrainingConfig,
+    EarlyStoppingConfig,
+    LearningRateSchedulerConfig,
+)
 
 
 class InteractiveTrainer:
@@ -46,20 +52,22 @@ class InteractiveTrainer:
 
     def setup_logger(self):
         """Initialize and configure logger"""
-        logger = logging.getLogger('InteractiveTrainer')
+        logger = logging.getLogger("InteractiveTrainer")
         logger.setLevel(logging.INFO)
-        
+
         # Create console handler
         ch = logging.StreamHandler()
         ch.setLevel(logging.INFO)
-        
+
         # Create formatter
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
         ch.setFormatter(formatter)
-        
+
         # Add handler to logger
         logger.addHandler(ch)
-        
+
         return logger
 
     def setup_variables(self):
@@ -531,7 +539,9 @@ class InteractiveTrainer:
 
         # Get PDE-specific configuration from config.yaml
         pde_name = self.selected_pde.get().lower().replace(" ", "_")
-        pde_key = pde_name.split("_")[0]  # Get base name (e.g., 'heat' from 'heat_equation')
+        pde_key = pde_name.split("_")[
+            0
+        ]  # Get base name (e.g., 'heat' from 'heat_equation')
         pde_config = yaml_config.get("pde_configs", {}).get(pde_key, {})
 
         # Get architecture configuration
@@ -542,15 +552,17 @@ class InteractiveTrainer:
         config = yaml_config.copy()
 
         # Update training parameters that can be set in UI
-        config["training"].update({
-            "num_epochs": self.epochs.get(),
-            "batch_size": self.batch_size.get(),
-            "num_collocation_points": self.num_points.get(),
-            "optimizer_config": {
-                **config["training"].get("optimizer_config", {}),
-                "learning_rate": self.learning_rate.get(),
-            },
-        })
+        config["training"].update(
+            {
+                "num_epochs": self.epochs.get(),
+                "batch_size": self.batch_size.get(),
+                "num_collocation_points": self.num_points.get(),
+                "optimizer_config": {
+                    **config["training"].get("optimizer_config", {}),
+                    "learning_rate": self.learning_rate.get(),
+                },
+            }
+        )
 
         # Update device
         config["device"] = self.selected_device.get()
@@ -563,14 +575,16 @@ class InteractiveTrainer:
             "name": self.selected_pde.get(),
             "domain": pde_config.get("domain"),
             "time_domain": pde_config.get("time_domain"),
-            "parameters": pde_config.get("parameters", {}),  # Ensure parameters are copied
+            "parameters": pde_config.get(
+                "parameters", {}
+            ),  # Ensure parameters are copied
             "boundary_conditions": pde_config.get("boundary_conditions", {}),
             "initial_condition": pde_config.get("initial_condition", {}),
             "exact_solution": pde_config.get("exact_solution", {}),
             "dimension": pde_config.get("dimension", 1),
             "input_dim": pde_config.get("input_dim", 2),
             "output_dim": pde_config.get("output_dim", 1),
-            "architecture": arch_type
+            "architecture": arch_type,
         }
 
         # Update model configuration based on PDE and architecture settings
@@ -580,7 +594,7 @@ class InteractiveTrainer:
             "hidden_dim": self.hidden_dim.get(),
             "output_dim": pde_config.get("output_dim", 1),
             "num_layers": self.num_layers.get(),
-            **arch_config  # Include all architecture-specific settings
+            **arch_config,  # Include all architecture-specific settings
         }
 
         return config
@@ -592,7 +606,9 @@ class InteractiveTrainer:
             name=config_dict["pde"]["name"],
             domain=config_dict["pde"]["domain"],
             time_domain=config_dict["pde"]["time_domain"],
-            parameters=config_dict["pde"].get("parameters", {}),  # Ensure parameters are passed
+            parameters=config_dict["pde"].get(
+                "parameters", {}
+            ),  # Ensure parameters are passed
             boundary_conditions=config_dict["pde"]["boundary_conditions"],
             initial_condition=config_dict["pde"]["initial_condition"],
             exact_solution=config_dict["pde"]["exact_solution"],
@@ -601,11 +617,17 @@ class InteractiveTrainer:
             training=TrainingConfig(
                 num_epochs=config_dict["training"]["num_epochs"],
                 batch_size=config_dict["training"]["batch_size"],
-                num_collocation_points=config_dict["training"]["num_collocation_points"],
+                num_collocation_points=config_dict["training"][
+                    "num_collocation_points"
+                ],
                 num_boundary_points=config_dict["training"]["num_boundary_points"],
                 num_initial_points=config_dict["training"]["num_initial_points"],
-                learning_rate=config_dict["training"]["optimizer_config"]["learning_rate"],
-                weight_decay=config_dict["training"]["optimizer_config"]["weight_decay"],
+                learning_rate=config_dict["training"]["optimizer_config"][
+                    "learning_rate"
+                ],
+                weight_decay=config_dict["training"]["optimizer_config"][
+                    "weight_decay"
+                ],
                 gradient_clipping=config_dict["training"].get("gradient_clipping", 1.0),
                 early_stopping=EarlyStoppingConfig(
                     enabled=config_dict["training"]["early_stopping"]["enabled"],
@@ -619,8 +641,8 @@ class InteractiveTrainer:
                     factor=config_dict["training"]["reduce_lr_params"]["factor"],
                     patience=config_dict["training"]["reduce_lr_params"]["patience"],
                 ),
-                loss_weights=config_dict["training"].get("loss_weights", None)
-            )
+                loss_weights=config_dict["training"].get("loss_weights", None),
+            ),
         )
 
         if pde_type == "Heat Equation":
@@ -661,7 +683,7 @@ class InteractiveTrainer:
             # Create Config object
             config_obj = Config()
             config_obj.device = config_dict["device"]
-            
+
             # Get architecture configuration
             arch_type = config_dict["model"]["architecture"]
             arch_config = config_dict["architectures"][arch_type]
@@ -674,21 +696,29 @@ class InteractiveTrainer:
                 num_layers=self.num_layers.get(),  # From UI
                 activation=arch_config.get("activation", "tanh"),
                 fourier_features=arch_type == "fourier",
-                fourier_scale=arch_config.get("scale", 1.0) if arch_type == "fourier" else None,
+                fourier_scale=(
+                    arch_config.get("scale", 1.0) if arch_type == "fourier" else None
+                ),
                 dropout=arch_config.get("dropout", 0.0),
                 layer_norm=arch_config.get("layer_norm", True),
-                architecture=arch_type
+                architecture=arch_type,
             )
 
             # Create training config
             config_obj.training = TrainingConfig(
                 num_epochs=config_dict["training"]["num_epochs"],
                 batch_size=config_dict["training"]["batch_size"],
-                num_collocation_points=config_dict["training"]["num_collocation_points"],
+                num_collocation_points=config_dict["training"][
+                    "num_collocation_points"
+                ],
                 num_boundary_points=config_dict["training"]["num_boundary_points"],
                 num_initial_points=config_dict["training"]["num_initial_points"],
-                learning_rate=config_dict["training"]["optimizer_config"]["learning_rate"],
-                weight_decay=config_dict["training"]["optimizer_config"]["weight_decay"],
+                learning_rate=config_dict["training"]["optimizer_config"][
+                    "learning_rate"
+                ],
+                weight_decay=config_dict["training"]["optimizer_config"][
+                    "weight_decay"
+                ],
                 gradient_clipping=config_dict["training"].get("gradient_clipping", 1.0),
                 early_stopping=EarlyStoppingConfig(
                     enabled=config_dict["training"]["early_stopping"]["enabled"],
@@ -764,7 +794,9 @@ class InteractiveTrainer:
                         if config_dict["rl"]["enabled"]
                         else None
                     ),
-                    validation_frequency=config_dict["training"]["validation_frequency"],
+                    validation_frequency=config_dict["training"][
+                        "validation_frequency"
+                    ],
                     early_stopping_config=config_dict["training"]["early_stopping"],
                 )
 

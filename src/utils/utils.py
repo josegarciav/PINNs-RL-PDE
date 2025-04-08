@@ -779,7 +779,7 @@ def save_training_metrics(
     metrics_file = os.path.join(experiment_dir, "metrics.json")
     with open(metrics_file, "w") as f:
         json.dump(history, f, indent=2)
-    
+
     # Save history.json directly in the experiment directory
     history_file = os.path.join(experiment_dir, "history.json")
     with open(history_file, "w") as f:

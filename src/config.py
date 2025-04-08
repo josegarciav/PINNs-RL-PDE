@@ -38,19 +38,12 @@ class TrainingConfig:
 
     def __post_init__(self):
         if self.loss_weights is None:
-            self.loss_weights = {
-                "residual": 1.0,
-                "boundary": 1.0,
-                "initial": 1.0
-            }
+            self.loss_weights = {"residual": 1.0, "boundary": 1.0, "initial": 1.0}
 
     @property
     def optimizer_config(self) -> Dict[str, Any]:
         """Get optimizer configuration."""
-        return {
-            "learning_rate": self.learning_rate,
-            "weight_decay": self.weight_decay
-        }
+        return {"learning_rate": self.learning_rate, "weight_decay": self.weight_decay}
 
     def __getitem__(self, key: str) -> Any:
         """Get the value for a given key, also to make it subscriptible."""

@@ -179,8 +179,7 @@ app.layout = html.Div(
 
 # Callback to update experiment list
 @app.callback(
-    Output("experiment-selector", "options"),
-    Input("interval-component", "n_intervals")
+    Output("experiment-selector", "options"), Input("interval-component", "n_intervals")
 )
 def update_experiments(_):
     return get_experiments()
@@ -1198,16 +1197,16 @@ def get_experiments():
     if os.path.exists(experiments_dir):
         for exp_dir in os.listdir(experiments_dir):
             # Skip .DS_Store and other hidden files
-            if exp_dir.startswith('.'):
+            if exp_dir.startswith("."):
                 continue
-                
+
             exp_path = os.path.join(experiments_dir, exp_dir)
             if os.path.isdir(exp_path):
                 # Check if this is a running experiment
                 is_running = os.path.exists(os.path.join(exp_path, ".running"))
-                
+
                 # Get experiment details from directory name
-                parts = exp_dir.split('_')
+                parts = exp_dir.split("_")
                 if len(parts) >= 2:
                     # Try to extract meaningful information from directory name
                     timestamp = parts[0]
@@ -1217,15 +1216,15 @@ def get_experiments():
                     else:
                         pde_name = "Unknown PDE"
                         arch_name = parts[1] if len(parts) > 1 else "unknown"
-                    
+
                     # Format the display name
                     display_name = f"{timestamp} - {pde_name} ({arch_name})"
                 else:
                     display_name = exp_dir
-                
+
                 if is_running:
                     display_name += " (Running)"
-                
+
                 experiments.append({"label": display_name, "value": exp_path})
 
     # Sort experiments by name (which includes timestamp) in reverse order

@@ -22,21 +22,23 @@ class HeatEquation(PDEBase):
 
         :param config: PDEConfig instance containing all necessary parameters
         :param kwargs: Additional keyword arguments
-        """        
+        """
         # Initialize base class first to ensure self.config is set
         super().__init__(config)
-                
+
         # Now we can safely access self.config.parameters
-        if not hasattr(self.config, 'parameters') or not self.config.parameters:
-            raise ValueError("Heat equation requires 'parameters' in config with 'alpha' value")
-            
-        if 'alpha' not in self.config.parameters:
+        if not hasattr(self.config, "parameters") or not self.config.parameters:
+            raise ValueError(
+                "Heat equation requires 'parameters' in config with 'alpha' value"
+            )
+
+        if "alpha" not in self.config.parameters:
             raise ValueError("Heat equation requires 'alpha' parameter in config")
 
     @property
     def alpha(self):
         """Thermal diffusivity coefficient."""
-        return self.config.parameters['alpha']
+        return self.config.parameters["alpha"]
 
     def _calculate_decay_rate(self, k: float) -> float:
         """
@@ -97,7 +99,7 @@ class HeatEquation(PDEBase):
             # Get solution parameters
             k = self.config.exact_solution.get("frequency", 1.0)
             decay_rate = self._calculate_decay_rate(k)
-            
+
             # The residual should be: u_t - α*u_xx = 0
             # For the exact solution, decay_rate should equal α*(k*π)^2
             # This is enforced by the physics of the heat equation
@@ -216,20 +218,33 @@ class HeatEquation(PDEBase):
                 decay_rate = self._calculate_decay_rate(k)
                 if self.dimension == 1:
                     # Include exponential decay term
-                    return lambda x, t: A * torch.sin(k * torch.pi * x) * torch.exp(-decay_rate * t)
+                    return (
+                        lambda x, t: A
+                        * torch.sin(k * torch.pi * x)
+                        * torch.exp(-decay_rate * t)
+                    )
                 else:
                     # For higher dimensions, use product of sine waves with exponential decay
-                    return lambda x, t: A * torch.prod(
-                        torch.sin(k * torch.pi * x), dim=1, keepdim=True
-                    ) * torch.exp(-decay_rate * t)
+                    return (
+                        lambda x, t: A
+                        * torch.prod(torch.sin(k * torch.pi * x), dim=1, keepdim=True)
+                        * torch.exp(-decay_rate * t)
+                    )
             else:
                 raise ValueError(f"Unsupported initial condition type: {ic_type}")
-        elif bc_type == "dirichlet" and self.config.exact_solution.get("type") == "sin_exp_decay":
+        elif (
+            bc_type == "dirichlet"
+            and self.config.exact_solution.get("type") == "sin_exp_decay"
+        ):
             # For Dirichlet boundary conditions with sin_exp_decay
             A = self.config.exact_solution.get("amplitude", 1.0)
             k = self.config.exact_solution.get("frequency", 1.0)
             decay_rate = self._calculate_decay_rate(k)
-            return lambda x, t: A * torch.sin(k * torch.pi * x) * torch.exp(-decay_rate * t)
+            return (
+                lambda x, t: A
+                * torch.sin(k * torch.pi * x)
+                * torch.exp(-decay_rate * t)
+            )
         else:
             return super()._create_boundary_condition(bc_type, params)
 
@@ -270,17 +285,25 @@ class HeatEquation(PDEBase):
         boundary_loss = torch.tensor(0.0, device=self.device)
 
         # Get number of points from config or use default
-        num_boundary_points = self.config.training.get("num_boundary_points", self.config.training.num_collocation_points // 10)
-        
+        num_boundary_points = self.config.training.get(
+            "num_boundary_points", self.config.training.num_collocation_points // 10
+        )
+
         # Calculate time ranges based on domain
         t_max = self.config.time_domain[1]
         t_early = t_max * 0.01  # Use 1% of total time for early points
-        
+
         # Generate more points near t=0 for better initial condition handling
-        t_boundary = torch.cat([
-            torch.linspace(0, t_early, num_boundary_points//4, device=self.device),
-            torch.linspace(t_early, t_max, 3*num_boundary_points//4, device=self.device)
-        ]).reshape(-1, 1)
+        t_boundary = torch.cat(
+            [
+                torch.linspace(
+                    0, t_early, num_boundary_points // 4, device=self.device
+                ),
+                torch.linspace(
+                    t_early, t_max, 3 * num_boundary_points // 4, device=self.device
+                ),
+            ]
+        ).reshape(-1, 1)
 
         # Left boundary (x=0) points
         x_left = torch.zeros(num_boundary_points, 1, device=self.device)
@@ -298,37 +321,53 @@ class HeatEquation(PDEBase):
 
         # Compute derivatives at boundaries
         du_dx_left = torch.autograd.grad(
-            u_left, points_left,
-            grad_outputs=torch.ones_like(u_left),
-            create_graph=True
-        )[0][:, 0:1]  # Extract only the x-derivative
+            u_left, points_left, grad_outputs=torch.ones_like(u_left), create_graph=True
+        )[0][
+            :, 0:1
+        ]  # Extract only the x-derivative
 
         du_dx_right = torch.autograd.grad(
-            u_right, points_right,
+            u_right,
+            points_right,
             grad_outputs=torch.ones_like(u_right),
-            create_graph=True
-        )[0][:, 0:1]  # Extract only the x-derivative
+            create_graph=True,
+        )[0][
+            :, 0:1
+        ]  # Extract only the x-derivative
 
         # Periodic boundary conditions:
         # 1. Values should match: u(0,t) = u(1,t)
-        boundary_loss += torch.mean((u_left - u_right)**2)
-        
+        boundary_loss += torch.mean((u_left - u_right) ** 2)
+
         # 2. Derivatives should match: du/dx(0,t) = du/dx(1,t)
-        boundary_loss += torch.mean((du_dx_left - du_dx_right)**2)
+        boundary_loss += torch.mean((du_dx_left - du_dx_right) ** 2)
 
         # Get number of initial points from config or use default
-        num_initial = self.config.training.get("num_initial_points", self.config.training.num_collocation_points // 5)
-        
+        num_initial = self.config.training.get(
+            "num_initial_points", self.config.training.num_collocation_points // 5
+        )
+
         # Calculate domain ranges
         x_min, x_max = self.config.domain[0]
         x_boundary = (x_max - x_min) * 0.1  # Use 10% of domain for boundary regions
-        
-        x_initial = torch.cat([
-            torch.linspace(x_min, x_min + x_boundary, num_initial//4, device=self.device),
-            torch.linspace(x_min + x_boundary, x_max - x_boundary, num_initial//2, device=self.device),
-            torch.linspace(x_max - x_boundary, x_max, num_initial//4, device=self.device)
-        ]).reshape(-1, 1)
-        
+
+        x_initial = torch.cat(
+            [
+                torch.linspace(
+                    x_min, x_min + x_boundary, num_initial // 4, device=self.device
+                ),
+                torch.linspace(
+                    x_min + x_boundary,
+                    x_max - x_boundary,
+                    num_initial // 2,
+                    device=self.device,
+                ),
+                torch.linspace(
+                    x_max - x_boundary, x_max, num_initial // 4, device=self.device
+                ),
+            ]
+        ).reshape(-1, 1)
+
         t_initial = torch.zeros_like(x_initial)
         points_initial = torch.cat([x_initial, t_initial], dim=1)
         u_initial = model(points_initial)
@@ -341,18 +380,20 @@ class HeatEquation(PDEBase):
             k = self.config.initial_condition.get("frequency", 2.0)
             u_target = torch.sin(k * torch.pi * x_initial)
 
-        initial_loss = torch.mean((u_initial - u_target)**2)
+        initial_loss = torch.mean((u_initial - u_target) ** 2)
 
         # Add smoothness regularization with configurable weight
         smoothness_weight = self.config.training.loss_weights.get("smoothness", 0.01)
-        smoothness_loss = torch.mean(torch.abs(du_dx_right)) + torch.mean(torch.abs(du_dx_left))
+        smoothness_loss = torch.mean(torch.abs(du_dx_right)) + torch.mean(
+            torch.abs(du_dx_left)
+        )
 
         # Total loss with weighted components from training config
         total_loss = (
-            self.config.training.loss_weights.get("pde", 1.0) * residual_loss +
-            self.config.training.loss_weights.get("boundary", 10.0) * boundary_loss +
-            self.config.training.loss_weights.get("initial", 10.0) * initial_loss +
-            smoothness_weight * smoothness_loss
+            self.config.training.loss_weights.get("pde", 1.0) * residual_loss
+            + self.config.training.loss_weights.get("boundary", 10.0) * boundary_loss
+            + self.config.training.loss_weights.get("initial", 10.0) * initial_loss
+            + smoothness_weight * smoothness_loss
         )
 
         return {
