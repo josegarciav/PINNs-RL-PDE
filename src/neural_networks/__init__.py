@@ -78,6 +78,7 @@ class PINNModel(BaseNetwork):
 
         # Store architecture type
         self.architecture = config.model.architecture
+        self.architecture_name = config.model.architecture  # More accessible name for metadata
 
         # Create model based on architecture
         if self.architecture == "fourier":

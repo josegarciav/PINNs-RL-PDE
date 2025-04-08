@@ -324,7 +324,7 @@ training:
     eta_min: 1.0e-6
   rl_update_frequency: 10  # Update RL agent every N epochs
   loss_weights:
-    pde: 1.0
+    pde: 10.0
     boundary: 20.0  # Increased boundary condition weight
     initial: 20.0   # Increased initial condition weight
     smoothness: 0.05  # Added smoothness regularization

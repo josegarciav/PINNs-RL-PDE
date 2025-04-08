@@ -722,8 +722,6 @@ class InteractiveTrainer:
 
             # Create subdirectories
             (experiment_dir / "visualizations").mkdir(exist_ok=True)
-            (experiment_dir / "models").mkdir(exist_ok=True)
-            (experiment_dir / "logs").mkdir(exist_ok=True)
 
             # Save configuration
             with open(experiment_dir / "config.yaml", "w") as f:
@@ -777,9 +775,6 @@ class InteractiveTrainer:
 
                 # Start training
                 self.logger.info("Starting training...")
-                self.logger.info(
-                    f"Saving visualizations to: {experiment_dir}/visualizations"
-                )
 
                 trainer.train(
                     num_epochs=config_obj.training.num_epochs,

@@ -205,12 +205,9 @@ def update_graphs(experiment, _):
         # Try to find history file
         history_file = os.path.join(experiment, "history.json")
         if not os.path.exists(history_file):
-            # Try alternative locations
-            alt_files = glob.glob(
-                os.path.join(experiment, "**", "history.json"), recursive=True
-            )
-            if alt_files:
-                history_file = alt_files[0]
+            # Only look in the experiment directory, not in subfolders
+            print(f"history.json not found in experiment directory: {experiment}")
+            return {}, {}, "No history.json found in experiment directory"
 
         with open(history_file, "r") as f:
             history = json.load(f)
@@ -536,14 +533,9 @@ def update_architecture_comparison(_):
         # Load history.json
         history_file = os.path.join(exp_dir, "history.json")
         if not os.path.exists(history_file):
-            # Try alternative locations
-            alt_files = glob.glob(
-                os.path.join(exp_dir, "**", "history.json"), recursive=True
-            )
-            if alt_files:
-                history_file = alt_files[0]
-            else:
-                continue
+            # Skip this experiment if history.json not found
+            print(f"history.json not found in experiment directory: {exp_dir}")
+            continue
 
         try:
             with open(history_file, "r") as f:
@@ -792,8 +784,8 @@ def update_solution_visualizations(experiment, time_point, _):
         from src.neural_networks import PINNModel
         from src.pdes.pde_base import PDEConfig
 
-        # Look for model in the models directory
-        model_path = os.path.join(experiment, "models", "final_model.pt")
+        # Look for model directly in the experiment directory
+        model_path = os.path.join(experiment, "final_model.pt")
         config_path = os.path.join(experiment, "config.yaml")
 
         print(f"Model path: {model_path}")

@@ -765,8 +765,7 @@ def save_training_metrics(
     experiment_dir: str,
     metadata: Optional[Dict[str, Any]] = None,
 ):
-    """
-    Save training metrics and metadata in real-time for dashboard monitoring.
+    """Save training metrics to JSON file.
 
     Args:
         history: Dictionary containing training metrics
@@ -776,7 +775,12 @@ def save_training_metrics(
     # Create experiment directory if it doesn't exist
     os.makedirs(experiment_dir, exist_ok=True)
 
-    # Save history for real-time monitoring
+    # Save metrics.json directly in the experiment directory
+    metrics_file = os.path.join(experiment_dir, "metrics.json")
+    with open(metrics_file, "w") as f:
+        json.dump(history, f, indent=2)
+    
+    # Save history.json directly in the experiment directory
     history_file = os.path.join(experiment_dir, "history.json")
     with open(history_file, "w") as f:
         json.dump(history, f, indent=2)

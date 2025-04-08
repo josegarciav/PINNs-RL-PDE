@@ -14,6 +14,8 @@ class HeatEquation(PDEBase):
     where α is the thermal diffusivity and ∇² is the Laplacian operator.
     """
 
+    pde_type = "heat"  # Add explicit pde_type attribute for FDM comparison detection
+
     def __init__(self, config: PDEConfig, **kwargs):
         """
         Initialize the Heat Equation.

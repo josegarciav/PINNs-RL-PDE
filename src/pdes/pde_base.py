@@ -148,14 +148,17 @@ class PDEBase:
         # Update config with normalized domain format
         self.config.domain = self.domain
 
-        # Handle time domain format
-        if isinstance(self.config.time_domain, list):
-            self.config.time_domain = (
-                float(self.config.time_domain[0]),
-                float(self.config.time_domain[1]),
-            )
-        elif not isinstance(self.config.time_domain, tuple):
-            self.config.time_domain = (0.0, 1.0)
+        # Handle time_domain/t_domain property
+        if hasattr(config, 'time_domain'):
+            self.time_domain = config.time_domain
+        elif hasattr(config, 't_domain'):
+            self.time_domain = config.t_domain
+        else:
+            self.time_domain = [0.0, 1.0]
+
+        # Convert time_domain to tuple if it's a list
+        if isinstance(self.time_domain, list):
+            self.time_domain = tuple(self.time_domain)
 
         # Setup device
         self.device = config.device or torch.device("cpu")
@@ -533,8 +536,8 @@ class PDEBase:
                     device=self.device,
                 ).reshape(-1, 1)
                 t = torch.linspace(
-                    self.config.time_domain[0],
-                    self.config.time_domain[1],
+                    self.time_domain[0],
+                    self.time_domain[1],
                     int(np.sqrt(num_points)),
                     device=self.device,
                 ).reshape(-1, 1)
@@ -547,7 +550,7 @@ class PDEBase:
                 # Add some noise for better training
                 x_noise = (self.domain[0][1] - self.domain[0][0]) * 0.01
                 t_noise = (
-                    self.config.time_domain[1] - self.config.time_domain[0]
+                    self.time_domain[1] - self.time_domain[0]
                 ) * 0.01
                 x = x + torch.randn_like(x) * x_noise
                 t = t + torch.randn_like(t) * t_noise
@@ -555,7 +558,7 @@ class PDEBase:
                 # Clip to domain
                 x = torch.clamp(x, self.domain[0][0], self.domain[0][1])
                 t = torch.clamp(
-                    t, self.config.time_domain[0], self.config.time_domain[1]
+                    t, self.time_domain[0], self.time_domain[1]
                 )
 
             else:
@@ -578,8 +581,8 @@ class PDEBase:
                 # Add time dimension
                 grid_points.append(
                     torch.linspace(
-                        self.config.time_domain[0],
-                        self.config.time_domain[1],
+                        self.time_domain[0],
+                        self.time_domain[1],
                         points_per_dim,
                     )
                 )
@@ -615,8 +618,8 @@ class PDEBase:
                     )
                 points[:, -1] = torch.clamp(
                     points[:, -1],
-                    self.config.time_domain[0],
-                    self.config.time_domain[1],
+                    self.time_domain[0],
+                    self.time_domain[1],
                 )
 
                 # Extract x and t
@@ -646,8 +649,8 @@ class PDEBase:
             t = torch.tensor(
                 qmc.scale(
                     sample[:, -1].reshape(-1, 1),
-                    l_bounds=[float(self.config.time_domain[0])],
-                    u_bounds=[float(self.config.time_domain[1])],
+                    l_bounds=[float(self.time_domain[0])],
+                    u_bounds=[float(self.time_domain[1])],
                 ),
                 dtype=torch.float32,
             )
@@ -667,8 +670,8 @@ class PDEBase:
                         device=self.device,
                     )
                     t_grid = torch.linspace(
-                        self.config.time_domain[0],
-                        self.config.time_domain[1],
+                        self.time_domain[0],
+                        self.time_domain[1],
                         grid_size,
                         device=self.device,
                     )
@@ -688,8 +691,8 @@ class PDEBase:
                         )
                     grid_points.append(
                         torch.linspace(
-                            self.config.time_domain[0],
-                            self.config.time_domain[1],
+                            self.time_domain[0],
+                            self.time_domain[1],
                             grid_size,
                             device=self.device,
                         )
@@ -732,7 +735,7 @@ class PDEBase:
                             for d in range(self.dimension)
                         ]
                     ),
-                    (self.config.time_domain[1] - self.config.time_domain[0])
+                    (self.time_domain[1] - self.time_domain[0])
                     / grid_size,
                 )
                 noise = torch.randn_like(selected_points) * noise_scale
@@ -747,8 +750,8 @@ class PDEBase:
                     )
                 selected_points[:, -1] = torch.clamp(
                     selected_points[:, -1],
-                    self.config.time_domain[0],
-                    self.config.time_domain[1],
+                    self.time_domain[0],
+                    self.time_domain[1],
                 )
 
                 # Split into spatial and temporal coordinates
@@ -811,8 +814,8 @@ class PDEBase:
             ).reshape(-1, 1)
 
         t_boundary = torch.linspace(
-            self.config.time_domain[0],
-            self.config.time_domain[1],
+            self.time_domain[0],
+            self.time_domain[1],
             100,
             device=self.device,
         ).reshape(-1, 1)
