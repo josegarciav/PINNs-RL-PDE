@@ -66,8 +66,8 @@ pde_configs:
       amplitude: 1.0
       frequency: 2.0  # Number of periods in [0,1]
     boundary_conditions:
-      #periodic: {}  # Periodic boundary conditions
-      dirichlet: { value: 0.0 }
+      periodic: {}  # Periodic boundary conditions
+      #dirichlet: { value: 0.0 }
     exact_solution:
       type: "sin_exp_decay"
       amplitude: 1.0
@@ -297,9 +297,15 @@ training:
   device: "mps"
   num_epochs: 1000  # Increased training time
   batch_size: 2048  # Larger batch size
-  num_collocation_points: 10000  # More collocation points
+  num_collocation_points: 20000  # More collocation points
   num_boundary_points: 2000  # More boundary points
   num_initial_points: 4000  # More initial points
+  collocation_distribution: "uniform"  # Options: "uniform", "latin_hypercube", "sobol", "adaptive" (requires RL agent)
+  adaptive_weights:
+    enabled: true  # Whether to use adaptive weights for loss terms
+    strategy: "rbw"  # Options: "lrw" (Learning Rate Weighting) or "rbw" (Relative Error Weighting)
+    alpha: 0.9  # Moving average factor for weight updates (0-1)
+    eps: 1e-5  # Small constant for numerical stability
   validation_frequency: 10
   early_stopping:
     enabled: true
@@ -308,7 +314,7 @@ training:
     monitor: "val_loss"
   optimizer_config:
     name: "adam"
-    learning_rate: 0.0005  # Lower learning rate for better convergence
+    learning_rate: 0.005  # Lower learning rate for better convergence
     beta1: 0.9
     beta2: 0.999
     weight_decay: 0.0001  # Added weight decay for regularization
@@ -324,14 +330,14 @@ training:
     eta_min: 1.0e-6
   rl_update_frequency: 10  # Update RL agent every N epochs
   loss_weights:
-    pde: 10.0
+    pde: 1.0
     boundary: 20.0  # Increased boundary condition weight
     initial: 20.0   # Increased initial condition weight
     smoothness: 0.05  # Added smoothness regularization
 
 # Reinforcement Learning Configuration
 rl:
-  enabled: false
+  enabled: true
   state_dim: 2  # (x, t)
   action_dim: 1  # Sampling probability
   hidden_dim: 512

@@ -312,6 +312,8 @@ class HeatEquationFDM(FiniteDifferenceSolver):
         else:
             spatial_domain = [(0.0, 1.0)]
 
+        logger.info(f"Spatial domain: {spatial_domain}")
+
         # Unified time domain retrieval - check all possible attributes
         time_domain = None
         if hasattr(pde, "time_domain") and pde.time_domain is not None:
@@ -339,28 +341,53 @@ class HeatEquationFDM(FiniteDifferenceSolver):
         logger.info(f"Domain: {spatial_domain}, Time domain: {time_domain}")
 
         # Get diffusion coefficient
-        alpha = 0.1  # Default
-        if hasattr(pde, "parameters") and pde.parameters and "alpha" in pde.parameters:
-            alpha = pde.parameters["alpha"]
-        elif hasattr(pde, "alpha"):
+        alpha = None
+        if hasattr(pde, "alpha") and pde.alpha is not None:
             alpha = pde.alpha
-        elif (
-            hasattr(pde.config, "parameters")
-            and pde.config.parameters
-            and "alpha" in pde.config.parameters
-        ):
-            alpha = pde.config.parameters["alpha"]
+            logger.info(f"Using alpha from pde.alpha: {alpha}")
+        elif hasattr(pde, "config") and hasattr(pde.config, "parameters") and pde.config.parameters is not None:
+            if "alpha" in pde.config.parameters:
+                alpha = pde.config.parameters["alpha"]
+                logger.info(f"Using alpha from pde.config.parameters: {alpha}")
+        
+        # If still not found, look in other places
+        if alpha is None:
+            if hasattr(pde, "parameters") and pde.parameters is not None and "alpha" in pde.parameters:
+                alpha = pde.parameters["alpha"]
+                logger.info(f"Using alpha from pde.parameters: {alpha}")
+            else:
+                alpha = 0.01  # Default value
+                logger.warning(f"No alpha parameter found, using default: {alpha}")
 
         logger.info(f"Using diffusion coefficient alpha: {alpha}")
 
         # Get boundary conditions
         bc_type = "dirichlet"
         bc_value = 0.0
-        if hasattr(pde.config, "boundary_conditions"):
-            if "dirichlet" in pde.config.boundary_conditions:
-                bc_value = pde.config.boundary_conditions["dirichlet"].get("value", 0.0)
-            elif "periodic" in pde.config.boundary_conditions:
-                bc_type = "periodic"
+        
+        if hasattr(pde, "boundary_conditions") and pde.boundary_conditions is not None:
+            bc_dict = pde.boundary_conditions
+            logger.info(f"Using boundary conditions from pde.boundary_conditions: {bc_dict}")
+        elif hasattr(pde.config, "boundary_conditions") and pde.config.boundary_conditions is not None:
+            bc_dict = pde.config.boundary_conditions
+            logger.info(f"Using boundary conditions from pde.config.boundary_conditions: {bc_dict}")
+        else:
+            bc_dict = {"dirichlet": {"value": 0.0}}
+            logger.warning(f"No boundary conditions found, using default: {bc_dict}")
+        
+        # Process boundary conditions
+        if "dirichlet" in bc_dict:
+            bc_type = "dirichlet"
+            if isinstance(bc_dict["dirichlet"], dict) and "value" in bc_dict["dirichlet"]:
+                bc_value = bc_dict["dirichlet"]["value"]
+            logger.info(f"Using Dirichlet boundary condition with value: {bc_value}")
+        elif "periodic" in bc_dict:
+            bc_type = "periodic"
+            logger.info("Using periodic boundary conditions")
+        else:
+            logger.warning(f"Unsupported boundary condition types, using Dirichlet with value 0.0")
+            bc_type = "dirichlet"
+            bc_value = 0.0
 
         # Configure FDM parameters
         nx = 100  # Number of spatial points
@@ -391,46 +418,48 @@ class HeatEquationFDM(FiniteDifferenceSolver):
             device=device,
         )
 
+        logger.info(f"Created FDM config with parameters: {fdm_config.parameters}")
+        logger.info(f"Created FDM config with boundary conditions: {fdm_config.boundary_conditions}")
         logger.info(f"Created FDM config with t_domain: {fdm_config.t_domain}")
 
         # Create FDM solver
         fdm_solver = HeatEquationFDM(fdm_config)
-
+        
+        # Try to get initial condition from PDE config
+        if hasattr(pde.config, "initial_condition"):
+            ic_dict = pde.config.initial_condition
+            logger.info(f"Using initial condition from config: {ic_dict}")
+            
+            if isinstance(ic_dict, dict):
+                ic_amplitude = ic_dict.get("amplitude", 1.0)
+                ic_frequency = ic_dict.get("frequency", 1.0)
+                logger.info(f"Initial condition parameters: amplitude={ic_amplitude}, frequency={ic_frequency}")
+        
         # Set initial condition based on PDE configuration
         if hasattr(pde, "initial_condition_fn"):
             # Use PDE's initial condition function
             x = np.linspace(spatial_domain[0][0], spatial_domain[0][1], nx)
             try:
+                logger.info("Attempting to use PDE's initial_condition_fn")
                 ic_values = pde.initial_condition_fn(x).detach().cpu().numpy()
                 fdm_solver.set_initial_condition(lambda x: ic_values)
-                logger.info("Using PDE's initial condition function")
+                logger.info("Successfully applied PDE's initial condition function")
             except Exception as e:
                 logger.warning(f"Error using PDE's initial condition function: {e}")
-                # Fall back to default
-                ic_amplitude = 1.0
-                ic_frequency = 1.0
-                fdm_solver.set_initial_condition(
-                    lambda x: ic_amplitude * np.sin(ic_frequency * np.pi * x)
-                )
-                logger.info("Falling back to default initial condition")
+                # Fall back to sine function
+                def initial_condition(x):
+                    return ic_amplitude * np.sin(ic_frequency * np.pi * x)
+                
+                fdm_solver.set_initial_condition(initial_condition)
+                logger.info(f"Falling back to sine wave with amplitude={ic_amplitude}, frequency={ic_frequency}")
         else:
-            # Default to sine function
-            ic_amplitude = 1.0
-            ic_frequency = 1.0
-
-            # Try to get initial condition parameters from config
-            if hasattr(pde.config, "initial_condition"):
-                if isinstance(pde.config.initial_condition, dict):
-                    ic_amplitude = pde.config.initial_condition.get("amplitude", 1.0)
-                    ic_frequency = pde.config.initial_condition.get("frequency", 1.0)
-
             # Define initial condition function
             def initial_condition(x):
                 return ic_amplitude * np.sin(ic_frequency * np.pi * x)
 
             fdm_solver.set_initial_condition(initial_condition)
             logger.info(
-                f"Using sine initial condition with amplitude {ic_amplitude} and frequency {ic_frequency}"
+                f"Using sine initial condition with amplitude={ic_amplitude} and frequency={ic_frequency}"
             )
 
         # Solve the equation
@@ -490,30 +519,16 @@ class HeatEquationFDM(FiniteDifferenceSolver):
         # 5. Plot comparison with PINN solution
         fdm_pinn_path = os.path.join(viz_dir, "fdm_vs_pinn.png")
         try:
-            # Usar el método de la clase base FiniteDifferenceSolver
+            # Use the base class FiniteDifferenceSolver method
             fig = fdm_solver.plot_comparison_with_pinn(
                 pinn_model=model,
                 save_path=fdm_pinn_path,
                 device=device,
-                title="Heat Equation: FDM vs PINN Comparison",
+                title=f"Heat Equation (α={alpha}): FDM vs PINN Comparison",
                 figsize=(15, 12),
             )
-
-            # También generar una comparación simple con plot_solution_comparison
-            simple_comparison_path = os.path.join(
-                viz_dir, "fdm_pinn_simple_comparison.png"
-            )
-            fdm_solver.plot_solution_comparison(
-                pinn_model=model, save_path=simple_comparison_path, device=device
-            )
-
-            logger.info("Generated PINN comparison plots")
+            logger.info("Generated FDM vs PINN comparison")
         except Exception as e:
-            logger.warning(f"Failed to generate PINN comparison: {e}")
-            import traceback
-
-            traceback.print_exc()
-
-        logger.info("FDM comparison plots generated successfully")
-
-        return fdm_solver  # Return the solver in case further analysis is needed
+            logger.warning(f"Failed to generate FDM vs PINN comparison: {e}")
+            
+        return fdm_solver

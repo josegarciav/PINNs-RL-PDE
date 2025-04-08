@@ -23,6 +23,14 @@ class EarlyStoppingConfig:
 
 
 @dataclass
+class AdaptiveWeightsConfig:
+    enabled: bool = False
+    strategy: str = "rbw"  # Options: "lrw" or "rbw"
+    alpha: float = 0.9  # Moving average factor (0-1)
+    eps: float = 1e-5  # Small constant for numerical stability
+
+
+@dataclass
 class TrainingConfig:
     num_epochs: int
     batch_size: int
@@ -34,11 +42,15 @@ class TrainingConfig:
     gradient_clipping: float
     early_stopping: EarlyStoppingConfig
     learning_rate_scheduler: LearningRateSchedulerConfig
+    collocation_distribution: str = "uniform"
+    adaptive_weights: AdaptiveWeightsConfig = None
     loss_weights: Dict[str, float] = None
 
     def __post_init__(self):
         if self.loss_weights is None:
             self.loss_weights = {"residual": 1.0, "boundary": 1.0, "initial": 1.0}
+        if self.adaptive_weights is None:
+            self.adaptive_weights = AdaptiveWeightsConfig()
 
     @property
     def optimizer_config(self) -> Dict[str, Any]:
@@ -257,8 +269,26 @@ class Config:
         # Training configuration
         training_config = config_dict.get("training", {})
         early_stopping_config = training_config.get("early_stopping", {})
-        lr_scheduler_config = training_config.get("learning_rate_scheduler", {})
+        lr_scheduler_config = training_config.get("scheduler_type", "cosine")
 
+        # Learning rate scheduler params
+        if isinstance(lr_scheduler_config, dict):
+            # Handle full scheduler config object
+            scheduler_type = lr_scheduler_config.get("type", "cosine")
+        else:
+            # Handle string type
+            scheduler_type = lr_scheduler_config
+            lr_scheduler_config = {}
+
+        # Get specific scheduler params based on type
+        if scheduler_type == "reduce_lr":
+            lr_scheduler_config = training_config.get("reduce_lr_params", {})
+        else:  # cosine
+            lr_scheduler_config = training_config.get("cosine_params", {})
+
+        # Load adaptive weights configuration
+        adaptive_weights_config = training_config.get("adaptive_weights", {})
+        
         self.training = TrainingConfig(
             num_epochs=training_config.get("num_epochs", 10000),
             batch_size=training_config.get("batch_size", 128),
@@ -279,6 +309,13 @@ class Config:
                 min_lr=lr_scheduler_config.get("min_lr", 1e-6),
                 factor=lr_scheduler_config.get("factor", 0.5),
                 patience=lr_scheduler_config.get("patience", 50),
+            ),
+            collocation_distribution=training_config.get("collocation_distribution", "uniform"),
+            adaptive_weights=AdaptiveWeightsConfig(
+                enabled=adaptive_weights_config.get("enabled", False),
+                strategy=adaptive_weights_config.get("strategy", "rbw"),
+                alpha=adaptive_weights_config.get("alpha", 0.9),
+                eps=adaptive_weights_config.get("eps", 1e-5),
             ),
             loss_weights=training_config.get("loss_weights", None),
         )
@@ -458,6 +495,13 @@ class Config:
                     "min_lr": self.training.learning_rate_scheduler.min_lr,
                     "factor": self.training.learning_rate_scheduler.factor,
                     "patience": self.training.learning_rate_scheduler.patience,
+                },
+                "collocation_distribution": self.training.collocation_distribution,
+                "adaptive_weights": {
+                    "enabled": self.training.adaptive_weights.enabled,
+                    "strategy": self.training.adaptive_weights.strategy,
+                    "alpha": self.training.adaptive_weights.alpha,
+                    "eps": self.training.adaptive_weights.eps,
                 },
                 "loss_weights": self.training.loss_weights,
             },

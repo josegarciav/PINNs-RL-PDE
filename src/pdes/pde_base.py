@@ -523,7 +523,7 @@ class PDEBase:
         Generate collocation points for training.
 
         :param num_points: Number of points to generate
-        :param strategy: Sampling strategy ('uniform', 'latin_hypercube', 'adaptive')
+        :param strategy: Sampling strategy ('uniform', 'latin_hypercube', 'sobol', 'adaptive')
         :return: Tuple of spatial and temporal points
         """
         if strategy == "uniform":
@@ -624,6 +624,36 @@ class PDEBase:
 
         elif strategy == "latin_hypercube":
             sampler = qmc.LatinHypercube(d=self.dimension + 1)  # +1 for time dimension
+            sample = sampler.random(n=num_points)
+
+            # Scale spatial coordinates
+            x = []
+            for dim in range(self.dimension):
+                x.append(
+                    torch.tensor(
+                        qmc.scale(
+                            sample[:, dim].reshape(-1, 1),
+                            l_bounds=[float(self.domain[dim][0])],
+                            u_bounds=[float(self.domain[dim][1])],
+                        ),
+                        dtype=torch.float32,
+                    )
+                )
+            x = torch.cat(x, dim=1)
+
+            # Scale time coordinate
+            t = torch.tensor(
+                qmc.scale(
+                    sample[:, -1].reshape(-1, 1),
+                    l_bounds=[float(self.time_domain[0])],
+                    u_bounds=[float(self.time_domain[1])],
+                ),
+                dtype=torch.float32,
+            )
+
+        elif strategy == "sobol":
+            # Sobol sequence for low-discrepancy sampling
+            sampler = qmc.Sobol(d=self.dimension + 1)  # +1 for time dimension
             sample = sampler.random(n=num_points)
 
             # Scale spatial coordinates
