@@ -41,8 +41,10 @@ class AdaptiveLossWeights:
         # Compute weights inversely proportional to gradient magnitudes
         inv_grads = 1.0 / (self.running_grads + self.eps)
         self.weights = inv_grads / torch.sum(inv_grads)
-        
-        print(f"LRW - Updated weights: gradients={gradients}, running_grads={self.running_grads}, weights={self.weights}")
+
+        print(
+            f"LRW - Updated weights: gradients={gradients}, running_grads={self.running_grads}, weights={self.weights}"
+        )
 
         return self.weights
 
@@ -67,8 +69,10 @@ class AdaptiveLossWeights:
         max_loss = torch.max(self.running_losses)
         relative_losses = self.running_losses / (max_loss + self.eps)
         self.weights = relative_losses / torch.sum(relative_losses)
-        
-        print(f"RBW - Updated weights: losses={losses}, running_losses={self.running_losses}, weights={self.weights}")
+
+        print(
+            f"RBW - Updated weights: losses={losses}, running_losses={self.running_losses}, weights={self.weights}"
+        )
 
         return self.weights
 

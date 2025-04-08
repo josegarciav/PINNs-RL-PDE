@@ -391,23 +391,30 @@ class HeatEquation(PDEBase):
         # Store individual loss components
         losses = {
             "residual": residual_loss,  # PDE residual loss
-            "boundary": boundary_loss,   # Boundary condition loss
-            "initial": initial_loss,     # Initial condition loss
-            "smoothness": smoothness_loss  # Smoothness regularization
+            "boundary": boundary_loss,  # Boundary condition loss
+            "initial": initial_loss,  # Initial condition loss
+            "smoothness": smoothness_loss,  # Smoothness regularization
         }
 
         # Use adaptive weights if enabled
-        if hasattr(self.config.training, 'adaptive_weights') and self.config.training.adaptive_weights.enabled:
+        if (
+            hasattr(self.config.training, "adaptive_weights")
+            and self.config.training.adaptive_weights.enabled
+        ):
             # The total loss will be computed by the trainer using adaptive weights
             # We just return the individual components
             losses["total"] = (
-                residual_loss + boundary_loss + initial_loss + smoothness_weight * smoothness_loss
+                residual_loss
+                + boundary_loss
+                + initial_loss
+                + smoothness_weight * smoothness_loss
             )
         else:
             # Otherwise use fixed weights from config
             total_loss = (
                 self.config.training.loss_weights.get("pde", 1.0) * residual_loss
-                + self.config.training.loss_weights.get("boundary", 10.0) * boundary_loss
+                + self.config.training.loss_weights.get("boundary", 10.0)
+                * boundary_loss
                 + self.config.training.loss_weights.get("initial", 10.0) * initial_loss
                 + smoothness_weight * smoothness_loss
             )
@@ -418,41 +425,41 @@ class HeatEquation(PDEBase):
     def _compute_smoothness_loss(self, model, x, t):
         """
         Compute smoothness regularization loss.
-        
+
         Args:
             model: Neural network model
             x: Spatial coordinates
             t: Time coordinates
-            
+
         Returns:
             torch.Tensor: Smoothness loss
         """
         # Sample additional points for smoothness calculation
         batch_size = x.shape[0]
         epsilon = 1e-4
-        
+
         # Create slightly shifted points to compute gradients
         x_right = x + epsilon
         x_left = x - epsilon
-        
+
         # Make sure the points stay within the domain bounds
         x_right = torch.clamp(x_right, self.domain[0][0], self.domain[0][1])
         x_left = torch.clamp(x_left, self.domain[0][0], self.domain[0][1])
-        
+
         # Forward pass for original and shifted points
         input_right = torch.cat([x_right, t], dim=1)
         input_left = torch.cat([x_left, t], dim=1)
-        
+
         u_right = model(input_right)
         u_left = model(input_left)
-        
+
         # Calculate approximate derivatives
         du_dx_right = (u_right - model(torch.cat([x, t], dim=1))) / epsilon
         du_dx_left = (model(torch.cat([x, t], dim=1)) - u_left) / epsilon
-        
+
         # Smoothness loss is the sum of the absolute gradients
         smoothness_loss = torch.mean(torch.abs(du_dx_right)) + torch.mean(
             torch.abs(du_dx_left)
         )
-        
+
         return smoothness_loss

@@ -345,14 +345,22 @@ class HeatEquationFDM(FiniteDifferenceSolver):
         if hasattr(pde, "alpha") and pde.alpha is not None:
             alpha = pde.alpha
             logger.info(f"Using alpha from pde.alpha: {alpha}")
-        elif hasattr(pde, "config") and hasattr(pde.config, "parameters") and pde.config.parameters is not None:
+        elif (
+            hasattr(pde, "config")
+            and hasattr(pde.config, "parameters")
+            and pde.config.parameters is not None
+        ):
             if "alpha" in pde.config.parameters:
                 alpha = pde.config.parameters["alpha"]
                 logger.info(f"Using alpha from pde.config.parameters: {alpha}")
-        
+
         # If still not found, look in other places
         if alpha is None:
-            if hasattr(pde, "parameters") and pde.parameters is not None and "alpha" in pde.parameters:
+            if (
+                hasattr(pde, "parameters")
+                and pde.parameters is not None
+                and "alpha" in pde.parameters
+            ):
                 alpha = pde.parameters["alpha"]
                 logger.info(f"Using alpha from pde.parameters: {alpha}")
             else:
@@ -364,28 +372,40 @@ class HeatEquationFDM(FiniteDifferenceSolver):
         # Get boundary conditions
         bc_type = "dirichlet"
         bc_value = 0.0
-        
+
         if hasattr(pde, "boundary_conditions") and pde.boundary_conditions is not None:
             bc_dict = pde.boundary_conditions
-            logger.info(f"Using boundary conditions from pde.boundary_conditions: {bc_dict}")
-        elif hasattr(pde.config, "boundary_conditions") and pde.config.boundary_conditions is not None:
+            logger.info(
+                f"Using boundary conditions from pde.boundary_conditions: {bc_dict}"
+            )
+        elif (
+            hasattr(pde.config, "boundary_conditions")
+            and pde.config.boundary_conditions is not None
+        ):
             bc_dict = pde.config.boundary_conditions
-            logger.info(f"Using boundary conditions from pde.config.boundary_conditions: {bc_dict}")
+            logger.info(
+                f"Using boundary conditions from pde.config.boundary_conditions: {bc_dict}"
+            )
         else:
             bc_dict = {"dirichlet": {"value": 0.0}}
             logger.warning(f"No boundary conditions found, using default: {bc_dict}")
-        
+
         # Process boundary conditions
         if "dirichlet" in bc_dict:
             bc_type = "dirichlet"
-            if isinstance(bc_dict["dirichlet"], dict) and "value" in bc_dict["dirichlet"]:
+            if (
+                isinstance(bc_dict["dirichlet"], dict)
+                and "value" in bc_dict["dirichlet"]
+            ):
                 bc_value = bc_dict["dirichlet"]["value"]
             logger.info(f"Using Dirichlet boundary condition with value: {bc_value}")
         elif "periodic" in bc_dict:
             bc_type = "periodic"
             logger.info("Using periodic boundary conditions")
         else:
-            logger.warning(f"Unsupported boundary condition types, using Dirichlet with value 0.0")
+            logger.warning(
+                f"Unsupported boundary condition types, using Dirichlet with value 0.0"
+            )
             bc_type = "dirichlet"
             bc_value = 0.0
 
@@ -419,22 +439,26 @@ class HeatEquationFDM(FiniteDifferenceSolver):
         )
 
         logger.info(f"Created FDM config with parameters: {fdm_config.parameters}")
-        logger.info(f"Created FDM config with boundary conditions: {fdm_config.boundary_conditions}")
+        logger.info(
+            f"Created FDM config with boundary conditions: {fdm_config.boundary_conditions}"
+        )
         logger.info(f"Created FDM config with t_domain: {fdm_config.t_domain}")
 
         # Create FDM solver
         fdm_solver = HeatEquationFDM(fdm_config)
-        
+
         # Try to get initial condition from PDE config
         if hasattr(pde.config, "initial_condition"):
             ic_dict = pde.config.initial_condition
             logger.info(f"Using initial condition from config: {ic_dict}")
-            
+
             if isinstance(ic_dict, dict):
                 ic_amplitude = ic_dict.get("amplitude", 1.0)
                 ic_frequency = ic_dict.get("frequency", 1.0)
-                logger.info(f"Initial condition parameters: amplitude={ic_amplitude}, frequency={ic_frequency}")
-        
+                logger.info(
+                    f"Initial condition parameters: amplitude={ic_amplitude}, frequency={ic_frequency}"
+                )
+
         # Set initial condition based on PDE configuration
         if hasattr(pde, "initial_condition_fn"):
             # Use PDE's initial condition function
@@ -446,12 +470,15 @@ class HeatEquationFDM(FiniteDifferenceSolver):
                 logger.info("Successfully applied PDE's initial condition function")
             except Exception as e:
                 logger.warning(f"Error using PDE's initial condition function: {e}")
+
                 # Fall back to sine function
                 def initial_condition(x):
                     return ic_amplitude * np.sin(ic_frequency * np.pi * x)
-                
+
                 fdm_solver.set_initial_condition(initial_condition)
-                logger.info(f"Falling back to sine wave with amplitude={ic_amplitude}, frequency={ic_frequency}")
+                logger.info(
+                    f"Falling back to sine wave with amplitude={ic_amplitude}, frequency={ic_frequency}"
+                )
         else:
             # Define initial condition function
             def initial_condition(x):
@@ -530,5 +557,5 @@ class HeatEquationFDM(FiniteDifferenceSolver):
             logger.info("Generated FDM vs PINN comparison")
         except Exception as e:
             logger.warning(f"Failed to generate FDM vs PINN comparison: {e}")
-            
+
         return fdm_solver

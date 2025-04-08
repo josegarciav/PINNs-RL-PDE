@@ -82,15 +82,17 @@ class PDETrainer:
 
         self.rl_agent = rl_agent
         self.viz_frequency = viz_frequency
-        
+
         # Initialize adaptive weights handler if enabled
         self.use_adaptive_weights = config.training.adaptive_weights.enabled
         if self.use_adaptive_weights:
-            self.logger.info(f"Using adaptive weights with strategy: {config.training.adaptive_weights.strategy}")
+            self.logger.info(
+                f"Using adaptive weights with strategy: {config.training.adaptive_weights.strategy}"
+            )
             self.adaptive_weights = AdaptiveLossWeights(
                 strategy=config.training.adaptive_weights.strategy,
                 alpha=config.training.adaptive_weights.alpha,
-                eps=config.training.adaptive_weights.eps
+                eps=config.training.adaptive_weights.eps,
             )
         else:
             self.logger.info("Adaptive weights are disabled")
@@ -247,26 +249,28 @@ class PDETrainer:
                 # Forward pass
                 self.optimizer.zero_grad()
                 losses = self.pde.compute_loss(self.model, x_batch, t_batch)
-                
+
                 # Apply adaptive weights if enabled
                 if self.use_adaptive_weights:
                     # Prepare loss components tensor - include smoothness if present
                     loss_components = []
                     component_names = ["residual", "boundary", "initial"]
-                    
+
                     # Add each component to the list
                     for component in component_names:
                         loss_components.append(losses[component])
-                        
+
                     # Add smoothness component if it exists and has a non-zero weight
-                    smoothness_weight = self.config.training.loss_weights.get("smoothness", 0.0)
+                    smoothness_weight = self.config.training.loss_weights.get(
+                        "smoothness", 0.0
+                    )
                     if "smoothness" in losses and smoothness_weight > 0:
                         loss_components.append(losses["smoothness"])
                         component_names.append("smoothness")
-                    
+
                     # Convert to tensor
                     loss_components = torch.tensor(loss_components, device=self.device)
-                    
+
                     if self.config.training.adaptive_weights.strategy == "lrw":
                         # For Learning Rate Weighting, we need gradients
                         # First, get individual gradients for each component
@@ -275,48 +279,54 @@ class PDETrainer:
                             component_loss = losses[loss_name]
                             self.optimizer.zero_grad()
                             component_loss.backward(retain_graph=True)
-                            
+
                             # Calculate gradient norm for this component
                             grad_norm = 0.0
                             for param in self.model.parameters():
                                 if param.grad is not None:
                                     grad_norm += param.grad.norm().item() ** 2
-                            grad_norm = torch.tensor(grad_norm ** 0.5, device=self.device)
+                            grad_norm = torch.tensor(grad_norm**0.5, device=self.device)
                             grad_norms.append(grad_norm)
-                            
+
                         # Get adaptive weights based on gradients
                         grad_norms = torch.stack(grad_norms)
                         weights = self.adaptive_weights.update(gradients=grad_norms)
                     else:
                         # For Relative Error Weighting
                         weights = self.adaptive_weights.update(losses=loss_components)
-                    
+
                     # Apply weights to compute the weighted loss
                     total_loss = 0
                     for i, component in enumerate(component_names):
-                        if i < len(weights):  # Ensure we have a weight for this component
+                        if i < len(
+                            weights
+                        ):  # Ensure we have a weight for this component
                             total_loss += weights[i] * losses[component]
-                    
+
                     losses["total"] = total_loss
-                    
+
                     # Print detailed debugging info
                     print(f"\nAdaptive weights calculation:")
-                    print(f"- Strategy: {self.config.training.adaptive_weights.strategy}")
+                    print(
+                        f"- Strategy: {self.config.training.adaptive_weights.strategy}"
+                    )
                     for i, component in enumerate(component_names):
                         if i < len(weights):
-                            print(f"- {component}: loss={losses[component].item():.6f}, weight={weights[i].item():.6f}, weighted={weights[i].item() * losses[component].item():.6f}")
+                            print(
+                                f"- {component}: loss={losses[component].item():.6f}, weight={weights[i].item():.6f}, weighted={weights[i].item() * losses[component].item():.6f}"
+                            )
                     print(f"- Total loss: {total_loss.item():.6f}\n")
-                    
+
                     # Store weights for visualization/tracking
                     weights_np = weights.detach().cpu().numpy()
-                    
+
                     # Ensure we have 4 weights (including smoothness) for consistency in visualization
                     if len(weights_np) < 4:
                         padding = np.zeros(4 - len(weights_np))
                         weights_np = np.concatenate([weights_np, padding])
-                    
+
                     self.history["loss_weights"].append(weights_np)
-                
+
                 loss = losses["total"]
 
                 # Backward pass
@@ -351,7 +361,7 @@ class PDETrainer:
                 "initial_loss": losses["initial"].item(),
                 "learning_rate": current_lr,
             }
-            
+
             # Add weights info if using adaptive weights
             if self.use_adaptive_weights and len(self.history["loss_weights"]) > 0:
                 current_weights = self.history["loss_weights"][-1]
@@ -524,39 +534,55 @@ class PDETrainer:
 
             # Create two subplots: one for losses and one for weights if using adaptive weights
             if self.use_adaptive_weights and len(self.history["loss_weights"]) > 0:
-                fig = make_subplots(rows=2, cols=1, subplot_titles=("Losses", "Loss Weights"))
-                
+                fig = make_subplots(
+                    rows=2, cols=1, subplot_titles=("Losses", "Loss Weights")
+                )
+
                 # Add traces for each loss component in first subplot
-                for key in ["train_loss", "val_loss", "residual_loss", "boundary_loss", "initial_loss"]:
+                for key in [
+                    "train_loss",
+                    "val_loss",
+                    "residual_loss",
+                    "boundary_loss",
+                    "initial_loss",
+                ]:
                     if key in self.history and self.history[key]:
                         fig.add_trace(
                             go.Scatter(y=self.history[key], name=key, mode="lines"),
-                            row=1, col=1
+                            row=1,
+                            col=1,
                         )
-                
+
                 # Add traces for loss weights in second subplot
                 weights = np.array(self.history["loss_weights"])
                 if len(weights) > 0:
                     components = ["residual", "boundary", "initial", "smoothness"]
                     for i, component in enumerate(components):
-                        if i < weights.shape[1]:  # Ensure we have data for this component
+                        if (
+                            i < weights.shape[1]
+                        ):  # Ensure we have data for this component
                             fig.add_trace(
-                                go.Scatter(y=weights[:, i], name=f"{component}_weight", mode="lines"),
-                                row=2, col=1
+                                go.Scatter(
+                                    y=weights[:, i],
+                                    name=f"{component}_weight",
+                                    mode="lines",
+                                ),
+                                row=2,
+                                col=1,
                             )
-                
+
                 # Update layout
                 fig.update_layout(
                     title="Training History",
                     height=800,  # Increase height for two subplots
                 )
-                
+
                 # Update y-axis for losses to be log scale
                 fig.update_yaxes(type="log", title="Loss", row=1, col=1)
-                
+
                 # Update y-axis for weights
                 fig.update_yaxes(title="Weight Value", row=2, col=1)
-                
+
                 # Update x-axis
                 fig.update_xaxes(title="Epoch", row=2, col=1)
             else:
@@ -565,7 +591,9 @@ class PDETrainer:
 
                 # Add traces for each loss component
                 for key in self.history.keys():
-                    if key not in ["lr", "loss_weights"] and self.history[key]:  # Skip learning rate and weights
+                    if (
+                        key not in ["lr", "loss_weights"] and self.history[key]
+                    ):  # Skip learning rate and weights
                         fig.add_trace(
                             go.Scatter(y=self.history[key], name=key, mode="lines")
                         )
@@ -1234,25 +1262,39 @@ class PDETrainer:
                 self.logger.info(f"PDE parameters: {self.pde.config.parameters}")
                 self.logger.info(f"Domain: {self.pde.domain}")
                 self.logger.info(f"Time domain: {self.pde.time_domain}")
-                self.logger.info(f"Boundary conditions: {self.pde.config.boundary_conditions}")
-                self.logger.info(f"Initial condition: {self.pde.config.initial_condition}")
-                
+                self.logger.info(
+                    f"Boundary conditions: {self.pde.config.boundary_conditions}"
+                )
+                self.logger.info(
+                    f"Initial condition: {self.pde.config.initial_condition}"
+                )
+
                 from src.numerical_solvers.heat_equation_fdm import HeatEquationFDM
 
                 # Ensure that PDE has the necessary attributes
-                if hasattr(self.pde, "config") and hasattr(self.pde.config, "parameters"):
+                if hasattr(self.pde, "config") and hasattr(
+                    self.pde.config, "parameters"
+                ):
                     if not hasattr(self.pde, "parameters"):
                         self.pde.parameters = self.pde.config.parameters
-                    
-                    if "alpha" in self.pde.config.parameters and not hasattr(self.pde, "alpha"):
+
+                    if "alpha" in self.pde.config.parameters and not hasattr(
+                        self.pde, "alpha"
+                    ):
                         self.pde.alpha = self.pde.config.parameters["alpha"]
-                        self.logger.info(f"Set pde.alpha = {self.pde.alpha} from config")
-                
-                if hasattr(self.pde, "config") and hasattr(self.pde.config, "boundary_conditions"):
+                        self.logger.info(
+                            f"Set pde.alpha = {self.pde.alpha} from config"
+                        )
+
+                if hasattr(self.pde, "config") and hasattr(
+                    self.pde.config, "boundary_conditions"
+                ):
                     if not hasattr(self.pde, "boundary_conditions"):
-                        self.pde.boundary_conditions = self.pde.config.boundary_conditions
+                        self.pde.boundary_conditions = (
+                            self.pde.config.boundary_conditions
+                        )
                         self.logger.info(f"Set pde.boundary_conditions from config")
-                
+
                 # Call the static method with all necessary details
                 fdm_solver = HeatEquationFDM.generate_fdm_comparison_plots(
                     pde=self.pde,

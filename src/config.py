@@ -288,7 +288,7 @@ class Config:
 
         # Load adaptive weights configuration
         adaptive_weights_config = training_config.get("adaptive_weights", {})
-        
+
         self.training = TrainingConfig(
             num_epochs=training_config.get("num_epochs", 10000),
             batch_size=training_config.get("batch_size", 128),
@@ -310,7 +310,9 @@ class Config:
                 factor=lr_scheduler_config.get("factor", 0.5),
                 patience=lr_scheduler_config.get("patience", 50),
             ),
-            collocation_distribution=training_config.get("collocation_distribution", "uniform"),
+            collocation_distribution=training_config.get(
+                "collocation_distribution", "uniform"
+            ),
             adaptive_weights=AdaptiveWeightsConfig(
                 enabled=adaptive_weights_config.get("enabled", False),
                 strategy=adaptive_weights_config.get("strategy", "rbw"),
