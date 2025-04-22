@@ -21,7 +21,6 @@ from src.pdes.wave_equation import WaveEquation
 from src.pdes.pendulum_equation import PendulumEquation
 from src.trainer import PDETrainer
 from src.rl_agent import RLAgent
-from src.utils.utils import save_model
 from src.pdes.pde_base import PDEConfig
 from src.config import (
     ModelConfig,
@@ -31,6 +30,7 @@ from src.config import (
     LearningRateSchedulerConfig,
     AdaptiveWeightsConfig,
 )
+from src.numerical_solvers.heat_equation_fdm import HeatEquationFDM
 
 
 class InteractiveTrainer:
@@ -569,14 +569,49 @@ class InteractiveTrainer:
         # Update RL configuration
         config["rl"]["enabled"] = self.use_rl.get()
 
+        # Update PDE-specific parameters based on the PDE type
+        parameters = pde_config.get("parameters", {}).copy()  # Start with a copy of the base parameters
+        
+        # Update with UI values for specific PDE types
+        if pde_key == "heat":
+            parameters["alpha"] = self.alpha.get()
+        elif pde_key == "burgers":
+            parameters["viscosity"] = self.viscosity.get()
+        elif pde_key == "wave":
+            parameters["c"] = self.alpha.get()  # Wave equation uses the same variable as heat
+        elif pde_key == "convection":
+            parameters["velocity"] = self.velocity.get()
+        elif pde_key == "allen_cahn":
+            parameters["epsilon"] = self.epsilon.get()
+        elif pde_key == "black_scholes":
+            parameters["sigma"] = self.sigma.get()
+            parameters["r"] = self.r.get()
+        elif pde_key == "pendulum":
+            parameters["gravity"] = self.gravity.get()
+            parameters["length"] = self.length.get()
+            
+        # Also update exact solution frequency if it exists
+        if "exact_solution" in pde_config and isinstance(pde_config["exact_solution"], dict):
+            exact_solution = pde_config["exact_solution"].copy()
+            if "frequency" in exact_solution:
+                exact_solution["frequency"] = self.frequency.get()
+            # Update the exact solution config
+            pde_config["exact_solution"] = exact_solution
+        
+        # Update initial condition frequency if it exists
+        if "initial_condition" in pde_config and isinstance(pde_config["initial_condition"], dict):
+            initial_condition = pde_config["initial_condition"].copy()
+            if "frequency" in initial_condition:
+                initial_condition["frequency"] = self.frequency.get()
+            # Update the initial condition config
+            pde_config["initial_condition"] = initial_condition
+
         # Update PDE configuration with a deep copy of pde_config
         config["pde"] = {
             "name": self.selected_pde.get(),
             "domain": pde_config.get("domain"),
             "time_domain": pde_config.get("time_domain"),
-            "parameters": pde_config.get(
-                "parameters", {}
-            ),  # Ensure parameters are copied
+            "parameters": parameters,  # Use the updated parameters
             "boundary_conditions": pde_config.get("boundary_conditions", {}),
             "initial_condition": pde_config.get("initial_condition", {}),
             "exact_solution": pde_config.get("exact_solution", {}),

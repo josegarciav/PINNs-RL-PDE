@@ -7,7 +7,7 @@ device: "mps"  # Options: "mps", "cpu" (cpu is slower for deep networks)
 # Architecture-specific configurations
 architectures:
   feedforward:
-    hidden_dims: [124, 124, 124, 124, 124, 124, 124]  # 7 hidden layers by default
+    hidden_dims: [128, 128, 128, 128, 128, 128, 128]  # 7 hidden layers by default
     activation: "tanh"
     dropout: 0.1
     layer_norm: true
@@ -23,10 +23,10 @@ architectures:
     omega_0: 30.0  # Frequency parameter for sin activation
   
   fourier:
-    mapping_size: 512  # Increased for better frequency resolution
-    hidden_dims: [512, 512, 512, 512, 512]  # Added more layers and increased width
+    mapping_size: 256  # Increased for better frequency resolution
+    hidden_dims: [256, 256, 256, 256, 256]  # Added more layers and increased width
     scale: 5.0  # Adjusted scale for better feature representation
-    activation: "gelu"
+    activation: "tanh"
     dropout: 0.1  # Increased dropout for better regularization
     layer_norm: true
     periodic: true  # Enable periodic features
@@ -57,7 +57,7 @@ pde_configs:
     input_dim: 2  # (x, t)
     output_dim: 1  # u(x,t)
     parameters:
-      alpha: 0.01  # Thermal diffusivity
+      alpha: 0.01  # Thermal diffusivity DO NOT CHANGE
     domain: [[0, 2]]  # [0, π] 3.14159 6.28318
     time_domain: [0, 10]
     dimension: 1
@@ -294,14 +294,14 @@ pde_configs:
 
 # Training Configuration
 training:
-  num_epochs: 10000  # Increased from 500 to 2000 for better convergence
-  batch_size: 2048  # Larger batch size
-  num_collocation_points: 10000  # Increased from 7000 for better coverage
-  num_boundary_points: 3000  # Increased from 2000 for better boundary enforcement
+  num_epochs: 5000  # for better convergence
+  batch_size: 2048  # Larger batch size: must be divisible by 8 (ideally a power of 2: 32, 64, 128, 256, 512, 1024, 2048)
+  num_collocation_points: 8000 # Increase for better coverage
+  num_boundary_points: 5000  # Increased from 2000 for better boundary enforcement
   num_initial_points: 5000  # Increased from 4000 for better initial condition representation
   collocation_distribution: "uniform"  # Options: "uniform", "latin_hypercube", "sobol", "adaptive" (requires RL agent)
   adaptive_weights:
-    enabled: false  # Whether to use adaptive weights for loss terms
+    enabled: true  # Whether to use adaptive weights for loss terms
     strategy: "rbw"  # Options: "lrw" (Learning Rate Weighting) or "rbw" (Relative Error Weighting)
     alpha: 0.9  # Moving average factor for weight updates (0-1)
     eps: 1e-5  # Small constant for numerical stability
@@ -313,10 +313,10 @@ training:
     monitor: "val_loss"
   optimizer_config:
     name: "adam"
-    learning_rate: 0.001  # Increased from 0.0005 to 0.001 for faster convergence
+    learning_rate: 0.001
     beta1: 0.9
     beta2: 0.999
-    weight_decay: 0.001  # Added weight decay for regularization
+    weight_decay: 0.0001  # Added weight decay for regularization
   scheduler_type: "cosine"  # Options: "reduce_lr" or "cosine"
   # Parameters for ReduceLROnPlateau
   reduce_lr_params:
@@ -329,10 +329,10 @@ training:
     eta_min: 1.0e-6
   rl_update_frequency: 10  # Update RL agent every N epochs
   loss_weights:
-    pde: 15.0
-    boundary: 20.0  # Increased boundary condition weight
-    initial: 20.0   # Increased initial condition weight
-    smoothness: 0.1  # Added smoothness regularization
+    pde: 10.0
+    boundary: 10.0
+    initial: 5.0
+    smoothness: 0.1
 
 # Reinforcement Learning Configuration
 rl:

@@ -775,15 +775,27 @@ def save_training_metrics(
     # Create experiment directory if it doesn't exist
     os.makedirs(experiment_dir, exist_ok=True)
 
+    # Convert NumPy arrays to Python lists in history
+    def convert_to_serializable(obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {k: convert_to_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_to_serializable(item) for item in obj]
+        return obj
+
+    serializable_history = convert_to_serializable(history)
+
     # Save metrics.json directly in the experiment directory
     metrics_file = os.path.join(experiment_dir, "metrics.json")
     with open(metrics_file, "w") as f:
-        json.dump(history, f, indent=2)
+        json.dump(serializable_history, f, indent=2)
 
     # Save history.json directly in the experiment directory
     history_file = os.path.join(experiment_dir, "history.json")
     with open(history_file, "w") as f:
-        json.dump(history, f, indent=2)
+        json.dump(serializable_history, f, indent=2)
 
     # Save metadata if provided
     if metadata:
@@ -803,7 +815,10 @@ def save_training_metrics(
         # Add timestamp
         metadata["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # Convert metadata to serializable format
+        serializable_metadata = convert_to_serializable(metadata)
+
         with open(metadata_file, "w") as f:
-            json.dump(metadata, f, indent=2)
+            json.dump(serializable_metadata, f, indent=2)
 
     return history_file

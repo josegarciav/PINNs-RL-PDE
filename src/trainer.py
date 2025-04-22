@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
 import numpy as np
 from typing import Dict, List, Optional
 import logging
@@ -452,7 +451,7 @@ class PDETrainer:
                         # Ensure weight_value is a Python float, not a tensor
                         if isinstance(weight_value, torch.Tensor):
                             weight_value = weight_value.item()
-                        weights_str += f", {name}={weight_value:.4f}"
+                        weights_str += f", {name}_weight={weight_value:.4f}"
 
                 # Ensure weights_str is a string, not a tensor
                 if isinstance(weights_str, torch.Tensor):
@@ -489,22 +488,6 @@ class PDETrainer:
                     f"Val Loss: {val_losses['total_loss']:.6f}, "
                     f"LR: {current_lr:.6f}{weights_str}"
                 )
-
-                # # Check if we should create a visualization at a specific epoch
-                # if experiment_dir and epoch % self.viz_frequency == 0:
-                #     try:
-                #         viz_dir = os.path.join(experiment_dir, "visualizations")
-                #         os.makedirs(viz_dir, exist_ok=True)
-
-                #         viz_path = os.path.join(viz_dir, f"solution_epoch_{epoch}.png")
-                #         self.plot_solution_comparison(num_points=50, save_path=viz_path)
-
-                #         history_path = os.path.join(viz_dir, f"history_epoch_{epoch}.png")
-                #         self.plot_training_history(save_path=history_path)
-
-                #         self.logger.info(f"Created visualizations for epoch {epoch}")
-                #     except Exception as e:
-                #         self.logger.warning(f"Error creating training visualizations: {e}")
 
                 # Early stopping check
                 if self.early_stopping_enabled:
@@ -1351,80 +1334,36 @@ class PDETrainer:
         """
         try:
             # Import required components
-            from src.numerical_solvers.finite_difference_base import FDMConfig
+            from src.numerical_solvers.heat_equation_fdm import HeatEquationFDM
 
             # Check if the PDE type is supported
             pde_type = getattr(self.pde, "pde_type", None)
             if pde_type is None and hasattr(self.pde, "config"):
                 pde_type = getattr(self.pde.config, "type", None)
 
-            if pde_type is None:
-                self.logger.info(
-                    "Could not determine PDE type, skipping FDM comparison"
-                )
-                return
+            if pde_type == "heat":
+                # Create visualization directory
+                viz_dir = os.path.join(experiment_dir, "visualizations")
+                os.makedirs(viz_dir, exist_ok=True)
 
-            # Set up visualization directory
-            viz_dir = os.path.join(experiment_dir, "visualizations")
-            os.makedirs(viz_dir, exist_ok=True)
-
-            # Create FDM solver based on PDE type
-            if pde_type.lower() == "heat":
-                self.logger.info("Generating FDM comparison for Heat Equation")
-                self.logger.info(f"PDE parameters: {self.pde.config.parameters}")
-                self.logger.info(f"Domain: {self.pde.domain}")
-                self.logger.info(f"Time domain: {self.pde.time_domain}")
-                self.logger.info(
-                    f"Boundary conditions: {self.pde.config.boundary_conditions}"
-                )
-                self.logger.info(
-                    f"Initial condition: {self.pde.config.initial_condition}"
-                )
-
-                from src.numerical_solvers.heat_equation_fdm import HeatEquationFDM
-
-                # Ensure that PDE has the necessary attributes
-                if hasattr(self.pde, "config") and hasattr(
-                    self.pde.config, "parameters"
-                ):
-                    if not hasattr(self.pde, "parameters"):
-                        self.pde.parameters = self.pde.config.parameters
-
-                    if "alpha" in self.pde.config.parameters and not hasattr(
-                        self.pde, "alpha"
-                    ):
-                        self.pde.alpha = self.pde.config.parameters["alpha"]
-                        self.logger.info(
-                            f"Set pde.alpha = {self.pde.alpha} from config"
-                        )
-
-                if hasattr(self.pde, "config") and hasattr(
-                    self.pde.config, "boundary_conditions"
-                ):
-                    if not hasattr(self.pde, "boundary_conditions"):
-                        self.pde.boundary_conditions = (
-                            self.pde.config.boundary_conditions
-                        )
-                        self.logger.info(f"Set pde.boundary_conditions from config")
-
-                # Call the static method with all necessary details
-                fdm_solver = HeatEquationFDM.generate_fdm_comparison_plots(
+                # Generate FDM comparison plots
+                metrics = HeatEquationFDM.generate_fdm_comparison_plots(
                     pde=self.pde,
                     model=self.model,
                     device=self.device,
                     viz_dir=viz_dir,
-                    logger=self.logger,
+                    logger=self.logger
                 )
 
-                self.logger.info("FDM comparison completed successfully")
+                if metrics:
+                    self.logger.info("FDM comparison plots generated successfully")
+                    self.logger.info(f"Error metrics: {metrics}")
+                else:
+                    self.logger.warning("Failed to generate FDM comparison plots")
             else:
-                self.logger.info(
-                    f"FDM comparison not implemented for PDE type: {pde_type}"
-                )
+                self.logger.info(f"FDM comparison not supported for PDE type: {pde_type}")
 
         except ImportError as e:
-            self.logger.warning(
-                f"Could not import required packages for FDM comparison: {e}"
-            )
+            self.logger.warning(f"Could not import required packages for FDM comparison: {str(e)}")
         except Exception as e:
-            self.logger.error(f"Error generating FDM comparison: {e}")
+            self.logger.error(f"Error generating FDM comparison: {str(e)}")

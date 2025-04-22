@@ -148,8 +148,8 @@ class HeatEquation(PDEBase):
 
         elif solution_type == "sine_2d" and self.dimension == 2:
             A = self.config.exact_solution.get("amplitude", 1.0)
-            kx = self.config.exact_solution.get("frequency_x", 1.0)
-            ky = self.config.exact_solution.get("frequency_y", 1.0)
+            kx = self.config.exact_solution.get("frequency_x", 2.0)
+            ky = self.config.exact_solution.get("frequency_y", 2.0)
 
             # Correct 2D heat equation solution
             decay_factor = (kx * torch.pi) ** 2 + (ky * torch.pi) ** 2
@@ -205,8 +205,8 @@ class HeatEquation(PDEBase):
                     )
             elif ic_type == "sine_2d" and self.dimension == 2:
                 A = params.get("amplitude", 1.0)
-                kx = params.get("frequency_x", 1.0)
-                ky = params.get("frequency_y", 1.0)
+                kx = params.get("frequency_x", 2.0)
+                ky = params.get("frequency_y", 2.0)
                 return (
                     lambda x, t: A
                     * torch.sin(kx * torch.pi * x[:, 0:1])
@@ -214,7 +214,7 @@ class HeatEquation(PDEBase):
                 )
             elif ic_type == "sin_exp_decay":
                 A = params.get("amplitude", 1.0)
-                k = params.get("frequency", 1.0)
+                k = params.get("frequency", 2.0)
                 decay_rate = self._calculate_decay_rate(k)
                 if self.dimension == 1:
                     # Include exponential decay term
@@ -238,7 +238,7 @@ class HeatEquation(PDEBase):
         ):
             # For Dirichlet boundary conditions with sin_exp_decay
             A = self.config.exact_solution.get("amplitude", 1.0)
-            k = self.config.exact_solution.get("frequency", 1.0)
+            k = self.config.exact_solution.get("frequency", 2.0)
             decay_rate = self._calculate_decay_rate(k)
             return (
                 lambda x, t: A
@@ -250,21 +250,79 @@ class HeatEquation(PDEBase):
 
     def validate(self, model, num_points=5000):
         """
-        Validate the model's solution against exact solution.
+        Validate the model's solution against exact solution and physical constraints.
 
-        :param model: Neural network model
-        :param num_points: Number of validation points (default increased to 5000 for better resolution)
-        :return: Dictionary of error metrics
+        Args:
+            model: Neural network model
+            num_points: Number of validation points (default 5000 for better resolution)
+
+        Returns:
+            Dictionary containing validation metrics and boolean indicating if all checks passed
         """
+        validation_passed = True
+        validation_messages = []
+        metrics = {}
+
+        # Generate validation points
         x, t = self.generate_collocation_points(num_points)
-        u_pred = model(torch.cat([x, t], dim=1))
+        input_points = torch.cat([x, t], dim=1)
+        
+        # Get model predictions
+        u_pred = model(input_points)
+        
+        # Check for NaN/Inf values
+        if torch.isnan(u_pred).any() or torch.isinf(u_pred).any():
+            validation_passed = False
+            validation_messages.append("Error: Solution contains NaN or Inf values")
+
+        # Compute exact solution and errors
         u_exact = self.exact_solution(x, t)
         error = torch.abs(u_pred - u_exact)
-        return {
+        
+        metrics.update({
             "l2_error": torch.mean(error**2).item(),
             "max_error": torch.max(error).item(),
             "mean_error": torch.mean(error).item(),
-        }
+        })
+
+        # Check physical bounds if configured
+        if hasattr(self.config, "physical_bounds"):
+            min_temp = self.config.physical_bounds.get("min_temperature", float("-inf"))
+            max_temp = self.config.physical_bounds.get("max_temperature", float("inf"))
+            
+            if torch.any(u_pred < min_temp) or torch.any(u_pred > max_temp):
+                validation_passed = False
+                validation_messages.append(
+                    f"Error: Solution violates physical temperature bounds [{min_temp}, {max_temp}]"
+                )
+
+        # Validate periodic boundary conditions
+        if "periodic" in self.boundary_conditions:
+            x_left = torch.zeros(num_points//10, 1, device=self.device)
+            x_right = torch.ones(num_points//10, 1, device=self.device)
+            t_boundary = torch.linspace(0, self.config.time_domain[1], 
+                                      num_points//10, device=self.device).reshape(-1, 1)
+            
+            points_left = torch.cat([x_left, t_boundary], dim=1)
+            points_right = torch.cat([x_right, t_boundary], dim=1)
+            
+            u_left = model(points_left)
+            u_right = model(points_right)
+            
+            periodic_error = torch.mean((u_left - u_right)**2).item()
+            metrics["periodic_bc_error"] = periodic_error
+            
+            if periodic_error > 1e-3:  # Tolerance threshold
+                validation_passed = False
+                validation_messages.append(
+                    f"Warning: Periodic boundary condition error ({periodic_error:.2e}) exceeds tolerance"
+                )
+
+        # Add validation status to metrics
+        metrics["validation_passed"] = validation_passed
+        metrics["validation_messages"] = validation_messages
+
+        return metrics
 
     def compute_loss(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
