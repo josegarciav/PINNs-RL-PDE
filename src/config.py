@@ -115,10 +115,10 @@ class ModelConfig:
         self.dropout = dropout
         self.layer_norm = layer_norm
         self.architecture = architecture
-        
+
         # Configure hidden_dims as a list based on hidden_dim when not explicitly set
         self.hidden_dims = [hidden_dim] * num_layers
-        
+
         # For ResNet, set num_blocks to be the same as num_layers
         if architecture == "resnet":
             self.num_blocks = num_layers
@@ -192,7 +192,9 @@ class Config:
         self.training = None
         self.rl = None
         self.paths = None
-        self.device = torch.device("cpu")  # Default to CPU, will be overridden by config
+        self.device = torch.device(
+            "cpu"
+        )  # Default to CPU, will be overridden by config
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get the value for a given key or return the default value if the key doesn't exist."""

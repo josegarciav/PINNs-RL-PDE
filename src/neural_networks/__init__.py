@@ -73,14 +73,14 @@ class PINNModel(BaseNetwork):
         """
         # Store configuration
         self.config = config
-        
+
         # Use provided device or get from config
         self.device = device if device is not None else config.device
-        
+
         # Override device in config with the determined device
         config_with_device = config.model
         config_with_device.device = self.device
-        
+
         # Create base NetworkConfig
         super().__init__(config_with_device)
 
@@ -103,17 +103,23 @@ class PINNModel(BaseNetwork):
                 "dropout": config.model.dropout,
                 "device": self.device,
             }
-            
+
             # Make sure num_blocks is defined, using num_layers as fallback
-            if hasattr(config.model, "num_blocks") and config.model.num_blocks is not None:
+            if (
+                hasattr(config.model, "num_blocks")
+                and config.model.num_blocks is not None
+            ):
                 resnet_config["num_blocks"] = config.model.num_blocks
             else:
                 resnet_config["num_blocks"] = config.model.num_layers
-                
+
             # Add hidden_dims if defined
-            if hasattr(config.model, "hidden_dims") and config.model.hidden_dims is not None:
+            if (
+                hasattr(config.model, "hidden_dims")
+                and config.model.hidden_dims is not None
+            ):
                 resnet_config["hidden_dims"] = config.model.hidden_dims
-                
+
             self.model = ResNet(resnet_config)
         elif self.architecture == "siren":
             self.model = SIREN(config_with_device)
@@ -125,7 +131,7 @@ class PINNModel(BaseNetwork):
             self.output_proj = FeedForwardNetwork(config_with_device)
         else:  # Default to feedforward
             self.model = FeedForwardNetwork(config_with_device)
-        
+
         # Explicitly move the model to the specified device
         self.model = self.model.to(self.device)
         self.to(self.device)

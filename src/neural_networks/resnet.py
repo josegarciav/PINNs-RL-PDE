@@ -83,15 +83,19 @@ class ResNet(BaseNetwork):
         """
         super().__init__(config)
         self.input_dim = config["input_dim"]
-        
-        # Support both hidden_dim (scalar) and hidden_dims (list) 
+
+        # Support both hidden_dim (scalar) and hidden_dims (list)
         if "hidden_dim" in config:
             self.hidden_dim = config["hidden_dim"]
-        elif "hidden_dims" in config and isinstance(config["hidden_dims"], list) and len(config["hidden_dims"]) > 0:
+        elif (
+            "hidden_dims" in config
+            and isinstance(config["hidden_dims"], list)
+            and len(config["hidden_dims"]) > 0
+        ):
             self.hidden_dim = config["hidden_dims"][0]
         else:
             self.hidden_dim = 124  # Default value if nothing is specified
-        
+
         # Support both num_blocks and num_layers
         if "num_blocks" in config:
             self.num_blocks = config["num_blocks"]
@@ -99,7 +103,7 @@ class ResNet(BaseNetwork):
             self.num_blocks = config["num_layers"]
         else:
             self.num_blocks = 4  # Default value if nothing is specified
-        
+
         self.output_dim = config["output_dim"]
         activation_name = config.get("activation", "relu")
         self.activation_fn = self._get_activation_module(activation_name)

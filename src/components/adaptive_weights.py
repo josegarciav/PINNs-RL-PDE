@@ -23,7 +23,9 @@ class AdaptiveLossWeights:
         self.running_losses = None
         self.running_grads = None
         self.logger = logging.getLogger(__name__)
-        self.logger.info(f"AdaptiveLossWeights initialized with strategy={strategy}, alpha={alpha}, eps={self.eps}")
+        self.logger.info(
+            f"AdaptiveLossWeights initialized with strategy={strategy}, alpha={alpha}, eps={self.eps}"
+        )
 
     def update_weights_lrw(self, gradients):
         """
@@ -45,7 +47,7 @@ class AdaptiveLossWeights:
 
         # Ensure eps is a tensor on the same device as the gradients
         eps_tensor = torch.tensor(self.eps, device=self.running_grads.device)
-        
+
         # Compute weights inversely proportional to gradient magnitudes
         inv_grads = 1.0 / (self.running_grads + eps_tensor)
         self.weights = inv_grads / torch.sum(inv_grads)
@@ -76,7 +78,7 @@ class AdaptiveLossWeights:
 
         # Ensure eps is a tensor on the same device as the losses
         eps_tensor = torch.tensor(self.eps, device=self.running_losses.device)
-        
+
         # Compute weights based on relative error magnitudes
         max_loss = torch.max(self.running_losses)
         relative_losses = self.running_losses / (max_loss + eps_tensor)

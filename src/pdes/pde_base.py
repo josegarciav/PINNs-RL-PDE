@@ -161,7 +161,7 @@ class PDEBase:
             self.time_domain = tuple(self.time_domain)
 
         # Setup device - Handle device explicitly and carefully
-        if hasattr(config, 'device') and config.device is not None:
+        if hasattr(config, "device") and config.device is not None:
             # If config.device is already a torch.device object, use it directly
             if isinstance(config.device, torch.device):
                 self.device = config.device
@@ -170,15 +170,17 @@ class PDEBase:
                 try:
                     self.device = torch.device(str(config.device))
                 except:
-                    print(f"Warning: Invalid device '{config.device}', falling back to CPU")
+                    print(
+                        f"Warning: Invalid device '{config.device}', falling back to CPU"
+                    )
                     self.device = torch.device("cpu")
         else:
             # Fallback to CPU if no device specified
             self.device = torch.device("cpu")
-            
+
         # Log the device being used
         print(f"PDE initialized with device: {self.device}")
-        
+
         # Ensure config has the same device
         self.config.device = self.device
 
@@ -828,7 +830,7 @@ class PDEBase:
         # Ensure the points are on the correct device before returning
         x = x.to(self.device)
         t = t.to(self.device)
-        
+
         return x, t
 
     def compute_loss(
@@ -910,22 +912,25 @@ class PDEBase:
                 u_target = temp_bc(x_initial, t_initial)
 
         initial_loss = torch.mean((u_initial - u_target) ** 2)
-        
+
         # Initialize smoothness loss
         smoothness_loss = torch.tensor(0.0, device=self.device)
-        
+
         # Get smoothness weight from config if available
-        if hasattr(self.config.training, "loss_weights") and self.config.training.loss_weights:
+        if (
+            hasattr(self.config.training, "loss_weights")
+            and self.config.training.loss_weights
+        ):
             smoothness_weight = self.config.training.loss_weights.get("smoothness", 0.0)
         else:
             smoothness_weight = 0.0
-        
+
         # Create dictionary of losses
         losses = {
             "residual": residual_loss,
             "boundary": boundary_loss,
             "initial": initial_loss,
-            "smoothness": smoothness_loss
+            "smoothness": smoothness_loss,
         }
 
         # Use adaptive weights if enabled
@@ -944,10 +949,12 @@ class PDEBase:
         else:
             # Otherwise use fixed weights from config
             # Map 'pde' key to 'residual' for backward compatibility
-            residual_weight = self.config.training.loss_weights.get("pde", self.config.training.loss_weights.get("residual", 1.0))
+            residual_weight = self.config.training.loss_weights.get(
+                "pde", self.config.training.loss_weights.get("residual", 1.0)
+            )
             boundary_weight = self.config.training.loss_weights.get("boundary", 10.0)
             initial_weight = self.config.training.loss_weights.get("initial", 10.0)
-            
+
             total_loss = (
                 residual_weight * residual_loss
                 + boundary_weight * boundary_loss

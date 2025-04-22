@@ -712,7 +712,9 @@ class InteractiveTrainer:
             # Add specific parameters for ResNet if needed
             if arch_type == "resnet":
                 config_obj.model.hidden_dim = self.hidden_dim.get()
-                config_obj.model.num_blocks = self.num_layers.get()  # For ResNet, num_layers corresponds to num_blocks
+                config_obj.model.num_blocks = (
+                    self.num_layers.get()
+                )  # For ResNet, num_layers corresponds to num_blocks
 
             # Create training config
             config_obj.training = TrainingConfig(

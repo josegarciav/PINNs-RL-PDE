@@ -47,10 +47,12 @@ class PDETrainer:
         :param early_stopping_config: Early stopping configuration
         """
         # Use device from config by default, fall back to provided device or cpu
-        self.device = device or (config.device if hasattr(config, 'device') else torch.device(
-            "mps" if torch.backends.mps.is_available() else "cpu"
-        ))
-        
+        self.device = device or (
+            config.device
+            if hasattr(config, "device")
+            else torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        )
+
         self.model = model.to(self.device)
         self.pde = pde
         self.config = config
@@ -201,7 +203,7 @@ class PDETrainer:
             architecture_name = self.model.architecture_name
         else:
             architecture_name = self.model.__class__.__name__
-            
+
         # Log PDE and architecture information
         self.logger.info("=" * 50)
         self.logger.info(f"STARTING TRAINING FOR PDE: {self.pde.__class__.__name__}")
@@ -209,21 +211,25 @@ class PDETrainer:
         if hasattr(self.model, "model"):
             self.logger.info(f"MODEL STRUCTURE: {self.model.model}")
         self.logger.info(f"DEVICE: {self.device}")
-        
+
         # Log adaptive weights configuration if enabled
         if self.use_adaptive_weights:
             self.logger.info(f"ADAPTIVE WEIGHTS ENABLED")
-            self.logger.info(f"  Strategy: {self.config.training.adaptive_weights.strategy}")
+            self.logger.info(
+                f"  Strategy: {self.config.training.adaptive_weights.strategy}"
+            )
             self.logger.info(f"  Alpha: {self.config.training.adaptive_weights.alpha}")
             self.logger.info(f"  Epsilon: {self.config.training.adaptive_weights.eps}")
         else:
             self.logger.info("ADAPTIVE WEIGHTS DISABLED")
             # Convert loss_weights to something printable
-            weights_dict = {k: float(v) if isinstance(v, torch.Tensor) else v 
-                            for k, v in self.config.training.loss_weights.items()}
+            weights_dict = {
+                k: float(v) if isinstance(v, torch.Tensor) else v
+                for k, v in self.config.training.loss_weights.items()
+            }
             self.logger.info(f"  Fixed weights: {weights_dict}")
         self.logger.info("=" * 50)
-        
+
         # Initialize adaptive weights history
         if self.use_adaptive_weights and "loss_weights" not in self.history:
             self.history["loss_weights"] = []
@@ -354,15 +360,27 @@ class PDETrainer:
                     for i, component in enumerate(component_names):
                         if i < len(weights):
                             # Ensure values are Python floats, not tensors
-                            loss_val = losses[component].item() if isinstance(losses[component], torch.Tensor) else losses[component]
-                            weight_val = weights[i].item() if isinstance(weights[i], torch.Tensor) else weights[i]
+                            loss_val = (
+                                losses[component].item()
+                                if isinstance(losses[component], torch.Tensor)
+                                else losses[component]
+                            )
+                            weight_val = (
+                                weights[i].item()
+                                if isinstance(weights[i], torch.Tensor)
+                                else weights[i]
+                            )
                             weighted_val = weight_val * loss_val
                             print(
                                 f"- {component}: loss={loss_val:.6f}, weight={weight_val:.6f}, weighted={weighted_val:.6f}"
                             )
-                    
+
                     # Ensure total_loss is a Python float
-                    total_loss_val = total_loss.item() if isinstance(total_loss, torch.Tensor) else total_loss
+                    total_loss_val = (
+                        total_loss.item()
+                        if isinstance(total_loss, torch.Tensor)
+                        else total_loss
+                    )
                     print(f"- Total loss: {total_loss_val:.6f}\n")
 
                     # Store weights for visualization/tracking
@@ -404,13 +422,13 @@ class PDETrainer:
 
             # Log metrics
             current_lr = self.optimizer.param_groups[0]["lr"]
-            
+
             # Ensure all values are Python floats, not tensors
             def ensure_float(val):
                 if isinstance(val, torch.Tensor):
                     return val.item()
                 return val
-            
+
             epoch_data = {
                 "epoch": epoch,
                 "train_loss": avg_epoch_loss,
@@ -427,7 +445,7 @@ class PDETrainer:
                 component_names = ["residual", "boundary", "initial"]
                 if len(current_weights) >= 4:
                     component_names.append("smoothness")
-                    
+
                 for i, name in enumerate(component_names):
                     if i < len(current_weights):
                         weight_value = current_weights[i]
@@ -435,11 +453,15 @@ class PDETrainer:
                         if isinstance(weight_value, torch.Tensor):
                             weight_value = weight_value.item()
                         weights_str += f", {name}={weight_value:.4f}"
-                
+
                 # Ensure weights_str is a string, not a tensor
                 if isinstance(weights_str, torch.Tensor):
-                    weights_str = weights_str.item() if weights_str.numel() == 1 else str(weights_str.tolist())
-                
+                    weights_str = (
+                        weights_str.item()
+                        if weights_str.numel() == 1
+                        else str(weights_str.tolist())
+                    )
+
                 self.logger.info(f"Adaptive weights:{weights_str}")
             else:
                 weights_str = ""
@@ -455,8 +477,12 @@ class PDETrainer:
                 self.history["val_loss"].append(val_losses["total_loss"])
                 # Ensure weights_str is a string, not a tensor
                 if isinstance(weights_str, torch.Tensor):
-                    weights_str = weights_str.item() if weights_str.numel() == 1 else str(weights_str.tolist())
-                
+                    weights_str = (
+                        weights_str.item()
+                        if weights_str.numel() == 1
+                        else str(weights_str.tolist())
+                    )
+
                 self.logger.info(
                     f"Epoch {epoch+1}/{num_epochs}, "
                     f"Train Loss: {avg_epoch_loss:.6f}, "
@@ -498,8 +524,12 @@ class PDETrainer:
             else:
                 # Ensure weights_str is a string, not a tensor
                 if isinstance(weights_str, torch.Tensor):
-                    weights_str = weights_str.item() if weights_str.numel() == 1 else str(weights_str.tolist())
-                
+                    weights_str = (
+                        weights_str.item()
+                        if weights_str.numel() == 1
+                        else str(weights_str.tolist())
+                    )
+
                 self.logger.info(
                     f"Epoch {epoch+1}/{num_epochs}, "
                     f"Train Loss: {avg_epoch_loss:.6f}, "
