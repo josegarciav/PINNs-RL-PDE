@@ -11,8 +11,8 @@ from dataclasses import dataclass
 @dataclass
 class FDMConfig:
     """Configuration for Finite Difference Methods."""
-    nx: int = 1000  # Number of spatial points
-    nt: int = 4000  # Number of time steps
+    nx: int = 120  # Number of spatial points
+    nt: int = 1000  # Number of time steps
     domain: List[List[float]] = None  # Spatial domain
     time_domain: List[float] = None  # Time domain
     parameters: Dict[str, Any] = None  # PDE parameters
@@ -119,7 +119,8 @@ class HeatEquationFDM:
         t_tensor = torch.zeros_like(x_tensor)
         
         # Set initial condition
-        self.u[0] = self.pde.boundary_conditions["initial"](x_tensor, t_tensor).cpu().numpy().flatten()
+        initial_values = self.pde.boundary_conditions["initial"](x_tensor, t_tensor).cpu().numpy()
+        self.u[0] = initial_values.reshape(-1)  # Ensure 1D array
         
         # Set boundary conditions based on type
         if "dirichlet" in self.pde.boundary_conditions:
@@ -131,8 +132,8 @@ class HeatEquationFDM:
             # Evaluate boundary conditions for all time steps
             for i in range(self.nt):
                 t_i = t_tensor[i:i+1]
-                self.u[i, 0] = self.pde.boundary_conditions["dirichlet"](x_left, t_i).item()
-                self.u[i, -1] = self.pde.boundary_conditions["dirichlet"](x_right, t_i).item()
+                self.u[i, 0] = self.pde.boundary_conditions["dirichlet"](x_left, t_i).cpu().numpy().reshape(-1)[0]
+                self.u[i, -1] = self.pde.boundary_conditions["dirichlet"](x_right, t_i).cpu().numpy().reshape(-1)[0]
                 
         elif "periodic" in self.pde.boundary_conditions:
             # Periodic boundary conditions - values at boundaries are equal
@@ -332,8 +333,8 @@ class HeatEquationFDM:
                 "initial_condition": pde.config.initial_condition,
                 "exact_solution": pde.config.exact_solution,
                 "dimension": pde.dimension,
-                "nx": 1000,
-                "nt": 4000
+                "nx": 120,
+                "nt": 1000
             }
             
             solver = HeatEquationFDM(config, device)

@@ -93,6 +93,7 @@ class PDETrainer:
                 strategy=config.training.adaptive_weights.strategy,
                 alpha=config.training.adaptive_weights.alpha,
                 eps=config.training.adaptive_weights.eps,
+                initial_weights=config.training.adaptive_weights.initial_weights,
             )
         else:
             self.logger.info("Adaptive weights are disabled")

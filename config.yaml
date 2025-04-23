@@ -294,17 +294,18 @@ pde_configs:
 
 # Training Configuration
 training:
-  num_epochs: 5000  # for better convergence
+  num_epochs: 500  # for better convergence
   batch_size: 2048  # Larger batch size: must be divisible by 8 (ideally a power of 2: 32, 64, 128, 256, 512, 1024, 2048)
-  num_collocation_points: 8000 # Increase for better coverage
-  num_boundary_points: 5000  # Increased from 2000 for better boundary enforcement
-  num_initial_points: 5000  # Increased from 4000 for better initial condition representation
+  num_collocation_points: 9000 # Increase for better coverage
+  num_boundary_points: 6000  # Increased from 2000 for better boundary enforcement
+  num_initial_points: 6000  # Increased from 4000 for better initial condition representation
   collocation_distribution: "uniform"  # Options: "uniform", "latin_hypercube", "sobol", "adaptive" (requires RL agent)
   adaptive_weights:
-    enabled: true  # Whether to use adaptive weights for loss terms
+    enabled: true # Whether to use adaptive weights for loss terms
     strategy: "rbw"  # Options: "lrw" (Learning Rate Weighting) or "rbw" (Relative Error Weighting)
-    alpha: 0.9  # Moving average factor for weight updates (0-1)
-    eps: 1e-5  # Small constant for numerical stability
+    alpha: 0.7     # Lower alpha for faster adaptation
+    eps: 1e-6
+    initial_weights: [0.2, 0.3, 0.5]  # [pde, boundary, initial] - Give more weight to PDE term initially
   validation_frequency: 10
   early_stopping:
     enabled: true
@@ -332,7 +333,7 @@ training:
     pde: 10.0
     boundary: 10.0
     initial: 5.0
-    smoothness: 0.1
+    smoothness: 0
 
 # Reinforcement Learning Configuration
 rl:

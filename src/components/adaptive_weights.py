@@ -6,7 +6,7 @@ import logging
 class AdaptiveLossWeights:
     """Handles adaptive weighting of different loss components in PINNs."""
 
-    def __init__(self, strategy="rbw", alpha=0.9, eps=1e-5):
+    def __init__(self, strategy="rbw", alpha=0.9, eps=1e-5, initial_weights=None):
         """
         Initialize adaptive loss weights handler.
 
@@ -14,18 +14,21 @@ class AdaptiveLossWeights:
             strategy (str): Weight adaptation strategy ('lrw' or 'rbw')
             alpha (float): Moving average factor for weight updates
             eps (float): Small constant for numerical stability
+            initial_weights (list): Initial weights for [pde, boundary, initial] components
         """
         self.strategy = strategy.lower()
         self.alpha = alpha
         # Ensure eps is a float, not a string
         self.eps = float(eps) if isinstance(eps, (str, int)) else eps
+        self.initial_weights = torch.tensor(initial_weights) if initial_weights is not None else None
         self.weights = None
         self.running_losses = None
         self.running_grads = None
         self.logger = logging.getLogger(__name__)
         self.logger.info(
-            f"AdaptiveLossWeights initialized with strategy={strategy}, alpha={alpha}, eps={self.eps}"
+            f"AdaptiveLossWeights initialized with strategy={strategy}, alpha={alpha}, eps={self.eps}, initial_weights={initial_weights}"
         )
+        self.prev_weights = None
 
     def update_weights_lrw(self, gradients):
         """
@@ -36,7 +39,7 @@ class AdaptiveLossWeights:
         """
         if self.running_grads is None:
             self.running_grads = gradients
-            self.weights = torch.ones_like(gradients)
+            self.weights = self.initial_weights.to(gradients.device) if self.initial_weights is not None else torch.ones_like(gradients)
             self.logger.info(f"LRW - Initialized weights: {self.weights}")
             return self.weights
 
@@ -61,13 +64,14 @@ class AdaptiveLossWeights:
     def update_weights_rbw(self, losses):
         """
         Update weights using Relative Error based Weighting (RBW).
+        Gives more weight to terms with bigger losses to balance them.
 
         Args:
             losses (list): List of individual loss components
         """
         if self.running_losses is None:
             self.running_losses = losses
-            self.weights = torch.ones_like(losses)
+            self.weights = self.initial_weights.to(losses.device) if self.initial_weights is not None else torch.ones_like(losses)
             self.logger.info(f"RBW - Initialized weights: {self.weights}")
             return self.weights
 
@@ -79,10 +83,16 @@ class AdaptiveLossWeights:
         # Ensure eps is a tensor on the same device as the losses
         eps_tensor = torch.tensor(self.eps, device=self.running_losses.device)
 
-        # Compute weights based on relative error magnitudes
-        max_loss = torch.max(self.running_losses)
-        relative_losses = self.running_losses / (max_loss + eps_tensor)
-        self.weights = relative_losses / torch.sum(relative_losses)
+        # Normalize the running losses to get weights
+        # Give more weight to higher losses to focus optimization on problematic terms
+        normalized_losses = self.running_losses / (self.running_losses.sum() + eps_tensor)
+        self.weights = normalized_losses  # Higher loss -> Higher weight
+
+        # Update weights with exponential moving average
+        if self.prev_weights is not None:
+            self.weights = self.alpha * self.prev_weights + (1 - self.alpha) * self.weights
+        
+        self.prev_weights = self.weights.clone()
 
         self.logger.info(
             f"RBW - Updated weights: losses={losses.detach().cpu().numpy()}, running_losses={self.running_losses.detach().cpu().numpy()}, weights={self.weights.detach().cpu().numpy()}"
@@ -112,6 +122,9 @@ class AdaptiveLossWeights:
 
     def get_weights(self):
         """Return current weights."""
-        return (
-            self.weights if self.weights is not None else torch.ones(3) / 3.0
-        )  # Default to equal weights for 3 components
+        if self.weights is not None:
+            return self.weights
+        elif self.initial_weights is not None:
+            return self.initial_weights
+        else:
+            return torch.ones(3) / 3.0  # Default to equal weights for 3 components

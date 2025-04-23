@@ -28,6 +28,11 @@ class AdaptiveWeightsConfig:
     strategy: str = "rbw"  # Options: "lrw" or "rbw"
     alpha: float = 0.9  # Moving average factor (0-1)
     eps: float = 1e-5  # Small constant for numerical stability
+    initial_weights: List[float] = None  # Initial weights for [pde, boundary, initial] components
+
+    def __post_init__(self):
+        if self.initial_weights is None:
+            self.initial_weights = [0.5, 0.3, 0.2]  # Default initial weights
 
 
 @dataclass
