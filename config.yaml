@@ -294,7 +294,7 @@ pde_configs:
 
 # Training Configuration
 training:
-  num_epochs: 500  # for better convergence
+  num_epochs: 5000  # for better convergence
   batch_size: 2048  # Larger batch size: must be divisible by 8 (ideally a power of 2: 32, 64, 128, 256, 512, 1024, 2048)
   num_collocation_points: 9000 # Increase for better coverage
   num_boundary_points: 6000  # Increased from 2000 for better boundary enforcement

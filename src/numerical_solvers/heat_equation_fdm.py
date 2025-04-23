@@ -197,12 +197,18 @@ class HeatEquationFDM:
         x = torch.linspace(self.pde.domain[0][0], self.pde.domain[0][1], self.nx)
         t = torch.linspace(self.pde.time_domain[0], self.pde.time_domain[1], self.nt)
         
+        # Create meshgrid for evaluation
+        x_grid, t_grid = torch.meshgrid(x, t, indexing='ij')
+        points = torch.stack([x_grid.flatten(), t_grid.flatten()], dim=1)
+        
         # Get exact solution
-        u_exact = self.pde.exact_solution(x, t)
+        u_exact = self.pde.exact_solution(points[:, 0].reshape(-1, 1), 
+                                        points[:, 1].reshape(-1, 1))
+        u_exact = u_exact.reshape(self.nx, self.nt).T.numpy()
         
         # Compute errors
-        l2_error = np.sqrt(np.mean((self.u - u_exact.numpy()) ** 2))
-        max_error = np.max(np.abs(self.u - u_exact.numpy()))
+        l2_error = np.sqrt(np.mean((self.u - u_exact) ** 2))
+        max_error = np.max(np.abs(self.u - u_exact))
         
         return l2_error, max_error
     
@@ -294,27 +300,21 @@ class HeatEquationFDM:
         
     def _evaluate_pinn_full(self, model, device):
         """Evaluate PINN on the full space-time grid."""
-        x_grid, t_grid = np.meshgrid(self.x, self.t)
-        points = np.stack([x_grid.flatten(), t_grid.flatten()], axis=1)
-        points_tensor = torch.tensor(points, dtype=torch.float32, device=device)
+        # Create proper meshgrid
+        x_tensor = torch.tensor(self.x, dtype=torch.float32, device=device)
+        t_tensor = torch.tensor(self.t, dtype=torch.float32, device=device)
+        x_grid, t_grid = torch.meshgrid(x_tensor, t_tensor, indexing='ij')
+        
+        # Stack coordinates for model input
+        points = torch.stack([x_grid.flatten(), t_grid.flatten()], dim=1)
         
         with torch.no_grad():
-            return model(points_tensor).cpu().numpy().reshape(self.nt, self.nx)
+            u_pinn = model(points).cpu()
+            return u_pinn.reshape(self.nx, self.nt).T.numpy()  # Reshape to match FDM shape (nt, nx)
 
     @staticmethod
     def generate_fdm_comparison_plots(pde, model, device, viz_dir, logger=None):
-        """Generate comparison plots between FDM and PINN solutions.
-        
-        Args:
-            pde: The PDE object
-            model: The trained neural network model
-            device: The device to use
-            viz_dir: Directory to save visualizations
-            logger: Logger for logging messages
-            
-        Returns:
-            Dictionary of error metrics
-        """
+        """Generate comparison plots between FDM and PINN solutions."""
         if logger is None:
             logger = logging.getLogger("HeatEquationFDM")
             logger.setLevel(logging.INFO)
@@ -339,28 +339,51 @@ class HeatEquationFDM:
             
             solver = HeatEquationFDM(config, device)
             
-            # Solve
-            solver.solve()
+            # Solve using FDM
+            u_fdm = solver.solve()
+            
+            # Get PINN solution on the same grid
+            u_pinn = solver._evaluate_pinn_full(model, device)
+            
+            # Get exact solution
+            x = torch.linspace(solver.pde.domain[0][0], solver.pde.domain[0][1], solver.nx, device=device)
+            t = torch.linspace(solver.pde.time_domain[0], solver.pde.time_domain[1], solver.nt, device=device)
+            x_grid, t_grid = torch.meshgrid(x, t, indexing='ij')
+            points = torch.stack([x_grid.flatten(), t_grid.flatten()], dim=1)
+            
+            with torch.no_grad():
+                u_exact = solver.pde.exact_solution(points[:, 0].reshape(-1, 1), 
+                                                  points[:, 1].reshape(-1, 1))
+                u_exact = u_exact.reshape(solver.nx, solver.nt).T.cpu().numpy()
             
             # Create comparison plots
             os.makedirs(viz_dir, exist_ok=True)
+            
+            # Plot solutions and save metrics
+            metrics = {
+                'fdm_pinn_l2_error': np.mean((u_fdm - u_pinn)**2),
+                'fdm_pinn_max_error': np.max(np.abs(u_fdm - u_pinn)),
+                'fdm_pinn_mean_error': np.mean(np.abs(u_fdm - u_pinn)),
+                'exact_fdm_l2_error': np.mean((u_exact - u_fdm)**2),
+                'exact_fdm_max_error': np.max(np.abs(u_exact - u_fdm)),
+                'exact_fdm_mean_error': np.mean(np.abs(u_exact - u_fdm)),
+            }
             
             # Plot FDM solution
             solver.plot_solution(os.path.join(viz_dir, 'fdm_solution.png'))
             
             # Plot comparison with PINN and exact solution
-            metrics = solver.plot_comparison_with_pinn(model, 
+            solver.plot_comparison_with_pinn(model, 
                                           os.path.join(viz_dir, 'fdm_vs_pinn_comparison.png'),
                                           device)
             
             logger.info(f"Comparison plots saved to {viz_dir}")
             logger.info(f"Error metrics between solutions:")
             logger.info(f"FDM vs PINN - L2={metrics['fdm_pinn_l2_error']:.6f}, Max={metrics['fdm_pinn_max_error']:.6f}, Mean={metrics['fdm_pinn_mean_error']:.6f}")
-            logger.info(f"PINN vs Exact - L2={metrics['exact_pinn_l2_error']:.6f}, Max={metrics['exact_pinn_max_error']:.6f}, Mean={metrics['exact_pinn_mean_error']:.6f}")
             logger.info(f"FDM vs Exact - L2={metrics['exact_fdm_l2_error']:.6f}, Max={metrics['exact_fdm_max_error']:.6f}, Mean={metrics['exact_fdm_mean_error']:.6f}")
             
             return metrics
-            
+
         except Exception as e:
             logger.error(f"Error generating FDM comparison: {str(e)}")
             return {}
