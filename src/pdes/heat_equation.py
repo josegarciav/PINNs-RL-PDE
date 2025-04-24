@@ -43,13 +43,15 @@ class HeatEquation(PDEBase):
     def _calculate_decay_rate(self, k: float) -> float:
         """
         Calculate the decay rate based on physical parameters.
-        For the heat equation with solution u(x,t) = A * exp(-decay_rate * t) * sin(k * pi * x),
-        the decay rate must be α*(k*π)^2 to satisfy the PDE.
+        For the heat equation with solution u(x,t) = A * exp(-decay_rate * t) * sin(2πfx/L),
+        the decay rate must be α*(2πf/L)^2 to satisfy the PDE.
 
         :param k: Frequency parameter
         :return: Decay rate
         """
-        return self.alpha * (k * torch.pi) ** 2
+        L = self.config.domain[0][1] - self.config.domain[0][0]  # Domain length
+        wave_number = 2 * torch.pi * k / L
+        return self.alpha * wave_number ** 2
 
     def compute_residual(
         self,
@@ -114,34 +116,48 @@ class HeatEquation(PDEBase):
         Compute exact analytical solution for the heat equation.
 
         The solution is of the form:
-        u(x,t) = A * exp(-decay_rate * t) * sin(k * pi * x)
+        u(x,t) = A * exp(-decay_rate * t) * sin(2πfx/L)
 
         For 2D:
-        u(x,y,t) = A * exp(-decay_rate * t) * sin(kx * pi * x) * sin(ky * pi * y)
+        u(x,y,t) = A * exp(-decay_rate * t) * sin(2πfx/Lx) * sin(2πfy/Ly)
 
         :param x: Spatial coordinates
         :param t: Time coordinates
         :return: Exact solution tensor
         """
-        if not self.config.exact_solution:
-            return None
+        if not hasattr(self.config, 'exact_solution') or not self.config.exact_solution:
+            # Default to initial condition if no exact solution is specified
+            if hasattr(self.config, 'initial_condition'):
+                ic_type = self.config.initial_condition.get("type", "sine")
+                A = self.config.initial_condition.get("amplitude", 1.0)
+                k = self.config.initial_condition.get("frequency", 2.0)
+                L = self.config.domain[0][1] - self.config.domain[0][0]
+                wave_number = 2 * torch.pi * k / L
+                decay_rate = self._calculate_decay_rate(k)
+                return A * torch.exp(-decay_rate * t) * torch.sin(wave_number * x)
+            return torch.zeros_like(x)  # Return zeros if no solution or initial condition
 
-        solution_type = self.config.exact_solution.get("type", "sine")
+        solution_type = self.config.exact_solution.get("type", "sin_exp_decay")
+        
         if solution_type == "sin_exp_decay":
             A = self.config.exact_solution.get("amplitude", 1.0)
             k = self.config.exact_solution.get("frequency", 2.0)
+            L = self.config.domain[0][1] - self.config.domain[0][0]  # Domain length
+            wave_number = 2 * torch.pi * k / L
             decay_rate = self._calculate_decay_rate(k)
 
             if self.dimension == 1:
                 # Heat equation solution with exponential decay
                 time_factor = torch.exp(-decay_rate * t)
-                space_factor = torch.sin(k * torch.pi * x)
+                space_factor = torch.sin(wave_number * x)
                 return A * time_factor * space_factor
             else:
                 # For higher dimensions, use product of sine waves with decay
                 solution = torch.ones_like(x[:, 0:1])
                 for dim in range(self.dimension):
-                    space_factor = torch.sin(k * torch.pi * x[:, dim : dim + 1])
+                    L_dim = self.config.domain[dim][1] - self.config.domain[dim][0]
+                    wave_number = 2 * torch.pi * k / L_dim
+                    space_factor = torch.sin(wave_number * x[:, dim:dim+1])
                     solution *= space_factor
                 time_factor = torch.exp(-decay_rate * t)
                 return A * time_factor * solution
@@ -153,7 +169,7 @@ class HeatEquation(PDEBase):
 
             # Correct 2D heat equation solution
             decay_factor = (kx * torch.pi) ** 2 + (ky * torch.pi) ** 2
-            time_factor = torch.exp(-decay_factor * t)
+            time_factor = torch.exp(-self.alpha * decay_factor * t)
             space_factor = torch.sin(kx * torch.pi * x[:, 0:1]) * torch.sin(
                 ky * torch.pi * x[:, 1:2]
             )
@@ -161,9 +177,24 @@ class HeatEquation(PDEBase):
 
         elif solution_type == "sine":
             # Legacy support for old config format
-            return self.exact_solution_sine(x, t)
-        else:
-            raise ValueError(f"Unsupported exact solution type: {solution_type}")
+            A = self.config.exact_solution.get("amplitude", 1.0)
+            k = self.config.exact_solution.get("frequency", 2.0)
+            L = self.config.domain[0][1] - self.config.domain[0][0]
+            wave_number = 2 * torch.pi * k / L
+            decay_rate = self._calculate_decay_rate(k)
+            return A * torch.exp(-decay_rate * t) * torch.sin(wave_number * x)
+
+        # If we reach here, return a default solution based on initial condition
+        if hasattr(self.config, 'initial_condition'):
+            ic_type = self.config.initial_condition.get("type", "sine")
+            A = self.config.initial_condition.get("amplitude", 1.0)
+            k = self.config.initial_condition.get("frequency", 2.0)
+            L = self.config.domain[0][1] - self.config.domain[0][0]
+            wave_number = 2 * torch.pi * k / L
+            decay_rate = self._calculate_decay_rate(k)
+            return A * torch.exp(-decay_rate * t) * torch.sin(wave_number * x)
+            
+        return torch.zeros_like(x)  # Final fallback
 
     def exact_solution_sine(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """Legacy support for old sine solution format"""
@@ -194,57 +225,54 @@ class HeatEquation(PDEBase):
         """
         if bc_type == "initial":
             ic_type = params.get("type", "sine")
-            if ic_type == "sine":
-                A = params.get("amplitude", 1.0)
-                k = params.get("frequency", 1.0)
-                if self.dimension == 1:
-                    return lambda x, t: A * torch.sin(k * torch.pi * x)
-                else:
-                    return lambda x, t: A * torch.prod(
-                        torch.sin(k * torch.pi * x), dim=1, keepdim=True
-                    )
-            elif ic_type == "sine_2d" and self.dimension == 2:
-                A = params.get("amplitude", 1.0)
-                kx = params.get("frequency_x", 2.0)
-                ky = params.get("frequency_y", 2.0)
-                return (
-                    lambda x, t: A
-                    * torch.sin(kx * torch.pi * x[:, 0:1])
-                    * torch.sin(ky * torch.pi * x[:, 1:2])
-                )
-            elif ic_type == "sin_exp_decay":
+            if ic_type == "sin_exp_decay":
                 A = params.get("amplitude", 1.0)
                 k = params.get("frequency", 2.0)
+                L = self.config.domain[0][1] - self.config.domain[0][0]  # Domain length
+                wave_number = 2 * torch.pi * k / L
                 decay_rate = self._calculate_decay_rate(k)
+                
                 if self.dimension == 1:
-                    # Include exponential decay term
-                    return (
-                        lambda x, t: A
-                        * torch.sin(k * torch.pi * x)
-                        * torch.exp(-decay_rate * t)
-                    )
+                    def initial_condition(x, t):
+                        return A * torch.sin(wave_number * x) * torch.exp(-decay_rate * t)
+                    return initial_condition
                 else:
-                    # For higher dimensions, use product of sine waves with exponential decay
-                    return (
-                        lambda x, t: A
-                        * torch.prod(torch.sin(k * torch.pi * x), dim=1, keepdim=True)
-                        * torch.exp(-decay_rate * t)
-                    )
+                    def initial_condition(x, t):
+                        solution = torch.ones_like(x[:, 0:1])
+                        for dim in range(self.dimension):
+                            L_dim = self.config.domain[dim][1] - self.config.domain[dim][0]
+                            wave_number = 2 * torch.pi * k / L_dim
+                            space_factor = torch.sin(wave_number * x[:, dim:dim+1])
+                            solution *= space_factor
+                        return A * solution * torch.exp(-decay_rate * t)
+                    return initial_condition
+            elif ic_type == "sine":
+                A = params.get("amplitude", 1.0)
+                k = params.get("frequency", 2.0)
+                L = self.config.domain[0][1] - self.config.domain[0][0]
+                wave_number = 2 * torch.pi * k / L
+                def initial_condition(x, t):
+                    if self.dimension == 1:
+                        return A * torch.sin(wave_number * x)
+                    else:
+                        return A * torch.prod(torch.sin(wave_number * x), dim=1, keepdim=True)
+                return initial_condition
             else:
-                raise ValueError(f"Unsupported initial condition type: {ic_type}")
+                return super()._create_boundary_condition(bc_type, params)
         elif (
             bc_type == "dirichlet"
+            and hasattr(self.config, 'exact_solution')
             and self.config.exact_solution.get("type") == "sin_exp_decay"
         ):
             # For Dirichlet boundary conditions with sin_exp_decay
             A = self.config.exact_solution.get("amplitude", 1.0)
             k = self.config.exact_solution.get("frequency", 2.0)
+            L = self.config.domain[0][1] - self.config.domain[0][0]
+            wave_number = 2 * torch.pi * k / L
             decay_rate = self._calculate_decay_rate(k)
-            return (
-                lambda x, t: A
-                * torch.sin(k * torch.pi * x)
-                * torch.exp(-decay_rate * t)
-            )
+            def boundary_condition(x, t):
+                return A * torch.sin(wave_number * x) * torch.exp(-decay_rate * t)
+            return boundary_condition
         else:
             return super()._create_boundary_condition(bc_type, params)
 

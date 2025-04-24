@@ -30,7 +30,6 @@ from src.config import (
     LearningRateSchedulerConfig,
     AdaptiveWeightsConfig,
 )
-from src.numerical_solvers.heat_equation_fdm import HeatEquationFDM
 
 
 class InteractiveTrainer:

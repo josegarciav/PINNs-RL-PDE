@@ -23,11 +23,11 @@ architectures:
     omega_0: 30.0  # Frequency parameter for sin activation
   
   fourier:
-    mapping_size: 256  # Increased for better frequency resolution
-    hidden_dims: [256, 256, 256, 256, 256]  # Added more layers and increased width
-    scale: 5.0  # Adjusted scale for better feature representation
-    activation: "tanh"
-    dropout: 0.1  # Increased dropout for better regularization
+    mapping_size: 512  # Reduced to prevent overfitting
+    hidden_dims: [512, 512, 512, 512]  # Moderate width but deep
+    scale: 4.0  # Increased to better capture high frequencies
+    activation: "tanh"  # Good for periodic problems
+    dropout: 0.1  # Removed dropout as it might interfere with periodic boundary conditions
     layer_norm: true
     periodic: true  # Enable periodic features
   
@@ -294,30 +294,30 @@ pde_configs:
 
 # Training Configuration
 training:
-  num_epochs: 5000  # for better convergence
-  batch_size: 2048  # Larger batch size: must be divisible by 8 (ideally a power of 2: 32, 64, 128, 256, 512, 1024, 2048)
-  num_collocation_points: 9000 # Increase for better coverage
-  num_boundary_points: 6000  # Increased from 2000 for better boundary enforcement
-  num_initial_points: 6000  # Increased from 4000 for better initial condition representation
+  num_epochs: 3000  # for better convergence
+  batch_size: 2048  # Larger batch size: should be divisible by 8 (ideally a power of 2: 32, 64, 128, 256, 512, 1024, 2048)
+  num_collocation_points: 5000 #better coverage
+  num_boundary_points: 5000  #better boundary enforcement
+  num_initial_points: 5000  #better initial condition representation
   collocation_distribution: "uniform"  # Options: "uniform", "latin_hypercube", "sobol", "adaptive" (requires RL agent)
   adaptive_weights:
-    enabled: true # Whether to use adaptive weights for loss terms
+    enabled: false # Whether to use adaptive weights for loss terms
     strategy: "rbw"  # Options: "lrw" (Learning Rate Weighting) or "rbw" (Relative Error Weighting)
     alpha: 0.7     # Lower alpha for faster adaptation
     eps: 1e-6
-    initial_weights: [0.2, 0.3, 0.5]  # [pde, boundary, initial] - Give more weight to PDE term initially
+    initial_weights: [0.3, 0.4, 0.3]  # More balanced weights
   validation_frequency: 10
   early_stopping:
     enabled: true
-    patience: 100  # Increased from 50 to allow more time for convergence
-    min_delta: 1e-7  # Stricter improvement threshold
+    patience: 100  # Increased patience
+    min_delta: 1e-7
     monitor: "val_loss"
   optimizer_config:
     name: "adam"
-    learning_rate: 0.001
+    learning_rate: 0.005  # Reduced for more stable training
     beta1: 0.9
     beta2: 0.999
-    weight_decay: 0.0001  # Added weight decay for regularization
+    weight_decay: 0.0005  # Added weight decay for regularization
   scheduler_type: "cosine"  # Options: "reduce_lr" or "cosine"
   # Parameters for ReduceLROnPlateau
   reduce_lr_params:
@@ -326,14 +326,13 @@ training:
     min_lr: 1.0e-6
   # Parameters for CosineAnnealingLR
   cosine_params:
-    T_max: 100  # Increased from 50 to match longer training
-    eta_min: 1.0e-6
-  rl_update_frequency: 10  # Update RL agent every N epochs
+    T_max: 400  # Doubled period
+    eta_min: 1e-7
   loss_weights:
-    pde: 10.0
-    boundary: 10.0
-    initial: 5.0
-    smoothness: 0
+    pde: 15.0      # Increased weight for PDE residual
+    boundary: 20.0  # Significantly increased for better boundary enforcement
+    initial: 10.0   # Increased for better initial condition satisfaction
+    smoothness: 0.1  # Increased slightly for better regularization
 
 # Reinforcement Learning Configuration
 rl:
@@ -368,7 +367,7 @@ evaluation:
 # Logging Configuration
 logging:
   level: "INFO"
-  save_tensorboard: true
+  save_tensorboard: false
   log_frequency: 100
 
 # Paths

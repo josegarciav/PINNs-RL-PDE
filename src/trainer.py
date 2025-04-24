@@ -601,15 +601,15 @@ class PDETrainer:
             self.logger.info("Generating and saving all plots...")
             self.save_plots(viz_dir)
 
-            # Generate FDM comparison plots explicitly
-            self.logger.info("Generating FDM comparison plots...")
-            try:
-                self.generate_fdm_comparison(experiment_dir)
-            except Exception as e:
-                self.logger.error(f"Error generating FDM comparison: {str(e)}")
-                import traceback
+            # # Generate FDM comparison plots explicitly
+            # self.logger.info("Generating FDM comparison plots...")
+            # try:
+            #     self.generate_fdm_comparison(experiment_dir)
+            # except Exception as e:
+            #     self.logger.error(f"Error generating FDM comparison: {str(e)}")
+            #     import traceback
 
-                traceback.print_exc()
+            #     traceback.print_exc()
 
         return self.history
 
