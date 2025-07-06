@@ -978,10 +978,12 @@ class PDEBase:
             from src.neural_networks import PINNModel
 
             # Determine the current PDE type. Default to "wave" if not specified.
-            pde_type = self.config.get("pde_type", "wave")
-            # Get the PDE-specific configuration.
-            pde_conf = self.config.get("pde_configs", {})
-            pde_conf = pde_conf.get(pde_type, {})
+            # Access configuration attributes safely since PDEConfig may not
+            # behave like a dictionary.
+            pde_type = getattr(self.config, "pde_type", "wave")
+            # Get the PDE-specific configuration dictionary if available
+            pde_conf = getattr(self.config, "pde_configs", {})
+            pde_conf = pde_conf.get(pde_type, {}) if isinstance(pde_conf, dict) else {}
 
             # Build the base architecture configuration using PDE-specific input/output dimensions
             # and the device from the class.
@@ -995,7 +997,7 @@ class PDEBase:
             arch_type = pde_conf.get("architecture", None)
             if arch_type is not None:
                 # Look up the detailed architecture settings in the global "architectures" section.
-                architectures_dict = self.config.get("architectures", {})
+                architectures_dict = getattr(self.config, "architectures", {})
                 if arch_type in architectures_dict:
                     # Merge in the PDE-specific architecture details.
                     arch_config.update(architectures_dict[arch_type])
