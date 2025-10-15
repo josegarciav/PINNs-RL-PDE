@@ -11,6 +11,7 @@ import os
 # Conditional imports to avoid memory issues
 try:
     import matplotlib.pyplot as plt
+
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
@@ -18,6 +19,7 @@ except ImportError:
 
 try:
     from scipy.stats import qmc
+
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
@@ -230,23 +232,23 @@ class PDEBase:
     def get_parameter(self, name: str, default=None, required: bool = False):
         """
         Safely get a parameter value with validation.
-        
+
         Args:
             name: Parameter name
             default: Default value if parameter not found
             required: Whether parameter is required (raises error if missing)
-            
+
         Returns:
             Parameter value
-            
+
         Raises:
             ValueError: If required parameter is missing
         """
-        if not hasattr(self.config, 'parameters') or self.config.parameters is None:
+        if not hasattr(self.config, "parameters") or self.config.parameters is None:
             if required:
                 raise ValueError(f"Required parameter '{name}' not found in config")
             return default
-            
+
         value = self.config.parameters.get(name, default)
         if value is None and required:
             raise ValueError(f"Required parameter '{name}' not found in config")
@@ -352,9 +354,13 @@ class PDEBase:
                 strike = params.get("strike", 100.0)
                 option_type = params.get("option_type", "call")
                 if option_type == "call":
-                    return lambda x, t: torch.maximum(x[:, 0:1] - strike, torch.zeros_like(x[:, 0:1]))
+                    return lambda x, t: torch.maximum(
+                        x[:, 0:1] - strike, torch.zeros_like(x[:, 0:1])
+                    )
                 else:  # put
-                    return lambda x, t: torch.maximum(strike - x[:, 0:1], torch.zeros_like(x[:, 0:1]))
+                    return lambda x, t: torch.maximum(
+                        strike - x[:, 0:1], torch.zeros_like(x[:, 0:1])
+                    )
 
             else:
                 # Default to zero if type not recognized
@@ -711,7 +717,7 @@ class PDEBase:
             if not SCIPY_AVAILABLE:
                 print("Warning: scipy not available, falling back to uniform sampling")
                 return self.generate_collocation_points(num_points, strategy="uniform")
-            
+
             sampler = qmc.LatinHypercube(d=self.dimension + 1)  # +1 for time dimension
             sample = sampler.random(n=num_points)
 
@@ -744,7 +750,7 @@ class PDEBase:
             if not SCIPY_AVAILABLE:
                 print("Warning: scipy not available, falling back to uniform sampling")
                 return self.generate_collocation_points(num_points, strategy="uniform")
-            
+
             # Sobol sequence for low-discrepancy sampling
             sampler = qmc.Sobol(d=self.dimension + 1)  # +1 for time dimension
             sample = sampler.random(n=num_points)

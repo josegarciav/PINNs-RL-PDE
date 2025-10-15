@@ -20,7 +20,9 @@ class AdaptiveLossWeights:
         self.alpha = alpha
         # Ensure eps is a float, not a string
         self.eps = float(eps) if isinstance(eps, (str, int)) else eps
-        self.initial_weights = torch.tensor(initial_weights) if initial_weights is not None else None
+        self.initial_weights = (
+            torch.tensor(initial_weights) if initial_weights is not None else None
+        )
         self.weights = None
         self.running_losses = None
         self.running_grads = None
@@ -39,7 +41,11 @@ class AdaptiveLossWeights:
         """
         if self.running_grads is None:
             self.running_grads = gradients
-            self.weights = self.initial_weights.to(gradients.device) if self.initial_weights is not None else torch.ones_like(gradients)
+            self.weights = (
+                self.initial_weights.to(gradients.device)
+                if self.initial_weights is not None
+                else torch.ones_like(gradients)
+            )
             self.logger.info(f"LRW - Initialized weights: {self.weights}")
             return self.weights
 
@@ -71,7 +77,11 @@ class AdaptiveLossWeights:
         """
         if self.running_losses is None:
             self.running_losses = losses
-            self.weights = self.initial_weights.to(losses.device) if self.initial_weights is not None else torch.ones_like(losses)
+            self.weights = (
+                self.initial_weights.to(losses.device)
+                if self.initial_weights is not None
+                else torch.ones_like(losses)
+            )
             self.logger.info(f"RBW - Initialized weights: {self.weights}")
             return self.weights
 
@@ -85,13 +95,17 @@ class AdaptiveLossWeights:
 
         # Normalize the running losses to get weights
         # Give more weight to higher losses to focus optimization on problematic terms
-        normalized_losses = self.running_losses / (self.running_losses.sum() + eps_tensor)
+        normalized_losses = self.running_losses / (
+            self.running_losses.sum() + eps_tensor
+        )
         self.weights = normalized_losses  # Higher loss -> Higher weight
 
         # Update weights with exponential moving average
         if self.prev_weights is not None:
-            self.weights = self.alpha * self.prev_weights + (1 - self.alpha) * self.weights
-        
+            self.weights = (
+                self.alpha * self.prev_weights + (1 - self.alpha) * self.weights
+            )
+
         self.prev_weights = self.weights.clone()
 
         self.logger.info(

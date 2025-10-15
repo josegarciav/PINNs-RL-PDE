@@ -28,7 +28,9 @@ class AdaptiveWeightsConfig:
     strategy: str = "rbw"  # Options: "lrw" or "rbw"
     alpha: float = 0.9  # Moving average factor (0-1)
     eps: float = 1e-5  # Small constant for numerical stability
-    initial_weights: List[float] = None  # Initial weights for [pde, boundary, initial] components
+    initial_weights: List[float] = (
+        None  # Initial weights for [pde, boundary, initial] components
+    )
 
     def __post_init__(self):
         if self.initial_weights is None:
@@ -201,7 +203,7 @@ class Config:
         self.device = torch.device(
             "cpu"
         )  # Default to CPU, will be overridden by config
-        
+
         # Load configuration if file exists
         if os.path.exists(config_path):
             self._load_config()

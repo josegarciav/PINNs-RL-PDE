@@ -10,6 +10,7 @@ def run_interactive_trainer():
     """Run the interactive trainer module"""
     try:
         from src.interactive_trainer import main as trainer_main
+
         trainer_main()
     except ImportError as e:
         print(f"Error importing interactive trainer: {e}")
@@ -38,7 +39,9 @@ def run_dashboard(port=8050):
                 break
             except Exception as e:
                 if "Address already in use" in str(e):
-                    print(f"Port {current_port} is in use. Trying port {current_port+1}...")
+                    print(
+                        f"Port {current_port} is in use. Trying port {current_port+1}..."
+                    )
                     current_port += 1
                     if attempt == max_retries - 1:
                         print(

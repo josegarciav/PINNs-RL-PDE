@@ -66,7 +66,9 @@ def _find_gaps(activity: np.ndarray, min_gap: int = 30) -> List[Tuple[int, int]]
     return gaps
 
 
-def detect_panels(img: np.ndarray, white_thr: int = 240, min_gap: int = 30) -> List[Tuple[int, int, int, int]]:
+def detect_panels(
+    img: np.ndarray, white_thr: int = 240, min_gap: int = 30
+) -> List[Tuple[int, int, int, int]]:
     """
     Detect three horizontal panels in img.
 
@@ -97,8 +99,10 @@ def detect_panels(img: np.ndarray, white_thr: int = 240, min_gap: int = 30) -> L
     # Sort left→right
     boxes.sort(key=lambda b: b[0])
     if len(boxes) != 3:
-        raise RuntimeError(f"Expected 3 panels, found {len(boxes)}. "
-                           "Try relaxing 'white_thr' or 'min_gap'.")
+        raise RuntimeError(
+            f"Expected 3 panels, found {len(boxes)}. "
+            "Try relaxing 'white_thr' or 'min_gap'."
+        )
     return boxes
 
 
@@ -128,8 +132,7 @@ def compose_panels(panels: List[np.ndarray], gap: int = 20) -> np.ndarray:
             pad_top = padding // 2
             pad_bot = padding - pad_top
             aligned.append(
-                np.pad(p, ((pad_top, pad_bot), (0, 0), (0, 0)),
-                       constant_values=255)
+                np.pad(p, ((pad_top, pad_bot), (0, 0), (0, 0)), constant_values=255)
             )
         else:
             aligned.append(p)
@@ -163,18 +166,42 @@ def process(
 
 def _parse_args(argv: List[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Tighten 3-panel figure spacing.")
-    p.add_argument("--input", "-i", type=Path, required=True,
-                   help="Path to original image (PNG/JPG).")
-    p.add_argument("--output", "-o", type=Path, required=True,
-                   help="Output image path (PNG).")
-    p.add_argument("--scale", "-s", type=float, default=1.0,
-                   help="Multiplicative scale factor for each panel.")
-    p.add_argument("--gap", "-g", type=int, default=20,
-                   help="Pixel gap between panels in final image.")
-    p.add_argument("--white_thr", type=int, default=240,
-                   help="Pixel value (>thr) treated as background.")
-    p.add_argument("--min_gap", type=int, default=30,
-                   help="Minimum width (px) to treat a vertical band as a gap.")
+    p.add_argument(
+        "--input",
+        "-i",
+        type=Path,
+        required=True,
+        help="Path to original image (PNG/JPG).",
+    )
+    p.add_argument(
+        "--output", "-o", type=Path, required=True, help="Output image path (PNG)."
+    )
+    p.add_argument(
+        "--scale",
+        "-s",
+        type=float,
+        default=1.0,
+        help="Multiplicative scale factor for each panel.",
+    )
+    p.add_argument(
+        "--gap",
+        "-g",
+        type=int,
+        default=20,
+        help="Pixel gap between panels in final image.",
+    )
+    p.add_argument(
+        "--white_thr",
+        type=int,
+        default=240,
+        help="Pixel value (>thr) treated as background.",
+    )
+    p.add_argument(
+        "--min_gap",
+        type=int,
+        default=30,
+        help="Minimum width (px) to treat a vertical band as a gap.",
+    )
     return p.parse_args(argv)
 
 
@@ -192,4 +219,3 @@ def main(argv: List[str] | None = None) -> None:
 
 if __name__ == "__main__":
     main()
-

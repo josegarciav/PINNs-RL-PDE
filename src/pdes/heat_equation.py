@@ -48,7 +48,7 @@ class HeatEquation(PDEBase):
         """
         L = self.config.domain[0][1] - self.config.domain[0][0]  # Domain length
         wave_number = 2 * torch.pi * k / L
-        return self.alpha * wave_number ** 2
+        return self.alpha * wave_number**2
 
     def compute_residual(
         self,
@@ -122,9 +122,9 @@ class HeatEquation(PDEBase):
         :param t: Time coordinates
         :return: Exact solution tensor
         """
-        if not hasattr(self.config, 'exact_solution') or not self.config.exact_solution:
+        if not hasattr(self.config, "exact_solution") or not self.config.exact_solution:
             # Default to initial condition if no exact solution is specified
-            if hasattr(self.config, 'initial_condition'):
+            if hasattr(self.config, "initial_condition"):
                 ic_type = self.config.initial_condition.get("type", "sine")
                 A = self.config.initial_condition.get("amplitude", 1.0)
                 k = self.config.initial_condition.get("frequency", 2.0)
@@ -132,10 +132,12 @@ class HeatEquation(PDEBase):
                 wave_number = 2 * torch.pi * k / L
                 decay_rate = self._calculate_decay_rate(k)
                 return A * torch.exp(-decay_rate * t) * torch.sin(wave_number * x)
-            return torch.zeros_like(x)  # Return zeros if no solution or initial condition
+            return torch.zeros_like(
+                x
+            )  # Return zeros if no solution or initial condition
 
         solution_type = self.config.exact_solution.get("type", "sin_exp_decay")
-        
+
         if solution_type == "sin_exp_decay":
             A = self.config.exact_solution.get("amplitude", 1.0)
             k = self.config.exact_solution.get("frequency", 2.0)
@@ -154,7 +156,7 @@ class HeatEquation(PDEBase):
                 for dim in range(self.dimension):
                     L_dim = self.config.domain[dim][1] - self.config.domain[dim][0]
                     wave_number = 2 * torch.pi * k / L_dim
-                    space_factor = torch.sin(wave_number * x[:, dim:dim+1])
+                    space_factor = torch.sin(wave_number * x[:, dim : dim + 1])
                     solution *= space_factor
                 time_factor = torch.exp(-decay_rate * t)
                 return A * time_factor * solution
@@ -182,7 +184,7 @@ class HeatEquation(PDEBase):
             return A * torch.exp(-decay_rate * t) * torch.sin(wave_number * x)
 
         # If we reach here, return a default solution based on initial condition
-        if hasattr(self.config, 'initial_condition'):
+        if hasattr(self.config, "initial_condition"):
             ic_type = self.config.initial_condition.get("type", "sine")
             A = self.config.initial_condition.get("amplitude", 1.0)
             k = self.config.initial_condition.get("frequency", 2.0)
@@ -190,7 +192,7 @@ class HeatEquation(PDEBase):
             wave_number = 2 * torch.pi * k / L
             decay_rate = self._calculate_decay_rate(k)
             return A * torch.exp(-decay_rate * t) * torch.sin(wave_number * x)
-            
+
         return torch.zeros_like(x)  # Final fallback
 
     def exact_solution_sine(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
@@ -228,37 +230,49 @@ class HeatEquation(PDEBase):
                 L = self.config.domain[0][1] - self.config.domain[0][0]  # Domain length
                 wave_number = 2 * torch.pi * k / L
                 decay_rate = self._calculate_decay_rate(k)
-                
+
                 if self.dimension == 1:
+
                     def initial_condition(x, t):
-                        return A * torch.sin(wave_number * x) * torch.exp(-decay_rate * t)
+                        return (
+                            A * torch.sin(wave_number * x) * torch.exp(-decay_rate * t)
+                        )
+
                     return initial_condition
                 else:
+
                     def initial_condition(x, t):
                         solution = torch.ones_like(x[:, 0:1])
                         for dim in range(self.dimension):
-                            L_dim = self.config.domain[dim][1] - self.config.domain[dim][0]
+                            L_dim = (
+                                self.config.domain[dim][1] - self.config.domain[dim][0]
+                            )
                             wave_number = 2 * torch.pi * k / L_dim
-                            space_factor = torch.sin(wave_number * x[:, dim:dim+1])
+                            space_factor = torch.sin(wave_number * x[:, dim : dim + 1])
                             solution *= space_factor
                         return A * solution * torch.exp(-decay_rate * t)
+
                     return initial_condition
             elif ic_type == "sine":
                 A = params.get("amplitude", 1.0)
                 k = params.get("frequency", 2.0)
                 L = self.config.domain[0][1] - self.config.domain[0][0]
                 wave_number = 2 * torch.pi * k / L
+
                 def initial_condition(x, t):
                     if self.dimension == 1:
                         return A * torch.sin(wave_number * x)
                     else:
-                        return A * torch.prod(torch.sin(wave_number * x), dim=1, keepdim=True)
+                        return A * torch.prod(
+                            torch.sin(wave_number * x), dim=1, keepdim=True
+                        )
+
                 return initial_condition
             else:
                 return super()._create_boundary_condition(bc_type, params)
         elif (
             bc_type == "dirichlet"
-            and hasattr(self.config, 'exact_solution')
+            and hasattr(self.config, "exact_solution")
             and self.config.exact_solution.get("type") == "sin_exp_decay"
         ):
             # For Dirichlet boundary conditions with sin_exp_decay
@@ -267,8 +281,10 @@ class HeatEquation(PDEBase):
             L = self.config.domain[0][1] - self.config.domain[0][0]
             wave_number = 2 * torch.pi * k / L
             decay_rate = self._calculate_decay_rate(k)
+
             def boundary_condition(x, t):
                 return A * torch.sin(wave_number * x) * torch.exp(-decay_rate * t)
+
             return boundary_condition
         else:
             return super()._create_boundary_condition(bc_type, params)
@@ -291,10 +307,10 @@ class HeatEquation(PDEBase):
         # Generate validation points
         x, t = self.generate_collocation_points(num_points)
         input_points = torch.cat([x, t], dim=1)
-        
+
         # Get model predictions
         u_pred = model(input_points)
-        
+
         # Check for NaN/Inf values
         if torch.isnan(u_pred).any() or torch.isinf(u_pred).any():
             validation_passed = False
@@ -303,18 +319,20 @@ class HeatEquation(PDEBase):
         # Compute exact solution and errors
         u_exact = self.exact_solution(x, t)
         error = torch.abs(u_pred - u_exact)
-        
-        metrics.update({
-            "l2_error": torch.mean(error**2).item(),
-            "max_error": torch.max(error).item(),
-            "mean_error": torch.mean(error).item(),
-        })
+
+        metrics.update(
+            {
+                "l2_error": torch.mean(error**2).item(),
+                "max_error": torch.max(error).item(),
+                "mean_error": torch.mean(error).item(),
+            }
+        )
 
         # Check physical bounds if configured
         if hasattr(self.config, "physical_bounds"):
             min_temp = self.config.physical_bounds.get("min_temperature", float("-inf"))
             max_temp = self.config.physical_bounds.get("max_temperature", float("inf"))
-            
+
             if torch.any(u_pred < min_temp) or torch.any(u_pred > max_temp):
                 validation_passed = False
                 validation_messages.append(
@@ -323,20 +341,21 @@ class HeatEquation(PDEBase):
 
         # Validate periodic boundary conditions
         if "periodic" in self.boundary_conditions:
-            x_left = torch.zeros(num_points//10, 1, device=self.device)
-            x_right = torch.ones(num_points//10, 1, device=self.device)
-            t_boundary = torch.linspace(0, self.config.time_domain[1], 
-                                      num_points//10, device=self.device).reshape(-1, 1)
-            
+            x_left = torch.zeros(num_points // 10, 1, device=self.device)
+            x_right = torch.ones(num_points // 10, 1, device=self.device)
+            t_boundary = torch.linspace(
+                0, self.config.time_domain[1], num_points // 10, device=self.device
+            ).reshape(-1, 1)
+
             points_left = torch.cat([x_left, t_boundary], dim=1)
             points_right = torch.cat([x_right, t_boundary], dim=1)
-            
+
             u_left = model(points_left)
             u_right = model(points_right)
-            
-            periodic_error = torch.mean((u_left - u_right)**2).item()
+
+            periodic_error = torch.mean((u_left - u_right) ** 2).item()
             metrics["periodic_bc_error"] = periodic_error
-            
+
             if periodic_error > 1e-3:  # Tolerance threshold
                 validation_passed = False
                 validation_messages.append(

@@ -480,7 +480,7 @@ class InteractiveTrainer:
             if not os.path.exists(config_path):
                 print(f"Warning: Config file {config_path} not found, using defaults")
                 return
-                
+
             with open(config_path, "r") as f:
                 config = yaml.safe_load(f)
 
@@ -517,7 +517,11 @@ class InteractiveTrainer:
                     elif default_pde == "wave":
                         self.alpha.set(params.get("c", 1.0))
                     elif default_pde == "convection":
-                        self.velocity.set(params.get("velocity", [1.0])[0] if isinstance(params.get("velocity"), list) else params.get("velocity", 1.0))
+                        self.velocity.set(
+                            params.get("velocity", [1.0])[0]
+                            if isinstance(params.get("velocity"), list)
+                            else params.get("velocity", 1.0)
+                        )
                     elif default_pde == "allen_cahn":
                         self.epsilon.set(params.get("epsilon", 0.1))
                     elif default_pde == "black_scholes":
@@ -547,7 +551,7 @@ class InteractiveTrainer:
                 "architectures": {},
                 "pde_configs": {},
                 "rl": {"enabled": False},
-                "paths": {"results_dir": "experiments"}
+                "paths": {"results_dir": "experiments"},
             }
 
         # Get PDE-specific configuration from config.yaml
@@ -584,15 +588,19 @@ class InteractiveTrainer:
         config["rl"]["enabled"] = self.use_rl.get()
 
         # Update PDE-specific parameters based on the PDE type
-        parameters = pde_config.get("parameters", {}).copy()  # Start with a copy of the base parameters
-        
+        parameters = pde_config.get(
+            "parameters", {}
+        ).copy()  # Start with a copy of the base parameters
+
         # Update with UI values for specific PDE types
         if pde_key == "heat":
             parameters["alpha"] = self.alpha.get()
         elif pde_key == "burgers":
             parameters["viscosity"] = self.viscosity.get()
         elif pde_key == "wave":
-            parameters["c"] = self.alpha.get()  # Wave equation uses the same variable as heat
+            parameters["c"] = (
+                self.alpha.get()
+            )  # Wave equation uses the same variable as heat
         elif pde_key == "convection":
             parameters["velocity"] = self.velocity.get()
         elif pde_key == "allen_cahn":
@@ -603,17 +611,21 @@ class InteractiveTrainer:
         elif pde_key == "pendulum":
             parameters["gravity"] = self.gravity.get()
             parameters["length"] = self.length.get()
-            
+
         # Also update exact solution frequency if it exists
-        if "exact_solution" in pde_config and isinstance(pde_config["exact_solution"], dict):
+        if "exact_solution" in pde_config and isinstance(
+            pde_config["exact_solution"], dict
+        ):
             exact_solution = pde_config["exact_solution"].copy()
             if "frequency" in exact_solution:
                 exact_solution["frequency"] = self.frequency.get()
             # Update the exact solution config
             pde_config["exact_solution"] = exact_solution
-        
+
         # Update initial condition frequency if it exists
-        if "initial_condition" in pde_config and isinstance(pde_config["initial_condition"], dict):
+        if "initial_condition" in pde_config and isinstance(
+            pde_config["initial_condition"], dict
+        ):
             initial_condition = pde_config["initial_condition"].copy()
             if "frequency" in initial_condition:
                 initial_condition["frequency"] = self.frequency.get()

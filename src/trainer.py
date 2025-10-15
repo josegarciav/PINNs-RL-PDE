@@ -1353,7 +1353,7 @@ class PDETrainer:
                     model=self.model,
                     device=self.device,
                     viz_dir=viz_dir,
-                    logger=self.logger
+                    logger=self.logger,
                 )
 
                 if metrics:
@@ -1362,9 +1362,13 @@ class PDETrainer:
                 else:
                     self.logger.warning("Failed to generate FDM comparison plots")
             else:
-                self.logger.info(f"FDM comparison not supported for PDE type: {pde_type}")
+                self.logger.info(
+                    f"FDM comparison not supported for PDE type: {pde_type}"
+                )
 
         except ImportError as e:
-            self.logger.warning(f"Could not import required packages for FDM comparison: {str(e)}")
+            self.logger.warning(
+                f"Could not import required packages for FDM comparison: {str(e)}"
+            )
         except Exception as e:
             self.logger.error(f"Error generating FDM comparison: {str(e)}")
