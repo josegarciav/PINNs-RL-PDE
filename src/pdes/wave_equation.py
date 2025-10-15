@@ -22,7 +22,17 @@ class WaveEquation(PDEBase):
         :param kwargs: Additional keyword arguments
         """
         super().__init__(config)
-        self.c = self.config.parameters.get("c", 1.0)
+
+    def _validate_parameters(self):
+        """Validate required parameters for wave equation."""
+        super()._validate_parameters()
+        # Wave equation requires wave speed parameter
+        self.get_parameter("c", default=1.0)
+
+    @property
+    def c(self):
+        """Wave speed coefficient."""
+        return self.get_parameter("c", default=1.0)
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor

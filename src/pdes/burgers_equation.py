@@ -24,7 +24,17 @@ class BurgersEquation(PDEBase):
         :param kwargs: Additional keyword arguments
         """
         super().__init__(config)
-        self.nu = self.config.parameters.get("nu", 0.01)
+
+    def _validate_parameters(self):
+        """Validate required parameters for Burgers equation."""
+        super()._validate_parameters()
+        # Burgers equation requires viscosity parameter
+        self.get_parameter("nu", default=0.01)
+
+    @property
+    def nu(self):
+        """Kinematic viscosity coefficient."""
+        return self.get_parameter("nu", default=0.01)
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor

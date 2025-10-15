@@ -23,7 +23,17 @@ class AllenCahnEquation(PDEBase):
         :param kwargs: Additional keyword arguments
         """
         super().__init__(config)
-        self.epsilon = self.config.parameters.get("epsilon", 0.1)
+
+    def _validate_parameters(self):
+        """Validate required parameters for Allen-Cahn equation."""
+        super()._validate_parameters()
+        # Allen-Cahn equation requires epsilon parameter
+        self.get_parameter("epsilon", default=0.1)
+
+    @property
+    def epsilon(self):
+        """Interface width parameter."""
+        return self.get_parameter("epsilon", default=0.1)
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor

@@ -21,9 +21,18 @@ class KdVEquation(PDEBase):
         :param config: PDEConfig instance containing all necessary parameters
         :param kwargs: Additional keyword arguments
         """
-        # Initialize speed before calling super().__init__
-        self.speed = config.parameters.get("speed", 1.0)  # Default soliton speed
         super().__init__(config)
+
+    def _validate_parameters(self):
+        """Validate required parameters for KdV equation."""
+        super()._validate_parameters()
+        # KdV equation requires speed parameter
+        self.get_parameter("speed", default=1.0)
+
+    @property
+    def speed(self):
+        """Soliton speed coefficient."""
+        return self.get_parameter("speed", default=1.0)
 
     def compute_residual(
         self,

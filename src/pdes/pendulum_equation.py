@@ -28,10 +28,23 @@ class PendulumEquation(PDEBase):
             kwargs: Additional keyword arguments
         """
         super().__init__(config)
-        self.g = self.config.parameters.get(
-            "g", 9.81
-        )  # Default gravitational acceleration
-        self.L = self.config.parameters.get("L", 1.0)  # Default pendulum length
+
+    def _validate_parameters(self):
+        """Validate required parameters for pendulum equation."""
+        super()._validate_parameters()
+        # Pendulum equation requires gravity and length parameters
+        self.get_parameter("g", default=9.81)
+        self.get_parameter("L", default=1.0)
+
+    @property
+    def g(self):
+        """Gravitational acceleration."""
+        return self.get_parameter("g", default=9.81)
+
+    @property
+    def L(self):
+        """Pendulum length."""
+        return self.get_parameter("L", default=1.0)
 
     def compute_residual(
         self,

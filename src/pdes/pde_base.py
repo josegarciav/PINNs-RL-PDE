@@ -5,11 +5,23 @@ import torch
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, Tuple, List, Union, Set
 import numpy as np
-from scipy.stats import qmc
-from src.rl_agent import RLAgent
-import matplotlib.pyplot as plt
 import logging
 import os
+
+# Conditional imports to avoid memory issues
+try:
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+    plt = None
+
+try:
+    from scipy.stats import qmc
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+    qmc = None
 
 
 @dataclass
@@ -178,9 +190,6 @@ class PDEBase:
             # Fallback to CPU if no device specified
             self.device = torch.device("cpu")
 
-        # Log the device being used
-        print(f"PDE initialized with device: {self.device}")
-
         # Ensure config has the same device
         self.config.device = self.device
 
@@ -208,6 +217,40 @@ class PDEBase:
 
         if self.config.output_dim is None:
             self.config.output_dim = 1  # Default to single output (u)
+
+        # Validate required parameters for this PDE type (call at the end)
+        # Temporarily disabled to debug import issues
+        # self._validate_parameters()
+
+    def _validate_parameters(self):
+        """Validate that required parameters are present. Override in subclasses."""
+        # Base implementation - subclasses should override with their specific requirements
+        pass
+
+    def get_parameter(self, name: str, default=None, required: bool = False):
+        """
+        Safely get a parameter value with validation.
+        
+        Args:
+            name: Parameter name
+            default: Default value if parameter not found
+            required: Whether parameter is required (raises error if missing)
+            
+        Returns:
+            Parameter value
+            
+        Raises:
+            ValueError: If required parameter is missing
+        """
+        if not hasattr(self.config, 'parameters') or self.config.parameters is None:
+            if required:
+                raise ValueError(f"Required parameter '{name}' not found in config")
+            return default
+            
+        value = self.config.parameters.get(name, default)
+        if value is None and required:
+            raise ValueError(f"Required parameter '{name}' not found in config")
+        return value
 
     def _setup_boundary_conditions(self):
         """Set up boundary condition functions from configuration."""
@@ -275,6 +318,13 @@ class PDEBase:
                     frequency * torch.pi * x[:, 0:1]
                 )
 
+            elif ic_type == "sin_exp_decay":
+                amplitude = params.get("amplitude", 1.0)
+                frequency = params.get("frequency", 1.0)
+                return lambda x, t: amplitude * torch.sin(
+                    frequency * torch.pi * x[:, 0:1]
+                )
+
             elif ic_type == "tanh":
                 epsilon = params.get("epsilon", 0.1)
                 return lambda x, t: torch.tanh(x[:, 0:1] / epsilon)
@@ -291,6 +341,20 @@ class PDEBase:
             elif ic_type == "random":
                 amplitude = params.get("amplitude", 0.1)
                 return lambda x, t: amplitude * (2 * torch.rand_like(x[:, 0:1]) - 1)
+
+            elif ic_type == "small_angle":
+                # For pendulum equation
+                initial_angle = params.get("initial_angle", 0.5)
+                return lambda x, t: torch.full_like(x[:, 0:1], initial_angle)
+
+            elif ic_type == "option":
+                # For Black-Scholes equation
+                strike = params.get("strike", 100.0)
+                option_type = params.get("option_type", "call")
+                if option_type == "call":
+                    return lambda x, t: torch.maximum(x[:, 0:1] - strike, torch.zeros_like(x[:, 0:1]))
+                else:  # put
+                    return lambda x, t: torch.maximum(strike - x[:, 0:1], torch.zeros_like(x[:, 0:1]))
 
             else:
                 # Default to zero if type not recognized
@@ -644,6 +708,10 @@ class PDEBase:
                 t = points[:, -1].reshape(-1, 1)
 
         elif strategy == "latin_hypercube":
+            if not SCIPY_AVAILABLE:
+                print("Warning: scipy not available, falling back to uniform sampling")
+                return self.generate_collocation_points(num_points, strategy="uniform")
+            
             sampler = qmc.LatinHypercube(d=self.dimension + 1)  # +1 for time dimension
             sample = sampler.random(n=num_points)
 
@@ -673,6 +741,10 @@ class PDEBase:
             )
 
         elif strategy == "sobol":
+            if not SCIPY_AVAILABLE:
+                print("Warning: scipy not available, falling back to uniform sampling")
+                return self.generate_collocation_points(num_points, strategy="uniform")
+            
             # Sobol sequence for low-discrepancy sampling
             sampler = qmc.Sobol(d=self.dimension + 1)  # +1 for time dimension
             sample = sampler.random(n=num_points)

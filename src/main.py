@@ -8,39 +8,54 @@ import argparse
 
 def run_interactive_trainer():
     """Run the interactive trainer module"""
-    from src.interactive_trainer import main as trainer_main
-
-    trainer_main()
+    try:
+        from src.interactive_trainer import main as trainer_main
+        trainer_main()
+    except ImportError as e:
+        print(f"Error importing interactive trainer: {e}")
+        print("Make sure all dependencies are installed")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error running interactive trainer: {e}")
+        sys.exit(1)
 
 
 def run_dashboard(port=8050):
     """Run the dashboard module"""
-    from src.dashboard import app
+    try:
+        from src.dashboard import app
 
-    print(f"\n🚀 Starting PINNs-RL-PDE Dashboard on port {port}")
-    print(f"📊 Open http://127.0.0.1:{port}/ in your browser")
+        print(f"\n🚀 Starting PINNs-RL-PDE Dashboard on port {port}")
+        print(f"📊 Open http://127.0.0.1:{port}/ in your browser")
 
-    # Try different ports if the specified one is in use
-    max_retries = 3
-    current_port = port
+        # Try different ports if the specified one is in use
+        max_retries = 3
+        current_port = port
 
-    for attempt in range(max_retries):
-        try:
-            app.run(debug=False, port=current_port)
-            break
-        except Exception as e:
-            if "Address already in use" in str(e):
-                print(f"Port {current_port} is in use. Trying port {current_port+1}...")
-                current_port += 1
-                if attempt == max_retries - 1:
-                    print(
-                        f"Could not find available port after {max_retries} attempts."
-                    )
-                    print("Please close any running dashboards and try again.")
+        for attempt in range(max_retries):
+            try:
+                app.run(debug=False, port=current_port)
+                break
+            except Exception as e:
+                if "Address already in use" in str(e):
+                    print(f"Port {current_port} is in use. Trying port {current_port+1}...")
+                    current_port += 1
+                    if attempt == max_retries - 1:
+                        print(
+                            f"Could not find available port after {max_retries} attempts."
+                        )
+                        print("Please close any running dashboards and try again.")
+                        sys.exit(1)
+                else:
+                    print(f"Error starting dashboard: {e}")
                     sys.exit(1)
-            else:
-                print(f"Error starting dashboard: {e}")
-                sys.exit(1)
+    except ImportError as e:
+        print(f"Error importing dashboard: {e}")
+        print("Make sure all dependencies are installed (dash, plotly, etc.)")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error running dashboard: {e}")
+        sys.exit(1)
 
 
 def parse_args():

@@ -22,10 +22,23 @@ class BlackScholesEquation(PDEBase):
         :param kwargs: Additional keyword arguments
         """
         super().__init__(config)
-        self.sigma = self.config.parameters.get(
-            "sigma", 0.2
-        )  # Default volatility of 20%
-        self.r = self.config.parameters.get("r", 0.05)  # Default risk-free rate of 5%
+
+    def _validate_parameters(self):
+        """Validate required parameters for Black-Scholes equation."""
+        super()._validate_parameters()
+        # Black-Scholes equation requires volatility and risk-free rate
+        self.get_parameter("sigma", default=0.2)
+        self.get_parameter("r", default=0.05)
+
+    @property
+    def sigma(self):
+        """Volatility coefficient."""
+        return self.get_parameter("sigma", default=0.2)
+
+    @property
+    def r(self):
+        """Risk-free interest rate."""
+        return self.get_parameter("r", default=0.05)
 
     def compute_residual(
         self,

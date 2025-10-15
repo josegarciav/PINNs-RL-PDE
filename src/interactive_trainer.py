@@ -477,6 +477,10 @@ class InteractiveTrainer:
     def load_config(self, config_path="config.yaml"):
         """Load configuration from YAML file"""
         try:
+            if not os.path.exists(config_path):
+                print(f"Warning: Config file {config_path} not found, using defaults")
+                return
+                
             with open(config_path, "r") as f:
                 config = yaml.safe_load(f)
 
@@ -513,27 +517,38 @@ class InteractiveTrainer:
                     elif default_pde == "wave":
                         self.alpha.set(params.get("c", 1.0))
                     elif default_pde == "convection":
-                        self.velocity.set(params.get("velocity", 1.0))
+                        self.velocity.set(params.get("velocity", [1.0])[0] if isinstance(params.get("velocity"), list) else params.get("velocity", 1.0))
                     elif default_pde == "allen_cahn":
                         self.epsilon.set(params.get("epsilon", 0.1))
                     elif default_pde == "black_scholes":
                         self.sigma.set(params.get("sigma", 0.2))
                         self.r.set(params.get("r", 0.05))
                     elif default_pde == "pendulum":
-                        self.gravity.set(params.get("gravity", 9.81))
-                        self.length.set(params.get("length", 1.0))
+                        self.gravity.set(params.get("g", 9.81))
+                        self.length.set(params.get("L", 1.0))
 
             # Update UI with loaded parameters
             self.update_pde_params()
 
         except Exception as e:
             print(f"Error loading configuration: {e}")
+            print("Using default configuration values")
 
     def create_config(self):
         """Create a configuration dictionary based on current values and config.yaml"""
         # Load config.yaml
-        with open("config.yaml", "r") as f:
-            yaml_config = yaml.safe_load(f)
+        try:
+            with open("config.yaml", "r") as f:
+                yaml_config = yaml.safe_load(f)
+        except FileNotFoundError:
+            print("Warning: config.yaml not found, using minimal default configuration")
+            yaml_config = {
+                "training": {},
+                "architectures": {},
+                "pde_configs": {},
+                "rl": {"enabled": False},
+                "paths": {"results_dir": "experiments"}
+            }
 
         # Get PDE-specific configuration from config.yaml
         pde_name = self.selected_pde.get().lower().replace(" ", "_")

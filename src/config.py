@@ -191,7 +191,8 @@ class PathsConfig:
 class Config:
     """Configuration for the PINNs-RL-PDE framework."""
 
-    def __init__(self):
+    def __init__(self, config_path="config.yaml"):
+        self.config_path = config_path
         self.model = None
         self.pde = None
         self.training = None
@@ -200,6 +201,11 @@ class Config:
         self.device = torch.device(
             "cpu"
         )  # Default to CPU, will be overridden by config
+        
+        # Load configuration if file exists
+        if os.path.exists(config_path):
+            self._load_config()
+            self._validate_config()
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get the value for a given key or return the default value if the key doesn't exist."""

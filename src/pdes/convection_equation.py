@@ -22,12 +22,22 @@ class ConvectionEquation(PDEBase):
         :param kwargs: Additional keyword arguments
         """
         super().__init__(config)
-        velocity = self.config.parameters.get("velocity", 1.0)
+
+    def _validate_parameters(self):
+        """Validate required parameters for convection equation."""
+        super()._validate_parameters()
+        # Convection equation requires velocity parameter
+        self.get_parameter("velocity", default=1.0)
+
+    @property
+    def velocity(self):
+        """Velocity vector."""
+        velocity = self.get_parameter("velocity", default=1.0)
         # Convert velocity to list if scalar
         if isinstance(velocity, (int, float)):
-            self.velocity = [velocity] * self.dimension
+            return [velocity] * self.dimension
         else:
-            self.velocity = velocity
+            return velocity
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor

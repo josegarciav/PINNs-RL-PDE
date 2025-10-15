@@ -26,19 +26,16 @@ class HeatEquation(PDEBase):
         # Initialize base class first to ensure self.config is set
         super().__init__(config)
 
-        # Now we can safely access self.config.parameters
-        if not hasattr(self.config, "parameters") or not self.config.parameters:
-            raise ValueError(
-                "Heat equation requires 'parameters' in config with 'alpha' value"
-            )
-
-        if "alpha" not in self.config.parameters:
-            raise ValueError("Heat equation requires 'alpha' parameter in config")
+    def _validate_parameters(self):
+        """Validate required parameters for heat equation."""
+        super()._validate_parameters()
+        # Heat equation requires alpha parameter
+        self.get_parameter("alpha", required=True)
 
     @property
     def alpha(self):
         """Thermal diffusivity coefficient."""
-        return self.config.parameters["alpha"]
+        return self.get_parameter("alpha", required=True)
 
     def _calculate_decay_rate(self, k: float) -> float:
         """

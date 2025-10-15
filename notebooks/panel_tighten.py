@@ -5,14 +5,6 @@ panel_tighten.py
 Utility for removing excessive horizontal whitespace from a 3-panel figure.
 The script detects the three panels, crops them, enlarges each by a user-defined
 scale factor, and re-assembles them with a uniform gap.
-
-Example
--------
-python panel_tighten.py \
-    --input  failure_mode_better.png \
-    --output failure_mode_better_tight.png \
-    --scale  1.25 \
-    --gap    25
 """
 from __future__ import annotations
 
