@@ -12,6 +12,7 @@ from src.pdes.allen_cahn import AllenCahnEquation
 from src.pdes.cahn_hilliard import CahnHilliardEquation
 from src.pdes.black_scholes import BlackScholesEquation
 from src.pdes.pendulum_equation import PendulumEquation
+from src.config import DEFAULT_CONFIG_PATH
 
 
 def load_pde_config(pde_type, device=None):
@@ -31,7 +32,7 @@ def load_pde_config(pde_type, device=None):
         device = torch.device("cpu")
 
     # Load config file
-    config_path = "config.yaml"
+    config_path = DEFAULT_CONFIG_PATH
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
 

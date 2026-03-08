@@ -5,6 +5,8 @@ from typing import Dict, Any, List, Union, Optional
 from dataclasses import dataclass
 from pathlib import Path
 
+DEFAULT_CONFIG_PATH = str(Path(__file__).parent / "config.yaml")
+
 
 @dataclass
 class LearningRateSchedulerConfig:
@@ -193,7 +195,9 @@ class PathsConfig:
 class Config:
     """Configuration for the PINNs-RL-PDE framework."""
 
-    def __init__(self, config_path="config.yaml"):
+    def __init__(self, config_path=None):
+        if config_path is None:
+            config_path = DEFAULT_CONFIG_PATH
         self.config_path = config_path
         self.model = None
         self.pde = None

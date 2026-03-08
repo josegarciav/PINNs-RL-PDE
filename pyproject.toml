@@ -1,44 +1,135 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "pinnrl"
 version = "0.1.0"
 description = "Physics-Informed Neural Networks with RL-based adaptive sampling for solving PDEs"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
+authors = [
+    { name = "Jose Garcia", email = "jgarciaventura23@gmail.com" },
+]
+keywords = [
+    "physics-informed neural networks",
+    "PINNs",
+    "partial differential equations",
+    "PDE",
+    "reinforcement learning",
+    "scientific machine learning",
+    "deep learning",
+    "simulation",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "torch>=2.0.0",
-    "numpy>=1.21.0",
-    "scipy>=1.7.0",
-    "matplotlib>=3.4.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "matplotlib>=3.7.0",
     "pyyaml>=6.0",
-    "gymnasium>=0.26.0",
-    "tqdm>=4.62.0",
+    "gymnasium>=0.29.0",
+    "tqdm>=4.65.0",
+    "plotly>=5.15.0",
+    "pandas>=2.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=6.2.0",
-    "black>=21.7b0",
-    "flake8>=3.9.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.4.0",
 ]
 viz = [
-    "plotly>=5.3.0",
-    "dash>=3.0.2",
-    "dash-bootstrap-components>=1.0.0",
+    "dash>=3.0.0",
+    "dash-bootstrap-components>=1.5.0",
+    "seaborn>=0.12.0",
+    "scikit-image>=0.21.0",
+]
+notebooks = [
+    "jupyter>=1.0.0",
+    "ipywidgets>=8.0.0",
+    "nbformat>=5.9.0",
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.4.0",
+    "mkdocstrings[python]>=0.23.0",
+]
+all = [
+    "pinnrl[dev,viz,notebooks,docs]",
 ]
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["src*"]
+[project.urls]
+Homepage = "https://github.com/josegarciav/PINNs-RL-PDE"
+Documentation = "https://github.com/josegarciav/PINNs-RL-PDE/tree/main/docs"
+Repository = "https://github.com/josegarciav/PINNs-RL-PDE"
+Issues = "https://github.com/josegarciav/PINNs-RL-PDE/issues"
+Changelog = "https://github.com/josegarciav/PINNs-RL-PDE/blob/main/CHANGELOG.md"
+
+[project.scripts]
+pinnrl-train = "scripts.train:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/",
+    "tests/",
+    "config.yaml",
+    "README.md",
+    "LICENSE",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "pre-commit>=3.4.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
 
 [tool.black]
 line-length = 100
-target-version = ["py39", "py310", "py311"]
+target-version = ["py310", "py311", "py312"]
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "W", "I", "N", "UP"]
+ignore = ["E501", "N806"]
+
+[tool.ruff.isort]
+known-first-party = ["src"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true

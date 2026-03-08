@@ -5,7 +5,7 @@
 import torch
 from .pde_base import PDEBase, PDEConfig
 from typing import Dict, Any, Optional, Union, Tuple, List
-from src.rl_agent import RLAgent
+from src.rl.rl_agent import RLAgent
 
 
 class WaveEquation(PDEBase):

@@ -13,7 +13,7 @@ from src.pdes.cahn_hilliard import CahnHilliardEquation
 from src.pdes.black_scholes import BlackScholesEquation
 from src.pdes.pendulum_equation import PendulumEquation
 from src.neural_networks import FeedForwardNetwork, PINNModel
-from src.rl_agent import RLAgent
+from src.rl.rl_agent import RLAgent
 from tests.test_components.test_utils import create_pde_from_config
 
 

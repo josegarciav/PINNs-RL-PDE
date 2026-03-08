@@ -25,9 +25,10 @@ from src.pdes.allen_cahn import AllenCahnEquation
 from src.pdes.cahn_hilliard import CahnHilliardEquation
 from src.pdes.black_scholes import BlackScholesEquation
 from src.trainer import PDETrainer
-from src.rl_agent import RLAgent
+from src.rl.rl_agent import RLAgent
 from src.pdes.pde_base import PDEConfig
 from src.config import (
+    DEFAULT_CONFIG_PATH,
     ModelConfig,
     Config,
     TrainingConfig,
@@ -51,7 +52,7 @@ class InteractiveTrainer:
         self.create_ui()
 
         # Load configuration
-        self.load_config("config.yaml")
+        self.load_config(DEFAULT_CONFIG_PATH)
 
     def setup_logger(self):
         """Initialize and configure logger"""
@@ -77,7 +78,7 @@ class InteractiveTrainer:
         """Initialize application variables"""
         # Load config to get default values
         try:
-            with open("config.yaml", "r") as f:
+            with open(DEFAULT_CONFIG_PATH, "r") as f:
                 config = yaml.safe_load(f)
                 training_config = config.get("training", {})
                 arch_config = config.get("architectures", {}).get("fourier", {})
@@ -382,7 +383,7 @@ class InteractiveTrainer:
 
         # Load config to get PDE-specific parameters
         try:
-            with open("config.yaml", "r") as f:
+            with open(DEFAULT_CONFIG_PATH, "r") as f:
                 config = yaml.safe_load(f)
                 pde_configs = config.get("pde_configs", {})
                 pde_config = pde_configs.get(pde_key, {})
@@ -455,7 +456,7 @@ class InteractiveTrainer:
         """Event handler when a PDE is selected"""
         try:
             # Load config to get PDE-specific architecture
-            with open("config.yaml", "r") as f:
+            with open(DEFAULT_CONFIG_PATH, "r") as f:
                 config = yaml.safe_load(f)
                 pde_configs = config.get("pde_configs", {})
 
@@ -474,7 +475,9 @@ class InteractiveTrainer:
         # Update PDE parameters
         self.update_pde_params()
 
-    def load_config(self, config_path="config.yaml"):
+    def load_config(self, config_path=None):
+        if config_path is None:
+            config_path = DEFAULT_CONFIG_PATH
         """Load configuration from YAML file"""
         try:
             if not os.path.exists(config_path):
@@ -542,7 +545,7 @@ class InteractiveTrainer:
         """Create a configuration dictionary based on current values and config.yaml"""
         # Load config.yaml
         try:
-            with open("config.yaml", "r") as f:
+            with open(DEFAULT_CONFIG_PATH, "r") as f:
                 yaml_config = yaml.safe_load(f)
         except FileNotFoundError:
             print("Warning: config.yaml not found, using minimal default configuration")
@@ -1049,14 +1052,14 @@ class InteractiveTrainer:
         """Handle RL checkbox toggle and update config.yaml"""
         try:
             # Read current config
-            with open("config.yaml", "r") as f:
+            with open(DEFAULT_CONFIG_PATH, "r") as f:
                 config = yaml.safe_load(f)
 
             # Update RL enabled status
             config["rl"]["enabled"] = self.use_rl.get()
 
             # Write updated config
-            with open("config.yaml", "w") as f:
+            with open(DEFAULT_CONFIG_PATH, "w") as f:
                 yaml.dump(config, f)
 
             self.status_label.config(
@@ -1070,14 +1073,14 @@ class InteractiveTrainer:
         """Handle device selection and update config.yaml"""
         try:
             # Read current config
-            with open("config.yaml", "r") as f:
+            with open(DEFAULT_CONFIG_PATH, "r") as f:
                 config = yaml.safe_load(f)
 
             # Update device
             config["device"] = self.selected_device.get()
 
             # Write updated config
-            with open("config.yaml", "w") as f:
+            with open(DEFAULT_CONFIG_PATH, "w") as f:
                 yaml.dump(config, f)
 
             self.status_label.config(

@@ -1,0 +1,55 @@
+site_name: pinnrl
+site_description: Physics-Informed Neural Networks with RL-based adaptive sampling for solving PDEs
+site_url: https://josegarciav.github.io/PINNs-RL-PDE
+repo_url: https://github.com/josegarciav/PINNs-RL-PDE
+repo_name: josegarciav/PINNs-RL-PDE
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Start Here: start_here.md
+    - Installation & Setup: setup.md
+  - Architecture: ARCHITECTURE.md
+  - Roadmap: roadmap.md

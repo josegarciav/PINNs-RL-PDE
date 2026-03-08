@@ -1,27 +1,40 @@
-# Ignore Python cache files
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
+*.egg-info/
+dist/
+build/
 
-# Virtual Environment
+# Virtual environments
 pinn/
-env/
-venv/
-ENV/
+.venv/
 
 # IDE
 .vscode/
 .idea/
-
-# OS
 .DS_Store
 
-# Results and logs
-*.log
-logs/
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Training artifacts
 experiments/
-visualizations/
 checkpoints/
+*.log
 
 # Model weights
 *.pth
+*.pt
+
+# Notebooks
+notebooks/images/
+.ipynb_checkpoints/
+
+# Docs
+site/
+docs/LINKEDIN.md
+
+# Sensitive
+.env
