@@ -9,40 +9,40 @@ architectures:
   feedforward:
     hidden_dims: [128, 128, 128, 128, 128, 128, 128]  # 7 hidden layers by default
     activation: "tanh"
-    dropout: 0.1
+    dropout: 0.0  # No dropout for PINN training (dropout hurts PDE residual convergence)
     layer_norm: true
 
   resnet:
     hidden_dim: 512
     num_blocks: 7  # 7 residual blocks by default
     activation: "tanh"
-    dropout: 0.1
-  
+    dropout: 0.0  # No dropout for PINN training
+
   siren:
     hidden_dims: [124, 124, 124, 124, 124, 124, 124]
     omega_0: 30.0  # Frequency parameter for sin activation
-  
+
   fourier:
-    mapping_size: 512  # Reduced to prevent overfitting
-    hidden_dims: [512, 512, 512, 512]  # Moderate width but deep
+    mapping_size: 512
+    hidden_dims: [512, 512, 512, 512]
     scale: 4.0  # Increased to better capture high frequencies
-    activation: "tanh"  # Good for periodic problems
-    dropout: 0.1  # Removed dropout as it might interfere with periodic boundary conditions
+    activation: "tanh"
+    dropout: 0.0  # No dropout for PINN training
     layer_norm: true
     periodic: true  # Enable periodic features
-  
+
   attention:
     hidden_dim: 124
     num_layers: 4  # 4 attention blocks by default
     num_heads: 4  # 4 attention heads per block
-    dropout: 0.1
+    dropout: 0.0  # No dropout for PINN training
     activation: "gelu"
-  
+
   autoencoder:
     latent_dim: 64  # Dimension of the latent space
-    hidden_dims: [124, 248, 124]  # Encoder and decoder dimensions
+    hidden_dims: [124, 248, 124]  # Encoder -> latent -> output (PINN function approximation)
     activation: "relu"
-    dropout: 0.1
+    dropout: 0.0  # No dropout for PINN training
     layer_norm: true
 
 # Default PDE type to train
@@ -329,10 +329,10 @@ training:
     T_max: 400  # Doubled period
     eta_min: 1e-7
   loss_weights:
-    pde: 15.0      # Increased weight for PDE residual
-    boundary: 20.0  # Significantly increased for better boundary enforcement
-    initial: 10.0   # Increased for better initial condition satisfaction
-    smoothness: 0.1  # Increased slightly for better regularization
+    residual: 15.0  # Weight for PDE residual loss
+    boundary: 20.0  # Weight for boundary condition loss
+    initial: 10.0   # Weight for initial condition loss
+    smoothness: 0.1  # Weight for smoothness regularization
 
 # Reinforcement Learning Configuration
 rl:

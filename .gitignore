@@ -23,6 +23,5 @@ experiments/
 visualizations/
 checkpoints/
 
-# Ignore model weights & config files (if necessary)
+# Model weights
 *.pth
-config.yaml

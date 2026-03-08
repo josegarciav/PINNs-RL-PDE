@@ -31,9 +31,8 @@ class FeedForwardNetwork(BaseNetwork):
         self.use_layer_norm = config.get("layer_norm", True)
         self.device = config.get("device", torch.device("cpu"))
 
-        # Get activation function
+        # Get activation function name for per-layer instantiation
         activation_name = config.get("activation", "relu")
-        self.activation = self._get_activation_module(activation_name)
 
         # Build layers
         layers = []
@@ -43,8 +42,10 @@ class FeedForwardNetwork(BaseNetwork):
             layers.append(nn.Linear(prev_dim, hidden_dim))
             if self.use_layer_norm:
                 layers.append(nn.LayerNorm(hidden_dim))
-            layers.append(self.activation)
-            layers.append(nn.Dropout(self.dropout_rate))
+            # Bug #9 fix: create a new activation instance per layer
+            layers.append(self._get_activation_module(activation_name))
+            if self.dropout_rate > 0.0:
+                layers.append(nn.Dropout(self.dropout_rate))
             prev_dim = hidden_dim
 
         # Output layer

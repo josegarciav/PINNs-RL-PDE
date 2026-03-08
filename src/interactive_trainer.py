@@ -19,6 +19,11 @@ from src.pdes.heat_equation import HeatEquation
 from src.pdes.burgers_equation import BurgersEquation
 from src.pdes.wave_equation import WaveEquation
 from src.pdes.pendulum_equation import PendulumEquation
+from src.pdes.kdv_equation import KdVEquation
+from src.pdes.convection_equation import ConvectionEquation
+from src.pdes.allen_cahn import AllenCahnEquation
+from src.pdes.cahn_hilliard import CahnHilliardEquation
+from src.pdes.black_scholes import BlackScholesEquation
 from src.trainer import PDETrainer
 from src.rl_agent import RLAgent
 from src.pdes.pde_base import PDEConfig
@@ -371,57 +376,52 @@ class InteractiveTrainer:
         for widget in self.pde_params_frame.winfo_children():
             widget.destroy()
 
-        # Get the current PDE type
-        pde_type = self.selected_pde.get().lower().replace(" ", "_")
+        # Bug #4 fix: use pde_name_to_key to get the correct config key
+        selected_name = self.selected_pde.get()
+        pde_key = self.pde_name_to_key.get(selected_name, "")
 
         # Load config to get PDE-specific parameters
         try:
             with open("config.yaml", "r") as f:
                 config = yaml.safe_load(f)
                 pde_configs = config.get("pde_configs", {})
-                pde_config = pde_configs.get(pde_type, {})
+                pde_config = pde_configs.get(pde_key, {})
 
                 # Update architecture based on config
                 if "architecture" in pde_config:
                     self.selected_arch.set(pde_config["architecture"])
 
-                # Show parameters based on PDE type
-                if pde_type == "heat_equation":
-                    ttk.Label(self.pde_params_frame, text="Alpha:").grid(
+                # Show parameters based on PDE config key
+                if pde_key == "heat" or pde_key == "wave":
+                    label = "Alpha (diffusivity):" if pde_key == "heat" else "Wave Speed:"
+                    ttk.Label(self.pde_params_frame, text=label).grid(
                         row=0, column=0, sticky="w", padx=5, pady=5
                     )
                     ttk.Entry(
                         self.pde_params_frame, textvariable=self.alpha, width=10
                     ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
-                elif pde_type == "burgers_equation":
+                elif pde_key == "burgers":
                     ttk.Label(self.pde_params_frame, text="Viscosity:").grid(
                         row=0, column=0, sticky="w", padx=5, pady=5
                     )
                     ttk.Entry(
                         self.pde_params_frame, textvariable=self.viscosity, width=10
                     ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
-                elif pde_type == "wave_equation":
-                    ttk.Label(self.pde_params_frame, text="Wave Speed:").grid(
-                        row=0, column=0, sticky="w", padx=5, pady=5
-                    )
-                    ttk.Entry(
-                        self.pde_params_frame, textvariable=self.alpha, width=10
-                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
-                elif pde_type == "convection_equation":
+                elif pde_key == "convection":
                     ttk.Label(self.pde_params_frame, text="Velocity:").grid(
                         row=0, column=0, sticky="w", padx=5, pady=5
                     )
                     ttk.Entry(
                         self.pde_params_frame, textvariable=self.velocity, width=10
                     ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
-                elif pde_type == "allen_cahn_equation":
+                elif pde_key in ("allen_cahn", "cahn_hilliard"):
                     ttk.Label(self.pde_params_frame, text="Epsilon:").grid(
                         row=0, column=0, sticky="w", padx=5, pady=5
                     )
                     ttk.Entry(
                         self.pde_params_frame, textvariable=self.epsilon, width=10
                     ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
-                elif pde_type == "black_scholes_equation":
+                elif pde_key == "black_scholes":
                     ttk.Label(self.pde_params_frame, text="Sigma:").grid(
                         row=0, column=0, sticky="w", padx=5, pady=5
                     )
@@ -434,7 +434,7 @@ class InteractiveTrainer:
                     ttk.Entry(
                         self.pde_params_frame, textvariable=self.r, width=10
                     ).grid(row=1, column=1, sticky="w", padx=5, pady=5)
-                elif pde_type == "pendulum_equation":
+                elif pde_key == "pendulum":
                     ttk.Label(self.pde_params_frame, text="Gravity:").grid(
                         row=0, column=0, sticky="w", padx=5, pady=5
                     )
@@ -554,11 +554,8 @@ class InteractiveTrainer:
                 "paths": {"results_dir": "experiments"},
             }
 
-        # Get PDE-specific configuration from config.yaml
-        pde_name = self.selected_pde.get().lower().replace(" ", "_")
-        pde_key = pde_name.split("_")[
-            0
-        ]  # Get base name (e.g., 'heat' from 'heat_equation')
+        # Bug #5 fix: use pde_name_to_key for correct pde_key lookup
+        pde_key = self.pde_name_to_key.get(self.selected_pde.get(), "heat")
         pde_config = yaml_config.get("pde_configs", {}).get(pde_key, {})
 
         # Get architecture configuration
@@ -719,6 +716,16 @@ class InteractiveTrainer:
             return WaveEquation(config=pde_config)
         elif pde_type == "Pendulum Equation":
             return PendulumEquation(config=pde_config)
+        elif pde_type == "KdV Equation":
+            return KdVEquation(config=pde_config)
+        elif pde_type == "Convection Equation":
+            return ConvectionEquation(config=pde_config)
+        elif pde_type == "Allen-Cahn Equation":
+            return AllenCahnEquation(config=pde_config)
+        elif pde_type == "Cahn-Hilliard Equation":
+            return CahnHilliardEquation(config=pde_config)
+        elif pde_type == "Black-Scholes Equation":
+            return BlackScholesEquation(config=pde_config)
         else:
             raise ValueError(f"Unsupported PDE: {pde_type}")
 

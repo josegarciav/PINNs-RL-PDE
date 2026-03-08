@@ -2,11 +2,12 @@
 
 import torch
 import torch.nn as nn
-from typing import Dict, Any, Optional, Union, List
+from typing import TYPE_CHECKING, Dict, Any, Optional, Union, List
 import sys
 import os
 
-from src.config import Config
+if TYPE_CHECKING:
+    from src.config import Config
 
 from .base_network import BaseNetwork, InputType, OutputType, NetworkConfig
 from .feedforward import FeedForwardNetwork
@@ -62,7 +63,7 @@ class PINNModel(BaseNetwork):
     architectures suitable for Physics-Informed Neural Networks.
     """
 
-    def __init__(self, config: Config, device=None, **kwargs):
+    def __init__(self, config: "Config", device=None, **kwargs):
         """
         Initialize the PINN model.
 
@@ -127,8 +128,6 @@ class PINNModel(BaseNetwork):
             self.model = AttentionNetwork(config_with_device)
         elif self.architecture == "autoencoder":
             self.model = AutoEncoder(config_with_device)
-            # Additional output projection for AutoEncoder to ensure correct output dimension
-            self.output_proj = FeedForwardNetwork(config_with_device)
         else:  # Default to feedforward
             self.model = FeedForwardNetwork(config_with_device)
 
@@ -146,35 +145,6 @@ class PINNModel(BaseNetwork):
         Returns:
             Output tensor of shape (batch_size, output_dim)
         """
-        if self.architecture == "autoencoder" and hasattr(self, "output_proj"):
-            # For autoencoder, we need to project from input_dim to output_dim
-            return self.output_proj(self.model(x))
         return self.model(x)
 
 
-def create_network(config: Config) -> nn.Module:
-    """
-    Create a neural network based on the configuration.
-
-    Args:
-        config: Configuration object
-
-    Returns:
-        Neural network module
-    """
-    architecture = config.model.architecture
-
-    if architecture == "feedforward":
-        from .feedforward import FeedForwardNetwork
-
-        return FeedForwardNetwork(config)
-    elif architecture == "fourier":
-        from .fourier import FourierNetwork
-
-        return FourierNetwork(config)
-    elif architecture == "siren":
-        from .siren import SirenNetwork
-
-        return SirenNetwork(config)
-    else:
-        raise ValueError(f"Unknown architecture: {architecture}")

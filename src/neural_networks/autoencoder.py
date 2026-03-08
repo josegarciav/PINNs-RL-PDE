@@ -25,33 +25,37 @@ class AutoEncoder(BaseNetwork):
         self.latent_dim = config.get("latent_dim", 16)
         self.hidden_dims = config.get("hidden_dims", [32, 64])
         activation_name = config.get("activation", "relu")
-        self.activation_fn = self._get_activation_module(activation_name)
-        self.dropout_rate = config.get("dropout", 0.1)
+        self.dropout_rate = config.get("dropout", 0.0)
         self.use_layer_norm = config.get("layer_norm", True)
 
-        # Build encoder
+        self.output_dim = config.get("output_dim", 1)
+
+        # Bug #14 fix: encoder maps input -> latent (not input -> input)
+        # Decoder maps latent -> output_dim for PINN function approximation.
         self.encoder = nn.ModuleList()
         prev_dim = self.input_dim
         for hidden_dim in self.hidden_dims:
             self.encoder.append(nn.Linear(prev_dim, hidden_dim))
             if self.use_layer_norm:
                 self.encoder.append(nn.LayerNorm(hidden_dim))
-            self.encoder.append(self.activation_fn)
-            self.encoder.append(nn.Dropout(self.dropout_rate))
+            self.encoder.append(self._get_activation_module(activation_name))
+            if self.dropout_rate > 0.0:
+                self.encoder.append(nn.Dropout(self.dropout_rate))
             prev_dim = hidden_dim
         self.encoder.append(nn.Linear(prev_dim, self.latent_dim))
 
-        # Build decoder
+        # Decoder: latent -> output_dim (solution value)
         self.decoder = nn.ModuleList()
         prev_dim = self.latent_dim
         for hidden_dim in reversed(self.hidden_dims):
             self.decoder.append(nn.Linear(prev_dim, hidden_dim))
             if self.use_layer_norm:
                 self.decoder.append(nn.LayerNorm(hidden_dim))
-            self.decoder.append(self.activation_fn)
-            self.decoder.append(nn.Dropout(self.dropout_rate))
+            self.decoder.append(self._get_activation_module(activation_name))
+            if self.dropout_rate > 0.0:
+                self.decoder.append(nn.Dropout(self.dropout_rate))
             prev_dim = hidden_dim
-        self.decoder.append(nn.Linear(prev_dim, self.input_dim))
+        self.decoder.append(nn.Linear(prev_dim, self.output_dim))
 
     def encode(self, x: InputType) -> torch.Tensor:
         """

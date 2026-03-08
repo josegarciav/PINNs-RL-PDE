@@ -260,18 +260,37 @@ class Config:
             "architecture", model_config.get("architecture", "fourier")
         )
 
+        # Bug #1 fix: load architecture-specific config and inject into ModelConfig
+        arch_specific = config_dict.get("architectures", {}).get(architecture, {})
+
         self.model = ModelConfig(
             input_dim=input_dim,
-            hidden_dim=model_config.get("hidden_dim", 128),
+            hidden_dim=arch_specific.get("hidden_dim", model_config.get("hidden_dim", 128)),
             output_dim=output_dim,
-            num_layers=model_config.get("num_layers", 4),
-            activation=model_config.get("activation", "tanh"),
+            num_layers=arch_specific.get("num_layers", model_config.get("num_layers", 4)),
+            activation=arch_specific.get("activation", model_config.get("activation", "tanh")),
             fourier_features=model_config.get("fourier_features", True),
             fourier_scale=model_config.get("fourier_scale", 2.0),
-            dropout=model_config.get("dropout", 0.1),
-            layer_norm=model_config.get("layer_norm", True),
-            architecture=architecture,  # Use PDE-specific architecture
+            dropout=arch_specific.get("dropout", model_config.get("dropout", 0.0)),
+            layer_norm=arch_specific.get("layer_norm", model_config.get("layer_norm", True)),
+            architecture=architecture,
         )
+
+        # Inject architecture-specific params not in ModelConfig.__init__
+        if "hidden_dims" in arch_specific:
+            self.model.hidden_dims = arch_specific["hidden_dims"]
+        if "mapping_size" in arch_specific:
+            self.model.mapping_size = arch_specific["mapping_size"]
+        if "scale" in arch_specific:
+            self.model.scale = arch_specific["scale"]
+        if "omega_0" in arch_specific:
+            self.model.omega_0 = arch_specific["omega_0"]
+        if "num_heads" in arch_specific:
+            self.model.num_heads = arch_specific["num_heads"]
+        if "num_blocks" in arch_specific:
+            self.model.num_blocks = arch_specific["num_blocks"]
+        if "latent_dim" in arch_specific:
+            self.model.latent_dim = arch_specific["latent_dim"]
 
         # PDE configuration
         pde_config = config_dict.get("pde", {})
@@ -312,14 +331,29 @@ class Config:
         # Load adaptive weights configuration
         adaptive_weights_config = training_config.get("adaptive_weights", {})
 
+        # Bug #2 fix: read learning_rate/weight_decay from optimizer_config if nested
+        optimizer_cfg = training_config.get("optimizer_config", {})
+        learning_rate = optimizer_cfg.get(
+            "learning_rate", training_config.get("learning_rate", 0.001)
+        )
+        weight_decay = optimizer_cfg.get(
+            "weight_decay", training_config.get("weight_decay", 0.0001)
+        )
+
+        # Bug #12 fix: normalize loss_weights key "pde" -> "residual"
+        raw_loss_weights = training_config.get("loss_weights", None)
+        if raw_loss_weights is not None and "pde" in raw_loss_weights:
+            raw_loss_weights = dict(raw_loss_weights)
+            raw_loss_weights["residual"] = raw_loss_weights.pop("pde")
+
         self.training = TrainingConfig(
             num_epochs=training_config.get("num_epochs", 10000),
             batch_size=training_config.get("batch_size", 128),
             num_collocation_points=training_config.get("num_collocation_points", 1000),
             num_boundary_points=training_config.get("num_boundary_points", 100),
             num_initial_points=training_config.get("num_initial_points", 100),
-            learning_rate=training_config.get("learning_rate", 0.001),
-            weight_decay=training_config.get("weight_decay", 0.0001),
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
             gradient_clipping=training_config.get("gradient_clipping", 1.0),
             early_stopping=EarlyStoppingConfig(
                 enabled=early_stopping_config.get("enabled", True),
@@ -342,7 +376,7 @@ class Config:
                 alpha=adaptive_weights_config.get("alpha", 0.9),
                 eps=adaptive_weights_config.get("eps", 1e-5),
             ),
-            loss_weights=training_config.get("loss_weights", None),
+            loss_weights=raw_loss_weights,
         )
 
         # RL configuration
