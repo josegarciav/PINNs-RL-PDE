@@ -1,0 +1,84 @@
+name: PR Quality Checks
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Scan dependencies for known CVEs (pip-audit)
+        run: |
+          uv export --project services/api --no-hashes > /tmp/requirements.txt
+          # CVE-2025-69872: diskcache (transitive via instructor) — no patch released yet
+          # (5.6.3 is the current latest). Remove ignore once a fix is published.
+          uvx pip-audit -r /tmp/requirements.txt --ignore-vuln CVE-2025-69872
+
+      - name: Static security analysis (bandit)
+        # -ll = medium severity and above (skip low-severity noise)
+        # -q  = quiet, show only findings
+        run: uvx bandit -r services/api/src -ll -q
+
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # Updated to v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5 # Official action is faster/cleaner
+        with:
+          enable-cache: true # Speeds up repeated PR runs
+          version: "latest"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5 # Updated to v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        # --frozen ensures the lockfile is up to date and isn't modified
+        run: uv sync --frozen --project services/api
+
+      - name: Run ruff (linting check)
+        run: uv run --project services/api ruff check .
+
+      - name: Run black (formatting check)
+        run: uv run --project services/api black --check .
+
+      - name: Run pydocstyle (docstrings check)
+        run: uv run --project services/api pydocstyle services/api/src
+
+      - name: Run mypy (type hints check)
+        run: uv run --project services/api mypy services/api/src --config-file services/api/pyproject.toml
+
+      - name: Run pytest with coverage
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/services/api
+          uv run --project services/api pytest --cov=services/api/src --cov-fail-under=50
+
+      - name: Skip bot commits
+        if: contains(github.event.head_commit.message, 'Jules')
+        run: echo "Skipping commit check for bot"
+
+      - name: Validate commit messages
+        if: "!contains(github.event.head_commit.message, 'Jules')"
+        uses: gsactions/commit-message-checker@v2
+        with:
+          pattern: '^(feat|fix|docs|style|refactor|perf|test|chore)(\(.+\))?: .+'
+          flags: 'i'
+          error: 'Commit message header must follow Conventional Commits format.'
+
+      - name: Verify lockfile is in sync
+        run: uv lock --check --project services/api
