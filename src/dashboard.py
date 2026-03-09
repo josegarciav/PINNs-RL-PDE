@@ -1,29 +1,22 @@
-import dash
-from dash import dcc, html, callback_context
-from dash.dependencies import Input, Output, State
-import plotly.graph_objects as go
-import plotly.express as px
-import pandas as pd
-import os
-import json
-import numpy as np
-from datetime import datetime
-import glob
 import argparse
-import sys
-import base64
-from pathlib import Path
+import glob
+import json
+import os
+from datetime import datetime
+
+import dash
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
 import yaml
+from dash import dcc, html
+from dash.dependencies import Input, Output, State
 
 
 # Parse command line arguments for port
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="PINNs-RL-PDE Training Monitor Dashboard"
-    )
-    parser.add_argument(
-        "--port", type=int, default=8050, help="Port to run the dashboard on"
-    )
+    parser = argparse.ArgumentParser(description="PINNs-RL-PDE Training Monitor Dashboard")
+    parser.add_argument("--port", type=int, default=8050, help="Port to run the dashboard on")
     return parser.parse_args()
 
 
@@ -40,9 +33,7 @@ app.layout = html.Div(
                 html.Div(
                     [
                         html.Label("Select Experiment:"),
-                        dcc.Dropdown(
-                            id="experiment-selector", placeholder="Select experiment..."
-                        ),
+                        dcc.Dropdown(id="experiment-selector", placeholder="Select experiment..."),
                     ],
                     style={
                         "width": "70%",
@@ -102,17 +93,13 @@ app.layout = html.Div(
                     [
                         html.Div(
                             [
-                                dcc.Graph(
-                                    id="exact-solution-3d", style={"height": "50vh"}
-                                ),
+                                dcc.Graph(id="exact-solution-3d", style={"height": "50vh"}),
                             ],
                             className="six columns",
                         ),
                         html.Div(
                             [
-                                dcc.Graph(
-                                    id="predicted-solution-3d", style={"height": "50vh"}
-                                ),
+                                dcc.Graph(id="predicted-solution-3d", style={"height": "50vh"}),
                             ],
                             className="six columns",
                         ),
@@ -178,9 +165,7 @@ app.layout = html.Div(
 
 
 # Callback to update experiment list
-@app.callback(
-    Output("experiment-selector", "options"), Input("interval-component", "n_intervals")
-)
+@app.callback(Output("experiment-selector", "options"), Input("interval-component", "n_intervals"))
 def update_experiments(_):
     return get_experiments()
 
@@ -229,9 +214,7 @@ def update_graphs(experiment, _):
 
                 experiment_details = json.dumps(metadata, indent=2)
                 # Check if early stopping was triggered
-                early_stopping_triggered = metadata.get(
-                    "early_stopping_triggered", False
-                )
+                early_stopping_triggered = metadata.get("early_stopping_triggered", False)
                 # Check if training is marked as completed
                 training_completed = "end_time" in metadata
         else:
@@ -253,10 +236,7 @@ def update_graphs(experiment, _):
         if os.path.exists(metadata_file):
             with open(metadata_file, "r") as f:
                 metadata = json.load(f)
-                if (
-                    "training_params" in metadata
-                    and "num_epochs" in metadata["training_params"]
-                ):
+                if "training_params" in metadata and "num_epochs" in metadata["training_params"]:
                     total_epochs = metadata["training_params"]["num_epochs"]
         else:
             # Try to get from config
@@ -286,19 +266,14 @@ def update_graphs(experiment, _):
                         "training_params" in metadata
                         and "validation_frequency" in metadata["training_params"]
                     ):
-                        val_frequency = metadata["training_params"][
-                            "validation_frequency"
-                        ]
+                        val_frequency = metadata["training_params"]["validation_frequency"]
             else:
                 # Try to get from config
                 config_file = os.path.join(experiment, "config.yaml")
                 if os.path.exists(config_file):
                     with open(config_file, "r") as f:
                         config = yaml.safe_load(f)
-                        if (
-                            "training" in config
-                            and "validation_frequency" in config["training"]
-                        ):
+                        if "training" in config and "validation_frequency" in config["training"]:
                             val_frequency = config["training"]["validation_frequency"]
 
             val_epochs = list(
@@ -336,9 +311,7 @@ def update_graphs(experiment, _):
         # Add training status annotation
         status_text = ""
         if early_stopping_triggered:
-            status_text = (
-                f"Early stopping triggered at epoch {final_epoch}/{total_epochs}"
-            )
+            status_text = f"Early stopping triggered at epoch {final_epoch}/{total_epochs}"
         elif training_completed:
             status_text = f"Training completed ({final_epoch} epochs)"
 
@@ -361,9 +334,7 @@ def update_graphs(experiment, _):
             title="Training Progress",
             xaxis_title="Epoch",
             yaxis_title="Loss",
-            legend=dict(
-                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
-            ),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
 
         # Find the most recent collocation visualization
@@ -436,12 +407,8 @@ def update_graphs(experiment, _):
                         coloraxis_showscale=False,
                     )
                     # Remove axis labels and ticks
-                    colloc_fig.update_xaxes(
-                        showticklabels=False, showgrid=False, zeroline=False
-                    )
-                    colloc_fig.update_yaxes(
-                        showticklabels=False, showgrid=False, zeroline=False
-                    )
+                    colloc_fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False)
+                    colloc_fig.update_yaxes(showticklabels=False, showgrid=False, zeroline=False)
 
                     return loss_fig, colloc_fig, experiment_details
                 except Exception as e:
@@ -504,7 +471,7 @@ def update_architecture_comparison(_):
                         architecture = metadata.get("architecture")
                     elif "config" in metadata and "model" in metadata["config"]:
                         architecture = metadata["config"]["model"].get("architecture")
-            except:
+            except Exception:
                 pass
 
         # If not found, check config.yaml
@@ -516,7 +483,7 @@ def update_architecture_comparison(_):
                         config = yaml.safe_load(f)
                         if "model" in config and "architecture" in config["model"]:
                             architecture = config["model"]["architecture"]
-                except:
+                except Exception:
                     pass
 
         # If still not found, try to infer from directory name
@@ -547,12 +514,10 @@ def update_architecture_comparison(_):
                 {
                     "name": os.path.basename(exp_dir),
                     "train_loss": history.get("train_loss", []),
-                    "val_loss": (
-                        history.get("val_loss", []) if "val_loss" in history else []
-                    ),
+                    "val_loss": (history.get("val_loss", []) if "val_loss" in history else []),
                 }
             )
-        except:
+        except Exception:
             continue
 
     # Create comparison graph
@@ -579,9 +544,7 @@ def update_architecture_comparison(_):
                         go.Scatter(
                             y=exp["val_loss"],
                             name=f"{arch} - {exp['name']} (Val)",
-                            line=dict(
-                                color=colors[color_idx % len(colors)], dash="dash"
-                            ),
+                            line=dict(color=colors[color_idx % len(colors)], dash="dash"),
                         )
                     )
 
@@ -599,9 +562,7 @@ def update_architecture_comparison(_):
 
 
 # Callback to update PDE comparison
-@app.callback(
-    Output("pde-comparison", "figure"), [Input("interval-component", "n_intervals")]
-)
+@app.callback(Output("pde-comparison", "figure"), [Input("interval-component", "n_intervals")])
 def update_pde_comparison(_):
     # Find all experiments and group by PDE type
     pdes = {}
@@ -636,7 +597,7 @@ def update_pde_comparison(_):
                         pde_params = metadata["config"]["pde"]
                         if "diffusion_coefficient" in pde_params:
                             pde_type = f"heat_eq_a{pde_params['diffusion_coefficient']}"
-            except:
+            except Exception:
                 pass
 
         # If not found, check config.yaml
@@ -652,10 +613,8 @@ def update_pde_comparison(_):
                             # Try to construct PDE type from config
                             pde_params = config["pde"]
                             if "diffusion_coefficient" in pde_params:
-                                pde_type = (
-                                    f"heat_eq_a{pde_params['diffusion_coefficient']}"
-                                )
-                except:
+                                pde_type = f"heat_eq_a{pde_params['diffusion_coefficient']}"
+                except Exception:
                     pass
 
         # If still not found, try to infer from directory name
@@ -663,9 +622,7 @@ def update_pde_comparison(_):
             dir_name = os.path.basename(exp_dir)
             parts = dir_name.split("_")
             if len(parts) >= 2:
-                pde_type = (
-                    f"{parts[0]}_{parts[1]}"  # Assuming PDE type is in first two parts
-                )
+                pde_type = f"{parts[0]}_{parts[1]}"  # Assuming PDE type is in first two parts
             else:
                 pde_type = dir_name  # Use directory name as fallback
 
@@ -673,9 +630,7 @@ def update_pde_comparison(_):
         history_file = os.path.join(exp_dir, "history.json")
         if not os.path.exists(history_file):
             # Try alternative locations
-            alt_files = glob.glob(
-                os.path.join(exp_dir, "**", "history.json"), recursive=True
-            )
+            alt_files = glob.glob(os.path.join(exp_dir, "**", "history.json"), recursive=True)
             if alt_files:
                 history_file = alt_files[0]
             else:
@@ -696,7 +651,7 @@ def update_pde_comparison(_):
                         if comp_time:
                             computation_times[pde_type] = comp_time
                             hover_text = f"Experiment: {os.path.basename(exp_dir)}<br>Training time: {comp_time:.2f} minutes"
-                except:
+                except Exception:
                     pass
 
             if pde_type not in pdes:
@@ -706,14 +661,12 @@ def update_pde_comparison(_):
                 {
                     "name": os.path.basename(exp_dir),
                     "train_loss": history.get("train_loss", []),
-                    "val_loss": (
-                        history.get("val_loss", []) if "val_loss" in history else []
-                    ),
+                    "val_loss": (history.get("val_loss", []) if "val_loss" in history else []),
                     "computation_time": comp_time,
                     "hover_text": hover_text,
                 }
             )
-        except:
+        except Exception:
             continue
 
     # Create comparison graph
@@ -775,13 +728,14 @@ def update_solution_visualizations(experiment, time_point, _):
         print(f"Time point: {time_point}")
 
         # Import necessary modules
-        import torch
         import sys
 
+        import torch
+
         sys.path.append(".")
-        from src.utils.utils import plot_solution
         from src.neural_networks import PINNModel
         from src.pdes.pde_base import PDEConfig
+        from src.utils.utils import plot_solution
 
         # Look for model directly in the experiment directory
         model_path = os.path.join(experiment, "final_model.pt")
@@ -792,9 +746,9 @@ def update_solution_visualizations(experiment, time_point, _):
 
         if not os.path.exists(model_path) or not os.path.exists(config_path):
             print("Error: Model or config file not found")
-            return create_empty_3d_figure(
+            return create_empty_3d_figure("No model data available"), create_empty_3d_figure(
                 "No model data available"
-            ), create_empty_3d_figure("No model data available")
+            )
 
         # Load configuration
         with open(config_path, "r") as f:
@@ -830,9 +784,7 @@ def update_solution_visualizations(experiment, time_point, _):
             from src.pdes.heat_equation import HeatEquation
 
             pde = HeatEquation(config=pde_config)
-            print(
-                f"Created HeatEquation instance with dimension {pde_config.dimension}"
-            )
+            print(f"Created HeatEquation instance with dimension {pde_config.dimension}")
         elif "wave" in pde_type:
             from src.pdes.wave_equation import WaveEquation
 
@@ -890,9 +842,7 @@ def update_solution_visualizations(experiment, time_point, _):
             ),
             "device": device,
             "pde_type": pde_type,
-            "input_dim": (
-                2 if pde_config.dimension == 1 else 3
-            ),  # x,t for 1D or x,y,t for 2D
+            "input_dim": (2 if pde_config.dimension == 1 else 3),  # x,t for 1D or x,y,t for 2D
             "output_dim": 1,
         }
 
@@ -907,9 +857,9 @@ def update_solution_visualizations(experiment, time_point, _):
             print("Model set to eval mode")
         except Exception as e:
             print(f"Error creating/loading model: {e}")
-            return create_empty_3d_figure(
+            return create_empty_3d_figure(f"Error loading model: {str(e)}"), create_empty_3d_figure(
                 f"Error loading model: {str(e)}"
-            ), create_empty_3d_figure(f"Error loading model: {str(e)}")
+            )
 
         # Generate visualization data using plot_solution
         print("Generating visualization...")
@@ -1025,9 +975,7 @@ def get_experiment_details(experiment_path):
         hidden_dim = config.get("model", {}).get("hidden_dim", "Unknown")
         num_layers = config.get("model", {}).get("num_layers", "Unknown")
         learning_rate = (
-            config.get("training", {})
-            .get("optimizer_config", {})
-            .get("learning_rate", "Unknown")
+            config.get("training", {}).get("optimizer_config", {}).get("learning_rate", "Unknown")
         )
         batch_size = config.get("training", {}).get("batch_size", "Unknown")
         num_epochs = config.get("training", {}).get("num_epochs", "Unknown")
@@ -1080,7 +1028,7 @@ def get_experiment_name(experiment_path):
             return f"{timestamp} ({arch}, {rl_status})"
         else:
             return name
-    except:
+    except Exception:
         return name
 
 
@@ -1100,9 +1048,7 @@ def generate_report(experiment_path):
         hidden_dim = config.get("model", {}).get("hidden_dim", "Unknown")
         num_layers = config.get("model", {}).get("num_layers", "Unknown")
         learning_rate = (
-            config.get("training", {})
-            .get("optimizer_config", {})
-            .get("learning_rate", "Unknown")
+            config.get("training", {}).get("optimizer_config", {}).get("learning_rate", "Unknown")
         )
         batch_size = config.get("training", {}).get("batch_size", "Unknown")
         num_epochs = config.get("training", {}).get("num_epochs", "Unknown")
@@ -1147,7 +1093,7 @@ def generate_report(experiment_path):
     State("experiment-selector", "value"),
     prevent_initial_call=True,
 )
-def generate_report(n_clicks, experiment):
+def generate_report(n_clicks, experiment):  # noqa: F811
     if not experiment or not n_clicks:
         return None
 
@@ -1155,9 +1101,7 @@ def generate_report(n_clicks, experiment):
         # Get current figures and data
         loss_fig = update_graphs(experiment, None)[0]
         collocation_fig = update_graphs(experiment, None)[1]
-        exact_solution, predicted_solution = update_solution_visualizations(
-            experiment, 0.5, None
-        )
+        exact_solution, predicted_solution = update_solution_visualizations(experiment, 0.5, None)
 
         # Load metadata
         metadata = {}
@@ -1232,6 +1176,21 @@ def get_experiments():
     return experiments
 
 
+def create_training_plot(history):
+    """Create a training progress plot from history data."""
+    fig = go.Figure()
+    if "total_loss" in history:
+        fig.add_trace(go.Scatter(y=history["total_loss"], mode="lines", name="Total Loss"))
+    if "residual_loss" in history:
+        fig.add_trace(go.Scatter(y=history["residual_loss"], mode="lines", name="Residual"))
+    if "boundary_loss" in history:
+        fig.add_trace(go.Scatter(y=history["boundary_loss"], mode="lines", name="Boundary"))
+    fig.update_layout(
+        title="Training Progress", xaxis_title="Epoch", yaxis_title="Loss", yaxis_type="log"
+    )
+    return fig
+
+
 def update_plots(experiment_path):
     """Update all plots for the selected experiment."""
     plots = {}
@@ -1257,9 +1216,7 @@ def update_plots(experiment_path):
                 plots["collocation_points"] = latest_coll_plot
 
             # Load latest solution plots if available
-            latest_solution = os.path.join(
-                experiment_path, "visualizations", "latest_solution.png"
-            )
+            latest_solution = os.path.join(experiment_path, "visualizations", "latest_solution.png")
             if os.path.exists(latest_solution):
                 plots["solution"] = latest_solution
 
@@ -1332,7 +1289,7 @@ def generate_html_report(experiment_path, figures, metadata):
             .plot {{ width: 100%; height: 600px; }}
             pre {{ background-color: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }}
             .header {{ background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
-            .status-badge {{ 
+            .status-badge {{
                 display: inline-block;
                 padding: 5px 10px;
                 border-radius: 15px;
@@ -1410,10 +1367,8 @@ if __name__ == "__main__":
                 print(f"Port {port} is in use. Trying port {port+1}...")
                 port += 1
                 if attempt == max_retries - 1:
-                    print(
-                        f"Could not find available port after {max_retries} attempts."
-                    )
-                    print(f"Please close any running dashboards and try again.")
+                    print(f"Could not find available port after {max_retries} attempts.")
+                    print("Please close any running dashboards and try again.")
             else:
                 print(f"Error starting dashboard: {e}")
                 break

@@ -1,11 +1,13 @@
+import logging
+import os
+from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
 import torch
-import logging
-from typing import Dict, Callable, Any, Optional, Tuple, List
-import os
+
 from src.pdes.heat_equation import HeatEquation
 from src.pdes.pde_base import PDEConfig
-from dataclasses import dataclass
 
 
 @dataclass
@@ -72,15 +74,11 @@ class HeatEquationFDM:
         self.nx = fdm_config.nx
         self.nt = fdm_config.nt
         self.dx = (fdm_config.domain[0][1] - fdm_config.domain[0][0]) / (self.nx - 1)
-        self.dt = (fdm_config.time_domain[1] - fdm_config.time_domain[0]) / (
-            self.nt - 1
-        )
+        self.dt = (fdm_config.time_domain[1] - fdm_config.time_domain[0]) / (self.nt - 1)
 
         # Create spatial and temporal grids
         self.x = np.linspace(fdm_config.domain[0][0], fdm_config.domain[0][1], self.nx)
-        self.t = np.linspace(
-            fdm_config.time_domain[0], fdm_config.time_domain[1], self.nt
-        )
+        self.t = np.linspace(fdm_config.time_domain[0], fdm_config.time_domain[1], self.nt)
 
         # Create PDEConfig for HeatEquation
         pde_config = PDEConfig(
@@ -108,9 +106,7 @@ class HeatEquationFDM:
         """Check if the numerical scheme is stable."""
         r = self.pde.alpha * self.dt / (self.dx**2)
         if r > 0.5:
-            raise ValueError(
-                f"Numerical scheme is unstable. Current r = {r:.3f}, must be <= 0.5"
-            )
+            raise ValueError(f"Numerical scheme is unstable. Current r = {r:.3f}, must be <= 0.5")
 
     def solve(self) -> np.ndarray:
         """
@@ -120,10 +116,8 @@ class HeatEquationFDM:
             np.ndarray: Solution array of shape (nt, nx)
         """
         # Convert to torch tensors for boundary condition evaluation
-        x_tensor = torch.tensor(
-            self.x, dtype=torch.float32, device=self.pde.device
-        ).reshape(-1, 1)
-        t_tensor = torch.zeros_like(x_tensor)
+        x_tensor = torch.tensor(self.x, dtype=torch.float32, device=self.pde.device).reshape(-1, 1)
+        torch.zeros_like(x_tensor)
 
         # Set initial condition based on type
         if "type" in self.config.initial_condition:
@@ -159,9 +153,7 @@ class HeatEquationFDM:
             u_next = np.copy(u_prev)
 
             # Update interior points using central difference in space
-            u_next[1:-1] = u_prev[1:-1] + r * (
-                u_prev[2:] - 2 * u_prev[1:-1] + u_prev[:-2]
-            )
+            u_next[1:-1] = u_prev[1:-1] + r * (u_prev[2:] - 2 * u_prev[1:-1] + u_prev[:-2])
 
             # Handle periodic boundary conditions
             if "periodic" in self.config.boundary_conditions:
@@ -203,7 +195,7 @@ class HeatEquationFDM:
         """
         # Convert FDM solution to torch tensor
         x = torch.linspace(self.pde.domain[0][0], self.pde.domain[0][1], self.nx)
-        t = torch.full_like(x, self.pde.time_domain[0] + n * self.dt)
+        torch.full_like(x, self.pde.time_domain[0] + n * self.dt)
         u_fdm = torch.tensor(self.u[n])
 
         # Create a simple model that returns the FDM solution
@@ -237,9 +229,7 @@ class HeatEquationFDM:
         points = torch.stack([x_grid.flatten(), t_grid.flatten()], dim=1)
 
         # Get exact solution
-        u_exact = self.pde.exact_solution(
-            points[:, 0].reshape(-1, 1), points[:, 1].reshape(-1, 1)
-        )
+        u_exact = self.pde.exact_solution(points[:, 0].reshape(-1, 1), points[:, 1].reshape(-1, 1))
         u_exact = u_exact.reshape(self.nx, self.nt).T.numpy()
 
         # Compute errors
@@ -278,9 +268,7 @@ class HeatEquationFDM:
         else:
             plt.show()
 
-    def plot_comparison_with_pinn(
-        self, model, save_path: str = None, device: str = "cpu"
-    ):
+    def plot_comparison_with_pinn(self, model, save_path: str = None, device: str = "cpu"):
         """Plot comparison between FDM, PINN, and exact solutions at different time steps."""
         import matplotlib.pyplot as plt
 
@@ -289,9 +277,7 @@ class HeatEquationFDM:
 
         # Create figure with subplots
         fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-        fig.suptitle(
-            f"Heat Equation (α={self.pde.alpha:.2f}): FDM vs PINN vs Exact Comparison"
-        )
+        fig.suptitle(f"Heat Equation (α={self.pde.alpha:.2f}): FDM vs PINN vs Exact Comparison")
         axes = axes.flatten()
 
         # Get PINN predictions for all points
@@ -306,20 +292,14 @@ class HeatEquationFDM:
             u_pinn = u_pinn_all[t_idx]
 
             # Get exact solution
-            x_tensor = torch.tensor(self.x, dtype=torch.float32, device=device).reshape(
-                -1, 1
-            )
+            x_tensor = torch.tensor(self.x, dtype=torch.float32, device=device).reshape(-1, 1)
             t_tensor = torch.full_like(x_tensor, t_val)
-            u_exact = (
-                self.pde.exact_solution(x_tensor, t_tensor).cpu().numpy().reshape(-1)
-            )
+            u_exact = self.pde.exact_solution(x_tensor, t_tensor).cpu().numpy().reshape(-1)
 
             # Plot all solutions
             ax = axes[idx]
             ax.plot(self.x, u_fdm, "b-", label="FDM", linewidth=2)
-            ax.plot(
-                self.x, u_pinn, "r--", alpha=0.3, linewidth=1
-            )  # Faint dashed line for trend
+            ax.plot(self.x, u_pinn, "r--", alpha=0.3, linewidth=1)  # Faint dashed line for trend
             ax.plot(self.x, u_pinn, "rx", label="PINN", markersize=4)  # Red x markers
             ax.plot(self.x, u_exact, "g:", label="Exact", linewidth=2)
             ax.set_xlabel("x")
@@ -340,15 +320,9 @@ class HeatEquationFDM:
         pinn_solution = u_pinn_all
 
         # Calculate exact solution for all points
-        x_tensor = torch.tensor(self.x, dtype=torch.float32, device=device).reshape(
-            -1, 1
-        )
-        t_tensor = torch.tensor(self.t, dtype=torch.float32, device=device).reshape(
-            -1, 1
-        )
-        x_grid, t_grid = torch.meshgrid(
-            x_tensor.squeeze(), t_tensor.squeeze(), indexing="ij"
-        )
+        x_tensor = torch.tensor(self.x, dtype=torch.float32, device=device).reshape(-1, 1)
+        t_tensor = torch.tensor(self.t, dtype=torch.float32, device=device).reshape(-1, 1)
+        x_grid, t_grid = torch.meshgrid(x_tensor.squeeze(), t_tensor.squeeze(), indexing="ij")
         points = torch.stack([x_grid.flatten(), t_grid.flatten()], dim=1)
 
         with torch.no_grad():
@@ -398,9 +372,7 @@ class HeatEquationFDM:
             if not logger.handlers:
                 handler = logging.StreamHandler()
                 handler.setFormatter(
-                    logging.Formatter(
-                        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-                    )
+                    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
                 )
                 logger.addHandler(handler)
 
@@ -497,7 +469,7 @@ class HeatEquationFDM:
                 device=device,
             )
 
-            logger.info(f"Error metrics between solutions:")
+            logger.info("Error metrics between solutions:")
             logger.info(
                 f"FDM vs PINN - L2={metrics['fdm_pinn_l2_error']:.6f}, Max={metrics['fdm_pinn_max_error']:.6f}, Mean={metrics['fdm_pinn_mean_error']:.6f}"
             )

@@ -1,6 +1,7 @@
 """Base class for neural network architectures."""
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -71,7 +72,7 @@ class BaseNetwork(nn.Module):
         Args:
             path: Path to load the model from
         """
-        state = torch.load(path, map_location=self.device)
+        state = torch.load(path, map_location=self.device, weights_only=False)
         self.load_state_dict(state["model_state_dict"])
         self.config = state["config"]
 

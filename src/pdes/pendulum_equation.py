@@ -2,9 +2,11 @@
 # Application domains: Mechanical systems, classical mechanics, robotics
 # Complexity: Nonlinear, 2nd-order
 
-import torch
+from typing import Any, Dict, Tuple
+
 import numpy as np
-from typing import Dict, Tuple, List, Optional, Any
+import torch
+
 from .pde_base import PDEBase, PDEConfig
 
 
@@ -84,7 +86,7 @@ class PendulumEquation(PDEBase):
 
         # Get solution and derivatives
         u = model(torch.cat([x, t], dim=1))
-        u_t = derivatives["dt"]
+        derivatives["dt"]
         u_tt = derivatives["dt2"]
 
         # Compute residual: d²θ/dt² + (g/L)sin(θ)
@@ -120,9 +122,7 @@ class PendulumEquation(PDEBase):
         else:
             raise ValueError(f"Unknown exact solution type: {solution_type}")
 
-    def _create_boundary_condition(
-        self, bc_type: str, params: Dict[str, Any]
-    ) -> callable:
+    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
         """Create boundary condition function from parameters.
 
         Args:
@@ -148,9 +148,7 @@ class PendulumEquation(PDEBase):
                 amplitude = params.get("amplitude", 1.0)
                 center = params.get("center", 0.0)
                 sigma = params.get("sigma", 0.1)
-                return lambda x, t: amplitude * torch.exp(
-                    -((x - center) ** 2) / (2 * sigma**2)
-                )
+                return lambda x, t: amplitude * torch.exp(-((x - center) ** 2) / (2 * sigma**2))
 
             else:
                 raise ValueError(f"Unknown initial condition type: {ic_type}")
@@ -265,9 +263,7 @@ class PendulumEquation(PDEBase):
         else:
             raise ValueError(f"Unknown initial condition type: {ic_type}")
 
-    def compute_boundary_condition(
-        self, x: torch.Tensor, t: torch.Tensor
-    ) -> torch.Tensor:
+    def compute_boundary_condition(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """Compute the boundary condition.
 
         Args:
@@ -280,9 +276,7 @@ class PendulumEquation(PDEBase):
         if not self.config.boundary_conditions:
             return None
 
-        bc_type = self.config.boundary_conditions.get("dirichlet", {}).get(
-            "type", "fixed"
-        )
+        bc_type = self.config.boundary_conditions.get("dirichlet", {}).get("type", "fixed")
 
         if bc_type == "fixed":
             value = self.config.boundary_conditions["dirichlet"].get("value", 0.0)

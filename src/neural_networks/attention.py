@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from .base_network import BaseNetwork, InputType, OutputType, NetworkConfig
+from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 
 
 class SelfAttention(nn.Module):

@@ -1,0 +1,375 @@
+# PINN Configuration with PDE-specific settings
+# Configuration file for Physics-Informed Neural Networks
+
+# Device Configuration
+device: "mps"  # Options: "mps", "cpu" (cpu is slower for deep networks)
+
+# Architecture-specific configurations
+architectures:
+  feedforward:
+    hidden_dims: [128, 128, 128, 128, 128, 128, 128]  # 7 hidden layers by default
+    activation: "tanh"
+    dropout: 0.0  # No dropout for PINN training (dropout hurts PDE residual convergence)
+    layer_norm: true
+
+  resnet:
+    hidden_dim: 512
+    num_blocks: 7  # 7 residual blocks by default
+    activation: "tanh"
+    dropout: 0.0  # No dropout for PINN training
+
+  siren:
+    hidden_dims: [124, 124, 124, 124, 124, 124, 124]
+    omega_0: 30.0  # Frequency parameter for sin activation
+
+  fourier:
+    mapping_size: 512
+    hidden_dims: [512, 512, 512, 512]
+    scale: 4.0  # Increased to better capture high frequencies
+    activation: "tanh"
+    dropout: 0.0  # No dropout for PINN training
+    layer_norm: true
+    periodic: true  # Enable periodic features
+
+  attention:
+    hidden_dim: 124
+    num_layers: 4  # 4 attention blocks by default
+    num_heads: 4  # 4 attention heads per block
+    dropout: 0.0  # No dropout for PINN training
+    activation: "gelu"
+
+  autoencoder:
+    latent_dim: 64  # Dimension of the latent space
+    hidden_dims: [124, 248, 124]  # Encoder -> latent -> output (PINN function approximation)
+    activation: "relu"
+    dropout: 0.0  # No dropout for PINN training
+    layer_norm: true
+
+# Default PDE type to train
+pde_type: "heat"  # Options: "heat", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
+
+# PDE-specific configurations
+pde_configs:
+  # Heat Equation Configuration
+  heat:
+    name: "Heat Equation"
+    architecture: "fourier"
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
+    parameters:
+      alpha: 0.01  # Thermal diffusivity DO NOT CHANGE
+    domain: [[0, 2]]  # [0, π] 3.14159 6.28318
+    time_domain: [0, 10]
+    dimension: 1
+    initial_condition:
+      type: "sin_exp_decay"
+      amplitude: 1.0
+      frequency: 2.0  # Number of periods in [0,1]
+    boundary_conditions:
+      periodic: {}  # Periodic boundary conditions
+      #dirichlet: { value: 0.0 }
+    exact_solution:
+      type: "sin_exp_decay"
+      amplitude: 1.0
+      frequency: 2.0
+
+  # Wave Equation Configuration
+  wave:
+    name: "Wave Equation"
+    architecture: "siren"  # Excellent for capturing oscillations and wave patterns
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
+    parameters:
+      c: 1.0  # Wave speed
+    domain: [[0.0, 1.0]]
+    time_domain: [0.0, 1.0]
+    dimension: 1
+    initial_condition:
+      type: "sine"
+      amplitude: 1.0
+      frequency: 1.0
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+    exact_solution:
+      type: "sine"
+      amplitude: 1.0
+      frequency: 1.0
+  
+  # Burgers Equation Configuration
+  burgers:
+    name: "Burgers Equation"
+    architecture: "resnet"  # Good for nonlinear problems with discontinuities (shocks)
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
+    parameters:
+      viscosity: 0.01  # Viscosity coefficient
+    domain: [[-1.0, 1.0]]
+    time_domain: [0.0, 1.0]
+    dimension: 1
+    initial_condition:
+      type: "sine"
+      amplitude: -1.0
+      frequency: 1.0
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+    exact_solution:
+      type: "cole_hopf"  # Cole-Hopf transformation for viscous Burgers
+      viscosity: 0.01
+      initial_amplitude: -1.0
+      initial_frequency: 1.0
+  
+  # Convection Equation Configuration
+  convection:
+    name: "Convection Equation"
+    architecture: "fourier"  # Good for transport problems with high frequencies
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
+    parameters:
+      velocity: [1.0]  # Convection velocity vector [vx]
+    domain: [[0.0, 2.0]]
+    time_domain: [0.0, 1.0]
+    dimension: 1
+    initial_condition:
+      type: "sin"
+      amplitude: 1.0
+      frequency: 1.0
+    boundary_conditions:
+      dirichlet:
+        type: "periodic"
+    exact_solution:
+      type: "sin"
+      amplitude: 1.0
+      frequency: 1.0
+  
+  # KdV Equation Configuration
+  kdv:
+    name: "KdV Equation"
+    architecture: "siren"  # Ideal for solitons and nonlinear wave patterns
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
+    parameters:
+      alpha: 6.0  # Nonlinear coefficient
+      beta: 1.0   # Dispersion coefficient
+      speed: 1.0  # Wave speed
+    domain: [[-15.0, 15.0]]
+    time_domain: [0.0, 5.0]
+    dimension: 1
+    initial_condition:
+      type: "soliton"
+      speed: 1.0
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+    exact_solution:
+      type: "soliton"
+      speed: 1.0
+  
+  # Allen-Cahn Equation Configuration
+  allen_cahn:
+    name: "Allen-Cahn Equation"
+    architecture: "fourier"  # Good for problems with sharp interfaces
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
+    parameters:
+      epsilon: 0.1  # Interface width parameter
+      reaction_rate: 1.0  # Reaction rate
+    domain: [[-1.0, 1.0]]
+    time_domain: [0.0, 1.0]
+    dimension: 1
+    initial_condition:
+      type: "tanh"
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+    exact_solution:
+      type: "tanh"
+  
+  # Cahn-Hilliard Equation Configuration
+  cahn_hilliard:
+    name: "Cahn-Hilliard Equation"
+    architecture: "resnet"  # Good for higher-order problems with phase separation
+    input_dim: 2  # (x, t)
+    output_dim: 1  # u(x,t)
+    parameters:
+      mobility: 1.0  # Mobility coefficient
+      kappa: 0.01  # Interface energy coefficient
+    domain: [[0.0, 1.0]]
+    time_domain: [0.0, 1.0]
+    dimension: 1
+    initial_condition:
+      type: "random"
+      amplitude: 0.1
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+      neumann:
+        type: "zero"
+    exact_solution:
+      type: "spinodal"  # Spinodal decomposition solution
+      wavelength: 0.2  # Characteristic wavelength of the pattern
+      growth_rate: 2.0  # Growth rate of the instability
+      amplitude: 0.1  # Initial amplitude of the perturbation
+      mobility: 1.0  # Should match the PDE parameter
+      kappa: 0.01  # Should match the PDE parameter
+  
+  # Black-Scholes Equation Configuration
+  black_scholes:
+    name: "Black-Scholes Equation"
+    architecture: "feedforward"  # Simple and effective for this type of problem
+    input_dim: 2  # (S, t)
+    output_dim: 1  # V(S,t)
+    parameters:
+      sigma: 0.2  # Volatility
+      r: 0.05  # Risk-free interest rate
+    domain: [[0.0, 200.0]]  # Stock price domain
+    time_domain: [0.0, 1.0]  # Time to maturity (years)
+    dimension: 1
+    initial_condition:
+      type: "option"
+      strike: 100.0
+      option_type: "call"
+    boundary_conditions:
+      dirichlet:
+        type: "custom"
+    exact_solution:
+      type: "black_scholes"
+      strike: 100.0
+      option_type: "call"
+  
+  # Pendulum Equation Configuration
+  pendulum:
+    name: "Pendulum Equation"
+    architecture: "resnet"  # Good for nonlinear dynamics and oscillatory behavior
+    input_dim: 2  # (theta, t)
+    output_dim: 1  # angular position
+    parameters:
+      g: 9.81  # Gravitational constant
+      L: 1.0   # Pendulum length
+      damping: 0.1  # Damping coefficient
+    domain: [[0.0, 3.14159]]  # Angle domain
+    time_domain: [0.0, 10.0]
+    dimension: 1
+    initial_condition:
+      type: "small_angle"  # Changed from "sine" to "small_angle"
+      initial_angle: 0.5   # Changed from amplitude to initial_angle
+    boundary_conditions:
+      dirichlet:
+        type: "periodic"
+    exact_solution:
+      type: "small_angle"  # Changed from "damped_oscillation" to "small_angle"
+      initial_angle: 0.5   # Initial angle (in radians)
+
+  # Heat Equation 2D Configuration
+  heat_2d:
+    name: "2D Heat Equation"
+    architecture: "fourier"
+    input_dim: 3  # (x, y, t)
+    output_dim: 1  # u(x,y,t)
+    parameters:
+      alpha: 0.01  # Thermal diffusivity
+    domain: [[0, 3.14159], [0, 3.14159]]  # [0, π] × [0, π]
+    time_domain: [0, 5]
+    dimension: 2
+    initial_condition:
+      type: "sine_2d"
+      amplitude: 1.0
+      frequency_x: 2.0
+      frequency_y: 2.0
+    boundary_conditions:
+      dirichlet:
+        type: "fixed"
+        value: 0.0
+    exact_solution:
+      type: "sine_2d"
+      amplitude: 1.0
+      frequency_x: 2.0
+      frequency_y: 2.0
+
+# Training Configuration
+training:
+  num_epochs: 3000  # for better convergence
+  batch_size: 2048  # Larger batch size: should be divisible by 8 (ideally a power of 2: 32, 64, 128, 256, 512, 1024, 2048)
+  num_collocation_points: 5000 #better coverage
+  num_boundary_points: 5000  #better boundary enforcement
+  num_initial_points: 5000  #better initial condition representation
+  collocation_distribution: "uniform"  # Options: "uniform", "stratified", "residual_based", "adaptive" (RL agent)
+  adaptive_weights:
+    enabled: false # Whether to use adaptive weights for loss terms
+    strategy: "rbw"  # Options: "lrw" (Learning Rate Weighting) or "rbw" (Relative Error Weighting)
+    alpha: 0.7     # Lower alpha for faster adaptation
+    eps: 1e-6
+    initial_weights: [0.3, 0.4, 0.3]  # More balanced weights
+  validation_frequency: 10
+  early_stopping:
+    enabled: true
+    patience: 100  # Increased patience
+    min_delta: 1e-7
+    monitor: "val_loss"
+  optimizer_config:
+    name: "adam"
+    learning_rate: 0.005  # Reduced for more stable training
+    beta1: 0.9
+    beta2: 0.999
+    weight_decay: 0.0005  # Added weight decay for regularization
+  scheduler_type: "cosine"  # Options: "reduce_lr" or "cosine"
+  # Parameters for ReduceLROnPlateau
+  reduce_lr_params:
+    factor: 0.5
+    patience: 50
+    min_lr: 1.0e-6
+  # Parameters for CosineAnnealingLR
+  cosine_params:
+    T_max: 400  # Doubled period
+    eta_min: 1e-7
+  loss_weights:
+    residual: 15.0  # Weight for PDE residual loss
+    boundary: 20.0  # Weight for boundary condition loss
+    initial: 10.0   # Weight for initial condition loss
+    smoothness: 0.1  # Weight for smoothness regularization
+
+# Reinforcement Learning Configuration
+rl:
+  enabled: false
+  state_dim: 2  # (x, t)
+  action_dim: 1  # Sampling probability
+  hidden_dim: 512
+  learning_rate: 0.001
+  gamma: 0.99
+  epsilon_start: 1.0
+  epsilon_end: 0.01
+  epsilon_decay: 0.995
+  memory_size: 10000
+  batch_size: 124
+  target_update: 100
+  reward_weights:
+    residual: 1.0
+    boundary: 1.0
+    initial: 1.0
+    exploration: 0.1
+
+# Evaluation Configuration
+evaluation:
+  num_points: 1000
+  metrics:
+    - "l2_error"
+    - "max_error"
+    - "mean_error"
+  save_plots: true
+  plot_frequency: 10  # Plot every N epochs
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  save_tensorboard: false
+  log_frequency: 100
+
+# Paths
+paths:
+  results_dir: "experiments"

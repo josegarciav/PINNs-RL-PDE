@@ -1,12 +1,12 @@
 # Base class for PDE implementations
 # Provides common functionality for all PDEs
 
-import torch
-from dataclasses import dataclass
-from typing import Dict, Any, Optional, Tuple, List, Union, Set
-import numpy as np
-import logging
 import os
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
+
+import numpy as np
+import torch
 
 # Conditional imports to avoid memory issues
 try:
@@ -16,14 +16,6 @@ try:
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
     plt = None
-
-try:
-    from scipy.stats import qmc
-
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
-    qmc = None
 
 
 @dataclass
@@ -41,9 +33,7 @@ class PDEConfig:
     exact_solution: Dict[str, Any]
     dimension: int = 1  # Default to 1D
     input_dim: Optional[int] = None  # Input dimensions for the NN (spatial + temporal)
-    output_dim: Optional[int] = (
-        None  # Output dimensions for the NN (solution components)
-    )
+    output_dim: Optional[int] = None  # Output dimensions for the NN (solution components)
     architecture: Optional[str] = None  # Neural network architecture for this PDE
     device: Optional[torch.device] = None
     training: Optional[Dict[str, Any]] = None  # Training configuration
@@ -56,9 +46,7 @@ class PDEBase:
     """
 
     @staticmethod
-    def create(
-        pde_type: str, config: Optional[PDEConfig] = None, **kwargs
-    ) -> "PDEBase":
+    def create(pde_type: str, config: Optional[PDEConfig] = None, **kwargs) -> "PDEBase":
         """
         Factory method to create PDE instances from type and parameters.
 
@@ -112,9 +100,7 @@ class PDEBase:
                             "domain": kwargs.pop("domain", [(0.0, 1.0)]),
                             "time_domain": kwargs.pop("time_domain", (0.0, 1.0)),
                             "parameters": kwargs.pop("parameters", {}),
-                            "boundary_conditions": kwargs.pop(
-                                "boundary_conditions", {}
-                            ),
+                            "boundary_conditions": kwargs.pop("boundary_conditions", {}),
                             "initial_condition": kwargs.pop("initial_condition", {}),
                             "exact_solution": kwargs.pop("exact_solution", {}),
                             "dimension": kwargs.pop("dimension", 1),
@@ -128,7 +114,7 @@ class PDEBase:
 
                     # Instantiate PDE with config and remaining kwargs
                     return pde_class(config=config, **kwargs)
-            except (ImportError, AttributeError) as e:
+            except (ImportError, AttributeError):
                 # Continue trying with other class names
                 continue
 
@@ -183,10 +169,8 @@ class PDEBase:
                 # Try to convert string to torch.device
                 try:
                     self.device = torch.device(str(config.device))
-                except:
-                    print(
-                        f"Warning: Invalid device '{config.device}', falling back to CPU"
-                    )
+                except Exception:
+                    print(f"Warning: Invalid device '{config.device}', falling back to CPU")
                     self.device = torch.device("cpu")
         else:
             # Fallback to CPU if no device specified
@@ -258,19 +242,12 @@ class PDEBase:
         """Set up boundary condition functions from configuration."""
         self.boundary_conditions = {}
 
-        if (
-            hasattr(self.config, "boundary_conditions")
-            and self.config.boundary_conditions
-        ):
+        if hasattr(self.config, "boundary_conditions") and self.config.boundary_conditions:
             for bc_type, params in self.config.boundary_conditions.items():
-                self.boundary_conditions[bc_type] = self._create_boundary_condition(
-                    bc_type, params
-                )
+                self.boundary_conditions[bc_type] = self._create_boundary_condition(bc_type, params)
 
         # Set up initial condition as a boundary condition if not already defined
-        if "initial" not in self.boundary_conditions and hasattr(
-            self.config, "initial_condition"
-        ):
+        if "initial" not in self.boundary_conditions and hasattr(self.config, "initial_condition"):
             self.boundary_conditions["initial"] = self._create_boundary_condition(
                 "initial", self.config.initial_condition
             )
@@ -279,9 +256,7 @@ class PDEBase:
         """Set up validation points for exact solution comparison."""
         self.validation_points = None
 
-    def _create_boundary_condition(
-        self, bc_type: str, params: Dict[str, Any]
-    ) -> callable:
+    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
         """
         Create boundary condition function from parameters.
 
@@ -305,9 +280,7 @@ class PDEBase:
             if self.dimension == 1:
                 return lambda x, t: torch.sin(2 * torch.pi * x[:, 0:1])
             else:
-                return lambda x, t: torch.sin(
-                    2 * torch.pi * torch.sum(x, dim=1, keepdim=True)
-                )
+                return lambda x, t: torch.sin(2 * torch.pi * torch.sum(x, dim=1, keepdim=True))
 
         elif bc_type == "initial":
             # Handle different types of initial conditions
@@ -316,16 +289,12 @@ class PDEBase:
             if ic_type == "sine":
                 amplitude = params.get("amplitude", 1.0)
                 frequency = params.get("frequency", 1.0)
-                return lambda x, t: amplitude * torch.sin(
-                    frequency * torch.pi * x[:, 0:1]
-                )
+                return lambda x, t: amplitude * torch.sin(frequency * torch.pi * x[:, 0:1])
 
             elif ic_type == "sin_exp_decay":
                 amplitude = params.get("amplitude", 1.0)
                 frequency = params.get("frequency", 1.0)
-                return lambda x, t: amplitude * torch.sin(
-                    frequency * torch.pi * x[:, 0:1]
-                )
+                return lambda x, t: amplitude * torch.sin(frequency * torch.pi * x[:, 0:1])
 
             elif ic_type == "tanh":
                 epsilon = params.get("epsilon", 0.1)
@@ -369,9 +338,7 @@ class PDEBase:
                 )
                 return lambda x, t: torch.zeros_like(x[:, 0:1])
         else:
-            print(
-                f"Warning: Unsupported boundary condition type '{bc_type}'. Defaulting to zero."
-            )
+            print(f"Warning: Unsupported boundary condition type '{bc_type}'. Defaulting to zero.")
             return lambda x, t: torch.zeros_like(x[:, 0:1])
 
     def compute_residual(
@@ -457,9 +424,7 @@ class PDEBase:
 
                 if i == 1:
                     # First time derivative
-                    grad_outputs = torch.ones_like(
-                        u, device=self.device
-                    ).requires_grad_(True)
+                    grad_outputs = torch.ones_like(u, device=self.device).requires_grad_(True)
                     u_t = torch.autograd.grad(
                         u,
                         t,
@@ -475,9 +440,9 @@ class PDEBase:
                 else:
                     # Higher-order time derivatives
                     key = f"dt{i}"
-                    grad_outputs = torch.ones_like(
-                        u_t_prev, device=self.device
-                    ).requires_grad_(True)
+                    grad_outputs = torch.ones_like(u_t_prev, device=self.device).requires_grad_(
+                        True
+                    )
                     u_t_higher = torch.autograd.grad(
                         u_t_prev,
                         t,
@@ -501,9 +466,7 @@ class PDEBase:
 
                     if i == 1:
                         # First derivative
-                        grad_outputs = torch.ones_like(
-                            u, device=self.device
-                        ).requires_grad_(True)
+                        grad_outputs = torch.ones_like(u, device=self.device).requires_grad_(True)
                         u_x = torch.autograd.grad(
                             u,
                             x,
@@ -519,9 +482,9 @@ class PDEBase:
                     else:
                         # Higher-order derivatives
                         key = f"dx{i}"
-                        grad_outputs = torch.ones_like(
-                            u_x_prev, device=self.device
-                        ).requires_grad_(True)
+                        grad_outputs = torch.ones_like(u_x_prev, device=self.device).requires_grad_(
+                            True
+                        )
                         u_x_higher = torch.autograd.grad(
                             u_x_prev,
                             x,
@@ -607,178 +570,161 @@ class PDEBase:
         """
         raise NotImplementedError("Subclasses must implement exact_solution")
 
+    def _sample_uniform(self, num_points: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Grid-based uniform sampling with small jitter for domain coverage."""
+        if self.dimension == 1:
+            n_side = int(np.sqrt(num_points))
+            x = torch.linspace(
+                self.domain[0][0], self.domain[0][1], n_side, device=self.device
+            ).reshape(-1, 1)
+            t = torch.linspace(
+                self.time_domain[0], self.time_domain[1], n_side, device=self.device
+            ).reshape(-1, 1)
+
+            X, T = torch.meshgrid(x.squeeze(), t.squeeze(), indexing="ij")
+            x = X.reshape(-1, 1)
+            t = T.reshape(-1, 1)
+
+            # Small jitter to break grid alignment
+            x_noise = (self.domain[0][1] - self.domain[0][0]) * 0.01
+            t_noise = (self.time_domain[1] - self.time_domain[0]) * 0.01
+            x = x + torch.randn_like(x) * x_noise
+            t = t + torch.randn_like(t) * t_noise
+
+            x = torch.clamp(x, self.domain[0][0], self.domain[0][1])
+            t = torch.clamp(t, self.time_domain[0], self.time_domain[1])
+        else:
+            points_per_dim = max(2, int(num_points ** (1 / (self.dimension + 1))) + 1)
+            grid_points = []
+            for dim in range(self.dimension):
+                grid_points.append(
+                    torch.linspace(self.domain[dim][0], self.domain[dim][1], points_per_dim)
+                )
+            grid_points.append(
+                torch.linspace(self.time_domain[0], self.time_domain[1], points_per_dim)
+            )
+
+            grid_tensors = torch.meshgrid(*grid_points, indexing="ij")
+            points = torch.stack([g.reshape(-1) for g in grid_tensors], dim=1)
+
+            if len(points) > num_points:
+                indices = torch.randperm(len(points))[:num_points]
+                points = points[indices]
+            elif len(points) < num_points:
+                extra = torch.randint(0, len(points), (num_points - len(points),))
+                points = torch.cat([points, points[extra]], dim=0)
+
+            points = points + torch.randn_like(points) * 0.01
+            for dim in range(self.dimension):
+                points[:, dim] = torch.clamp(
+                    points[:, dim], self.domain[dim][0], self.domain[dim][1]
+                )
+            points[:, -1] = torch.clamp(points[:, -1], self.time_domain[0], self.time_domain[1])
+
+            x = points[:, : self.dimension]
+            t = points[:, -1].reshape(-1, 1)
+
+        return x, t
+
+    def _sample_stratified(self, num_points: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Stratified random sampling (Latin Hypercube-style, pure PyTorch).
+
+        Divides each dimension into num_points equal bins and places one random
+        sample per bin, then shuffles across dimensions for independence.
+        """
+        total_dims = self.dimension + 1  # spatial dims + time
+
+        # Build lower and upper bounds for all dims
+        lowers = []
+        uppers = []
+        for dim in range(self.dimension):
+            lowers.append(self.domain[dim][0])
+            uppers.append(self.domain[dim][1])
+        lowers.append(self.time_domain[0])
+        uppers.append(self.time_domain[1])
+
+        samples = torch.zeros(num_points, total_dims, device=self.device)
+        for d in range(total_dims):
+            lo, hi = lowers[d], uppers[d]
+            bin_size = (hi - lo) / num_points
+            # One random point inside each bin
+            offsets = torch.rand(num_points, device=self.device)
+            indices = torch.arange(num_points, dtype=torch.float32, device=self.device)
+            samples[:, d] = lo + (indices + offsets) * bin_size
+            # Shuffle this dimension independently for LHS property
+            perm = torch.randperm(num_points, device=self.device)
+            samples[:, d] = samples[perm, d]
+
+        x = samples[:, : self.dimension]
+        t = samples[:, -1].reshape(-1, 1)
+        return x, t
+
+    def _sample_residual_based(
+        self, num_points: int, model: Optional[torch.nn.Module] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Residual-Adaptive Refinement (RAR) sampling.
+
+        1. Generate a large candidate pool via uniform sampling.
+        2. If a model is provided, compute PDE residuals and oversample regions
+           with high residual magnitude.
+        3. If no model is available (first epoch), fall back to uniform.
+        """
+        if model is None:
+            return self._sample_uniform(num_points)
+
+        # Generate a candidate pool 4x larger than needed
+        pool_size = num_points * 4
+        x_pool, t_pool = self._sample_uniform(pool_size)
+
+        # Compute PDE residual at each candidate point
+        x_pool = x_pool.detach().requires_grad_(True)
+        t_pool = t_pool.detach().requires_grad_(True)
+
+        with torch.no_grad():
+            try:
+                residuals = self.compute_pde_residual(model, x_pool, t_pool)
+                if isinstance(residuals, tuple):
+                    residuals = residuals[0]
+                residual_mag = torch.abs(residuals).squeeze()
+            except Exception:
+                # If residual computation fails, fall back to uniform
+                return self._sample_uniform(num_points)
+
+        # Convert residual magnitudes to sampling probabilities
+        # Add small epsilon so zero-residual regions still have a chance
+        probs = residual_mag + 1e-8
+        probs = probs / probs.sum()
+
+        # Sample points weighted by residual magnitude
+        selected = torch.multinomial(probs, num_points, replacement=True)
+        x = x_pool[selected].detach()
+        t = t_pool[selected].detach()
+
+        return x, t
+
     def generate_collocation_points(
-        self, num_points: int, strategy: str = "uniform"
+        self, num_points: int, strategy: str = "uniform", **kwargs
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Generate collocation points for training.
 
         :param num_points: Number of points to generate
-        :param strategy: Sampling strategy ('uniform', 'latin_hypercube', 'sobol', 'adaptive')
+        :param strategy: Sampling strategy — one of:
+            - 'uniform': grid-based with small jitter
+            - 'stratified': Latin Hypercube-style stratified random (pure PyTorch)
+            - 'residual_based': resample where PDE residual is highest (requires model kwarg)
+            - 'adaptive': RL agent-driven sampling (requires self.rl_agent)
         :return: Tuple of spatial and temporal points
         """
         if strategy == "uniform":
-            if self.dimension == 1:
-                # For 1D, domain is a list with one tuple
-                x = torch.linspace(
-                    self.domain[0][0],
-                    self.domain[0][1],
-                    int(np.sqrt(num_points)),
-                    device=self.device,
-                ).reshape(-1, 1)
-                t = torch.linspace(
-                    self.time_domain[0],
-                    self.time_domain[1],
-                    int(np.sqrt(num_points)),
-                    device=self.device,
-                ).reshape(-1, 1)
+            x, t = self._sample_uniform(num_points)
 
-                # Create meshgrid for even coverage
-                X, T = torch.meshgrid(x.squeeze(), t.squeeze(), indexing="ij")
-                x = X.reshape(-1, 1)
-                t = T.reshape(-1, 1)
+        elif strategy == "stratified":
+            x, t = self._sample_stratified(num_points)
 
-                # Add some noise for better training
-                x_noise = (self.domain[0][1] - self.domain[0][0]) * 0.01
-                t_noise = (self.time_domain[1] - self.time_domain[0]) * 0.01
-                x = x + torch.randn_like(x) * x_noise
-                t = t + torch.randn_like(t) * t_noise
-
-                # Clip to domain
-                x = torch.clamp(x, self.domain[0][0], self.domain[0][1])
-                t = torch.clamp(t, self.time_domain[0], self.time_domain[1])
-
-            else:
-                # For multi-dimensional domains
-                grid_points = []
-                # Calculate points per dimension to ensure we get enough points
-                # Use a number slightly higher to account for possible pruning
-                points_per_dim = max(
-                    2, int((num_points) ** (1 / (self.dimension + 1))) + 1
-                )
-
-                for dim in range(self.dimension):
-                    grid_dim = torch.linspace(
-                        self.domain[dim][0],
-                        self.domain[dim][1],
-                        points_per_dim,
-                    )
-                    grid_points.append(grid_dim)
-
-                # Add time dimension
-                grid_points.append(
-                    torch.linspace(
-                        self.time_domain[0],
-                        self.time_domain[1],
-                        points_per_dim,
-                    )
-                )
-
-                # Create meshgrid
-                grid_tensors = torch.meshgrid(*grid_points, indexing="ij")
-
-                # Reshape to points
-                points = torch.stack([g.reshape(-1) for g in grid_tensors], dim=1)
-
-                # If we have more points than requested, sample exactly num_points
-                if len(points) > num_points:
-                    # Random indices without replacement
-                    indices = torch.randperm(len(points))[:num_points]
-                    points = points[indices]
-                # If we have fewer points, add more by sampling with replacement
-                elif len(points) < num_points:
-                    additional_indices = torch.randint(
-                        0, len(points), (num_points - len(points),)
-                    )
-                    additional_points = points[additional_indices]
-                    points = torch.cat([points, additional_points], dim=0)
-
-                # Add noise for better training
-                noise_scale = 0.01
-                noise = torch.randn_like(points) * noise_scale
-                points = points + noise
-
-                # Clip to domain
-                for dim in range(self.dimension):
-                    points[:, dim] = torch.clamp(
-                        points[:, dim], self.domain[dim][0], self.domain[dim][1]
-                    )
-                points[:, -1] = torch.clamp(
-                    points[:, -1],
-                    self.time_domain[0],
-                    self.time_domain[1],
-                )
-
-                # Extract x and t
-                x = points[:, : self.dimension]
-                t = points[:, -1].reshape(-1, 1)
-
-        elif strategy == "latin_hypercube":
-            if not SCIPY_AVAILABLE:
-                print("Warning: scipy not available, falling back to uniform sampling")
-                return self.generate_collocation_points(num_points, strategy="uniform")
-
-            sampler = qmc.LatinHypercube(d=self.dimension + 1)  # +1 for time dimension
-            sample = sampler.random(n=num_points)
-
-            # Scale spatial coordinates
-            x = []
-            for dim in range(self.dimension):
-                x.append(
-                    torch.tensor(
-                        qmc.scale(
-                            sample[:, dim].reshape(-1, 1),
-                            l_bounds=[float(self.domain[dim][0])],
-                            u_bounds=[float(self.domain[dim][1])],
-                        ),
-                        dtype=torch.float32,
-                    )
-                )
-            x = torch.cat(x, dim=1)
-
-            # Scale time coordinate
-            t = torch.tensor(
-                qmc.scale(
-                    sample[:, -1].reshape(-1, 1),
-                    l_bounds=[float(self.time_domain[0])],
-                    u_bounds=[float(self.time_domain[1])],
-                ),
-                dtype=torch.float32,
-            )
-
-        elif strategy == "sobol":
-            if not SCIPY_AVAILABLE:
-                print("Warning: scipy not available, falling back to uniform sampling")
-                return self.generate_collocation_points(num_points, strategy="uniform")
-
-            # Sobol sequence for low-discrepancy sampling
-            sampler = qmc.Sobol(d=self.dimension + 1)  # +1 for time dimension
-            sample = sampler.random(n=num_points)
-
-            # Scale spatial coordinates
-            x = []
-            for dim in range(self.dimension):
-                x.append(
-                    torch.tensor(
-                        qmc.scale(
-                            sample[:, dim].reshape(-1, 1),
-                            l_bounds=[float(self.domain[dim][0])],
-                            u_bounds=[float(self.domain[dim][1])],
-                        ),
-                        dtype=torch.float32,
-                    )
-                )
-            x = torch.cat(x, dim=1)
-
-            # Scale time coordinate
-            t = torch.tensor(
-                qmc.scale(
-                    sample[:, -1].reshape(-1, 1),
-                    l_bounds=[float(self.time_domain[0])],
-                    u_bounds=[float(self.time_domain[1])],
-                ),
-                dtype=torch.float32,
-            )
+        elif strategy == "residual_based":
+            model = kwargs.get("model", None)
+            x, t = self._sample_residual_based(num_points, model)
 
         elif strategy == "adaptive":
             # Use RL agent for adaptive sampling if available
@@ -847,9 +793,7 @@ class PDEBase:
                         device=self.device,
                     )
                     additional_points = selected_points[additional_indices]
-                    selected_points = torch.cat(
-                        [selected_points, additional_points], dim=0
-                    )
+                    selected_points = torch.cat([selected_points, additional_points], dim=0)
 
                 # Add some small noise to avoid exact grid points
                 noise_scale = min(
@@ -890,12 +834,8 @@ class PDEBase:
 
                 # Reward the RL agent based on the diversity of selected points
                 if len(self.collocation_history) > 1:
-                    prev_points = torch.tensor(
-                        self.collocation_history[-2], device=self.device
-                    )
-                    reward = torch.mean(
-                        torch.min(torch.cdist(selected_points, prev_points), dim=1)[0]
-                    )
+                    prev_points = torch.tensor(self.collocation_history[-2], device=self.device)
+                    torch.mean(torch.min(torch.cdist(selected_points, prev_points), dim=1)[0])
                     self.rl_agent.update_epsilon(
                         len(self.collocation_history)
                     )  # Update exploration rate
@@ -937,9 +877,9 @@ class PDEBase:
             x_boundary = []
             for dim in range(self.dimension):
                 x_boundary.extend([self.domain[dim][0], self.domain[dim][1]])
-            x_boundary = torch.tensor(
-                x_boundary, dtype=torch.float32, device=self.device
-            ).reshape(-1, 1)
+            x_boundary = torch.tensor(x_boundary, dtype=torch.float32, device=self.device).reshape(
+                -1, 1
+            )
 
         t_boundary = torch.linspace(
             self.time_domain[0],
@@ -984,9 +924,7 @@ class PDEBase:
                 )
             else:
                 # For other types, create a temporary boundary condition function
-                temp_bc = self._create_boundary_condition(
-                    "initial", self.config.initial_condition
-                )
+                temp_bc = self._create_boundary_condition("initial", self.config.initial_condition)
                 u_target = temp_bc(x_initial, t_initial)
 
         initial_loss = torch.mean((u_initial - u_target) ** 2)
@@ -995,10 +933,7 @@ class PDEBase:
         smoothness_loss = torch.tensor(0.0, device=self.device)
 
         # Get smoothness weight from config if available
-        if (
-            hasattr(self.config.training, "loss_weights")
-            and self.config.training.loss_weights
-        ):
+        if hasattr(self.config.training, "loss_weights") and self.config.training.loss_weights:
             smoothness_weight = self.config.training.loss_weights.get("smoothness", 0.0)
         else:
             smoothness_weight = 0.0
@@ -1019,10 +954,7 @@ class PDEBase:
             # The total loss will be computed by the trainer using adaptive weights
             # We just return the individual components
             losses["total"] = (
-                residual_loss
-                + boundary_loss
-                + initial_loss
-                + smoothness_weight * smoothness_loss
+                residual_loss + boundary_loss + initial_loss + smoothness_weight * smoothness_loss
             )
         else:
             # Otherwise use fixed weights from config
@@ -1091,14 +1023,10 @@ class PDEBase:
             return PINNModel(**arch_config)
 
         except ImportError:
-            print(
-                "Could not import PINNModel. Make sure neural_networks module is available."
-            )
+            print("Could not import PINNModel. Make sure neural_networks module is available.")
             return None
 
-    def validate(
-        self, model: torch.nn.Module, num_points: int = 1000
-    ) -> Dict[str, float]:
+    def validate(self, model: torch.nn.Module, num_points: int = 1000) -> Dict[str, float]:
         """
         Validate the model's solution against exact solution.
 
@@ -1134,9 +1062,7 @@ class PDEBase:
         u_exact = self.exact_solution(x, t)
 
         plt.figure(figsize=(10, 6))
-        plt.scatter(
-            x.cpu().numpy(), u_pred.detach().cpu().numpy(), label="Predicted", alpha=0.5
-        )
+        plt.scatter(x.cpu().numpy(), u_pred.detach().cpu().numpy(), label="Predicted", alpha=0.5)
         plt.scatter(x.cpu().numpy(), u_exact.cpu().numpy(), label="Exact", alpha=0.5)
         plt.xlabel("x")
         plt.ylabel("u")
@@ -1172,9 +1098,7 @@ class PDEBase:
         self.validation_points = state["validation_points"]
         self._setup_boundary_conditions()
 
-    def update_sampling_strategy(
-        self, x: torch.Tensor, t: torch.Tensor, residual: torch.Tensor
-    ):
+    def update_sampling_strategy(self, x: torch.Tensor, t: torch.Tensor, residual: torch.Tensor):
         """
         Update the RL agent's sampling strategy based on the residual.
 
@@ -1227,9 +1151,7 @@ class PDEBase:
         :param num_snapshots: Number of snapshots to visualize
         """
         # Use provided points_history or class attribute
-        history = (
-            points_history if points_history is not None else self.collocation_history
-        )
+        history = points_history if points_history is not None else self.collocation_history
 
         if not history or len(history) < 2:
             print("Not enough collocation history to visualize evolution")
@@ -1242,7 +1164,6 @@ class PDEBase:
             matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from matplotlib.colors import LinearSegmentedColormap
-        import os
 
         # Create output directory if it doesn't exist
         os.makedirs("visualizations", exist_ok=True)
@@ -1260,9 +1181,7 @@ class PDEBase:
 
         # Define custom colormap for evolution
         colors = ["#0d3b66", "#1b9aaa", "#ef476f", "#ffc43d"]
-        cmap = LinearSegmentedColormap.from_list(
-            "evolution_cmap", colors, N=len(history)
-        )
+        cmap = LinearSegmentedColormap.from_list("evolution_cmap", colors, N=len(history))
 
         # Select snapshots to visualize
         indices = np.linspace(0, len(history) - 1, num_snapshots).astype(int)
@@ -1298,9 +1217,7 @@ class PDEBase:
 
         # Second plot: Density evolution (first snapshot)
         points = history[0]
-        self._plot_density_snapshot(
-            axes[0, 1], points, "Initial Distribution", cmap="Blues"
-        )
+        self._plot_density_snapshot(axes[0, 1], points, "Initial Distribution", cmap="Blues")
 
         # Third plot: Density evolution (middle snapshot)
         mid_idx = len(history) // 2
@@ -1313,18 +1230,14 @@ class PDEBase:
         )
         # Fourth plot: Density evolution (last snapshot)
         points = history[-1]
-        self._plot_density_snapshot(
-            axes[1, 1], points, "Final Distribution", cmap="Reds"
-        )
+        self._plot_density_snapshot(axes[1, 1], points, "Final Distribution", cmap="Reds")
 
         plt.tight_layout()
         if save_path:
             plt.savefig(save_path, dpi=300)
         else:
             save_name = (
-                f"collocation_evolution_epoch_{epoch}.png"
-                if epoch
-                else "collocation_evolution.png"
+                f"collocation_evolution_epoch_{epoch}.png" if epoch else "collocation_evolution.png"
             )
             plt.savefig(f"visualizations/{save_name}", dpi=300)
             # Also save as latest for real-time viewing

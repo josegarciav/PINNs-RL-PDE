@@ -1,12 +1,12 @@
 """Neural network with Fourier feature encoding for better fitting of high-frequency functions."""
 
 from typing import Optional
+
 import torch
 import torch.nn as nn
-from torch import Tensor
 from torch.jit import script
 
-from .base_network import BaseNetwork, InputType, OutputType, NetworkConfig
+from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 
 
 @script
@@ -39,14 +39,10 @@ class FourierFeatures(nn.Module):
         self.input_dim = input_dim
         self.mapping_size = mapping_size
         self.scale = scale
-        self.device = device or torch.device(
-            "mps" if torch.backends.mps.is_available() else "cpu"
-        )
+        self.device = device or torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
         # Initialize random Fourier features with better initialization
-        self.register_buffer(
-            "B", torch.randn(input_dim, mapping_size, device=self.device) * scale
-        )
+        self.register_buffer("B", torch.randn(input_dim, mapping_size, device=self.device) * scale)
 
         # Pre-compute output dimension
         self.output_dim = mapping_size * 2
@@ -101,9 +97,7 @@ class FourierNetwork(BaseNetwork):
         prev_dim = 2 * self.mapping_size  # Sine and cosine features
 
         # Create hidden layers
-        for _ in range(
-            self.num_layers - 1
-        ):  # -1 because we add output layer separately
+        for _ in range(self.num_layers - 1):  # -1 because we add output layer separately
             self.layers.append(nn.Linear(prev_dim, self.hidden_dim))
             prev_dim = self.hidden_dim
 

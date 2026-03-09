@@ -1,17 +1,19 @@
 import os
+
 import torch
 import yaml
-import numpy as np
-from src.pdes.pde_base import PDEConfig
-from src.pdes.heat_equation import HeatEquation
-from src.pdes.wave_equation import WaveEquation
-from src.pdes.kdv_equation import KdVEquation
-from src.pdes.burgers_equation import BurgersEquation
-from src.pdes.convection_equation import ConvectionEquation
+
+from src.config import DEFAULT_CONFIG_PATH
 from src.pdes.allen_cahn import AllenCahnEquation
-from src.pdes.cahn_hilliard import CahnHilliardEquation
 from src.pdes.black_scholes import BlackScholesEquation
+from src.pdes.burgers_equation import BurgersEquation
+from src.pdes.cahn_hilliard import CahnHilliardEquation
+from src.pdes.convection_equation import ConvectionEquation
+from src.pdes.heat_equation import HeatEquation
+from src.pdes.kdv_equation import KdVEquation
+from src.pdes.pde_base import PDEConfig
 from src.pdes.pendulum_equation import PendulumEquation
+from src.pdes.wave_equation import WaveEquation
 
 
 def load_pde_config(pde_type, device=None):
@@ -31,7 +33,7 @@ def load_pde_config(pde_type, device=None):
         device = torch.device("cpu")
 
     # Load config file
-    config_path = "config.yaml"
+    config_path = DEFAULT_CONFIG_PATH
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
 

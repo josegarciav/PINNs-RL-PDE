@@ -1,22 +1,63 @@
 import unittest
+
 import torch
-import numpy as np
+
+from src.config import Config, ModelConfig
 from src.neural_networks import (
-    FeedForwardNetwork,
-    ResNet,
-    FourierNetwork,
     SIREN,
     AttentionNetwork,
     AutoEncoder,
-    PINNModel,
+    FeedForwardNetwork,
     FourierFeatures,
-    SIRENLayer,
+    FourierNetwork,
+    PINNModel,
+    ResNet,
     ResNetBlock,
     SelfAttention,
 )
 
 # Import FeedForwardBlock from attention module instead of feedforward
 from src.neural_networks.attention import FeedForwardBlock
+
+
+def _make_config(
+    input_dim=2,
+    hidden_dim=32,
+    output_dim=1,
+    num_layers=3,
+    activation="tanh",
+    architecture="feedforward",
+    device=None,
+):
+    """Helper: build a minimal Config object for PINNModel tests."""
+    if device is None:
+        device = torch.device("cpu")
+    cfg = Config.__new__(Config)
+    cfg.device = device
+    cfg.model = ModelConfig(
+        input_dim=input_dim,
+        hidden_dim=hidden_dim,
+        output_dim=output_dim,
+        num_layers=num_layers,
+        activation=activation,
+        dropout=0.0,
+        layer_norm=False,
+        architecture=architecture,
+    )
+    # Ensure architecture-specific defaults are set
+    if architecture == "fourier":
+        cfg.model.mapping_size = 16
+        cfg.model.scale = 10.0
+    elif architecture == "siren":
+        cfg.model.omega_0 = 30.0
+    elif architecture == "attention":
+        cfg.model.num_heads = 4
+    elif architecture == "autoencoder":
+        cfg.model.latent_dim = hidden_dim // 2
+    elif architecture == "resnet":
+        cfg.model.num_blocks = num_layers
+    cfg.model.device = device
+    return cfg
 
 
 class TestNeuralNetworks(unittest.TestCase):
@@ -29,9 +70,7 @@ class TestNeuralNetworks(unittest.TestCase):
         self.input_dim = 2  # x, t
         self.hidden_dim = 32
         self.output_dim = 1
-        self.sample_input = torch.rand(
-            self.batch_size, self.input_dim, device=self.device
-        )
+        self.sample_input = torch.rand(self.batch_size, self.input_dim, device=self.device)
 
     def test_feedforward_network(self):
         """Test FeedForwardNetwork architecture."""
@@ -96,6 +135,7 @@ class TestNeuralNetworks(unittest.TestCase):
         config = {
             "input_dim": self.input_dim,
             "mapping_size": 16,
+            "hidden_dim": self.hidden_dim,
             "hidden_dims": [self.hidden_dim, self.hidden_dim],
             "output_dim": self.output_dim,
             "activation": "relu",
@@ -112,9 +152,7 @@ class TestNeuralNetworks(unittest.TestCase):
         loss = torch.mean(output)
         loss.backward()
         # Make sure Fourier features layer has the expected parameters
-        self.assertEqual(
-            model.fourier.B.shape, (self.input_dim, config["mapping_size"])
-        )
+        self.assertEqual(model.fourier.B.shape, (self.input_dim, config["mapping_size"]))
 
     def test_siren(self):
         """Test SIREN architecture."""
@@ -166,23 +204,26 @@ class TestNeuralNetworks(unittest.TestCase):
             self.assertIsInstance(layer_pair[1], FeedForwardBlock)
 
     def test_autoencoder(self):
-        """Test AutoEncoder architecture."""
+        """Test AutoEncoder architecture (PINN mode: encoder->latent->output_dim)."""
         config = {
             "input_dim": self.input_dim,
+            "output_dim": self.output_dim,
             "latent_dim": self.hidden_dim // 2,
             "hidden_dims": [self.hidden_dim, self.hidden_dim],
             "activation": "relu",
+            "dropout": 0.0,
+            "layer_norm": False,
             "device": self.device,
         }
 
         model = AutoEncoder(config)
-        # Test encode function
+        # Test encode function — should produce latent representation
         latent = model.encode(self.sample_input)
         self.assertEqual(latent.shape, (self.batch_size, config["latent_dim"]))
 
-        # Test full forward pass (encode and decode)
+        # Test full forward pass — decoder outputs output_dim (solution value, not reconstruction)
         output = model(self.sample_input)
-        self.assertEqual(output.shape, (self.batch_size, self.input_dim))
+        self.assertEqual(output.shape, (self.batch_size, self.output_dim))
 
         # Test gradients
         loss = torch.mean(output)
@@ -190,7 +231,6 @@ class TestNeuralNetworks(unittest.TestCase):
 
     def test_pinn_model(self):
         """Test PINNModel with different architectures."""
-        # Test all available architectures
         architectures = [
             "fourier",
             "resnet",
@@ -201,7 +241,7 @@ class TestNeuralNetworks(unittest.TestCase):
         ]
 
         for arch in architectures:
-            model = PINNModel(
+            cfg = _make_config(
                 input_dim=self.input_dim,
                 hidden_dim=self.hidden_dim,
                 output_dim=self.output_dim,
@@ -210,34 +250,29 @@ class TestNeuralNetworks(unittest.TestCase):
                 architecture=arch,
                 device=self.device,
             )
-
+            model = PINNModel(config=cfg, device=self.device)
             output = model(self.sample_input)
 
-            # Check output shape
             self.assertEqual(
                 output.shape,
                 (self.batch_size, self.output_dim),
                 f"Failed for architecture: {arch}",
             )
 
-            # Test gradients
             loss = torch.mean(output)
             loss.backward()
 
-            # Make sure parameters exist and have gradients
             param_count = model.count_parameters()
             self.assertGreater(param_count, 0, f"No parameters in {arch} architecture")
 
-            # Reset gradients for next test
             model.zero_grad()
 
     def test_save_load(self):
         """Test saving and loading models."""
-        import tempfile
         import os
+        import tempfile
 
-        # Create model with simple architecture
-        model = PINNModel(
+        cfg = _make_config(
             input_dim=self.input_dim,
             hidden_dim=self.hidden_dim,
             output_dim=self.output_dim,
@@ -245,41 +280,23 @@ class TestNeuralNetworks(unittest.TestCase):
             architecture="fourier",
             device=self.device,
         )
+        model = PINNModel(config=cfg, device=self.device)
 
-        # Get output before saving
         before_output = model(self.sample_input).detach().clone()
 
-        # Create temporary file
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             path = tmp.name
 
         try:
-            # Save model
             model.save_state(path)
 
-            # Create identical model (same architecture and dimensions)
-            new_model = PINNModel(
-                input_dim=self.input_dim,
-                hidden_dim=self.hidden_dim,  # Same dimensions
-                output_dim=self.output_dim,
-                num_layers=3,  # Same number of layers
-                architecture="fourier",
-                device=self.device,
-            )
-
-            # Load saved model
+            new_model = PINNModel(config=cfg, device=self.device)
             new_model.load_state(path)
 
-            # Get output after loading
             after_output = new_model(self.sample_input)
 
-            # Outputs should be identical
-            self.assertTrue(
-                torch.allclose(before_output, after_output, rtol=1e-5, atol=1e-5)
-            )
-
+            self.assertTrue(torch.allclose(before_output, after_output, rtol=1e-5, atol=1e-5))
         finally:
-            # Clean up
             if os.path.exists(path):
                 os.remove(path)
 
@@ -328,7 +345,6 @@ class TestNeuralNetworks(unittest.TestCase):
 
     def test_gradient_stability(self):
         """Test that gradients are not infinite or unstable for each architecture."""
-        # Test all available architectures
         architectures = [
             "fourier",
             "resnet",
@@ -339,7 +355,7 @@ class TestNeuralNetworks(unittest.TestCase):
         ]
 
         for arch in architectures:
-            model = PINNModel(
+            cfg = _make_config(
                 input_dim=self.input_dim,
                 hidden_dim=self.hidden_dim,
                 output_dim=self.output_dim,
@@ -348,6 +364,7 @@ class TestNeuralNetworks(unittest.TestCase):
                 architecture=arch,
                 device=self.device,
             )
+            model = PINNModel(config=cfg, device=self.device)
 
             # Forward pass with gradient tracking
             output = model(self.sample_input)
@@ -386,8 +403,7 @@ class TestNeuralNetworks(unittest.TestCase):
 
     def test_training_stability(self):
         """Test numerical stability during multiple training steps."""
-        # Test with a representative architecture
-        model = PINNModel(
+        cfg = _make_config(
             input_dim=self.input_dim,
             hidden_dim=self.hidden_dim,
             output_dim=self.output_dim,
@@ -396,6 +412,7 @@ class TestNeuralNetworks(unittest.TestCase):
             architecture="feedforward",
             device=self.device,
         )
+        model = PINNModel(config=cfg, device=self.device)
 
         # Use a simple optimizer
         optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -416,31 +433,21 @@ class TestNeuralNetworks(unittest.TestCase):
 
             # Check gradients before optimization step
             for param in model.parameters():
-                self.assertFalse(
-                    torch.isnan(param.grad).any(), "NaN gradient during training"
-                )
-                self.assertFalse(
-                    torch.isinf(param.grad).any(), "Infinite gradient during training"
-                )
+                self.assertFalse(torch.isnan(param.grad).any(), "NaN gradient during training")
+                self.assertFalse(torch.isinf(param.grad).any(), "Infinite gradient during training")
 
             # Optimization step
             optimizer.step()
 
             # Check parameters after optimization step
             for param in model.parameters():
-                self.assertFalse(
-                    torch.isnan(param).any(), "NaN parameter during training"
-                )
-                self.assertFalse(
-                    torch.isinf(param).any(), "Infinite parameter during training"
-                )
+                self.assertFalse(torch.isnan(param).any(), "NaN parameter during training")
+                self.assertFalse(torch.isinf(param).any(), "Infinite parameter during training")
 
         # Verify that loss is decreasing (generally)
         # Allow for some fluctuations but overall trend should be downward
         first_half_avg = sum(loss_values[: num_steps // 2]) / (num_steps // 2)
-        second_half_avg = sum(loss_values[num_steps // 2 :]) / (
-            num_steps - num_steps // 2
-        )
+        second_half_avg = sum(loss_values[num_steps // 2 :]) / (num_steps - num_steps // 2)
 
         self.assertLess(
             second_half_avg,

@@ -1,19 +1,16 @@
 """Neural network architectures for Physics-Informed Neural Networks (PINNs)."""
 
-import torch
-import torch.nn as nn
-from typing import Dict, Any, Optional, Union, List
-import sys
-import os
+from typing import TYPE_CHECKING
 
-from src.config import Config
+if TYPE_CHECKING:
+    from src.config import Config
 
-from .base_network import BaseNetwork, InputType, OutputType, NetworkConfig
+from .autoencoder import AutoEncoder
+from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 from .feedforward import FeedForwardNetwork
+from .fourier import FourierFeatures, FourierNetwork
 from .resnet import ResNet, ResNetBlock
 from .siren import SIREN, SIRENLayer
-from .fourier import FourierNetwork, FourierFeatures
-from .autoencoder import AutoEncoder
 
 # Import optional architectures if available
 try:
@@ -62,7 +59,7 @@ class PINNModel(BaseNetwork):
     architectures suitable for Physics-Informed Neural Networks.
     """
 
-    def __init__(self, config: Config, device=None, **kwargs):
+    def __init__(self, config: "Config", device=None, **kwargs):
         """
         Initialize the PINN model.
 
@@ -86,9 +83,7 @@ class PINNModel(BaseNetwork):
 
         # Store architecture type
         self.architecture = config.model.architecture
-        self.architecture_name = (
-            config.model.architecture
-        )  # More accessible name for metadata
+        self.architecture_name = config.model.architecture  # More accessible name for metadata
 
         # Create model based on architecture
         if self.architecture == "fourier":
@@ -105,19 +100,13 @@ class PINNModel(BaseNetwork):
             }
 
             # Make sure num_blocks is defined, using num_layers as fallback
-            if (
-                hasattr(config.model, "num_blocks")
-                and config.model.num_blocks is not None
-            ):
+            if hasattr(config.model, "num_blocks") and config.model.num_blocks is not None:
                 resnet_config["num_blocks"] = config.model.num_blocks
             else:
                 resnet_config["num_blocks"] = config.model.num_layers
 
             # Add hidden_dims if defined
-            if (
-                hasattr(config.model, "hidden_dims")
-                and config.model.hidden_dims is not None
-            ):
+            if hasattr(config.model, "hidden_dims") and config.model.hidden_dims is not None:
                 resnet_config["hidden_dims"] = config.model.hidden_dims
 
             self.model = ResNet(resnet_config)
@@ -127,8 +116,6 @@ class PINNModel(BaseNetwork):
             self.model = AttentionNetwork(config_with_device)
         elif self.architecture == "autoencoder":
             self.model = AutoEncoder(config_with_device)
-            # Additional output projection for AutoEncoder to ensure correct output dimension
-            self.output_proj = FeedForwardNetwork(config_with_device)
         else:  # Default to feedforward
             self.model = FeedForwardNetwork(config_with_device)
 
@@ -146,35 +133,4 @@ class PINNModel(BaseNetwork):
         Returns:
             Output tensor of shape (batch_size, output_dim)
         """
-        if self.architecture == "autoencoder" and hasattr(self, "output_proj"):
-            # For autoencoder, we need to project from input_dim to output_dim
-            return self.output_proj(self.model(x))
         return self.model(x)
-
-
-def create_network(config: Config) -> nn.Module:
-    """
-    Create a neural network based on the configuration.
-
-    Args:
-        config: Configuration object
-
-    Returns:
-        Neural network module
-    """
-    architecture = config.model.architecture
-
-    if architecture == "feedforward":
-        from .feedforward import FeedForwardNetwork
-
-        return FeedForwardNetwork(config)
-    elif architecture == "fourier":
-        from .fourier import FourierNetwork
-
-        return FourierNetwork(config)
-    elif architecture == "siren":
-        from .siren import SirenNetwork
-
-        return SirenNetwork(config)
-    else:
-        raise ValueError(f"Unknown architecture: {architecture}")

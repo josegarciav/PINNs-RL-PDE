@@ -2,10 +2,11 @@
 # Application domains: Phase transitions, material science, pattern formation
 # Complexity: Nonlinear, 2nd-order
 
+from typing import Any, Dict
+
 import torch
+
 from .pde_base import PDEBase, PDEConfig
-from typing import Dict, Any, Optional, Union, Tuple, List
-from src.rl_agent import RLAgent
 
 
 class AllenCahnEquation(PDEBase):
@@ -127,9 +128,7 @@ class AllenCahnEquation(PDEBase):
                 solution *= torch.tanh(x[:, dim : dim + 1] / (2 * self.epsilon))
             return solution
 
-    def _create_boundary_condition(
-        self, bc_type: str, params: Dict[str, Any]
-    ) -> callable:
+    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
         """
         Create boundary condition function from parameters.
 

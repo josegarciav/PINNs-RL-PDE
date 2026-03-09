@@ -1,9 +1,8 @@
-import os
-import sys
+import argparse
 import multiprocessing
+import sys
 import webbrowser
 from time import sleep
-import argparse
 
 
 def run_interactive_trainer():
@@ -39,14 +38,10 @@ def run_dashboard(port=8050):
                 break
             except Exception as e:
                 if "Address already in use" in str(e):
-                    print(
-                        f"Port {current_port} is in use. Trying port {current_port+1}..."
-                    )
+                    print(f"Port {current_port} is in use. Trying port {current_port+1}...")
                     current_port += 1
                     if attempt == max_retries - 1:
-                        print(
-                            f"Could not find available port after {max_retries} attempts."
-                        )
+                        print(f"Could not find available port after {max_retries} attempts.")
                         print("Please close any running dashboards and try again.")
                         sys.exit(1)
                 else:
@@ -69,13 +64,13 @@ def parse_args():
 Examples:
   Run complete application (trainer first, then dashboard):
     python src/main.py
-  
+
   Run only the interactive trainer:
     python src/main.py --trainer-only
-    
+
   Run only the dashboard viewer:
     python src/main.py --dashboard-only
-  
+
   Specify dashboard port:
     python src/main.py --port 8051
         """,
@@ -130,9 +125,7 @@ def main():
         sleep(2)
 
         print("\n📊 Starting Dashboard...")
-        dashboard_process = multiprocessing.Process(
-            target=run_dashboard, args=(args.port,)
-        )
+        dashboard_process = multiprocessing.Process(target=run_dashboard, args=(args.port,))
         dashboard_process.start()
 
         # Open the dashboard in the default web browser

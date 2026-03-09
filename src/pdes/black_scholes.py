@@ -2,10 +2,11 @@
 # Application domains: Financial derivatives, option pricing
 # Complexity: Nonlinear, 2nd-order
 
+from typing import Any, Dict
+
 import torch
+
 from .pde_base import PDEBase, PDEConfig
-from typing import Dict, Any, Optional, Union, Tuple, List
-from src.rl_agent import RLAgent
 
 
 class BlackScholesEquation(PDEBase):
@@ -79,9 +80,7 @@ class BlackScholesEquation(PDEBase):
         V = model(torch.cat([x, t], dim=1))
 
         if self.dimension == 1:
-            residual = (
-                V_t + 0.5 * self.sigma**2 * x**2 * V_SS + self.r * x * V_S - self.r * V
-            )
+            residual = V_t + 0.5 * self.sigma**2 * x**2 * V_SS + self.r * x * V_S - self.r * V
         else:
             # For higher dimensions, sum over all dimensions
             residual = (
@@ -117,19 +116,16 @@ class BlackScholesEquation(PDEBase):
             # For higher dimensions, use product of 1D solutions
             solution = torch.ones_like(x[:, 0:1])
             for dim in range(self.dimension):
-                d1 = (
-                    torch.log(x[:, dim : dim + 1] / K)
-                    + (self.r + 0.5 * self.sigma**2) * t
-                ) / (self.sigma * torch.sqrt(t))
+                d1 = (torch.log(x[:, dim : dim + 1] / K) + (self.r + 0.5 * self.sigma**2) * t) / (
+                    self.sigma * torch.sqrt(t)
+                )
                 d2 = d1 - self.sigma * torch.sqrt(t)
                 solution *= x[:, dim : dim + 1] * torch.erf(d1) - K * torch.exp(
                     -self.r * t
                 ) * torch.erf(d2)
             return solution
 
-    def _create_boundary_condition(
-        self, bc_type: str, params: Dict[str, Any]
-    ) -> callable:
+    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
         """
         Create boundary condition function from parameters.
 
