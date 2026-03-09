@@ -724,9 +724,6 @@ def update_solution_visualizations(experiment, time_point, _):
         )
 
     try:
-        print(f"\nAttempting to visualize solution for experiment: {experiment}")
-        print(f"Time point: {time_point}")
-
         # Import necessary modules
         import sys
 
@@ -741,9 +738,6 @@ def update_solution_visualizations(experiment, time_point, _):
         model_path = os.path.join(experiment, "final_model.pt")
         config_path = os.path.join(experiment, "config.yaml")
 
-        print(f"Model path: {model_path}")
-        print(f"Config path: {config_path}")
-
         if not os.path.exists(model_path) or not os.path.exists(config_path):
             print("Error: Model or config file not found")
             return create_empty_3d_figure("No model data available"), create_empty_3d_figure(
@@ -753,16 +747,13 @@ def update_solution_visualizations(experiment, time_point, _):
         # Load configuration
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
-            print(f"Loaded config: {json.dumps(config, indent=2)}")
 
         # Create PDE configuration
         pde_type = config.get("pde_type", "unknown").lower()
-        print(f"PDE type: {pde_type}")
 
         # Extract PDE-specific configuration
         pde_config = config.get("pde_configs", {}).get(pde_type, {})
         if not pde_config:
-            print(f"Error: No configuration found for PDE type {pde_type}")
             return create_empty_3d_figure(
                 f"No configuration for PDE type: {pde_type}"
             ), create_empty_3d_figure(f"No configuration for PDE type: {pde_type}")
@@ -784,107 +775,109 @@ def update_solution_visualizations(experiment, time_point, _):
             from src.pdes.heat_equation import HeatEquation
 
             pde = HeatEquation(config=pde_config)
-            print(f"Created HeatEquation instance with dimension {pde_config.dimension}")
         elif "wave" in pde_type:
             from src.pdes.wave_equation import WaveEquation
 
             pde = WaveEquation(config=pde_config)
-            print("Created WaveEquation instance")
         elif "burgers" in pde_type:
             from src.pdes.burgers_equation import BurgersEquation
 
             pde = BurgersEquation(config=pde_config)
-            print("Created BurgersEquation instance")
         elif "convection" in pde_type:
             from src.pdes.convection_equation import ConvectionEquation
 
             pde = ConvectionEquation(config=pde_config)
-            print("Created ConvectionEquation instance")
         elif "kdv" in pde_type:
             from src.pdes.kdv_equation import KdVEquation
 
             pde = KdVEquation(config=pde_config)
-            print("Created KdVEquation instance")
         elif "allen" in pde_type and "cahn" in pde_type:
             from src.pdes.allen_cahn import AllenCahnEquation
 
             pde = AllenCahnEquation(config=pde_config)
-            print("Created AllenCahnEquation instance")
         elif "cahn" in pde_type and "hilliard" in pde_type:
             from src.pdes.cahn_hilliard import CahnHilliardEquation
 
             pde = CahnHilliardEquation(config=pde_config)
-            print("Created CahnHilliardEquation instance")
         elif "black" in pde_type or "scholes" in pde_type:
             from src.pdes.black_scholes import BlackScholesEquation
 
             pde = BlackScholesEquation(config=pde_config)
-            print("Created BlackScholesEquation instance")
         elif "pendulum" in pde_type:
             from src.pdes.pendulum_equation import PendulumEquation
 
             pde = PendulumEquation(config=pde_config)
-            print("Created PendulumEquation instance")
         else:
-            print(f"Error: Unsupported PDE type: {pde_type}")
             return create_empty_3d_figure(
                 f"Unsupported PDE type: {pde_type}"
             ), create_empty_3d_figure(f"Unsupported PDE type: {pde_type}")
 
         # Load model
-        device = torch.device("cpu")  # Use CPU for visualization
-        print(f"Using device: {device}")
+        device = torch.device("cpu")
 
-        # Create model configuration
-        model_config = {
-            "architecture": config.get("architectures", {}).get(
-                pde_config.get("architecture", "feedforward"), {}
-            ),
-            "device": device,
-            "pde_type": pde_type,
-            "input_dim": (2 if pde_config.dimension == 1 else 3),  # x,t for 1D or x,y,t for 2D
-            "output_dim": 1,
-        }
+        # Create model configuration using Config
+        from src.config import Config, ModelConfig
 
-        print(f"Model config: {model_config}")
+        # Read model params from the saved config's "model" section (exact training params)
+        saved_model = config.get("model", {})
+        architecture = saved_model.get("architecture", "feedforward")
+        input_dim = saved_model.get("input_dim", 2 if pde_config.dimension == 1 else 3)
+        output_dim = saved_model.get("output_dim", 1)
+
+        model_cfg = ModelConfig(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            architecture=architecture,
+            hidden_dim=saved_model.get("hidden_dim", 128),
+            num_layers=saved_model.get("num_layers", 4),
+            activation=saved_model.get("activation", "tanh"),
+            dropout=saved_model.get("dropout", 0.0),
+            layer_norm=saved_model.get("layer_norm", False),
+        )
+        # Inject architecture-specific fields from saved model config
+        for key in [
+            "mapping_size",
+            "scale",
+            "omega_0",
+            "num_heads",
+            "num_blocks",
+            "latent_dim",
+            "hidden_dims",
+            "periodic",
+        ]:
+            if key in saved_model:
+                setattr(model_cfg, key, saved_model[key])
+
+        cfg = Config.__new__(Config)
+        cfg.device = device
+        cfg.model = model_cfg
 
         try:
-            model = PINNModel(config=model_config, device=device)
-            print("Successfully created PINNModel instance")
-            model.load_state_dict(torch.load(model_path, map_location=device))
-            print("Successfully loaded model state")
+            model = PINNModel(config=cfg, device=device)
+            model.load_state_dict(torch.load(model_path, map_location=device, weights_only=False))
             model.eval()
-            print("Model set to eval mode")
         except Exception as e:
-            print(f"Error creating/loading model: {e}")
             return create_empty_3d_figure(f"Error loading model: {str(e)}"), create_empty_3d_figure(
                 f"Error loading model: {str(e)}"
             )
 
         # Generate visualization data using plot_solution
-        print("Generating visualization...")
-        num_points = 1000  # Increased for better resolution
+        num_points = 1000
         try:
             exact_fig, predicted_fig = plot_solution(
                 model=model,
                 pde=pde,
                 num_points=num_points,
-                time_point=time_point,  # Pass the current time point
-                return_figs=True,  # Return figures instead of showing them
+                time_point=time_point,
+                return_figs=True,
             )
-            print("Visualization generated successfully")
             return exact_fig, predicted_fig
         except Exception as e:
-            print(f"Error generating visualization: {e}")
             return create_empty_3d_figure(
                 f"Error generating visualization: {str(e)}"
             ), create_empty_3d_figure(f"Error generating visualization: {str(e)}")
 
     except Exception as e:
-        print(f"Error in solution visualization: {e}")
-        import traceback
-
-        traceback.print_exc()
         return create_empty_3d_figure(f"Error: {str(e)}"), create_empty_3d_figure(
             f"Error: {str(e)}"
         )
@@ -1147,7 +1140,18 @@ def get_experiments():
             exp_path = os.path.join(experiments_dir, exp_dir)
             if os.path.isdir(exp_path):
                 # Check if this is a running experiment
-                is_running = os.path.exists(os.path.join(exp_path, ".running"))
+                # Check if experiment is truly running
+                running_file = os.path.join(exp_path, ".running")
+                is_running = os.path.exists(running_file)
+                if is_running:
+                    # If metadata has end_time, training finished — stale marker
+                    meta_file = os.path.join(exp_path, "metadata.json")
+                    if os.path.exists(meta_file):
+                        with open(meta_file, "r") as mf:
+                            meta = json.load(mf)
+                            if "end_time" in meta:
+                                os.remove(running_file)
+                                is_running = False
 
                 # Get experiment details from directory name
                 parts = exp_dir.split("_")
@@ -1227,39 +1231,6 @@ def update_plots(experiment_path):
         print(f"Error updating plots: {e}")
 
     return plots
-
-
-@app.callback(
-    [
-        Output("experiment-details", "children"),
-        Output("training-plot", "figure"),
-        Output("collocation-plot", "src"),
-        Output("solution-plot", "src"),
-        Output("interval-component", "disabled"),
-    ],
-    [Input("experiment-dropdown", "value"), Input("interval-component", "n_intervals")],
-)
-def update_experiment_view(selected_experiment, n_intervals):
-    """Update all components of the dashboard based on selected experiment."""
-    if not selected_experiment:
-        return "No experiment selected", {}, "", "", True
-
-    # Get experiment details
-    details, metadata = get_experiment_details(selected_experiment)
-
-    # Update plots
-    plots = update_plots(selected_experiment)
-
-    # Check if experiment is running
-    is_running = os.path.exists(os.path.join(selected_experiment, ".running"))
-
-    return (
-        details,
-        plots.get("training_progress", {}),
-        plots.get("collocation_points", ""),
-        plots.get("solution", ""),
-        not is_running,  # Enable auto-refresh only for running experiments
-    )
 
 
 def generate_html_report(experiment_path, figures, metadata):
@@ -1360,7 +1331,7 @@ if __name__ == "__main__":
 
     for attempt in range(max_retries):
         try:
-            app.run(debug=True, port=port)
+            app.run(debug=False, port=port)
             break
         except Exception as e:
             if "Address already in use" in str(e):
