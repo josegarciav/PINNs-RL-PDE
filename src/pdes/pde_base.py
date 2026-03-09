@@ -948,22 +948,26 @@ class PDEBase:
 
         # Use adaptive weights if enabled
         if (
-            hasattr(self.config.training, "adaptive_weights")
+            self.config.training is not None
+            and hasattr(self.config.training, "adaptive_weights")
             and self.config.training.adaptive_weights.enabled
         ):
-            # The total loss will be computed by the trainer using adaptive weights
-            # We just return the individual components
             losses["total"] = (
                 residual_loss + boundary_loss + initial_loss + smoothness_weight * smoothness_loss
             )
         else:
-            # Otherwise use fixed weights from config
-            # Map 'pde' key to 'residual' for backward compatibility
-            residual_weight = self.config.training.loss_weights.get(
-                "pde", self.config.training.loss_weights.get("residual", 1.0)
-            )
-            boundary_weight = self.config.training.loss_weights.get("boundary", 10.0)
-            initial_weight = self.config.training.loss_weights.get("initial", 10.0)
+            # Use fixed weights from config (or defaults if training config is absent)
+            if (
+                self.config.training is not None
+                and hasattr(self.config.training, "loss_weights")
+                and self.config.training.loss_weights
+            ):
+                lw = self.config.training.loss_weights
+                residual_weight = lw.get("pde", lw.get("residual", 1.0))
+                boundary_weight = lw.get("boundary", 10.0)
+                initial_weight = lw.get("initial", 10.0)
+            else:
+                residual_weight, boundary_weight, initial_weight = 1.0, 10.0, 10.0
 
             total_loss = (
                 residual_weight * residual_loss

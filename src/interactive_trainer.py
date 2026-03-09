@@ -153,19 +153,15 @@ class InteractiveTrainer:
             "Pendulum Equation": "pendulum",
         }
 
-        # Get all unique architectures from config
-        self.architectures = list(
-            set(pde_config.get("architecture", "fourier") for pde_config in pde_configs.values())
-        )
-        if not self.architectures:  # Fallback if config loading failed
-            self.architectures = [
-                "fourier",
-                "siren",
-                "resnet",
-                "feedforward",
-                "attention",
-                "autoencoder",
-            ]
+        # All available architectures — any PDE can be paired with any architecture
+        self.architectures = [
+            "fourier",
+            "siren",
+            "resnet",
+            "feedforward",
+            "attention",
+            "autoencoder",
+        ]
 
         # Control variables
         self.selected_pde = tk.StringVar(
@@ -536,8 +532,8 @@ class InteractiveTrainer:
         pde_key = self.pde_name_to_key.get(self.selected_pde.get(), "heat")
         pde_config = yaml_config.get("pde_configs", {}).get(pde_key, {})
 
-        # Get architecture configuration
-        arch_type = pde_config.get("architecture", "fourier")
+        # Use the architecture selected in the UI dropdown, not the PDE default
+        arch_type = self.selected_arch.get()
         arch_config = yaml_config.get("architectures", {}).get(arch_type, {})
 
         # Create a copy of the yaml_config to modify

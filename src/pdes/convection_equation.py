@@ -51,8 +51,9 @@ class ConvectionEquation(PDEBase):
         :param t: Time coordinates
         :return: Residual tensor
         """
+        x = x.detach().requires_grad_(True)
+        t = t.detach().requires_grad_(True)
         xt = torch.cat([x, t], dim=1)
-        xt.requires_grad_(True)
 
         # Compute derivatives
         u = model(xt)
@@ -103,7 +104,7 @@ class ConvectionEquation(PDEBase):
         """
         if bc_type == "initial":
             ic_type = params.get("type", "sine")
-            if ic_type == "sine":
+            if ic_type in ("sine", "sin"):
                 A = params.get("amplitude", 1.0)
                 k = params.get("frequency", 2.0)
                 if self.dimension == 1:

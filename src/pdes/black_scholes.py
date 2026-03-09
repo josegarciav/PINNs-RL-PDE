@@ -135,8 +135,8 @@ class BlackScholesEquation(PDEBase):
         """
         if bc_type == "initial":
             ic_type = params.get("type", "call_option")
-            if ic_type == "call_option":
-                K = params.get("strike_price", 1.0)
+            if ic_type in ("call_option", "option"):
+                K = params.get("strike_price", params.get("strike", 1.0))
                 if self.dimension == 1:
                     return lambda x, t: torch.maximum(x - K, torch.zeros_like(x))
                 else:

@@ -35,6 +35,8 @@ markdown_extensions:
       alternate_style: true
   - pymdownx.details
   - admonition
+  - pymdownx.arithmatex:
+      generic: true
   - tables
   - toc:
       permalink: true
@@ -52,4 +54,5 @@ nav:
     - Start Here: start_here.md
     - Installation & Setup: setup.md
   - Architecture: ARCHITECTURE.md
+  - Sampling Strategies: sampling_strategies.md
   - Roadmap: roadmap.md

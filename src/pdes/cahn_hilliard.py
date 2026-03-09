@@ -192,6 +192,9 @@ class CahnHilliardEquation(PDEBase):
                     return lambda x, t: torch.tanh(
                         torch.sum(x, dim=1, keepdim=True) / (2 * self.epsilon)
                     )
+            elif ic_type == "random":
+                amp = params.get("amplitude", 0.1)
+                return lambda x, t: amp * (2 * torch.rand_like(x[:, 0:1]) - 1)
             else:
                 raise ValueError(f"Unsupported initial condition type: {ic_type}")
         else:
