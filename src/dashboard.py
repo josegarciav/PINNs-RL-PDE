@@ -174,12 +174,11 @@ app.layout = html.Div(
             ],
             style={"marginTop": "30px"},
         ),
-        # Automatic update interval
+        # Automatic update interval (refreshes experiment list and loss graphs)
         dcc.Interval(
             id="interval-component",
-            interval=5 * 1000,  # in milliseconds
+            interval=10 * 1000,  # 10 seconds
             n_intervals=0,
-            disabled=True,
         ),
     ],
     style={"padding": "20px"},
@@ -229,8 +228,22 @@ def launch_trainer(n_clicks):
         if python_cmd is None:
             return "Error: No Python with tkinter found. Install tk: brew install python-tk"
 
-        subprocess.Popen([python_cmd, trainer_path])
-        return "Interactive Trainer launched."
+        proc = subprocess.Popen(
+            [python_cmd, trainer_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        # Wait briefly to check if the process crashes on startup
+        try:
+            proc.wait(timeout=2)
+            # If we get here, process exited within 2 seconds — it crashed
+            stderr = proc.stderr.read().decode(errors="replace").strip()
+            return f"Error: Trainer exited immediately. {stderr}"
+        except subprocess.TimeoutExpired:
+            # Process is still running after 2s — it launched successfully
+            # Close stderr pipe so it doesn't block the subprocess
+            proc.stderr.close()
+            return "Interactive Trainer launched."
     except Exception as e:
         return f"Error launching trainer: {e}"
 
@@ -261,8 +274,9 @@ def update_graphs(experiment, _):
         with open(history_file, "r") as f:
             history = json.load(f)
 
-        # Load metadata if available
+        # Load metadata once and reuse
         metadata_file = os.path.join(experiment, "metadata.json")
+        metadata = None
         early_stopping_triggered = False
         training_completed = False
 
@@ -297,20 +311,25 @@ def update_graphs(experiment, _):
         final_epoch = len(history["train_loss"])
         total_epochs = final_epoch  # Default to final_epoch
 
-        # Try to get total epochs from metadata if available
-        if os.path.exists(metadata_file):
-            with open(metadata_file, "r") as f:
-                metadata = json.load(f)
-                if "training_params" in metadata and "num_epochs" in metadata["training_params"]:
+        # Get total epochs and validation frequency from metadata or config
+        val_frequency = 10  # Default validation frequency
+
+        if metadata is not None:
+            if "training_params" in metadata:
+                if "num_epochs" in metadata["training_params"]:
                     total_epochs = metadata["training_params"]["num_epochs"]
+                if "validation_frequency" in metadata["training_params"]:
+                    val_frequency = metadata["training_params"]["validation_frequency"]
         else:
-            # Try to get from config
             config_file = os.path.join(experiment, "config.yaml")
             if os.path.exists(config_file):
                 with open(config_file, "r") as f:
                     config = yaml.safe_load(f)
-                    if "training" in config and "num_epochs" in config["training"]:
-                        total_epochs = config["training"]["num_epochs"]
+                    if "training" in config:
+                        if "num_epochs" in config["training"]:
+                            total_epochs = config["training"]["num_epochs"]
+                        if "validation_frequency" in config["training"]:
+                            val_frequency = config["training"]["validation_frequency"]
 
         # Create training loss trace
         loss_fig = go.Figure()
@@ -320,27 +339,6 @@ def update_graphs(experiment, _):
 
         # Add validation loss if available
         if "val_loss" in history and history["val_loss"]:
-            # For validation, we need to account for validation frequency
-            val_frequency = 10  # Default validation frequency
-
-            # Try to get validation frequency from metadata or config
-            if os.path.exists(metadata_file):
-                with open(metadata_file, "r") as f:
-                    metadata = json.load(f)
-                    if (
-                        "training_params" in metadata
-                        and "validation_frequency" in metadata["training_params"]
-                    ):
-                        val_frequency = metadata["training_params"]["validation_frequency"]
-            else:
-                # Try to get from config
-                config_file = os.path.join(experiment, "config.yaml")
-                if os.path.exists(config_file):
-                    with open(config_file, "r") as f:
-                        config = yaml.safe_load(f)
-                        if "training" in config and "validation_frequency" in config["training"]:
-                            val_frequency = config["training"]["validation_frequency"]
-
             val_epochs = list(
                 range(
                     val_frequency,
@@ -770,7 +768,7 @@ def update_pde_comparison(_):
     return fig
 
 
-# Callback to update 3D solution visualizations
+# Callback to update 3D solution visualizations (only on user interaction, not interval)
 @app.callback(
     [
         Output("exact-solution-3d", "figure"),
@@ -779,10 +777,9 @@ def update_pde_comparison(_):
     [
         Input("experiment-selector", "value"),
         Input("time-slider", "value"),
-        Input("interval-component", "n_intervals"),
     ],
 )
-def update_solution_visualizations(experiment, time_point, _):
+def update_solution_visualizations(experiment, time_point):
     if not experiment:
         return create_empty_3d_figure("Select an experiment"), create_empty_3d_figure(
             "Select an experiment"
@@ -817,22 +814,22 @@ def update_solution_visualizations(experiment, time_point, _):
         pde_type = config.get("pde_type", "unknown").lower()
 
         # Extract PDE-specific configuration
-        pde_config = config.get("pde_configs", {}).get(pde_type, {})
-        if not pde_config:
+        pde_config_dict = config.get("pde_configs", {}).get(pde_type, {})
+        if not pde_config_dict:
             return create_empty_3d_figure(
                 f"No configuration for PDE type: {pde_type}"
             ), create_empty_3d_figure(f"No configuration for PDE type: {pde_type}")
 
         # Create PDEConfig instance with the correct configuration
         pde_config = PDEConfig(
-            name=pde_config.get("name", pde_type),
-            dimension=pde_config.get("dimension", 1),
-            domain=pde_config.get("domain", [[0, 1]]),
-            time_domain=pde_config.get("time_domain", [0, 1]),
-            initial_condition=pde_config.get("initial_condition", {}),
-            boundary_conditions=pde_config.get("boundary_conditions", {}),
-            parameters=pde_config.get("parameters", {}),
-            exact_solution=pde_config.get("exact_solution", {}),
+            name=pde_config_dict.get("name", pde_type),
+            dimension=pde_config_dict.get("dimension", 1),
+            domain=pde_config_dict.get("domain", [[0, 1]]),
+            time_domain=pde_config_dict.get("time_domain", [0, 1]),
+            initial_condition=pde_config_dict.get("initial_condition", {}),
+            boundary_conditions=pde_config_dict.get("boundary_conditions", {}),
+            parameters=pde_config_dict.get("parameters", {}),
+            exact_solution=pde_config_dict.get("exact_solution", {}),
         )
 
         # Import and create appropriate PDE instance
@@ -955,6 +952,8 @@ def create_empty_3d_figure(message):
         text=message,
         x=0.5,
         y=0.5,
+        xref="paper",
+        yref="paper",
         showarrow=False,
         font=dict(size=16),
     )
@@ -967,104 +966,6 @@ def create_empty_3d_figure(message):
         ),
     )
     return fig
-
-
-def generate_example_solution(X, Y, solution_type, pde_type, time=None):
-    """Generate example solutions for visualization."""
-    if time is None:
-        time = Y  # Assume Y is time grid for 1D problems
-
-    # Generate different solutions based on PDE type
-    if pde_type and "heat" in pde_type.lower():
-        if solution_type == "exact":
-            # Heat equation exact solution
-            return np.sin(np.pi * X) * np.exp(-np.pi**2 * time)
-        else:
-            # Add some noise to simulate prediction
-            return (
-                np.sin(np.pi * X)
-                * np.exp(-np.pi**2 * time)
-                * (1 + 0.1 * np.random.rand(*X.shape) - 0.05)
-            )
-
-    elif pde_type and "wave" in pde_type.lower():
-        if solution_type == "exact":
-            # Wave equation exact solution
-            return np.sin(np.pi * X) * np.cos(np.pi * time)
-        else:
-            # Add some noise to simulate prediction
-            return (
-                np.sin(np.pi * X)
-                * np.cos(np.pi * time)
-                * (1 + 0.1 * np.random.rand(*X.shape) - 0.05)
-            )
-
-    elif pde_type and "burgers" in pde_type.lower():
-        # Simplified Burgers' equation solution (example)
-        if solution_type == "exact":
-            return np.tanh((X - 0.5 - 0.5 * time) / (0.1 + 0.05 * time))
-        else:
-            return np.tanh((X - 0.5 - 0.5 * time) / (0.1 + 0.05 * time)) * (
-                1 + 0.15 * np.random.rand(*X.shape) - 0.075
-            )
-
-    else:
-        # Generic solution for unknown PDEs
-        if solution_type == "exact":
-            return np.sin(np.pi * X) * np.cos(2 * np.pi * time)
-        else:
-            return (
-                np.sin(np.pi * X)
-                * np.cos(2 * np.pi * time)
-                * (1 + 0.1 * np.random.rand(*X.shape) - 0.05)
-            )
-
-
-def get_experiment_details(experiment_path):
-    """Get experiment details from config file."""
-    try:
-        config_path = os.path.join(experiment_path, "config.yaml")
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-
-        # Extract basic details
-        pde_type = config.get("pde", {}).get("name", "Unknown")
-        architecture = config.get("model", {}).get("architecture", "Unknown")
-        hidden_dim = config.get("model", {}).get("hidden_dim", "Unknown")
-        num_layers = config.get("model", {}).get("num_layers", "Unknown")
-        learning_rate = (
-            config.get("training", {}).get("optimizer_config", {}).get("learning_rate", "Unknown")
-        )
-        batch_size = config.get("training", {}).get("batch_size", "Unknown")
-        num_epochs = config.get("training", {}).get("num_epochs", "Unknown")
-        rl_enabled = config.get("rl", {}).get("enabled", False)
-
-        # Add RL status to metadata for HTML report
-        metadata = {
-            "pde_type": pde_type,
-            "architecture": architecture,
-            "hidden_dim": hidden_dim,
-            "num_layers": num_layers,
-            "learning_rate": learning_rate,
-            "batch_size": batch_size,
-            "num_epochs": num_epochs,
-            "rl_enabled": rl_enabled,
-        }
-
-        details = f"""
-        **PDE Type:** {pde_type}
-        **Architecture:** {architecture}
-        **Hidden Dimension:** {hidden_dim}
-        **Number of Layers:** {num_layers}
-        **Learning Rate:** {learning_rate}
-        **Batch Size:** {batch_size}
-        **Number of Epochs:** {num_epochs}
-        **RL Enabled:** {rl_enabled}
-        """
-
-        return details, metadata
-    except Exception as e:
-        return f"Error loading experiment details: {str(e)}", {}
 
 
 def get_experiment_name(experiment_path):
@@ -1090,68 +991,13 @@ def get_experiment_name(experiment_path):
         return name
 
 
-def generate_report(experiment_path):
-    """Generate a detailed report for the experiment."""
-    try:
-        config_path = os.path.join(experiment_path, "config.yaml")
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-
-        # Get experiment name
-        exp_name = get_experiment_name(experiment_path)
-
-        # Basic configuration
-        pde_type = config.get("pde", {}).get("name", "Unknown")
-        architecture = config.get("model", {}).get("architecture", "Unknown")
-        hidden_dim = config.get("model", {}).get("hidden_dim", "Unknown")
-        num_layers = config.get("model", {}).get("num_layers", "Unknown")
-        learning_rate = (
-            config.get("training", {}).get("optimizer_config", {}).get("learning_rate", "Unknown")
-        )
-        batch_size = config.get("training", {}).get("batch_size", "Unknown")
-        num_epochs = config.get("training", {}).get("num_epochs", "Unknown")
-        rl_enabled = config.get("rl", {}).get("enabled", False)
-
-        report = f"""# Experiment Report: {exp_name}
-
-## Configuration
-- **PDE Type:** {pde_type}
-- **Architecture:** {architecture}
-- **Hidden Dimension:** {hidden_dim}
-- **Number of Layers:** {num_layers}
-- **Learning Rate:** {learning_rate}
-- **Batch Size:** {batch_size}
-- **Number of Epochs:** {num_epochs}
-- **RL Enabled:** {rl_enabled}
-
-## Training Results
-"""
-        # Add training results if available
-        history_path = os.path.join(experiment_path, "history.json")
-        if os.path.exists(history_path):
-            with open(history_path, "r") as f:
-                history = json.load(f)
-
-            final_epoch = len(history.get("train_loss", []))
-            best_val_loss = min(history.get("val_loss", [float("inf")]))
-
-            report += f"""
-- **Completed Epochs:** {final_epoch}
-- **Best Validation Loss:** {best_val_loss:.6f}
-"""
-
-        return report
-    except Exception as e:
-        return f"Error generating report: {str(e)}"
-
-
 @app.callback(
     Output("download-report", "data"),
     Input("download-report-button", "n_clicks"),
     State("experiment-selector", "value"),
     prevent_initial_call=True,
 )
-def generate_report(n_clicks, experiment):  # noqa: F811
+def download_report(n_clicks, experiment):
     if not experiment or not n_clicks:
         return None
 
@@ -1159,7 +1005,7 @@ def generate_report(n_clicks, experiment):  # noqa: F811
         # Get current figures and data
         loss_fig = update_graphs(experiment, None)[0]
         collocation_fig = update_graphs(experiment, None)[1]
-        exact_solution, predicted_solution = update_solution_visualizations(experiment, 0.5, None)
+        exact_solution, predicted_solution = update_solution_visualizations(experiment, 0.5)
 
         # Load metadata
         metadata = {}
@@ -1209,29 +1055,68 @@ def get_experiments():
                 running_file = os.path.join(exp_path, ".running")
                 is_running = os.path.exists(running_file)
                 if is_running:
-                    # If metadata has end_time, training finished — stale marker
+                    stale = False
                     meta_file = os.path.join(exp_path, "metadata.json")
+                    history_file = os.path.join(exp_path, "history.json")
+
                     if os.path.exists(meta_file):
-                        with open(meta_file, "r") as mf:
-                            meta = json.load(mf)
-                            if "end_time" in meta:
-                                os.remove(running_file)
-                                is_running = False
+                        # If metadata has end_time, training finished — stale marker
+                        try:
+                            with open(meta_file, "r") as mf:
+                                meta = json.load(mf)
+                                if "end_time" in meta:
+                                    stale = True
+                        except Exception:
+                            stale = True
+                    elif not os.path.exists(history_file):
+                        # No metadata AND no history — crashed/aborted run
+                        stale = True
+                    else:
+                        # Has history but no metadata — check if .running file is old (>1 hour)
+                        running_age = datetime.now().timestamp() - os.path.getmtime(running_file)
+                        if running_age > 3600:
+                            stale = True
+
+                    if stale:
+                        try:
+                            os.remove(running_file)
+                        except OSError:
+                            pass
+                        is_running = False
 
                 # Get experiment details from directory name
+                # Format: "YYYYMMDD_HHMMSS_PDE Name_arch_rl_status"
+                # Timestamp is always YYYYMMDD_HHMMSS (15 chars), then underscore
+                # PDE name may contain spaces, arch and rl_status are at the end
                 parts = exp_dir.split("_")
-                if len(parts) >= 2:
-                    # Try to extract meaningful information from directory name
-                    timestamp = parts[0]
-                    if len(parts) >= 4:
-                        pde_name = parts[1] + " " + parts[2]
-                        arch_name = parts[3]
+                if len(parts) >= 3 and len(parts[0]) == 8 and len(parts[1]) == 6:
+                    timestamp = f"{parts[0]}_{parts[1]}"
+                    remainder = exp_dir[len(timestamp) + 1 :]
+
+                    # Check for known RL suffixes to parse from the end
+                    if remainder.endswith("_no_rl"):
+                        rl_status = "no_rl"
+                        middle = remainder[: -len("_no_rl")]
+                    elif remainder.endswith("_rl"):
+                        rl_status = "rl"
+                        middle = remainder[: -len("_rl")]
                     else:
-                        pde_name = "Unknown PDE"
-                        arch_name = parts[1] if len(parts) > 1 else "unknown"
+                        rl_status = None
+                        middle = remainder
+
+                    # Middle should be "PDE Name_arch" — arch is the last underscore-token
+                    if "_" in middle:
+                        last_underscore = middle.rfind("_")
+                        pde_name = middle[:last_underscore]
+                        arch_name = middle[last_underscore + 1 :]
+                    else:
+                        pde_name = middle if middle else "Unknown PDE"
+                        arch_name = "unknown"
 
                     # Format the display name
                     display_name = f"{timestamp} - {pde_name} ({arch_name})"
+                    if rl_status:
+                        display_name += f" [{rl_status}]"
                 else:
                     display_name = exp_dir
 
@@ -1243,59 +1128,6 @@ def get_experiments():
     # Sort experiments by name (which includes timestamp) in reverse order
     experiments.sort(key=lambda x: x["label"], reverse=True)
     return experiments
-
-
-def create_training_plot(history):
-    """Create a training progress plot from history data."""
-    fig = go.Figure()
-    if "total_loss" in history:
-        fig.add_trace(go.Scatter(y=history["total_loss"], mode="lines", name="Total Loss"))
-    if "residual_loss" in history:
-        fig.add_trace(go.Scatter(y=history["residual_loss"], mode="lines", name="Residual"))
-    if "boundary_loss" in history:
-        fig.add_trace(go.Scatter(y=history["boundary_loss"], mode="lines", name="Boundary"))
-    fig.update_layout(
-        title="Training Progress", xaxis_title="Epoch", yaxis_title="Loss", yaxis_type="log"
-    )
-    return fig
-
-
-def update_plots(experiment_path):
-    """Update all plots for the selected experiment."""
-    plots = {}
-
-    # Check if experiment is running
-    is_running = os.path.exists(os.path.join(experiment_path, ".running"))
-
-    try:
-        # Load history
-        history_path = os.path.join(experiment_path, "history.json")
-        if os.path.exists(history_path):
-            with open(history_path, "r") as f:
-                history = json.load(f)
-
-            # Training progress plot
-            plots["training_progress"] = create_training_plot(history)
-
-            # Load latest collocation plot if available
-            latest_coll_plot = os.path.join(
-                experiment_path, "visualizations", "latest_collocation_evolution.png"
-            )
-            if os.path.exists(latest_coll_plot):
-                plots["collocation_points"] = latest_coll_plot
-
-            # Load latest solution plots if available
-            latest_solution = os.path.join(experiment_path, "visualizations", "latest_solution.png")
-            if os.path.exists(latest_solution):
-                plots["solution"] = latest_solution
-
-        # If experiment is running, set auto-refresh
-        if is_running:
-            plots["refresh"] = True
-    except Exception as e:
-        print(f"Error updating plots: {e}")
-
-    return plots
 
 
 def generate_html_report(experiment_path, figures, metadata):

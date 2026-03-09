@@ -1,8 +1,12 @@
 import argparse
 import multiprocessing
+import os
 import sys
 import webbrowser
 from time import sleep
+
+# Ensure the project root is on sys.path so `src` is importable
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def run_interactive_trainer():
