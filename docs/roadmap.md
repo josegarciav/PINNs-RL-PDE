@@ -8,7 +8,7 @@ This document describes the planned development trajectory for `pinnrl`, from it
 
 **Status:** Complete
 
-All nine PDEs are trainable with all six architectures. The RL adaptive sampler is functional. The CLI (`scripts/train.py`) provides a stable interface with full `config.yaml` override support.
+All nine PDEs are trainable with all six architectures. The RL adaptive sampler is functional. The interactive trainer (`src/interactive_trainer.py`) allows selecting any PDE with any architecture.
 
 | Item | Adoption difficulty | Scientific impact | Innovation level |
 |---|---|---|---|
@@ -65,7 +65,7 @@ Extends the scientific capability of the solver with methods that are actively u
 | 2D PDEs: full `heat_2d` training (already in config) | 2 | 4 | 2 |
 | Inverse problems: parameter identification from data | 3 | 5 | 3 |
 | Formal FDM comparison on heat/wave equations | 2 | 3 | 1 |
-| Latin Hypercube and Sobol sampling (selectable in config) | 1 | 3 | 1 |
+| Stratified and RAR sampling benchmarks vs RL | 1 | 3 | 1 |
 | `pinnrl-benchmark` CLI subcommand | 2 | 3 | 2 |
 | Configurable loss functions (MSE, MAE, Huber) | 1 | 2 | 1 |
 
@@ -83,7 +83,7 @@ Makes the RL adaptive sampler a first-class, well-benchmarked feature rather tha
 
 | Item | Adoption difficulty | Scientific impact | Innovation level |
 |---|---|---|---|
-| Formal RL benchmark: RL vs uniform vs RAR vs Sobol | 3 | 4 | 3 |
+| Formal RL benchmark: RL vs uniform vs RAR vs stratified | 3 | 4 | 3 |
 | Policy gradient (PPO) alternative to DQN agent | 4 | 4 | 4 |
 | Curriculum learning: coarse-to-fine collocation | 3 | 4 | 3 |
 | RL agent pre-training on synthetic PDE families | 4 | 5 | 4 |
@@ -136,7 +136,7 @@ The following directions are ranked by their expected return — combining open 
 
 ### 3. RL benchmark paper
 
-**Scientific demand:** Moderate but strategic. The combination of RL and PINNs is a novel area with few rigorous empirical evaluations. A well-controlled benchmark study comparing DQN-based sampling against RAR, Sobol, and Latin Hypercube across all nine PDEs would be a publishable NeurIPS/ICLR workshop paper or JMLST paper.
+**Scientific demand:** Moderate but strategic. The combination of RL and PINNs is a novel area with few rigorous empirical evaluations. A well-controlled benchmark study comparing DQN-based sampling against RAR, stratified, and uniform strategies across all nine PDEs would be a publishable NeurIPS/ICLR workshop paper or JMLST paper.
 
 **Differentiation:** `pinnrl` is currently the only open-source PINN library with an integrated RL agent. This is the clearest scientific differentiator. Formalizing it with reproducible benchmarks converts an experimental feature into a validated contribution.
 

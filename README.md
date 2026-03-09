@@ -138,7 +138,7 @@ The GUI launches an interactive trainer (`src/interactive_trainer.py`) alongside
 
 ## Features
 
-- **RL-adaptive collocation** — a DQN agent (`src/rl_agent.py`) observes the current residual field and steers point sampling toward high-error regions, reducing wasted forward passes on low-residual areas.
+- **RL-adaptive collocation** — a DQN agent (`src/rl/rl_agent.py`) observes the current residual field and steers point sampling toward high-error regions, reducing wasted forward passes on low-residual areas.
 - **Six neural architectures** — FeedForward, ResNet, SIREN (periodic activations), Fourier Features (random Fourier mapping), Self-Attention Transformer, and Autoencoder, all exposed through a single `PINNModel` factory class.
 - **Nine PDEs** — linear to nonlinear, parabolic to hyperbolic, 1D to 2D, spanning thermal diffusion, soliton dynamics, phase-field models, and financial derivatives.
 - **Exact analytical solutions** — every PDE ships with an `exact_solution` method for L2 and max-error validation during and after training; no external reference solver is required.

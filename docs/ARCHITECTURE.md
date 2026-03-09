@@ -256,7 +256,7 @@ architectures:
 
 ## RL adaptive sampling
 
-When `rl.enabled: true` in `config.yaml`, the `CollocationRLAgent` (implemented in `src/rl_agent.py`) replaces uniform random collocation sampling with a DQN-based point selection strategy.
+When `rl.enabled: true` in `config.yaml`, the `CollocationRLAgent` (implemented in `src/rl/rl_agent.py`) replaces uniform random collocation sampling with a DQN-based point selection strategy.
 
 ### How it works
 
@@ -341,11 +341,11 @@ architectures:
 ```python
 ARCH_MAP = {
     "feedforward": FeedForwardNetwork,
-    "resnet":      ResNetNetwork,
-    "siren":       SIRENNetwork,
+    "resnet":      ResNet,
+    "siren":       SIREN,
     "fourier":     FourierNetwork,
     "attention":   AttentionNetwork,
-    "autoencoder": AutoencoderNetwork,
+    "autoencoder": AutoEncoder,
 }
 ```
 

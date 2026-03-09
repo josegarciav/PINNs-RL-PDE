@@ -291,16 +291,17 @@ pde_class_map = {
 }
 ```
 
-### Step 4 — Register in `scripts/train.py`
+### Step 4 — Register in `src/interactive_trainer.py`
 
-Add the import and dictionary entry in `PDE_CLASSES`:
+Add the import and case in `create_pde()`:
 
 ```python
 from src.pdes.fisher_equation import FisherEquation
 
-PDE_CLASSES = {
+# Inside create_pde(), in the pde_class_map dictionary:
+pde_class_map = {
     "heat": HeatEquation,
-    "burgers": BurgersEquation,
+    "wave": WaveEquation,
     # ... existing entries ...
     "fisher": FisherEquation,   # <-- add this line
 }
@@ -362,7 +363,7 @@ After all steps are complete, verify end-to-end with:
 
 ```bash
 uv run pytest tests/unit_tests/test_pdes.py::TestFisherEquation -v
-uv run python scripts/train.py --pde fisher --arch fourier --epochs 100
+uv run python src/interactive_trainer.py  # Select "Fisher" PDE and "Fourier" architecture
 ```
 
 ---

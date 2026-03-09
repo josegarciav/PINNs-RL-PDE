@@ -26,15 +26,15 @@ Using `pip`:
 pip install pinnrl
 ```
 
-### Step 2 — Run the CLI
+### Step 2 — Run the interactive trainer
 
-Train a PINN on the heat equation using the Fourier Features architecture for 3000 epochs:
+Launch the Tkinter-based interactive trainer:
 
 ```bash
-python scripts/train.py --pde heat --arch fourier --epochs 3000
+python src/interactive_trainer.py
 ```
 
-You will see a live progress bar. Training output is saved automatically to a timestamped directory under `experiments/`.
+Select a PDE (e.g., Heat Equation) and architecture (e.g., Fourier) from the dropdowns, then click **Start Training**. Training output is saved automatically to a timestamped directory under `experiments/`.
 
 ### Step 3 — Inspect results
 
@@ -126,6 +126,9 @@ pde_config = PDEConfig(
 # Instantiate PDE
 pde = HeatEquation(pde_config)
 
+# Device selection
+device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+
 # Build model — Fourier Features architecture
 model_config = ModelConfig(
     input_dim=2,           # (x, t)
@@ -135,10 +138,12 @@ model_config = ModelConfig(
     hidden_dims=[512, 512, 512, 512],
     scale=4.0,
 )
-model = PINNModel(model_config)
+config = Config.__new__(Config)
+config.device = device
+config.model = model_config
+model = PINNModel(config, device=device)
 
 # Train
-device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 trainer = PDETrainer(model=model, pde=pde, optimizer_config={"name": "adam", "learning_rate": 0.005}, config=None, device=device)
 trainer.train(num_epochs=3000)
 ```
@@ -164,23 +169,23 @@ The loss curve descends monotonically (with minor fluctuations from cosine LR an
 | Full installation, GPU setup, troubleshooting | [docs/setup.md](setup.md) |
 | Architecture selection and training loop internals | [docs/ARCHITECTURE.md](ARCHITECTURE.md) |
 | Interactive examples and comparisons | `notebooks/PINN_intro_workshop.ipynb` |
-| Sampling strategies (RL vs uniform vs Latin hypercube) | `notebooks/sampling_techniques.ipynb` |
+| Sampling strategies (uniform, stratified, RAR, RL) | [Sampling Strategies](sampling_strategies.md) |
 | Roadmap and future directions | [docs/roadmap.md](roadmap.md) |
 
 ---
 
 ## Quick reference card
 
-| PDE | Recommended arch | Key parameters | CLI flag |
-|---|---|---|---|
-| Heat equation | `fourier` | `alpha` (diffusivity), periodic BC | `--pde heat` |
-| Wave equation | `siren` | `c` (wave speed), Dirichlet BC | `--pde wave` |
-| Burgers equation | `resnet` | `viscosity`, shock-forming | `--pde burgers` |
-| Convection equation | `fourier` | `velocity`, periodic BC | `--pde convection` |
-| KdV equation | `siren` | `alpha`, `beta`, soliton IC | `--pde kdv` |
-| Allen-Cahn equation | `fourier` | `epsilon` (interface width) | `--pde allen_cahn` |
-| Cahn-Hilliard equation | `resnet` | `mobility`, `kappa` | `--pde cahn_hilliard` |
-| Black-Scholes equation | `feedforward` | `sigma` (vol), `r` (rate) | `--pde black_scholes` |
-| Pendulum equation | `resnet` | `g`, `L`, `damping` | `--pde pendulum` |
+| PDE | Recommended arch | Key parameters |
+|---|---|---|
+| Heat equation | `fourier` | `alpha` (diffusivity), periodic BC |
+| Wave equation | `siren` | `c` (wave speed), Dirichlet BC |
+| Burgers equation | `resnet` | `viscosity`, shock-forming |
+| Convection equation | `fourier` | `velocity`, periodic BC |
+| KdV equation | `siren` | `alpha`, `beta`, soliton IC |
+| Allen-Cahn equation | `fourier` | `epsilon` (interface width) |
+| Cahn-Hilliard equation | `resnet` | `mobility`, `kappa` |
+| Black-Scholes equation | `feedforward` | `sigma` (vol), `r` (rate) |
+| Pendulum equation | `resnet` | `g`, `L`, `damping` |
 
 **Epochs guidance:** Start with 3000 for linear PDEs (heat, wave, convection). Use 5000+ for nonlinear PDEs (Burgers, KdV, Allen-Cahn, Cahn-Hilliard). Black-Scholes and Pendulum typically converge well within 3000 epochs.

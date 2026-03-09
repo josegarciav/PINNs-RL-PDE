@@ -10,9 +10,10 @@
 |---|---|
 | Get running in 5 minutes | [Start Here](start_here.md) |
 | Install and configure the library | [Setup](setup.md) |
-| Understand how the architecture works | [Architecture Overview](architecture/overview.md) |
+| Understand how the architecture works | [Architecture Overview](ARCHITECTURE.md) |
 | See where the project is going | [Roadmap](roadmap.md) |
-| Contribute a PDE or architecture | [Contributing](../CONTRIBUTING.md) |
+| Understand sampling strategies | [Sampling Strategies](sampling_strategies.md) |
+| Contribute a PDE or architecture | [Contributing](https://github.com/josegarciav/PINNs-RL-PDE/blob/main/CONTRIBUTING.md) |
 
 ## Supported PDEs and architectures
 
