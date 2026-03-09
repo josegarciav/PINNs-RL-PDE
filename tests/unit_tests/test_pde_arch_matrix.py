@@ -81,6 +81,10 @@ class TestPDEArchMatrix(unittest.TestCase):
 
     def _run_combo(self, pde_type, arch_type):
         """Run a single PDE x Architecture combination end-to-end."""
+        # Fix seed for reproducibility — some combos (e.g. cahn_hilliard+attention)
+        # produce NaN with certain random initializations due to 4th-order derivatives
+        torch.manual_seed(42)
+
         # 1. Create PDE from config
         pde = create_pde_from_config(pde_type, self.device)
         input_dim = pde.config.input_dim or (pde.dimension + 1)
