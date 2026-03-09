@@ -162,7 +162,7 @@ The loss curve descends monotonically (with minor fluctuations from cosine LR an
 | Goal | Where to go |
 |---|---|
 | Full installation, GPU setup, troubleshooting | [docs/setup.md](setup.md) |
-| Architecture selection and training loop internals | [docs/architecture/overview.md](architecture/overview.md) |
+| Architecture selection and training loop internals | [docs/ARCHITECTURE.md](ARCHITECTURE.md) |
 | Interactive examples and comparisons | `notebooks/PINN_intro_workshop.ipynb` |
 | Sampling strategies (RL vs uniform vs Latin hypercube) | `notebooks/sampling_techniques.ipynb` |
 | Roadmap and future directions | [docs/roadmap.md](roadmap.md) |

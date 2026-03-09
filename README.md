@@ -123,13 +123,13 @@ print(f"L2 error: {metrics['l2_error']:.2e}  |  Max error: {metrics['max_error']
 
 ```bash
 # Trainer + live Dash dashboard (opens browser automatically)
-python src/main.py
+python3 src/main.py
 
 # Trainer only
-python src/main.py --trainer-only
+python3 src/main.py --trainer-only
 
 # Dashboard only — inspect previously saved experiments
-python src/main.py --dashboard-only --port 8051
+python3 src/main.py --dashboard-only --port 8051
 ```
 
 The GUI launches an interactive trainer (`src/interactive_trainer.py`) alongside a Plotly/Dash dashboard that streams loss curves, residual fields, and exact-vs-predicted comparisons in real time.
@@ -185,7 +185,7 @@ The GUI launches an interactive trainer (`src/interactive_trainer.py`) alongside
 
 Contributions are welcome. Please open an issue before submitting a large pull request.
 
-**Core development:** Jose Garcia ([@josegarciav](https://github.com/josegarciav))
+**Core development:** Jose Garcia Ventura ([@josegarciav](https://github.com/josegarciav))
 
 **Community contributions** in scope: new PDEs, new architectures, bug fixes, documentation improvements, and example notebooks. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
@@ -197,7 +197,7 @@ If you use `pinnrl` in published work, please cite:
 
 ```bibtex
 @software{garcia2024pinnrl,
-  author    = {Garcia, Jose},
+  author    = {Garcia Ventura, Jose},
   title     = {pinnrl: Physics-Informed Neural Networks with Reinforcement Learning Adaptive Sampling},
   year      = {2024},
   url       = {https://github.com/josegarciav/PINNs-RL-PDE},
@@ -209,4 +209,4 @@ If you use `pinnrl` in published work, please cite:
 
 ## License
 
-[MIT License](LICENSE) &copy; 2024 Jose Garcia
+[MIT License](LICENSE) &copy; 2024 Jose Garcia Ventura
