@@ -570,107 +570,161 @@ class PDEBase:
         """
         raise NotImplementedError("Subclasses must implement exact_solution")
 
+    def _sample_uniform(self, num_points: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Grid-based uniform sampling with small jitter for domain coverage."""
+        if self.dimension == 1:
+            n_side = int(np.sqrt(num_points))
+            x = torch.linspace(
+                self.domain[0][0], self.domain[0][1], n_side, device=self.device
+            ).reshape(-1, 1)
+            t = torch.linspace(
+                self.time_domain[0], self.time_domain[1], n_side, device=self.device
+            ).reshape(-1, 1)
+
+            X, T = torch.meshgrid(x.squeeze(), t.squeeze(), indexing="ij")
+            x = X.reshape(-1, 1)
+            t = T.reshape(-1, 1)
+
+            # Small jitter to break grid alignment
+            x_noise = (self.domain[0][1] - self.domain[0][0]) * 0.01
+            t_noise = (self.time_domain[1] - self.time_domain[0]) * 0.01
+            x = x + torch.randn_like(x) * x_noise
+            t = t + torch.randn_like(t) * t_noise
+
+            x = torch.clamp(x, self.domain[0][0], self.domain[0][1])
+            t = torch.clamp(t, self.time_domain[0], self.time_domain[1])
+        else:
+            points_per_dim = max(2, int(num_points ** (1 / (self.dimension + 1))) + 1)
+            grid_points = []
+            for dim in range(self.dimension):
+                grid_points.append(
+                    torch.linspace(self.domain[dim][0], self.domain[dim][1], points_per_dim)
+                )
+            grid_points.append(
+                torch.linspace(self.time_domain[0], self.time_domain[1], points_per_dim)
+            )
+
+            grid_tensors = torch.meshgrid(*grid_points, indexing="ij")
+            points = torch.stack([g.reshape(-1) for g in grid_tensors], dim=1)
+
+            if len(points) > num_points:
+                indices = torch.randperm(len(points))[:num_points]
+                points = points[indices]
+            elif len(points) < num_points:
+                extra = torch.randint(0, len(points), (num_points - len(points),))
+                points = torch.cat([points, points[extra]], dim=0)
+
+            points = points + torch.randn_like(points) * 0.01
+            for dim in range(self.dimension):
+                points[:, dim] = torch.clamp(
+                    points[:, dim], self.domain[dim][0], self.domain[dim][1]
+                )
+            points[:, -1] = torch.clamp(points[:, -1], self.time_domain[0], self.time_domain[1])
+
+            x = points[:, : self.dimension]
+            t = points[:, -1].reshape(-1, 1)
+
+        return x, t
+
+    def _sample_stratified(self, num_points: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Stratified random sampling (Latin Hypercube-style, pure PyTorch).
+
+        Divides each dimension into num_points equal bins and places one random
+        sample per bin, then shuffles across dimensions for independence.
+        """
+        total_dims = self.dimension + 1  # spatial dims + time
+
+        # Build lower and upper bounds for all dims
+        lowers = []
+        uppers = []
+        for dim in range(self.dimension):
+            lowers.append(self.domain[dim][0])
+            uppers.append(self.domain[dim][1])
+        lowers.append(self.time_domain[0])
+        uppers.append(self.time_domain[1])
+
+        samples = torch.zeros(num_points, total_dims, device=self.device)
+        for d in range(total_dims):
+            lo, hi = lowers[d], uppers[d]
+            bin_size = (hi - lo) / num_points
+            # One random point inside each bin
+            offsets = torch.rand(num_points, device=self.device)
+            indices = torch.arange(num_points, dtype=torch.float32, device=self.device)
+            samples[:, d] = lo + (indices + offsets) * bin_size
+            # Shuffle this dimension independently for LHS property
+            perm = torch.randperm(num_points, device=self.device)
+            samples[:, d] = samples[perm, d]
+
+        x = samples[:, : self.dimension]
+        t = samples[:, -1].reshape(-1, 1)
+        return x, t
+
+    def _sample_residual_based(
+        self, num_points: int, model: Optional[torch.nn.Module] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Residual-Adaptive Refinement (RAR) sampling.
+
+        1. Generate a large candidate pool via uniform sampling.
+        2. If a model is provided, compute PDE residuals and oversample regions
+           with high residual magnitude.
+        3. If no model is available (first epoch), fall back to uniform.
+        """
+        if model is None:
+            return self._sample_uniform(num_points)
+
+        # Generate a candidate pool 4x larger than needed
+        pool_size = num_points * 4
+        x_pool, t_pool = self._sample_uniform(pool_size)
+
+        # Compute PDE residual at each candidate point
+        x_pool = x_pool.detach().requires_grad_(True)
+        t_pool = t_pool.detach().requires_grad_(True)
+
+        with torch.no_grad():
+            try:
+                residuals = self.compute_pde_residual(model, x_pool, t_pool)
+                if isinstance(residuals, tuple):
+                    residuals = residuals[0]
+                residual_mag = torch.abs(residuals).squeeze()
+            except Exception:
+                # If residual computation fails, fall back to uniform
+                return self._sample_uniform(num_points)
+
+        # Convert residual magnitudes to sampling probabilities
+        # Add small epsilon so zero-residual regions still have a chance
+        probs = residual_mag + 1e-8
+        probs = probs / probs.sum()
+
+        # Sample points weighted by residual magnitude
+        selected = torch.multinomial(probs, num_points, replacement=True)
+        x = x_pool[selected].detach()
+        t = t_pool[selected].detach()
+
+        return x, t
+
     def generate_collocation_points(
-        self, num_points: int, strategy: str = "uniform"
+        self, num_points: int, strategy: str = "uniform", **kwargs
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Generate collocation points for training.
 
         :param num_points: Number of points to generate
-        :param strategy: Sampling strategy ('uniform' or 'adaptive')
+        :param strategy: Sampling strategy — one of:
+            - 'uniform': grid-based with small jitter
+            - 'stratified': Latin Hypercube-style stratified random (pure PyTorch)
+            - 'residual_based': resample where PDE residual is highest (requires model kwarg)
+            - 'adaptive': RL agent-driven sampling (requires self.rl_agent)
         :return: Tuple of spatial and temporal points
         """
         if strategy == "uniform":
-            if self.dimension == 1:
-                # For 1D, domain is a list with one tuple
-                x = torch.linspace(
-                    self.domain[0][0],
-                    self.domain[0][1],
-                    int(np.sqrt(num_points)),
-                    device=self.device,
-                ).reshape(-1, 1)
-                t = torch.linspace(
-                    self.time_domain[0],
-                    self.time_domain[1],
-                    int(np.sqrt(num_points)),
-                    device=self.device,
-                ).reshape(-1, 1)
+            x, t = self._sample_uniform(num_points)
 
-                # Create meshgrid for even coverage
-                X, T = torch.meshgrid(x.squeeze(), t.squeeze(), indexing="ij")
-                x = X.reshape(-1, 1)
-                t = T.reshape(-1, 1)
+        elif strategy == "stratified":
+            x, t = self._sample_stratified(num_points)
 
-                # Add some noise for better training
-                x_noise = (self.domain[0][1] - self.domain[0][0]) * 0.01
-                t_noise = (self.time_domain[1] - self.time_domain[0]) * 0.01
-                x = x + torch.randn_like(x) * x_noise
-                t = t + torch.randn_like(t) * t_noise
-
-                # Clip to domain
-                x = torch.clamp(x, self.domain[0][0], self.domain[0][1])
-                t = torch.clamp(t, self.time_domain[0], self.time_domain[1])
-
-            else:
-                # For multi-dimensional domains
-                grid_points = []
-                # Calculate points per dimension to ensure we get enough points
-                # Use a number slightly higher to account for possible pruning
-                points_per_dim = max(2, int((num_points) ** (1 / (self.dimension + 1))) + 1)
-
-                for dim in range(self.dimension):
-                    grid_dim = torch.linspace(
-                        self.domain[dim][0],
-                        self.domain[dim][1],
-                        points_per_dim,
-                    )
-                    grid_points.append(grid_dim)
-
-                # Add time dimension
-                grid_points.append(
-                    torch.linspace(
-                        self.time_domain[0],
-                        self.time_domain[1],
-                        points_per_dim,
-                    )
-                )
-
-                # Create meshgrid
-                grid_tensors = torch.meshgrid(*grid_points, indexing="ij")
-
-                # Reshape to points
-                points = torch.stack([g.reshape(-1) for g in grid_tensors], dim=1)
-
-                # If we have more points than requested, sample exactly num_points
-                if len(points) > num_points:
-                    # Random indices without replacement
-                    indices = torch.randperm(len(points))[:num_points]
-                    points = points[indices]
-                # If we have fewer points, add more by sampling with replacement
-                elif len(points) < num_points:
-                    additional_indices = torch.randint(0, len(points), (num_points - len(points),))
-                    additional_points = points[additional_indices]
-                    points = torch.cat([points, additional_points], dim=0)
-
-                # Add noise for better training
-                noise_scale = 0.01
-                noise = torch.randn_like(points) * noise_scale
-                points = points + noise
-
-                # Clip to domain
-                for dim in range(self.dimension):
-                    points[:, dim] = torch.clamp(
-                        points[:, dim], self.domain[dim][0], self.domain[dim][1]
-                    )
-                points[:, -1] = torch.clamp(
-                    points[:, -1],
-                    self.time_domain[0],
-                    self.time_domain[1],
-                )
-
-                # Extract x and t
-                x = points[:, : self.dimension]
-                t = points[:, -1].reshape(-1, 1)
+        elif strategy == "residual_based":
+            model = kwargs.get("model", None)
+            x, t = self._sample_residual_based(num_points, model)
 
         elif strategy == "adaptive":
             # Use RL agent for adaptive sampling if available

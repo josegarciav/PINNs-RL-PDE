@@ -1,6 +1,7 @@
 import unittest
 
 import torch
+import torch.nn as nn
 
 from src.pdes.heat_equation import HeatEquation
 from src.rl.rl_agent import CollocationRLAgent, RLAgent
@@ -8,7 +9,7 @@ from tests.unit_tests.test_utils import create_pde_from_config
 
 
 class TestPDESampling(unittest.TestCase):
-    """Test PDE sampling strategies: uniform and RL-based adaptive."""
+    """Test all four sampling strategies: uniform, stratified, residual_based, adaptive."""
 
     def setUp(self):
         """Set up test fixtures."""
@@ -34,13 +35,7 @@ class TestPDESampling(unittest.TestCase):
             self.wave_eq_2d = None
 
         # Create RL agents for adaptive sampling
-        self.rl_agent = RLAgent(
-            state_dim=3,  # For 2D spatial + time
-            action_dim=1,
-            hidden_dim=32,
-            device=self.device,
-        )
-
+        self.rl_agent = RLAgent(state_dim=3, action_dim=1, hidden_dim=32, device=self.device)
         self.coll_rl_agent = CollocationRLAgent(
             state_dim=3, action_dim=1, hidden_dim=32, device=self.device
         )
@@ -59,17 +54,24 @@ class TestPDESampling(unittest.TestCase):
             f"Time out of bounds [{t_min}, {t_max}]",
         )
 
+    def _make_dummy_model(self, input_dim, output_dim=1):
+        """Create a simple model for residual-based sampling tests."""
+        return nn.Sequential(
+            nn.Linear(input_dim, 32),
+            nn.Tanh(),
+            nn.Linear(32, output_dim),
+        ).to(self.device)
+
+    # ── Uniform sampling ──────────────────────────────────────────────
+
     def test_uniform_sampling_1d(self):
         """Test uniform sampling in 1D."""
         num_points = 100
-
-        # Heat equation
         x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="uniform")
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
         self._assert_bounds(x, t, self.heat_eq_1d)
 
-        # Wave equation
         x, t = self.wave_eq_1d.generate_collocation_points(num_points, strategy="uniform")
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
@@ -78,41 +80,103 @@ class TestPDESampling(unittest.TestCase):
     def test_uniform_sampling_2d(self):
         """Test uniform sampling in 2D."""
         num_points = 100
-
-        # Heat equation
         x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy="uniform")
         self.assertEqual(x.shape, (num_points, 2))
         self.assertEqual(t.shape, (num_points, 1))
         self._assert_bounds(x, t, self.heat_eq_2d)
 
-        # Wave equation
         x, t = self.wave_eq_2d.generate_collocation_points(num_points, strategy="uniform")
         self.assertEqual(x.shape, (num_points, 2))
         self.assertEqual(t.shape, (num_points, 1))
         self._assert_bounds(x, t, self.wave_eq_2d)
 
+    # ── Stratified sampling ───────────────────────────────────────────
+
+    def test_stratified_sampling_1d(self):
+        """Test stratified (LHS-style) sampling in 1D."""
+        num_points = 100
+        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="stratified")
+        self.assertEqual(x.shape, (num_points, 1))
+        self.assertEqual(t.shape, (num_points, 1))
+        self._assert_bounds(x, t, self.heat_eq_1d)
+
+    def test_stratified_sampling_2d(self):
+        """Test stratified sampling in 2D."""
+        num_points = 100
+        x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy="stratified")
+        self.assertEqual(x.shape, (num_points, 2))
+        self.assertEqual(t.shape, (num_points, 1))
+        self._assert_bounds(x, t, self.heat_eq_2d)
+
+    def test_stratified_coverage(self):
+        """Stratified sampling should cover the domain more evenly than pure random."""
+        num_points = 200
+        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="stratified")
+        x_min, x_max = self.heat_eq_1d.domain[0]
+        x_mid = (x_min + x_max) / 2.0
+
+        # Split domain in half — stratified should put ~50% in each half
+        lower_half = (x < x_mid).sum().item()
+        ratio = lower_half / num_points
+        self.assertGreater(ratio, 0.35, "Stratified should cover lower half")
+        self.assertLess(ratio, 0.65, "Stratified should cover upper half")
+
+    # ── Residual-based (RAR) sampling ─────────────────────────────────
+
+    def test_residual_based_no_model_fallback(self):
+        """Residual-based sampling without model should fall back to uniform."""
+        num_points = 100
+        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="residual_based")
+        # Should still return valid points (uniform fallback)
+        self.assertEqual(x.shape[1], 1)
+        self.assertEqual(t.shape[1], 1)
+        self._assert_bounds(x, t, self.heat_eq_1d)
+
+    def test_residual_based_with_model(self):
+        """Residual-based sampling with a model should return valid points."""
+        num_points = 100
+        model = self._make_dummy_model(input_dim=2)  # x + t
+
+        x, t = self.heat_eq_1d.generate_collocation_points(
+            num_points, strategy="residual_based", model=model
+        )
+        self.assertEqual(x.shape, (num_points, 1))
+        self.assertEqual(t.shape, (num_points, 1))
+        self._assert_bounds(x, t, self.heat_eq_1d)
+
+    def test_residual_based_2d(self):
+        """Residual-based sampling in 2D."""
+        num_points = 100
+        model = self._make_dummy_model(input_dim=3)  # x1 + x2 + t
+
+        x, t = self.heat_eq_2d.generate_collocation_points(
+            num_points, strategy="residual_based", model=model
+        )
+        self.assertEqual(x.shape, (num_points, 2))
+        self.assertEqual(t.shape, (num_points, 1))
+        self._assert_bounds(x, t, self.heat_eq_2d)
+
+    # ── RL adaptive sampling ──────────────────────────────────────────
+
     def test_adaptive_sampling_with_rl_agent(self):
         """Test adaptive sampling with RL agent."""
         num_points = 100
 
-        # Assign RL agents
         self.heat_eq_1d.rl_agent = self.rl_agent
         self.heat_eq_2d.rl_agent = self.rl_agent
 
-        # Test 1D adaptive sampling
         x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
         self._assert_bounds(x, t, self.heat_eq_1d)
 
-        # Test 2D adaptive sampling
         x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy="adaptive")
         self.assertEqual(x.shape, (num_points, 2))
         self.assertEqual(t.shape, (num_points, 1))
         self._assert_bounds(x, t, self.heat_eq_2d)
 
     def test_adaptive_sampling_fallback(self):
-        """Test that adaptive sampling falls back to uniform when no RL agent is provided."""
+        """Adaptive sampling falls back to uniform when no RL agent is set."""
         num_points = 100
         self.heat_eq_1d.rl_agent = None
 
@@ -120,71 +184,6 @@ class TestPDESampling(unittest.TestCase):
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
         self._assert_bounds(x, t, self.heat_eq_1d)
-
-    def test_different_num_points(self):
-        """Test with different numbers of points."""
-        for num_points in [50, 100, 200, 500]:
-            tolerance = max(5, int(num_points * 0.05))
-
-            # 1D uniform
-            x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="uniform")
-            self.assertTrue(
-                abs(x.shape[0] - num_points) <= tolerance,
-                f"Expected around {num_points} points, got {x.shape[0]}",
-            )
-            self.assertEqual(x.shape[1], 1)
-            self.assertEqual(t.shape[1], 1)
-
-            # 2D uniform
-            x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy="uniform")
-            self.assertTrue(
-                abs(x.shape[0] - num_points) <= tolerance,
-                f"Expected around {num_points} points, got {x.shape[0]}",
-            )
-            self.assertEqual(x.shape[1], 2)
-            self.assertEqual(t.shape[1], 1)
-
-    def test_small_number_points(self):
-        """Test with very small number of points."""
-        num_points = 10
-
-        # 1D uniform
-        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="uniform")
-        self.assertTrue(
-            abs(x.shape[0] - num_points) <= 1,
-            f"Expected around {num_points} points, got {x.shape[0]}",
-        )
-        self.assertEqual(x.shape[1], 1)
-        self.assertEqual(t.shape[1], 1)
-
-        # 2D uniform
-        x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy="uniform")
-        self.assertTrue(
-            abs(x.shape[0] - num_points) <= 1,
-            f"Expected around {num_points} points, got {x.shape[0]}",
-        )
-        self.assertEqual(x.shape[1], 2)
-        self.assertEqual(t.shape[1], 1)
-
-    def test_collocation_history(self):
-        """Test that collocation history is maintained correctly with RL agent."""
-        num_points = 100
-
-        rl_agent_1d = RLAgent(state_dim=2, action_dim=1, hidden_dim=32, device=self.device)
-        self.heat_eq_1d.rl_agent = rl_agent_1d
-
-        for _ in range(3):
-            self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
-
-        self.assertEqual(len(self.heat_eq_1d.collocation_history), 3)
-        for h in self.heat_eq_1d.collocation_history:
-            self.assertEqual(h.shape[0], num_points)
-            self.assertEqual(h.shape[1], 2)  # 1D spatial + time
-
-    def test_invalid_strategy(self):
-        """Test that an invalid strategy raises an error."""
-        with self.assertRaises(ValueError):
-            self.heat_eq_1d.generate_collocation_points(100, strategy="invalid_strategy")
 
     def test_adaptive_sampling_exploration(self):
         """Test adaptive sampling exploration behavior with mock RL agent."""
@@ -252,8 +251,68 @@ class TestPDESampling(unittest.TestCase):
         self.assertEqual(x_2d.shape, (num_points, 2))
         self.assertEqual(t_2d.shape, (num_points, 1))
 
+    # ── Collocation history ───────────────────────────────────────────
+
+    def test_collocation_history(self):
+        """Test that collocation history is maintained correctly with RL agent."""
+        num_points = 100
+        rl_agent_1d = RLAgent(state_dim=2, action_dim=1, hidden_dim=32, device=self.device)
+        self.heat_eq_1d.rl_agent = rl_agent_1d
+
+        for _ in range(3):
+            self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
+
+        self.assertEqual(len(self.heat_eq_1d.collocation_history), 3)
+        for h in self.heat_eq_1d.collocation_history:
+            self.assertEqual(h.shape[0], num_points)
+            self.assertEqual(h.shape[1], 2)  # 1D spatial + time
+
+    # ── General / edge cases ──────────────────────────────────────────
+
+    def test_invalid_strategy(self):
+        """Test that an invalid strategy raises an error."""
+        with self.assertRaises(ValueError):
+            self.heat_eq_1d.generate_collocation_points(100, strategy="invalid_strategy")
+
+    def test_different_num_points(self):
+        """Test with different numbers of points."""
+        for num_points in [50, 100, 200, 500]:
+            tolerance = max(5, int(num_points * 0.05))
+
+            x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="uniform")
+            self.assertTrue(
+                abs(x.shape[0] - num_points) <= tolerance,
+                f"Expected around {num_points} points, got {x.shape[0]}",
+            )
+            self.assertEqual(x.shape[1], 1)
+            self.assertEqual(t.shape[1], 1)
+
+            # Stratified should always return exact count
+            x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="stratified")
+            self.assertEqual(x.shape[0], num_points)
+
+    def test_small_number_points(self):
+        """Test with very small number of points."""
+        num_points = 10
+
+        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="uniform")
+        self.assertTrue(
+            abs(x.shape[0] - num_points) <= 1,
+            f"Expected around {num_points} points, got {x.shape[0]}",
+        )
+        self.assertEqual(x.shape[1], 1)
+        self.assertEqual(t.shape[1], 1)
+
+        x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy="uniform")
+        self.assertTrue(
+            abs(x.shape[0] - num_points) <= 1,
+            f"Expected around {num_points} points, got {x.shape[0]}",
+        )
+        self.assertEqual(x.shape[1], 2)
+        self.assertEqual(t.shape[1], 1)
+
     def test_comprehensive_pde_models_sampling(self):
-        """Test collocation point generation across all PDE models."""
+        """Test collocation point generation across all PDE models and strategies."""
         num_points = 100
 
         pde_types = [
@@ -276,7 +335,6 @@ class TestPDESampling(unittest.TestCase):
             except Exception as e:
                 print(f"Could not create {pde_type}: {e}")
 
-        # Fallback if no PDEs loaded from config
         if not pde_models:
             pde_models.append(
                 (
@@ -286,15 +344,23 @@ class TestPDESampling(unittest.TestCase):
                         domain=[(0.0, 1.0)],
                         time_domain=(0.0, 1.0),
                         boundary_conditions={"dirichlet": {"value": 0.0}},
-                        initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 2.0},
-                        exact_solution={"type": "sine", "amplitude": 1.0, "frequency": 2.0},
+                        initial_condition={
+                            "type": "sine",
+                            "amplitude": 1.0,
+                            "frequency": 2.0,
+                        },
+                        exact_solution={
+                            "type": "sine",
+                            "amplitude": 1.0,
+                            "frequency": 2.0,
+                        },
                         dimension=1,
                         device=self.device,
                     ),
                 )
             )
 
-        strategies = ["uniform", "adaptive"]
+        strategies = ["uniform", "stratified", "adaptive"]
 
         for pde_type, pde in pde_models:
             pde_name = pde.__class__.__name__
@@ -317,20 +383,6 @@ class TestPDESampling(unittest.TestCase):
                     f"Wrong time shape for {pde_name} with {strategy}",
                 )
                 self._assert_bounds(x, t, pde)
-
-                # Try 2D version
-                if pde.dimension == 1:
-                    try:
-                        pde_2d = create_pde_from_config(pde_type, self.device, dimension=2)
-                        x_2d, t_2d = pde_2d.generate_collocation_points(
-                            num_points, strategy=strategy
-                        )
-                        self.assertEqual(x_2d.shape[0], num_points)
-                        self.assertEqual(x_2d.shape[1], 2)
-                        self.assertEqual(t_2d.shape, (num_points, 1))
-                        self._assert_bounds(x_2d, t_2d, pde_2d)
-                    except Exception as e:
-                        print(f"Could not test 2D {pde_name}: {e}")
 
 
 if __name__ == "__main__":

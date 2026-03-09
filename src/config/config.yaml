@@ -299,7 +299,7 @@ training:
   num_collocation_points: 5000 #better coverage
   num_boundary_points: 5000  #better boundary enforcement
   num_initial_points: 5000  #better initial condition representation
-  collocation_distribution: "uniform"  # Options: "uniform", "adaptive" (requires RL agent)
+  collocation_distribution: "uniform"  # Options: "uniform", "stratified", "residual_based", "adaptive" (RL agent)
   adaptive_weights:
     enabled: false # Whether to use adaptive weights for loss terms
     strategy: "rbw"  # Options: "lrw" (Learning Rate Weighting) or "rbw" (Relative Error Weighting)
