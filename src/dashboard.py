@@ -2,6 +2,8 @@ import argparse
 import glob
 import json
 import os
+import subprocess
+import sys
 from datetime import datetime
 
 import dash
@@ -27,6 +29,26 @@ app = dash.Dash(__name__)
 app.layout = html.Div(
     [
         html.H1("PINNs-RL-PDE Training Monitor", style={"textAlign": "center"}),
+        # Launch trainer button
+        html.Div(
+            [
+                html.Button(
+                    "Launch Interactive Trainer",
+                    id="launch-trainer-button",
+                    style={
+                        "backgroundColor": "#2196F3",
+                        "color": "white",
+                        "padding": "12px 24px",
+                        "border": "none",
+                        "borderRadius": "4px",
+                        "cursor": "pointer",
+                        "fontSize": "16px",
+                    },
+                ),
+                html.Div(id="trainer-status", style={"marginTop": "8px", "color": "#666"}),
+            ],
+            style={"textAlign": "center", "marginBottom": "20px"},
+        ),
         # Experiment selector and download button row
         html.Div(
             [
@@ -168,6 +190,49 @@ app.layout = html.Div(
 @app.callback(Output("experiment-selector", "options"), Input("interval-component", "n_intervals"))
 def update_experiments(_):
     return get_experiments()
+
+
+# Callback to launch interactive trainer
+@app.callback(
+    Output("trainer-status", "children"),
+    Input("launch-trainer-button", "n_clicks"),
+    prevent_initial_call=True,
+)
+def launch_trainer(n_clicks):
+    if not n_clicks:
+        return ""
+    try:
+        trainer_path = os.path.join(os.path.dirname(__file__), "interactive_trainer.py")
+
+        # Find a Python interpreter with working tkinter.
+        # uv-managed Python 3.14 ships without Tcl/Tk, so sys.executable may not work.
+        python_cmd = None
+        candidates = [
+            sys.executable,
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), "pinn", "bin", "python3"),
+            "python3",
+            "python",
+        ]
+        for candidate in candidates:
+            try:
+                result = subprocess.run(
+                    [candidate, "-c", "import tkinter"],
+                    capture_output=True,
+                    timeout=5,
+                )
+                if result.returncode == 0:
+                    python_cmd = candidate
+                    break
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+
+        if python_cmd is None:
+            return "Error: No Python with tkinter found. Install tk: brew install python-tk"
+
+        subprocess.Popen([python_cmd, trainer_path])
+        return "Interactive Trainer launched."
+    except Exception as e:
+        return f"Error launching trainer: {e}"
 
 
 # Callback to update main graphs

@@ -48,8 +48,8 @@ class CahnHilliardEquation(PDEBase):
         :return: Residual tensor
         """
         # Ensure input tensors require gradients
-        x = x.requires_grad_(True)
-        t = t.requires_grad_(True)
+        x = x.detach().requires_grad_(True)
+        t = t.detach().requires_grad_(True)
 
         # Combine inputs
         xt = torch.cat([x, t], dim=1)
@@ -109,7 +109,9 @@ class CahnHilliardEquation(PDEBase):
                         laplacian += u_xx
 
         # Chemical potential μ = -ε²∇²u + f'(u)
-        mu = -self.epsilon**2 * laplacian + u**3 - u
+        # Clamp u to prevent numerical overflow in u³ with untrained networks
+        u_clamped = torch.clamp(u, -10.0, 10.0)
+        mu = -self.epsilon**2 * laplacian + u_clamped**3 - u_clamped
 
         # Compute ∇²μ
         if self.dimension == 1:
