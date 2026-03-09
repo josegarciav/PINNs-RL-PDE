@@ -1,41 +1,41 @@
+import logging
 import os
 import sys
-import tkinter as tk
-from tkinter import ttk
-import torch
-import yaml
 import threading
+import time
+import tkinter as tk
 from datetime import datetime
 from pathlib import Path
-import numpy as np
-import time
-import logging
+from tkinter import ttk
+
+import torch
+import yaml
 
 # Make sure src is in the PYTHONPATH
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.neural_networks import PINNModel
-from src.pdes.heat_equation import HeatEquation
-from src.pdes.burgers_equation import BurgersEquation
-from src.pdes.wave_equation import WaveEquation
-from src.pdes.pendulum_equation import PendulumEquation
-from src.pdes.kdv_equation import KdVEquation
-from src.pdes.convection_equation import ConvectionEquation
-from src.pdes.allen_cahn import AllenCahnEquation
-from src.pdes.cahn_hilliard import CahnHilliardEquation
-from src.pdes.black_scholes import BlackScholesEquation
-from src.trainer import PDETrainer
-from src.rl.rl_agent import RLAgent
-from src.pdes.pde_base import PDEConfig
 from src.config import (
     DEFAULT_CONFIG_PATH,
-    ModelConfig,
+    AdaptiveWeightsConfig,
     Config,
-    TrainingConfig,
     EarlyStoppingConfig,
     LearningRateSchedulerConfig,
-    AdaptiveWeightsConfig,
+    ModelConfig,
+    TrainingConfig,
 )
+from src.neural_networks import PINNModel
+from src.pdes.allen_cahn import AllenCahnEquation
+from src.pdes.black_scholes import BlackScholesEquation
+from src.pdes.burgers_equation import BurgersEquation
+from src.pdes.cahn_hilliard import CahnHilliardEquation
+from src.pdes.convection_equation import ConvectionEquation
+from src.pdes.heat_equation import HeatEquation
+from src.pdes.kdv_equation import KdVEquation
+from src.pdes.pde_base import PDEConfig
+from src.pdes.pendulum_equation import PendulumEquation
+from src.pdes.wave_equation import WaveEquation
+from src.rl.rl_agent import RLAgent
+from src.trainer import PDETrainer
 
 
 class InteractiveTrainer:
@@ -64,9 +64,7 @@ class InteractiveTrainer:
         ch.setLevel(logging.INFO)
 
         # Create formatter
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         ch.setFormatter(formatter)
 
         # Add handler to logger
@@ -94,13 +92,9 @@ class InteractiveTrainer:
         # Training parameters with defaults from config.yaml
         self.epochs = tk.IntVar(value=training_config.get("num_epochs", 100))
         self.batch_size = tk.IntVar(value=training_config.get("batch_size", 32))
-        self.num_points = tk.IntVar(
-            value=training_config.get("num_collocation_points", 10000)
-        )
+        self.num_points = tk.IntVar(value=training_config.get("num_collocation_points", 10000))
         self.learning_rate = tk.DoubleVar(
-            value=training_config.get("optimizer_config", {}).get(
-                "learning_rate", 0.001
-            )
+            value=training_config.get("optimizer_config", {}).get("learning_rate", 0.001)
         )
         self.hidden_dim = tk.IntVar(
             value=(
@@ -119,9 +113,7 @@ class InteractiveTrainer:
 
         # Device options and default from config
         self.device_options = ["cpu", "cuda", "mps"]
-        self.selected_device = tk.StringVar(
-            value=device_config
-        )  # Use device from config
+        self.selected_device = tk.StringVar(value=device_config)  # Use device from config
 
         # RL enabled from config
         self.use_rl = tk.BooleanVar(
@@ -163,10 +155,7 @@ class InteractiveTrainer:
 
         # Get all unique architectures from config
         self.architectures = list(
-            set(
-                pde_config.get("architecture", "fourier")
-                for pde_config in pde_configs.values()
-            )
+            set(pde_config.get("architecture", "fourier") for pde_config in pde_configs.values())
         )
         if not self.architectures:  # Fallback if config loading failed
             self.architectures = [
@@ -184,9 +173,9 @@ class InteractiveTrainer:
         )  # Explicitly set default to Heat Equation
 
         # Get the default architecture for the selected PDE
-        default_arch = pde_configs.get(
-            self.pde_name_to_key.get("Heat Equation", "heat"), {}
-        ).get("architecture", "fourier")
+        default_arch = pde_configs.get(self.pde_name_to_key.get("Heat Equation", "heat"), {}).get(
+            "architecture", "fourier"
+        )
 
         self.selected_arch = tk.StringVar(value=default_arch)
 
@@ -230,9 +219,7 @@ class InteractiveTrainer:
 
         # PDE-specific parameters
         self.pde_params_frame = ttk.Frame(pde_frame)
-        self.pde_params_frame.grid(
-            row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=5
-        )
+        self.pde_params_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
         self.update_pde_params()
 
         # Network architecture section
@@ -268,16 +255,12 @@ class InteractiveTrainer:
         train_frame = ttk.LabelFrame(main_frame, text="Training Parameters")
         train_frame.pack(fill="x", padx=5, pady=5)
 
-        ttk.Label(train_frame, text="Epochs:").grid(
-            row=0, column=0, sticky="w", padx=5, pady=5
-        )
+        ttk.Label(train_frame, text="Epochs:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         ttk.Entry(train_frame, textvariable=self.epochs, width=10).grid(
             row=0, column=1, sticky="w", padx=5, pady=5
         )
 
-        ttk.Label(train_frame, text="Batch Size:").grid(
-            row=1, column=0, sticky="w", padx=5, pady=5
-        )
+        ttk.Label(train_frame, text="Batch Size:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
         ttk.Entry(train_frame, textvariable=self.batch_size, width=10).grid(
             row=1, column=1, sticky="w", padx=5, pady=5
         )
@@ -296,9 +279,7 @@ class InteractiveTrainer:
             row=3, column=1, sticky="w", padx=5, pady=5
         )
 
-        ttk.Label(train_frame, text="Device:").grid(
-            row=4, column=0, sticky="w", padx=5, pady=5
-        )
+        ttk.Label(train_frame, text="Device:").grid(row=4, column=0, sticky="w", padx=5, pady=5)
         device_combo = ttk.Combobox(
             train_frame,
             textvariable=self.selected_device,
@@ -323,9 +304,7 @@ class InteractiveTrainer:
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill="x", padx=5, pady=10)
 
-        self.start_btn = ttk.Button(
-            btn_frame, text="Start Training", command=self.start_training
-        )
+        self.start_btn = ttk.Button(btn_frame, text="Start Training", command=self.start_training)
         self.start_btn.pack(side="left", padx=5)
 
         self.stop_btn = ttk.Button(
@@ -342,9 +321,7 @@ class InteractiveTrainer:
         progress_frame = ttk.LabelFrame(main_frame, text="Progress")
         progress_frame.pack(fill="x", padx=5, pady=5)
 
-        ttk.Label(progress_frame, text="Epoch:").grid(
-            row=0, column=0, sticky="w", padx=5, pady=5
-        )
+        ttk.Label(progress_frame, text="Epoch:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         self.epoch_label = ttk.Label(progress_frame, text="0/0")
         self.epoch_label.grid(row=0, column=1, sticky="w", padx=5, pady=5)
 
@@ -357,9 +334,7 @@ class InteractiveTrainer:
         self.progress_bar = ttk.Progressbar(
             progress_frame, orient="horizontal", length=300, mode="determinate"
         )
-        self.progress_bar.grid(
-            row=2, column=0, columnspan=2, sticky="ew", padx=5, pady=5
-        )
+        self.progress_bar.grid(row=2, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
 
         # Status label at the bottom
         status_frame = ttk.Frame(main_frame)
@@ -398,56 +373,56 @@ class InteractiveTrainer:
                     ttk.Label(self.pde_params_frame, text=label).grid(
                         row=0, column=0, sticky="w", padx=5, pady=5
                     )
-                    ttk.Entry(
-                        self.pde_params_frame, textvariable=self.alpha, width=10
-                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                    ttk.Entry(self.pde_params_frame, textvariable=self.alpha, width=10).grid(
+                        row=0, column=1, sticky="w", padx=5, pady=5
+                    )
                 elif pde_key == "burgers":
                     ttk.Label(self.pde_params_frame, text="Viscosity:").grid(
                         row=0, column=0, sticky="w", padx=5, pady=5
                     )
-                    ttk.Entry(
-                        self.pde_params_frame, textvariable=self.viscosity, width=10
-                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                    ttk.Entry(self.pde_params_frame, textvariable=self.viscosity, width=10).grid(
+                        row=0, column=1, sticky="w", padx=5, pady=5
+                    )
                 elif pde_key == "convection":
                     ttk.Label(self.pde_params_frame, text="Velocity:").grid(
                         row=0, column=0, sticky="w", padx=5, pady=5
                     )
-                    ttk.Entry(
-                        self.pde_params_frame, textvariable=self.velocity, width=10
-                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                    ttk.Entry(self.pde_params_frame, textvariable=self.velocity, width=10).grid(
+                        row=0, column=1, sticky="w", padx=5, pady=5
+                    )
                 elif pde_key in ("allen_cahn", "cahn_hilliard"):
                     ttk.Label(self.pde_params_frame, text="Epsilon:").grid(
                         row=0, column=0, sticky="w", padx=5, pady=5
                     )
-                    ttk.Entry(
-                        self.pde_params_frame, textvariable=self.epsilon, width=10
-                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                    ttk.Entry(self.pde_params_frame, textvariable=self.epsilon, width=10).grid(
+                        row=0, column=1, sticky="w", padx=5, pady=5
+                    )
                 elif pde_key == "black_scholes":
                     ttk.Label(self.pde_params_frame, text="Sigma:").grid(
                         row=0, column=0, sticky="w", padx=5, pady=5
                     )
-                    ttk.Entry(
-                        self.pde_params_frame, textvariable=self.sigma, width=10
-                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                    ttk.Entry(self.pde_params_frame, textvariable=self.sigma, width=10).grid(
+                        row=0, column=1, sticky="w", padx=5, pady=5
+                    )
                     ttk.Label(self.pde_params_frame, text="Risk-free Rate:").grid(
                         row=1, column=0, sticky="w", padx=5, pady=5
                     )
-                    ttk.Entry(
-                        self.pde_params_frame, textvariable=self.r, width=10
-                    ).grid(row=1, column=1, sticky="w", padx=5, pady=5)
+                    ttk.Entry(self.pde_params_frame, textvariable=self.r, width=10).grid(
+                        row=1, column=1, sticky="w", padx=5, pady=5
+                    )
                 elif pde_key == "pendulum":
                     ttk.Label(self.pde_params_frame, text="Gravity:").grid(
                         row=0, column=0, sticky="w", padx=5, pady=5
                     )
-                    ttk.Entry(
-                        self.pde_params_frame, textvariable=self.gravity, width=10
-                    ).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+                    ttk.Entry(self.pde_params_frame, textvariable=self.gravity, width=10).grid(
+                        row=0, column=1, sticky="w", padx=5, pady=5
+                    )
                     ttk.Label(self.pde_params_frame, text="Length:").grid(
                         row=1, column=0, sticky="w", padx=5, pady=5
                     )
-                    ttk.Entry(
-                        self.pde_params_frame, textvariable=self.length, width=10
-                    ).grid(row=1, column=1, sticky="w", padx=5, pady=5)
+                    ttk.Entry(self.pde_params_frame, textvariable=self.length, width=10).grid(
+                        row=1, column=1, sticky="w", padx=5, pady=5
+                    )
 
         except Exception as e:
             print(f"Error updating PDE parameters: {e}")
@@ -598,9 +573,7 @@ class InteractiveTrainer:
         elif pde_key == "burgers":
             parameters["viscosity"] = self.viscosity.get()
         elif pde_key == "wave":
-            parameters["c"] = (
-                self.alpha.get()
-            )  # Wave equation uses the same variable as heat
+            parameters["c"] = self.alpha.get()  # Wave equation uses the same variable as heat
         elif pde_key == "convection":
             parameters["velocity"] = self.velocity.get()
         elif pde_key == "allen_cahn":
@@ -613,9 +586,7 @@ class InteractiveTrainer:
             parameters["length"] = self.length.get()
 
         # Also update exact solution frequency if it exists
-        if "exact_solution" in pde_config and isinstance(
-            pde_config["exact_solution"], dict
-        ):
+        if "exact_solution" in pde_config and isinstance(pde_config["exact_solution"], dict):
             exact_solution = pde_config["exact_solution"].copy()
             if "frequency" in exact_solution:
                 exact_solution["frequency"] = self.frequency.get()
@@ -623,9 +594,7 @@ class InteractiveTrainer:
             pde_config["exact_solution"] = exact_solution
 
         # Update initial condition frequency if it exists
-        if "initial_condition" in pde_config and isinstance(
-            pde_config["initial_condition"], dict
-        ):
+        if "initial_condition" in pde_config and isinstance(pde_config["initial_condition"], dict):
             initial_condition = pde_config["initial_condition"].copy()
             if "frequency" in initial_condition:
                 initial_condition["frequency"] = self.frequency.get()
@@ -666,9 +635,7 @@ class InteractiveTrainer:
             name=config_dict["pde"]["name"],
             domain=config_dict["pde"]["domain"],
             time_domain=config_dict["pde"]["time_domain"],
-            parameters=config_dict["pde"].get(
-                "parameters", {}
-            ),  # Ensure parameters are passed
+            parameters=config_dict["pde"].get("parameters", {}),  # Ensure parameters are passed
             boundary_conditions=config_dict["pde"]["boundary_conditions"],
             initial_condition=config_dict["pde"]["initial_condition"],
             exact_solution=config_dict["pde"]["exact_solution"],
@@ -677,17 +644,11 @@ class InteractiveTrainer:
             training=TrainingConfig(
                 num_epochs=config_dict["training"]["num_epochs"],
                 batch_size=config_dict["training"]["batch_size"],
-                num_collocation_points=config_dict["training"][
-                    "num_collocation_points"
-                ],
+                num_collocation_points=config_dict["training"]["num_collocation_points"],
                 num_boundary_points=config_dict["training"]["num_boundary_points"],
                 num_initial_points=config_dict["training"]["num_initial_points"],
-                learning_rate=config_dict["training"]["optimizer_config"][
-                    "learning_rate"
-                ],
-                weight_decay=config_dict["training"]["optimizer_config"][
-                    "weight_decay"
-                ],
+                learning_rate=config_dict["training"]["optimizer_config"]["learning_rate"],
+                weight_decay=config_dict["training"]["optimizer_config"]["weight_decay"],
                 gradient_clipping=config_dict["training"].get("gradient_clipping", 1.0),
                 early_stopping=EarlyStoppingConfig(
                     enabled=config_dict["training"]["early_stopping"]["enabled"],
@@ -772,9 +733,7 @@ class InteractiveTrainer:
                 num_layers=self.num_layers.get(),  # From UI
                 activation=arch_config.get("activation", "tanh"),
                 fourier_features=arch_type == "fourier",
-                fourier_scale=(
-                    arch_config.get("scale", 1.0) if arch_type == "fourier" else None
-                ),
+                fourier_scale=(arch_config.get("scale", 1.0) if arch_type == "fourier" else None),
                 dropout=arch_config.get("dropout", 0.0),
                 layer_norm=arch_config.get("layer_norm", True),
                 architecture=arch_type,
@@ -791,17 +750,11 @@ class InteractiveTrainer:
             config_obj.training = TrainingConfig(
                 num_epochs=config_dict["training"]["num_epochs"],
                 batch_size=config_dict["training"]["batch_size"],
-                num_collocation_points=config_dict["training"][
-                    "num_collocation_points"
-                ],
+                num_collocation_points=config_dict["training"]["num_collocation_points"],
                 num_boundary_points=config_dict["training"]["num_boundary_points"],
                 num_initial_points=config_dict["training"]["num_initial_points"],
-                learning_rate=config_dict["training"]["optimizer_config"][
-                    "learning_rate"
-                ],
-                weight_decay=config_dict["training"]["optimizer_config"][
-                    "weight_decay"
-                ],
+                learning_rate=config_dict["training"]["optimizer_config"]["learning_rate"],
+                weight_decay=config_dict["training"]["optimizer_config"]["weight_decay"],
                 gradient_clipping=config_dict["training"].get("gradient_clipping", 1.0),
                 early_stopping=EarlyStoppingConfig(
                     enabled=config_dict["training"]["early_stopping"]["enabled"],
@@ -884,9 +837,7 @@ class InteractiveTrainer:
                         if config_dict["rl"]["enabled"]
                         else None
                     ),
-                    validation_frequency=config_dict["training"][
-                        "validation_frequency"
-                    ],
+                    validation_frequency=config_dict["training"]["validation_frequency"],
                     early_stopping_config=config_dict["training"]["early_stopping"],
                 )
 
@@ -937,8 +888,7 @@ class InteractiveTrainer:
                 # Check if early stopping was triggered
                 early_stopped = (
                     hasattr(self.current_trainer, "patience_counter")
-                    and self.current_trainer.patience_counter
-                    >= self.current_trainer.patience
+                    and self.current_trainer.patience_counter >= self.current_trainer.patience
                 )
 
                 # Update UI
@@ -982,18 +932,13 @@ class InteractiveTrainer:
             # Check if early stopping was triggered
             early_stopped = (
                 hasattr(self.current_trainer, "patience_counter")
-                and self.current_trainer.patience_counter
-                >= self.current_trainer.patience
+                and self.current_trainer.patience_counter >= self.current_trainer.patience
             )
 
             if early_stopped:
-                self.epoch_label.config(
-                    text=f"{current_epoch}/{total_epochs} (Early Stop)"
-                )
+                self.epoch_label.config(text=f"{current_epoch}/{total_epochs} (Early Stop)")
             else:
-                self.epoch_label.config(
-                    text=f"{current_epoch}/{total_epochs} (Completed)"
-                )
+                self.epoch_label.config(text=f"{current_epoch}/{total_epochs} (Completed)")
 
             # Update best loss display
             if (
@@ -1018,17 +963,17 @@ class InteractiveTrainer:
     def open_dashboard(self):
         """Open the training monitoring dashboard"""
         try:
-            import webbrowser
+            import os
             import subprocess
             import sys
-            import os
+            import webbrowser
 
             # Get the path to the dashboard script
             dashboard_script = os.path.join(os.path.dirname(__file__), "dashboard.py")
 
             # Start the dashboard server in a separate process
             port = 8050  # Default port for Dash
-            dashboard_process = subprocess.Popen(
+            subprocess.Popen(
                 [sys.executable, dashboard_script, "--port", str(port)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -1040,9 +985,7 @@ class InteractiveTrainer:
             # Open the dashboard in the default web browser
             webbrowser.open(f"http://127.0.0.1:{port}")
 
-            self.status_label.config(
-                text=f"Dashboard opened at http://127.0.0.1:{port}"
-            )
+            self.status_label.config(text=f"Dashboard opened at http://127.0.0.1:{port}")
 
         except Exception as e:
             print(f"Error opening dashboard: {e}")
@@ -1094,7 +1037,7 @@ class InteractiveTrainer:
 def main():
     """Entry point for the interactive trainer"""
     root = tk.Tk()
-    app = InteractiveTrainer(root)
+    InteractiveTrainer(root)
     root.mainloop()
 
 

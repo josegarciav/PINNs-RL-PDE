@@ -1,27 +1,34 @@
 import unittest
+
 import torch
-import numpy as np
+
+from src.config import Config, ModelConfig
 from src.neural_networks import (
-    FeedForwardNetwork,
-    ResNet,
-    FourierNetwork,
     SIREN,
     AttentionNetwork,
     AutoEncoder,
-    PINNModel,
+    FeedForwardNetwork,
     FourierFeatures,
-    SIRENLayer,
+    FourierNetwork,
+    PINNModel,
+    ResNet,
     ResNetBlock,
     SelfAttention,
 )
-from src.config import Config, ModelConfig
 
 # Import FeedForwardBlock from attention module instead of feedforward
 from src.neural_networks.attention import FeedForwardBlock
 
 
-def _make_config(input_dim=2, hidden_dim=32, output_dim=1, num_layers=3,
-                 activation="tanh", architecture="feedforward", device=None):
+def _make_config(
+    input_dim=2,
+    hidden_dim=32,
+    output_dim=1,
+    num_layers=3,
+    activation="tanh",
+    architecture="feedforward",
+    device=None,
+):
     """Helper: build a minimal Config object for PINNModel tests."""
     if device is None:
         device = torch.device("cpu")
@@ -63,9 +70,7 @@ class TestNeuralNetworks(unittest.TestCase):
         self.input_dim = 2  # x, t
         self.hidden_dim = 32
         self.output_dim = 1
-        self.sample_input = torch.rand(
-            self.batch_size, self.input_dim, device=self.device
-        )
+        self.sample_input = torch.rand(self.batch_size, self.input_dim, device=self.device)
 
     def test_feedforward_network(self):
         """Test FeedForwardNetwork architecture."""
@@ -147,9 +152,7 @@ class TestNeuralNetworks(unittest.TestCase):
         loss = torch.mean(output)
         loss.backward()
         # Make sure Fourier features layer has the expected parameters
-        self.assertEqual(
-            model.fourier.B.shape, (self.input_dim, config["mapping_size"])
-        )
+        self.assertEqual(model.fourier.B.shape, (self.input_dim, config["mapping_size"]))
 
     def test_siren(self):
         """Test SIREN architecture."""
@@ -266,8 +269,8 @@ class TestNeuralNetworks(unittest.TestCase):
 
     def test_save_load(self):
         """Test saving and loading models."""
-        import tempfile
         import os
+        import tempfile
 
         cfg = _make_config(
             input_dim=self.input_dim,
@@ -292,9 +295,7 @@ class TestNeuralNetworks(unittest.TestCase):
 
             after_output = new_model(self.sample_input)
 
-            self.assertTrue(
-                torch.allclose(before_output, after_output, rtol=1e-5, atol=1e-5)
-            )
+            self.assertTrue(torch.allclose(before_output, after_output, rtol=1e-5, atol=1e-5))
         finally:
             if os.path.exists(path):
                 os.remove(path)
@@ -432,31 +433,21 @@ class TestNeuralNetworks(unittest.TestCase):
 
             # Check gradients before optimization step
             for param in model.parameters():
-                self.assertFalse(
-                    torch.isnan(param.grad).any(), "NaN gradient during training"
-                )
-                self.assertFalse(
-                    torch.isinf(param.grad).any(), "Infinite gradient during training"
-                )
+                self.assertFalse(torch.isnan(param.grad).any(), "NaN gradient during training")
+                self.assertFalse(torch.isinf(param.grad).any(), "Infinite gradient during training")
 
             # Optimization step
             optimizer.step()
 
             # Check parameters after optimization step
             for param in model.parameters():
-                self.assertFalse(
-                    torch.isnan(param).any(), "NaN parameter during training"
-                )
-                self.assertFalse(
-                    torch.isinf(param).any(), "Infinite parameter during training"
-                )
+                self.assertFalse(torch.isnan(param).any(), "NaN parameter during training")
+                self.assertFalse(torch.isinf(param).any(), "Infinite parameter during training")
 
         # Verify that loss is decreasing (generally)
         # Allow for some fluctuations but overall trend should be downward
         first_half_avg = sum(loss_values[: num_steps // 2]) / (num_steps // 2)
-        second_half_avg = sum(loss_values[num_steps // 2 :]) / (
-            num_steps - num_steps // 2
-        )
+        second_half_avg = sum(loss_values[num_steps // 2 :]) / (num_steps - num_steps // 2)
 
         self.assertLess(
             second_half_avg,

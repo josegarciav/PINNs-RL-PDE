@@ -1,20 +1,16 @@
 """Neural network architectures for Physics-Informed Neural Networks (PINNs)."""
 
-import torch
-import torch.nn as nn
-from typing import TYPE_CHECKING, Dict, Any, Optional, Union, List
-import sys
-import os
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.config import Config
 
-from .base_network import BaseNetwork, InputType, OutputType, NetworkConfig
+from .autoencoder import AutoEncoder
+from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 from .feedforward import FeedForwardNetwork
+from .fourier import FourierFeatures, FourierNetwork
 from .resnet import ResNet, ResNetBlock
 from .siren import SIREN, SIRENLayer
-from .fourier import FourierNetwork, FourierFeatures
-from .autoencoder import AutoEncoder
 
 # Import optional architectures if available
 try:
@@ -87,9 +83,7 @@ class PINNModel(BaseNetwork):
 
         # Store architecture type
         self.architecture = config.model.architecture
-        self.architecture_name = (
-            config.model.architecture
-        )  # More accessible name for metadata
+        self.architecture_name = config.model.architecture  # More accessible name for metadata
 
         # Create model based on architecture
         if self.architecture == "fourier":
@@ -106,19 +100,13 @@ class PINNModel(BaseNetwork):
             }
 
             # Make sure num_blocks is defined, using num_layers as fallback
-            if (
-                hasattr(config.model, "num_blocks")
-                and config.model.num_blocks is not None
-            ):
+            if hasattr(config.model, "num_blocks") and config.model.num_blocks is not None:
                 resnet_config["num_blocks"] = config.model.num_blocks
             else:
                 resnet_config["num_blocks"] = config.model.num_layers
 
             # Add hidden_dims if defined
-            if (
-                hasattr(config.model, "hidden_dims")
-                and config.model.hidden_dims is not None
-            ):
+            if hasattr(config.model, "hidden_dims") and config.model.hidden_dims is not None:
                 resnet_config["hidden_dims"] = config.model.hidden_dims
 
             self.model = ResNet(resnet_config)
@@ -146,5 +134,3 @@ class PINNModel(BaseNetwork):
             Output tensor of shape (batch_size, output_dim)
         """
         return self.model(x)
-
-

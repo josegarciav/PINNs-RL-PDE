@@ -1,19 +1,11 @@
 import unittest
+
 import torch
-import numpy as np
-from scipy.stats import qmc
+from tests.test_components.test_utils import create_pde_from_config
+
 from src.pdes.heat_equation import HeatEquation
 from src.pdes.wave_equation import WaveEquation
-from src.pdes.kdv_equation import KdVEquation
-from src.pdes.burgers_equation import BurgersEquation
-from src.pdes.convection_equation import ConvectionEquation
-from src.pdes.allen_cahn import AllenCahnEquation
-from src.pdes.cahn_hilliard import CahnHilliardEquation
-from src.pdes.black_scholes import BlackScholesEquation
-from src.pdes.pendulum_equation import PendulumEquation
-from src.pdes.pde_base import PDEBase, PDEConfig
-from src.rl.rl_agent import RLAgent, CollocationRLAgent
-from tests.test_components.test_utils import create_pde_from_config
+from src.rl.rl_agent import CollocationRLAgent, RLAgent
 
 
 class TestPDESampling(unittest.TestCase):
@@ -106,140 +98,96 @@ class TestPDESampling(unittest.TestCase):
         num_points = 100
 
         # Heat equation
-        x, t = self.heat_eq_1d.generate_collocation_points(
-            num_points, strategy="uniform"
-        )
+        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="uniform")
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
         self.assertTrue(
-            torch.all(x >= self.domain_1d[0][0])
-            and torch.all(x <= self.domain_1d[0][1])
+            torch.all(x >= self.domain_1d[0][0]) and torch.all(x <= self.domain_1d[0][1])
         )
-        self.assertTrue(
-            torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1])
-        )
+        self.assertTrue(torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1]))
 
         # Wave equation
-        x, t = self.wave_eq_1d.generate_collocation_points(
-            num_points, strategy="uniform"
-        )
+        x, t = self.wave_eq_1d.generate_collocation_points(num_points, strategy="uniform")
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
         self.assertTrue(
-            torch.all(x >= self.domain_1d[0][0])
-            and torch.all(x <= self.domain_1d[0][1])
+            torch.all(x >= self.domain_1d[0][0]) and torch.all(x <= self.domain_1d[0][1])
         )
-        self.assertTrue(
-            torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1])
-        )
+        self.assertTrue(torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1]))
 
     def test_uniform_sampling_2d(self):
         """Test uniform sampling in 2D."""
         num_points = 100
 
         # Heat equation
-        x, t = self.heat_eq_2d.generate_collocation_points(
-            num_points, strategy="uniform"
-        )
+        x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy="uniform")
         self.assertEqual(x.shape, (num_points, 2))
         self.assertEqual(t.shape, (num_points, 1))
 
         # Check domain bounds for each dimension
         for i, (min_val, max_val) in enumerate(self.domain_2d):
-            self.assertTrue(
-                torch.all(x[:, i] >= min_val) and torch.all(x[:, i] <= max_val)
-            )
+            self.assertTrue(torch.all(x[:, i] >= min_val) and torch.all(x[:, i] <= max_val))
 
-        self.assertTrue(
-            torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1])
-        )
+        self.assertTrue(torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1]))
 
         # Wave equation
-        x, t = self.wave_eq_2d.generate_collocation_points(
-            num_points, strategy="uniform"
-        )
+        x, t = self.wave_eq_2d.generate_collocation_points(num_points, strategy="uniform")
         self.assertEqual(x.shape, (num_points, 2))
         self.assertEqual(t.shape, (num_points, 1))
 
         # Check domain bounds for each dimension
         for i, (min_val, max_val) in enumerate(self.domain_2d):
-            self.assertTrue(
-                torch.all(x[:, i] >= min_val) and torch.all(x[:, i] <= max_val)
-            )
+            self.assertTrue(torch.all(x[:, i] >= min_val) and torch.all(x[:, i] <= max_val))
 
-        self.assertTrue(
-            torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1])
-        )
+        self.assertTrue(torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1]))
 
     def test_latin_hypercube_sampling_1d(self):
         """Test Latin Hypercube sampling in 1D."""
         num_points = 100
 
         # Heat equation
-        x, t = self.heat_eq_1d.generate_collocation_points(
-            num_points, strategy="latin_hypercube"
-        )
+        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="latin_hypercube")
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
         self.assertTrue(
-            torch.all(x >= self.domain_1d[0][0])
-            and torch.all(x <= self.domain_1d[0][1])
+            torch.all(x >= self.domain_1d[0][0]) and torch.all(x <= self.domain_1d[0][1])
         )
-        self.assertTrue(
-            torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1])
-        )
+        self.assertTrue(torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1]))
 
         # Wave equation
-        x, t = self.wave_eq_1d.generate_collocation_points(
-            num_points, strategy="latin_hypercube"
-        )
+        x, t = self.wave_eq_1d.generate_collocation_points(num_points, strategy="latin_hypercube")
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
         self.assertTrue(
-            torch.all(x >= self.domain_1d[0][0])
-            and torch.all(x <= self.domain_1d[0][1])
+            torch.all(x >= self.domain_1d[0][0]) and torch.all(x <= self.domain_1d[0][1])
         )
-        self.assertTrue(
-            torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1])
-        )
+        self.assertTrue(torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1]))
 
     def test_latin_hypercube_sampling_2d(self):
         """Test Latin Hypercube sampling in 2D."""
         num_points = 100
 
         # Heat equation
-        x, t = self.heat_eq_2d.generate_collocation_points(
-            num_points, strategy="latin_hypercube"
-        )
+        x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy="latin_hypercube")
         self.assertEqual(x.shape, (num_points, 2))
         self.assertEqual(t.shape, (num_points, 1))
 
         # Check domain bounds for each dimension
         for i, (min_val, max_val) in enumerate(self.domain_2d):
-            self.assertTrue(
-                torch.all(x[:, i] >= min_val) and torch.all(x[:, i] <= max_val)
-            )
+            self.assertTrue(torch.all(x[:, i] >= min_val) and torch.all(x[:, i] <= max_val))
 
-        self.assertTrue(
-            torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1])
-        )
+        self.assertTrue(torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1]))
 
         # Wave equation
-        x, t = self.wave_eq_2d.generate_collocation_points(
-            num_points, strategy="latin_hypercube"
-        )
+        x, t = self.wave_eq_2d.generate_collocation_points(num_points, strategy="latin_hypercube")
         self.assertEqual(x.shape, (num_points, 2))
         self.assertEqual(t.shape, (num_points, 1))
 
         # Check domain bounds for each dimension
         for i, (min_val, max_val) in enumerate(self.domain_2d):
-            self.assertTrue(
-                torch.all(x[:, i] >= min_val) and torch.all(x[:, i] <= max_val)
-            )
+            self.assertTrue(torch.all(x[:, i] >= min_val) and torch.all(x[:, i] <= max_val))
 
-        self.assertTrue(
-            torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1])
-        )
+        self.assertTrue(torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1]))
 
     def test_adaptive_sampling_with_rl_agent(self):
         """Test adaptive sampling with RL agent."""
@@ -250,35 +198,24 @@ class TestPDESampling(unittest.TestCase):
         self.heat_eq_2d.rl_agent = self.rl_agent
 
         # Test 1D adaptive sampling
-        x, t = self.heat_eq_1d.generate_collocation_points(
-            num_points, strategy="adaptive"
-        )
+        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
         self.assertTrue(
-            torch.all(x >= self.domain_1d[0][0])
-            and torch.all(x <= self.domain_1d[0][1])
+            torch.all(x >= self.domain_1d[0][0]) and torch.all(x <= self.domain_1d[0][1])
         )
-        self.assertTrue(
-            torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1])
-        )
+        self.assertTrue(torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1]))
 
         # Test 2D adaptive sampling
-        x, t = self.heat_eq_2d.generate_collocation_points(
-            num_points, strategy="adaptive"
-        )
+        x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy="adaptive")
         self.assertEqual(x.shape, (num_points, 2))
         self.assertEqual(t.shape, (num_points, 1))
 
         # Check domain bounds for each dimension
         for i, (min_val, max_val) in enumerate(self.domain_2d):
-            self.assertTrue(
-                torch.all(x[:, i] >= min_val) and torch.all(x[:, i] <= max_val)
-            )
+            self.assertTrue(torch.all(x[:, i] >= min_val) and torch.all(x[:, i] <= max_val))
 
-        self.assertTrue(
-            torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1])
-        )
+        self.assertTrue(torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1]))
 
     def test_adaptive_sampling_fallback(self):
         """Test that adaptive sampling falls back to uniform when no RL agent is provided."""
@@ -288,18 +225,13 @@ class TestPDESampling(unittest.TestCase):
         self.heat_eq_1d.rl_agent = None
 
         # Should fall back to uniform
-        x, t = self.heat_eq_1d.generate_collocation_points(
-            num_points, strategy="adaptive"
-        )
+        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
         self.assertTrue(
-            torch.all(x >= self.domain_1d[0][0])
-            and torch.all(x <= self.domain_1d[0][1])
+            torch.all(x >= self.domain_1d[0][0]) and torch.all(x <= self.domain_1d[0][1])
         )
-        self.assertTrue(
-            torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1])
-        )
+        self.assertTrue(torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1]))
 
     def test_different_num_points(self):
         """Test with different numbers of points."""
@@ -312,13 +244,9 @@ class TestPDESampling(unittest.TestCase):
 
         for num_points in num_points_list:
             # 1D uniform
-            x, t = self.heat_eq_1d.generate_collocation_points(
-                num_points, strategy="uniform"
-            )
+            x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="uniform")
             # Allow for a larger tolerance in point count due to grid based implementation in uniform sampling
-            tolerance = max(
-                5, int(num_points * 0.05)
-            )  # 5% tolerance or at least 5 points
+            tolerance = max(5, int(num_points * 0.05))  # 5% tolerance or at least 5 points
             self.assertTrue(
                 abs(x.shape[0] - num_points) <= tolerance,
                 f"Expected around {num_points} points, got {x.shape[0]}",
@@ -327,9 +255,7 @@ class TestPDESampling(unittest.TestCase):
             self.assertEqual(t.shape[1], 1)
 
             # 2D uniform
-            x, t = self.heat_eq_2d.generate_collocation_points(
-                num_points, strategy="uniform"
-            )
+            x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy="uniform")
             self.assertTrue(
                 abs(x.shape[0] - num_points) <= tolerance,
                 f"Expected around {num_points} points, got {x.shape[0]}",
@@ -341,18 +267,14 @@ class TestPDESampling(unittest.TestCase):
             x, t = self.heat_eq_1d.generate_collocation_points(
                 num_points, strategy="latin_hypercube"
             )
-            self.assertEqual(
-                x.shape, (num_points, 1)
-            )  # Latin hypercube should be exact
+            self.assertEqual(x.shape, (num_points, 1))  # Latin hypercube should be exact
             self.assertEqual(t.shape, (num_points, 1))
 
             # 2D latin hypercube
             x, t = self.heat_eq_2d.generate_collocation_points(
                 num_points, strategy="latin_hypercube"
             )
-            self.assertEqual(
-                x.shape, (num_points, 2)
-            )  # Latin hypercube should be exact
+            self.assertEqual(x.shape, (num_points, 2))  # Latin hypercube should be exact
             self.assertEqual(t.shape, (num_points, 1))
 
     def test_small_number_points(self):
@@ -363,9 +285,7 @@ class TestPDESampling(unittest.TestCase):
         # but not necessarily exact
 
         # 1D uniform
-        x, t = self.heat_eq_1d.generate_collocation_points(
-            num_points, strategy="uniform"
-        )
+        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="uniform")
         self.assertTrue(
             abs(x.shape[0] - num_points) <= 1,
             f"Expected around {num_points} points, got {x.shape[0]}",
@@ -374,9 +294,7 @@ class TestPDESampling(unittest.TestCase):
         self.assertEqual(t.shape[1], 1)
 
         # 2D uniform
-        x, t = self.heat_eq_2d.generate_collocation_points(
-            num_points, strategy="uniform"
-        )
+        x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy="uniform")
         self.assertTrue(
             abs(x.shape[0] - num_points) <= 1,
             f"Expected around {num_points} points, got {x.shape[0]}",
@@ -401,9 +319,7 @@ class TestPDESampling(unittest.TestCase):
 
         # Generate points with adaptive strategy to create history
         for _ in range(3):
-            x, t = self.heat_eq_1d.generate_collocation_points(
-                num_points, strategy="adaptive"
-            )
+            x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
 
         # Check that history has been recorded
         self.assertEqual(len(self.heat_eq_1d.collocation_history), 3)
@@ -419,9 +335,7 @@ class TestPDESampling(unittest.TestCase):
         num_points = 100
 
         with self.assertRaises(ValueError):
-            self.heat_eq_1d.generate_collocation_points(
-                num_points, strategy="invalid_strategy"
-            )
+            self.heat_eq_1d.generate_collocation_points(num_points, strategy="invalid_strategy")
 
     def test_adaptive_sampling_exploration(self):
         """Test adaptive sampling exploration behavior with RL agent."""
@@ -453,9 +367,7 @@ class TestPDESampling(unittest.TestCase):
         self.heat_eq_1d.rl_agent = mock_agent
 
         # Generate points with adaptive strategy using our mock agent
-        x, t = self.heat_eq_1d.generate_collocation_points(
-            num_points, strategy="adaptive"
-        )
+        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
 
         # Check shapes
         self.assertEqual(x.shape, (num_points, 1))
@@ -463,12 +375,9 @@ class TestPDESampling(unittest.TestCase):
 
         # Check domain bounds
         self.assertTrue(
-            torch.all(x >= self.domain_1d[0][0])
-            and torch.all(x <= self.domain_1d[0][1])
+            torch.all(x >= self.domain_1d[0][0]) and torch.all(x <= self.domain_1d[0][1])
         )
-        self.assertTrue(
-            torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1])
-        )
+        self.assertTrue(torch.all(t >= self.time_domain[0]) and torch.all(t <= self.time_domain[1]))
 
         # With our mock agent, points should be more concentrated near x=0.5
         # Count points in central region vs edges
@@ -476,7 +385,7 @@ class TestPDESampling(unittest.TestCase):
         edge_region = ~central_region
 
         central_count = central_region.sum().item()
-        edge_count = edge_region.sum().item()
+        edge_region.sum().item()
 
         # Calculate the percentage of points in the central region
         central_percentage = central_count / num_points
@@ -492,9 +401,7 @@ class TestPDESampling(unittest.TestCase):
         # Run for multiple epochs to see exploration change
         history = []
         for i in range(5):
-            x, t = self.heat_eq_1d.generate_collocation_points(
-                num_points, strategy="adaptive"
-            )
+            x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
 
             # Store distribution metrics
             central_region = (x > 0.4) & (x < 0.6)
@@ -520,9 +427,7 @@ class TestPDESampling(unittest.TestCase):
         mock_agent_2d = MockCollocationRLAgent(self.device)
         self.heat_eq_2d.rl_agent = mock_agent_2d
 
-        x_2d, t_2d = self.heat_eq_2d.generate_collocation_points(
-            num_points, strategy="adaptive"
-        )
+        x_2d, t_2d = self.heat_eq_2d.generate_collocation_points(num_points, strategy="adaptive")
 
         # Check shapes
         self.assertEqual(x_2d.shape, (num_points, 2))
@@ -596,9 +501,7 @@ class TestPDESampling(unittest.TestCase):
             # Test all sampling strategies
             for strategy in strategies:
                 # 1D sampling
-                x_1d, t_1d = pde.generate_collocation_points(
-                    num_points, strategy=strategy
-                )
+                x_1d, t_1d = pde.generate_collocation_points(num_points, strategy=strategy)
 
                 # Check dimensions of points
                 self.assertEqual(
@@ -631,9 +534,7 @@ class TestPDESampling(unittest.TestCase):
                 if pde.dimension == 1:
                     try:
                         # Create a 2D version of the same PDE
-                        pde_2d = create_pde_from_config(
-                            pde_type, self.device, dimension=2
-                        )
+                        pde_2d = create_pde_from_config(pde_type, self.device, dimension=2)
 
                         # Test 2D sampling
                         x_2d, t_2d = pde_2d.generate_collocation_points(

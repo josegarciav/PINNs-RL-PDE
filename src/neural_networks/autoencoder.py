@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 
-from .base_network import BaseNetwork, InputType, OutputType, NetworkConfig
+from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 
 
 class AutoEncoder(BaseNetwork):

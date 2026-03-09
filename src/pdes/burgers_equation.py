@@ -3,10 +3,11 @@
 # Complexity: Nonlinear, 2nd-order
 
 
+from typing import Any, Dict
+
 import torch
+
 from .pde_base import PDEBase, PDEConfig
-from typing import Dict, Any, Optional, Union, Tuple, List
-from src.rl.rl_agent import RLAgent
 
 
 class BurgersEquation(PDEBase):
@@ -86,14 +87,12 @@ class BurgersEquation(PDEBase):
         if solution_type == "cole_hopf":
             # Cole-Hopf transformation solution
             nu = self.config.exact_solution.get("viscosity", self.nu)
-            A = self.config.exact_solution.get("initial_amplitude", -1.0)
+            self.config.exact_solution.get("initial_amplitude", -1.0)
             k = self.config.exact_solution.get("initial_frequency", 1.0)
 
             if self.dimension == 1:
                 # Compute Cole-Hopf transformation solution
-                phi = -torch.cos(k * torch.pi * x) * torch.exp(
-                    -nu * (k * torch.pi) ** 2 * t
-                )
+                phi = -torch.cos(k * torch.pi * x) * torch.exp(-nu * (k * torch.pi) ** 2 * t)
                 phi_x = torch.autograd.grad(
                     phi, x, grad_outputs=torch.ones_like(phi), create_graph=True
                 )[0]
@@ -122,16 +121,12 @@ class BurgersEquation(PDEBase):
                 # For higher dimensions, use product of tanh waves
                 solution = torch.ones_like(x[:, 0:1])
                 for dim in range(self.dimension):
-                    solution *= torch.tanh(
-                        (x[:, dim : dim + 1] - 0.5 - self.nu * t) / epsilon
-                    )
+                    solution *= torch.tanh((x[:, dim : dim + 1] - 0.5 - self.nu * t) / epsilon)
                 return solution
         else:
             raise ValueError(f"Unsupported exact solution type: {solution_type}")
 
-    def _create_boundary_condition(
-        self, bc_type: str, params: Dict[str, Any]
-    ) -> callable:
+    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
         """
         Create boundary condition function from parameters.
 

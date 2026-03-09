@@ -1,6 +1,6 @@
-import torch
-import numpy as np
 import logging
+
+import torch
 
 
 class AdaptiveLossWeights:
@@ -50,9 +50,7 @@ class AdaptiveLossWeights:
             return self.weights
 
         # Update running average of gradients
-        self.running_grads = (
-            self.alpha * self.running_grads + (1 - self.alpha) * gradients
-        )
+        self.running_grads = self.alpha * self.running_grads + (1 - self.alpha) * gradients
 
         # Ensure eps is a tensor on the same device as the gradients
         eps_tensor = torch.tensor(self.eps, device=self.running_grads.device)
@@ -86,25 +84,19 @@ class AdaptiveLossWeights:
             return self.weights
 
         # Update running average of losses
-        self.running_losses = (
-            self.alpha * self.running_losses + (1 - self.alpha) * losses
-        )
+        self.running_losses = self.alpha * self.running_losses + (1 - self.alpha) * losses
 
         # Ensure eps is a tensor on the same device as the losses
         eps_tensor = torch.tensor(self.eps, device=self.running_losses.device)
 
         # Normalize the running losses to get weights
         # Give more weight to higher losses to focus optimization on problematic terms
-        normalized_losses = self.running_losses / (
-            self.running_losses.sum() + eps_tensor
-        )
+        normalized_losses = self.running_losses / (self.running_losses.sum() + eps_tensor)
         self.weights = normalized_losses  # Higher loss -> Higher weight
 
         # Update weights with exponential moving average
         if self.prev_weights is not None:
-            self.weights = (
-                self.alpha * self.prev_weights + (1 - self.alpha) * self.weights
-            )
+            self.weights = self.alpha * self.prev_weights + (1 - self.alpha) * self.weights
 
         self.prev_weights = self.weights.clone()
 
@@ -130,9 +122,7 @@ class AdaptiveLossWeights:
         elif self.strategy == "rbw" and losses is not None:
             return self.update_weights_rbw(losses)
         else:
-            raise ValueError(
-                f"Invalid combination of strategy ({self.strategy}) and inputs"
-            )
+            raise ValueError(f"Invalid combination of strategy ({self.strategy}) and inputs")
 
     def get_weights(self):
         """Return current weights."""

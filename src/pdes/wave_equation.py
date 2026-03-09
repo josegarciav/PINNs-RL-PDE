@@ -2,10 +2,11 @@
 # Application domains: Wave propagation, acoustics, electromagnetics
 # Complexity: Linear, 2nd-order
 
+from typing import Any, Dict
+
 import torch
+
 from .pde_base import PDEBase, PDEConfig
-from typing import Dict, Any, Optional, Union, Tuple, List
-from src.rl.rl_agent import RLAgent
 
 
 class WaveEquation(PDEBase):
@@ -134,9 +135,7 @@ class WaveEquation(PDEBase):
                 solution *= torch.sin(2 * torch.pi * (x[:, dim : dim + 1] - self.c * t))
             return solution
 
-    def _create_boundary_condition(
-        self, bc_type: str, params: Dict[str, Any]
-    ) -> callable:
+    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
         """
         Create boundary condition function from parameters.
 

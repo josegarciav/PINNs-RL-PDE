@@ -2,10 +2,11 @@
 # Application domains: Fluid dynamics, transport phenomena
 # Complexity: Linear, 1st-order
 
+from typing import Any, Dict
+
 import torch
+
 from .pde_base import PDEBase, PDEConfig
-from typing import Dict, Any, Optional, Union, Tuple, List
-from src.rl.rl_agent import RLAgent
 
 
 class ConvectionEquation(PDEBase):
@@ -55,15 +56,11 @@ class ConvectionEquation(PDEBase):
 
         # Compute derivatives
         u = model(xt)
-        u_t = torch.autograd.grad(
-            u, t, grad_outputs=torch.ones_like(u), create_graph=True
-        )[0]
+        u_t = torch.autograd.grad(u, t, grad_outputs=torch.ones_like(u), create_graph=True)[0]
 
         # Compute gradient based on dimension
         if self.dimension == 1:
-            u_x = torch.autograd.grad(
-                u, x, grad_outputs=torch.ones_like(u), create_graph=True
-            )[0]
+            u_x = torch.autograd.grad(u, x, grad_outputs=torch.ones_like(u), create_graph=True)[0]
             convection = self.velocity[0] * u_x
         else:
             # For higher dimensions, compute dot product of velocity and gradient
@@ -93,14 +90,10 @@ class ConvectionEquation(PDEBase):
             # For higher dimensions, use product of sine waves
             solution = torch.ones_like(x[:, 0:1])
             for dim in range(self.dimension):
-                solution *= torch.sin(
-                    2 * torch.pi * (x[:, dim : dim + 1] - self.velocity[dim] * t)
-                )
+                solution *= torch.sin(2 * torch.pi * (x[:, dim : dim + 1] - self.velocity[dim] * t))
             return solution
 
-    def _create_boundary_condition(
-        self, bc_type: str, params: Dict[str, Any]
-    ) -> callable:
+    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
         """
         Create boundary condition function from parameters.
 

@@ -1,7 +1,8 @@
-simport unittest
+import unittest
+
 import torch
-import numpy as np
-from src.rl.rl_agent import RLAgent, DQNNetwork, ReplayBuffer, CollocationRLAgent
+
+from src.rl.rl_agent import CollocationRLAgent, DQNNetwork, ReplayBuffer, RLAgent
 
 
 class TestRLAgent(unittest.TestCase):

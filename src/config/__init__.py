@@ -1,9 +1,10 @@
 import os
-import torch
-import yaml
-from typing import Dict, Any, List, Union, Optional
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import torch
+import yaml
 
 DEFAULT_CONFIG_PATH = str(Path(__file__).parent / "config.yaml")
 
@@ -30,9 +31,7 @@ class AdaptiveWeightsConfig:
     strategy: str = "rbw"  # Options: "lrw" or "rbw"
     alpha: float = 0.9  # Moving average factor (0-1)
     eps: float = 1e-5  # Small constant for numerical stability
-    initial_weights: List[float] = (
-        None  # Initial weights for [pde, boundary, initial] components
-    )
+    initial_weights: List[float] = None  # Initial weights for [pde, boundary, initial] components
 
     def __post_init__(self):
         if self.initial_weights is None:
@@ -204,9 +203,7 @@ class Config:
         self.training = None
         self.rl = None
         self.paths = None
-        self.device = torch.device(
-            "cpu"
-        )  # Default to CPU, will be overridden by config
+        self.device = torch.device("cpu")  # Default to CPU, will be overridden by config
 
         # Load configuration if file exists
         if os.path.exists(config_path):
@@ -260,9 +257,7 @@ class Config:
         output_dim = pde_config.get("output_dim", model_config.get("output_dim", 1))
 
         # Get architecture from PDE config if available
-        architecture = pde_config.get(
-            "architecture", model_config.get("architecture", "fourier")
-        )
+        architecture = pde_config.get("architecture", model_config.get("architecture", "fourier"))
 
         # Bug #1 fix: load architecture-specific config and inject into ModelConfig
         arch_specific = config_dict.get("architectures", {}).get(architecture, {})
@@ -371,9 +366,7 @@ class Config:
                 factor=lr_scheduler_config.get("factor", 0.5),
                 patience=lr_scheduler_config.get("patience", 50),
             ),
-            collocation_distribution=training_config.get(
-                "collocation_distribution", "uniform"
-            ),
+            collocation_distribution=training_config.get("collocation_distribution", "uniform"),
             adaptive_weights=AdaptiveWeightsConfig(
                 enabled=adaptive_weights_config.get("enabled", False),
                 strategy=adaptive_weights_config.get("strategy", "rbw"),
@@ -475,10 +468,7 @@ class Config:
         if hasattr(self.pde, "t_domain") and len(self.pde.t_domain) != 2:
             raise ValueError("t_domain must be a list of two values")
 
-        if (
-            hasattr(self.pde, "diffusion_coefficient")
-            and self.pde.diffusion_coefficient <= 0
-        ):
+        if hasattr(self.pde, "diffusion_coefficient") and self.pde.diffusion_coefficient <= 0:
             raise ValueError("diffusion_coefficient must be positive")
 
         # Validate training configuration

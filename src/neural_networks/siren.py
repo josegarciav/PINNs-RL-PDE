@@ -5,15 +5,13 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from .base_network import BaseNetwork, InputType, OutputType, NetworkConfig
+from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 
 
 class SIRENLayer(nn.Module):
     """SIREN layer with sinusoidal activation."""
 
-    def __init__(
-        self, in_features: int, out_features: int, omega_0: float = 30.0
-    ) -> None:
+    def __init__(self, in_features: int, out_features: int, omega_0: float = 30.0) -> None:
         """
         Initialize the layer.
 

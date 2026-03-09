@@ -1,13 +1,19 @@
 """Utility functions for the PINN framework."""
 
-import torch
-import numpy as np
-from typing import Tuple, Optional, Dict, List, Union, Any
-import os
 import json
 import logging
+import os
 from datetime import datetime
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+
+if TYPE_CHECKING:
+    from src.neural_networks import PINNModel
+    from src.pdes.pde_base import PDEBase
+    from src.rl.rl_agent import RLAgent
+
+import numpy as np
 import plotly.graph_objects as go
+import torch
 from plotly.subplots import make_subplots
 
 # Type aliases for better readability
@@ -53,15 +59,10 @@ def generate_collocation_points(
     :param kwargs: Additional parameters for specific distributions
     :return: Tensor of collocation points
     """
-    device = device or torch.device(
-        "mps" if torch.backends.mps.is_available() else "cpu"
-    )
+    device = device or torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
     if distribution == "uniform":
-        points = (
-            torch.rand(num_points, 1, device=device) * (domain[1] - domain[0])
-            + domain[0]
-        )
+        points = torch.rand(num_points, 1, device=device) * (domain[1] - domain[0]) + domain[0]
 
     elif distribution == "latin_hypercube":
         # Latin Hypercube Sampling for better space-filling
@@ -70,9 +71,7 @@ def generate_collocation_points(
         for i in range(num_points):
             bin_idx = i % n_bins
             bin_size = (domain[1] - domain[0]) / n_bins
-            points[i] = (
-                domain[0] + bin_idx * bin_size + torch.rand(1, device=device) * bin_size
-            )
+            points[i] = domain[0] + bin_idx * bin_size + torch.rand(1, device=device) * bin_size
 
     elif distribution == "sobol":
         # Sobol sequence for quasi-random sampling
@@ -80,9 +79,7 @@ def generate_collocation_points(
 
         sampler = qmc.Sobol(d=1)
         points = torch.tensor(
-            qmc.scale(
-                sampler.random_base2(m=int(np.log2(num_points))), domain[0], domain[1]
-            ),
+            qmc.scale(sampler.random_base2(m=int(np.log2(num_points))), domain[0], domain[1]),
             device=device,
         )
 
@@ -92,9 +89,7 @@ def generate_collocation_points(
     return points
 
 
-def save_model(
-    model: Union[torch.nn.Module, "RLAgent"], path: str, config: Optional[Dict] = None
-):
+def save_model(model: Union[torch.nn.Module, "RLAgent"], path: str, config: Optional[Dict] = None):
     """
     Save the trained model and configuration.
 
@@ -134,9 +129,7 @@ def load_model(
     :param load_config: Whether to load the configuration
     :return: Tuple of (loaded model, configuration dictionary)
     """
-    device = device or torch.device(
-        "mps" if torch.backends.mps.is_available() else "cpu"
-    )
+    device = device or torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
     # Load model state
     model.load_state_dict(torch.load(path, map_location=device))
@@ -266,9 +259,7 @@ def plot_solution(
                 for i in range(len(t))
             ]
             frames_pred = [
-                go.Frame(
-                    data=[go.Surface(x=X, y=Y, z=predictions[i])], name=f"t={T[i]:.2f}"
-                )
+                go.Frame(data=[go.Surface(x=X, y=Y, z=predictions[i])], name=f"t={T[i]:.2f}")
                 for i in range(len(t))
             ]
             exact_fig.frames = frames_exact
@@ -379,9 +370,7 @@ def plot_solution(
         scene=dict(
             xaxis=dict(title="x", **axis_settings),
             yaxis=dict(title="t" if pde.dimension == 1 else "y", **axis_settings),
-            zaxis=dict(
-                title="u(x,t)" if pde.dimension == 1 else "u(x,y,t)", **axis_settings
-            ),
+            zaxis=dict(title="u(x,t)" if pde.dimension == 1 else "u(x,y,t)", **axis_settings),
             camera=camera,
             dragmode="turntable",
             aspectmode="cube",
@@ -395,9 +384,7 @@ def plot_solution(
         scene=dict(
             xaxis=dict(title="x", **axis_settings),
             yaxis=dict(title="t" if pde.dimension == 1 else "y", **axis_settings),
-            zaxis=dict(
-                title="u(x,t)" if pde.dimension == 1 else "u(x,y,t)", **axis_settings
-            ),
+            zaxis=dict(title="u(x,t)" if pde.dimension == 1 else "u(x,y,t)", **axis_settings),
             camera=camera,
             dragmode="turntable",
             aspectmode="cube",
@@ -431,9 +418,7 @@ def plot_architecture_comparison(
         save_path: Optional path to save the plot
     """
     # Generate grid points
-    x = torch.linspace(
-        pde.domain[0], pde.domain[1], int(np.sqrt(num_points)), device=model.device
-    )
+    x = torch.linspace(pde.domain[0], pde.domain[1], int(np.sqrt(num_points)), device=model.device)
     t = torch.linspace(
         pde.config.time_domain[0],
         pde.config.time_domain[1],
@@ -464,7 +449,7 @@ def plot_architecture_comparison(
         rows=2,
         cols=2,
         subplot_titles=(
-            f"Exact Solution",
+            "Exact Solution",
             f"{model.architecture.title()} Network Prediction",
             "Error Distribution",
             "Error Surface",
@@ -633,7 +618,6 @@ def create_interactive_report(
     """
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
-    import plotly.express as px
 
     # Create main figure with tabs
     fig = go.Figure()
@@ -678,7 +662,7 @@ def create_interactive_report(
     )
 
     # Create tabs for different visualizations
-    tabs = [
+    [
         dict(label="Solution Comparison", value="solution"),
         dict(label="Training Metrics", value="metrics"),
         dict(label="Computational Efficiency", value="efficiency"),
@@ -705,11 +689,7 @@ def create_interactive_report(
             efficiency_fig.add_trace(
                 go.Bar(
                     x=[pde.__class__.__name__],
-                    y=[
-                        metrics["computation_time"][
-                            f"{pde.__class__.__name__}_{arch['name']}"
-                        ]
-                    ],
+                    y=[metrics["computation_time"][f"{pde.__class__.__name__}_{arch['name']}"]],
                     name=arch["name"],
                 )
             )
@@ -809,7 +789,7 @@ def save_training_metrics(
                 # Update with new metadata
                 existing_metadata.update(metadata)
                 metadata = existing_metadata
-            except:
+            except Exception:
                 pass
 
         # Add timestamp

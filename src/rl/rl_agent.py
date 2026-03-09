@@ -1,15 +1,16 @@
+import os
+import random
+from collections import deque
+from typing import Dict, List, Optional, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-import numpy as np
-import matplotlib.pyplot as plt
-import os
-from scipy.stats import gaussian_kde
+import torch.optim as optim
 from matplotlib.colors import LinearSegmentedColormap
-from typing import List, Tuple, Dict, Optional
-from collections import deque
-import random
+from scipy.stats import gaussian_kde
 
 
 class DQNNetwork(nn.Module):
@@ -164,9 +165,7 @@ class RLAgent:
         :param reward_weights: Weights for different reward components
         :param device: Device to place the model on
         """
-        self.device = device or torch.device(
-            "mps" if torch.backends.mps.is_available() else "cpu"
-        )
+        self.device = device or torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
         # Store parameters
         self.state_dim = state_dim
@@ -370,12 +369,8 @@ class RLAgent:
             "epsilon": self.epsilon,
             "steps": self.steps,
             "episode_reward": self.episode_reward,
-            "mean_episode_reward": (
-                np.mean(self.episode_rewards) if self.episode_rewards else 0.0
-            ),
-            "std_episode_reward": (
-                np.std(self.episode_rewards) if self.episode_rewards else 0.0
-            ),
+            "mean_episode_reward": (np.mean(self.episode_rewards) if self.episode_rewards else 0.0),
+            "std_episode_reward": (np.std(self.episode_rewards) if self.episode_rewards else 0.0),
         }
 
     def visualize_collocation_evolution(self, points_history, epoch):
@@ -397,9 +392,7 @@ class RLAgent:
 
         # Define custom colormap for evolution (from older to newer points)
         colors = ["#0d3b66", "#1b9aaa", "#ef476f", "#ffc43d"]
-        cmap = LinearSegmentedColormap.from_list(
-            "evolution_cmap", colors, N=len(points_history)
-        )
+        cmap = LinearSegmentedColormap.from_list("evolution_cmap", colors, N=len(points_history))
 
         # Plot points progression with alpha to show density
         num_checkpoints = min(5, len(points_history))
@@ -437,7 +430,7 @@ class RLAgent:
         # Save the figure
         plt.tight_layout()
         plt.savefig(f"visualizations/collocation_evolution_epoch_{epoch}.png", dpi=300)
-        plt.savefig(f"visualizations/latest_collocation_evolution.png", dpi=300)
+        plt.savefig("visualizations/latest_collocation_evolution.png", dpi=300)
         plt.close()
 
         # Create a heatmap of the most recent points density
@@ -476,7 +469,7 @@ class RLAgent:
             values = np.vstack([x_pts, y_pts])
             kernel = gaussian_kde(values)
             density = np.reshape(kernel(positions), x_grid.shape)
-        except Exception as e:
+        except Exception:
             # Fallback to histogram if KDE fails
             fig, ax = plt.subplots(figsize=(10, 8))
             h = ax.hist2d(x_pts, y_pts, bins=50, cmap="viridis")
@@ -486,7 +479,7 @@ class RLAgent:
             plt.colorbar(h[3], ax=ax, label="Point Count")
             plt.tight_layout()
             plt.savefig(f"visualizations/density_heatmap_epoch_{epoch}.png", dpi=300)
-            plt.savefig(f"visualizations/latest_density_heatmap.png", dpi=300)
+            plt.savefig("visualizations/latest_density_heatmap.png", dpi=300)
             plt.close()
             return
 
@@ -501,9 +494,7 @@ class RLAgent:
         )
 
         # Add contour lines for better visualization
-        contour = ax.contour(
-            x_grid, y_grid, density, colors="white", alpha=0.3, levels=5
-        )
+        ax.contour(x_grid, y_grid, density, colors="white", alpha=0.3, levels=5)
 
         # Add points overlay
         ax.scatter(x_pts, y_pts, s=2, c="white", alpha=0.1)
@@ -515,7 +506,7 @@ class RLAgent:
 
         plt.tight_layout()
         plt.savefig(f"visualizations/density_heatmap_epoch_{epoch}.png", dpi=300)
-        plt.savefig(f"visualizations/latest_density_heatmap.png", dpi=300)
+        plt.savefig("visualizations/latest_density_heatmap.png", dpi=300)
         plt.close()
 
     def get_sampling_density(self):
@@ -527,9 +518,7 @@ class RLAgent:
         grid_points = np.vstack([X.flatten(), T.flatten()])
 
         # Convert to tensor
-        grid_tensor = torch.tensor(
-            grid_points.T, dtype=torch.float32, device=self.device
-        )
+        grid_tensor = torch.tensor(grid_points.T, dtype=torch.float32, device=self.device)
 
         # Get sampling probabilities
         with torch.no_grad():
@@ -578,9 +567,7 @@ class AdaptiveSamplingMixin:
             return self.generate_collocation_points(num_points)
 
         # Generate initial uniform grid for RL agent to sample from
-        x = torch.linspace(
-            self.config.domain[0], self.config.domain[1], 100, device=self.device
-        )
+        x = torch.linspace(self.config.domain[0], self.config.domain[1], 100, device=self.device)
         t = torch.linspace(
             self.config.time_domain[0],
             self.config.time_domain[1],
@@ -605,9 +592,7 @@ class AdaptiveSamplingMixin:
             probs = torch.softmax(probs, dim=0)
 
             # Sample points based on probabilities
-            indices = torch.multinomial(
-                probs, min(batch_size, num_points - len(selected_points))
-            )
+            indices = torch.multinomial(probs, min(batch_size, num_points - len(selected_points)))
             selected_points.append(batch[indices])
 
         # Concatenate selected points
@@ -664,9 +649,7 @@ class CollocationRLAgent(nn.Module):
             device: Computing device
         """
         super().__init__()
-        self.device = device or torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        )
+        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Network architecture
         layers = []

@@ -2,10 +2,11 @@
 # Application domains: Water waves, plasma physics, nonlinear optics
 # Complexity: Nonlinear, 3rd-order
 
+from typing import Any, Dict
+
 import torch
+
 from .pde_base import PDEBase, PDEConfig
-from typing import Dict, Any, Optional, Union, Tuple, List
-from src.rl.rl_agent import RLAgent
 
 
 class KdVEquation(PDEBase):
@@ -101,9 +102,7 @@ class KdVEquation(PDEBase):
         if not self.config.exact_solution:
             return None
 
-        c = torch.tensor(
-            self.speed, dtype=x.dtype, device=x.device
-        )  # Convert speed to tensor
+        c = torch.tensor(self.speed, dtype=x.dtype, device=x.device)  # Convert speed to tensor
 
         if self.dimension == 1:
             return 2 * c * (1 / torch.cosh(torch.sqrt(c) * (x - c * t))) ** 2
@@ -112,9 +111,7 @@ class KdVEquation(PDEBase):
             x_sum = torch.sum(x, dim=1, keepdim=True)
             return 2 * c * (1 / torch.cosh(torch.sqrt(c) * (x_sum - c * t))) ** 2
 
-    def _create_boundary_condition(
-        self, bc_type: str, params: Dict[str, Any]
-    ) -> callable:
+    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
         """
         Create boundary condition function from parameters.
 
@@ -136,13 +133,7 @@ class KdVEquation(PDEBase):
                     return (
                         lambda x, t: 2
                         * c
-                        * (
-                            1
-                            / torch.cosh(
-                                torch.sqrt(c) * torch.sum(x, dim=1, keepdim=True)
-                            )
-                        )
-                        ** 2
+                        * (1 / torch.cosh(torch.sqrt(c) * torch.sum(x, dim=1, keepdim=True))) ** 2
                     )
             else:
                 raise ValueError(f"Unsupported initial condition type: {ic_type}")
