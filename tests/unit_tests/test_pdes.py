@@ -2,7 +2,6 @@ import unittest
 
 import pytest
 import torch
-from tests.test_components.test_utils import create_pde_from_config
 
 from src.neural_networks import FeedForwardNetwork
 from src.pdes.allen_cahn import AllenCahnEquation
@@ -16,6 +15,7 @@ from src.pdes.pde_base import PDEConfig
 from src.pdes.pendulum_equation import PendulumEquation
 from src.pdes.wave_equation import WaveEquation
 from src.rl.rl_agent import RLAgent
+from tests.unit_tests.test_utils import create_pde_from_config
 
 
 class TestPDEs(unittest.TestCase):

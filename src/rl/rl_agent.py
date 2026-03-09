@@ -10,7 +10,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from matplotlib.colors import LinearSegmentedColormap
-from scipy.stats import gaussian_kde
 
 
 class DQNNetwork(nn.Module):
@@ -467,6 +466,8 @@ class RLAgent:
         # Kernel density estimation
         try:
             values = np.vstack([x_pts, y_pts])
+            from scipy.stats import gaussian_kde
+
             kernel = gaussian_kde(values)
             density = np.reshape(kernel(positions), x_grid.shape)
         except Exception:

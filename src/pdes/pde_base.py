@@ -17,13 +17,21 @@ except ImportError:
     MATPLOTLIB_AVAILABLE = False
     plt = None
 
-try:
-    from scipy.stats import qmc
+SCIPY_AVAILABLE = True
+qmc = None
 
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
-    qmc = None
+
+def _get_qmc():
+    """Lazy import scipy.stats.qmc to avoid import-time hang on some platforms."""
+    global qmc, SCIPY_AVAILABLE
+    if qmc is None and SCIPY_AVAILABLE:
+        try:
+            from scipy.stats import qmc as _qmc
+
+            qmc = _qmc
+        except ImportError:
+            SCIPY_AVAILABLE = False
+    return qmc
 
 
 @dataclass
@@ -588,6 +596,9 @@ class PDEBase:
         :param strategy: Sampling strategy ('uniform', 'latin_hypercube', 'sobol', 'adaptive')
         :return: Tuple of spatial and temporal points
         """
+        # Lazy-load scipy.stats.qmc (avoids import-time hang on some platforms)
+        qmc = _get_qmc()
+
         if strategy == "uniform":
             if self.dimension == 1:
                 # For 1D, domain is a list with one tuple

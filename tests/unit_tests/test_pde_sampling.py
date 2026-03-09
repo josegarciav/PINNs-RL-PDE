@@ -1,11 +1,11 @@
 import unittest
 
 import torch
-from tests.test_components.test_utils import create_pde_from_config
 
 from src.pdes.heat_equation import HeatEquation
 from src.pdes.wave_equation import WaveEquation
 from src.rl.rl_agent import CollocationRLAgent, RLAgent
+from tests.unit_tests.test_utils import create_pde_from_config
 
 
 class TestPDESampling(unittest.TestCase):
@@ -28,58 +28,18 @@ class TestPDESampling(unittest.TestCase):
         self.exact_solution = {"type": "sine_wave", "amplitude": 1.0, "frequency": 2.0}
 
         # Create 1D and 2D PDEs for testing using config.yaml
-        try:
-            # Try to use the configuration from config.yaml
-            self.heat_eq_1d = create_pde_from_config("heat", self.device, dimension=1)
-        except (FileNotFoundError, KeyError, ValueError):
-            # Fallback to hardcoded parameters if config.yaml is not available or missing necessary entries
-            self.heat_eq_1d = HeatEquation(
-                alpha=0.01,
-                domain=self.domain_1d,
-                time_domain=self.time_domain,
-                boundary_conditions=self.boundary_conditions,
-                initial_condition=self.initial_condition,
-                exact_solution=self.exact_solution,
-                dimension=1,
-                device=self.device,
-            )
+        self.heat_eq_1d = create_pde_from_config("heat", self.device, dimension=1)
+        self.heat_eq_2d = create_pde_from_config("heat", self.device, dimension=2)
 
         try:
-            self.heat_eq_2d = create_pde_from_config("heat", self.device, dimension=2)
+            self.wave_eq_1d = create_pde_from_config("wave", self.device, dimension=1)
         except (FileNotFoundError, KeyError, ValueError):
-            # Create a 2D heat equation
-            self.heat_eq_2d = HeatEquation(
-                alpha=0.01,
-                domain=self.domain_2d,
-                time_domain=self.time_domain,
-                boundary_conditions=self.boundary_conditions,
-                initial_condition=self.initial_condition,
-                exact_solution=self.exact_solution,
-                dimension=2,
-                device=self.device,
-            )
+            self.wave_eq_1d = None
 
-        self.wave_eq_1d = WaveEquation(
-            c=1.0,
-            domain=self.domain_1d,
-            time_domain=self.time_domain,
-            boundary_conditions=self.boundary_conditions,
-            initial_condition=self.initial_condition,
-            exact_solution=self.exact_solution,
-            dimension=1,
-            device=self.device,
-        )
-
-        self.wave_eq_2d = WaveEquation(
-            c=1.0,
-            domain=self.domain_2d,
-            time_domain=self.time_domain,
-            boundary_conditions=self.boundary_conditions,
-            initial_condition=self.initial_condition,
-            exact_solution=self.exact_solution,
-            dimension=2,
-            device=self.device,
-        )
+        try:
+            self.wave_eq_2d = create_pde_from_config("wave", self.device, dimension=2)
+        except (FileNotFoundError, KeyError, ValueError):
+            self.wave_eq_2d = None
 
         # Create an RL agent for adaptive sampling
         self.rl_agent = RLAgent(
