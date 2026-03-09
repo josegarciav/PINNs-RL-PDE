@@ -17,22 +17,6 @@ except ImportError:
     MATPLOTLIB_AVAILABLE = False
     plt = None
 
-SCIPY_AVAILABLE = True
-qmc = None
-
-
-def _get_qmc():
-    """Lazy import scipy.stats.qmc to avoid import-time hang on some platforms."""
-    global qmc, SCIPY_AVAILABLE
-    if qmc is None and SCIPY_AVAILABLE:
-        try:
-            from scipy.stats import qmc as _qmc
-
-            qmc = _qmc
-        except ImportError:
-            SCIPY_AVAILABLE = False
-    return qmc
-
 
 @dataclass
 class PDEConfig:
@@ -593,12 +577,9 @@ class PDEBase:
         Generate collocation points for training.
 
         :param num_points: Number of points to generate
-        :param strategy: Sampling strategy ('uniform', 'latin_hypercube', 'sobol', 'adaptive')
+        :param strategy: Sampling strategy ('uniform' or 'adaptive')
         :return: Tuple of spatial and temporal points
         """
-        # Lazy-load scipy.stats.qmc (avoids import-time hang on some platforms)
-        qmc = _get_qmc()
-
         if strategy == "uniform":
             if self.dimension == 1:
                 # For 1D, domain is a list with one tuple
@@ -690,73 +671,6 @@ class PDEBase:
                 # Extract x and t
                 x = points[:, : self.dimension]
                 t = points[:, -1].reshape(-1, 1)
-
-        elif strategy == "latin_hypercube":
-            if not SCIPY_AVAILABLE:
-                print("Warning: scipy not available, falling back to uniform sampling")
-                return self.generate_collocation_points(num_points, strategy="uniform")
-
-            sampler = qmc.LatinHypercube(d=self.dimension + 1)  # +1 for time dimension
-            sample = sampler.random(n=num_points)
-
-            # Scale spatial coordinates
-            x = []
-            for dim in range(self.dimension):
-                x.append(
-                    torch.tensor(
-                        qmc.scale(
-                            sample[:, dim].reshape(-1, 1),
-                            l_bounds=[float(self.domain[dim][0])],
-                            u_bounds=[float(self.domain[dim][1])],
-                        ),
-                        dtype=torch.float32,
-                    )
-                )
-            x = torch.cat(x, dim=1)
-
-            # Scale time coordinate
-            t = torch.tensor(
-                qmc.scale(
-                    sample[:, -1].reshape(-1, 1),
-                    l_bounds=[float(self.time_domain[0])],
-                    u_bounds=[float(self.time_domain[1])],
-                ),
-                dtype=torch.float32,
-            )
-
-        elif strategy == "sobol":
-            if not SCIPY_AVAILABLE:
-                print("Warning: scipy not available, falling back to uniform sampling")
-                return self.generate_collocation_points(num_points, strategy="uniform")
-
-            # Sobol sequence for low-discrepancy sampling
-            sampler = qmc.Sobol(d=self.dimension + 1)  # +1 for time dimension
-            sample = sampler.random(n=num_points)
-
-            # Scale spatial coordinates
-            x = []
-            for dim in range(self.dimension):
-                x.append(
-                    torch.tensor(
-                        qmc.scale(
-                            sample[:, dim].reshape(-1, 1),
-                            l_bounds=[float(self.domain[dim][0])],
-                            u_bounds=[float(self.domain[dim][1])],
-                        ),
-                        dtype=torch.float32,
-                    )
-                )
-            x = torch.cat(x, dim=1)
-
-            # Scale time coordinate
-            t = torch.tensor(
-                qmc.scale(
-                    sample[:, -1].reshape(-1, 1),
-                    l_bounds=[float(self.time_domain[0])],
-                    u_bounds=[float(self.time_domain[1])],
-                ),
-                dtype=torch.float32,
-            )
 
         elif strategy == "adaptive":
             # Use RL agent for adaptive sampling if available

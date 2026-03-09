@@ -280,7 +280,6 @@ class PDETrainer:
                     "adaptive"
                     if self.rl_agent is not None
                     else self.config.training.collocation_distribution
-                    # "uniform", "latin_hypercube", "sobol"
                 )
                 x_batch, t_batch = self.pde.generate_collocation_points(
                     batch_size, strategy=sampling_strategy

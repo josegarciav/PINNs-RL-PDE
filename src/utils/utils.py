@@ -55,7 +55,7 @@ def generate_collocation_points(
     :param num_points: Number of points to generate
     :param domain: Domain range (min, max)
     :param device: Device to place the tensor
-    :param distribution: Sampling distribution ('uniform', 'latin_hypercube', 'sobol')
+    :param distribution: Sampling distribution ('uniform')
     :param kwargs: Additional parameters for specific distributions
     :return: Tensor of collocation points
     """
@@ -63,25 +63,6 @@ def generate_collocation_points(
 
     if distribution == "uniform":
         points = torch.rand(num_points, 1, device=device) * (domain[1] - domain[0]) + domain[0]
-
-    elif distribution == "latin_hypercube":
-        # Latin Hypercube Sampling for better space-filling
-        n_bins = int(np.sqrt(num_points))
-        points = torch.zeros(num_points, 1, device=device)
-        for i in range(num_points):
-            bin_idx = i % n_bins
-            bin_size = (domain[1] - domain[0]) / n_bins
-            points[i] = domain[0] + bin_idx * bin_size + torch.rand(1, device=device) * bin_size
-
-    elif distribution == "sobol":
-        # Sobol sequence for quasi-random sampling
-        from scipy.stats import qmc
-
-        sampler = qmc.Sobol(d=1)
-        points = torch.tensor(
-            qmc.scale(sampler.random_base2(m=int(np.log2(num_points))), domain[0], domain[1]),
-            device=device,
-        )
 
     else:
         raise ValueError(f"Unsupported distribution: {distribution}")

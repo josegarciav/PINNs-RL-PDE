@@ -378,19 +378,24 @@ class HeatEquation(PDEBase):
         boundary_loss = torch.tensor(0.0, device=self.device)
 
         # Get number of points from config or use default
-        num_boundary_points = self.config.training.get(
-            "num_boundary_points", self.config.training.num_collocation_points // 10
-        )
+        if self.config.training is not None:
+            num_boundary_points = self.config.training.get(
+                "num_boundary_points", self.config.training.num_collocation_points // 10
+            )
+        else:
+            num_boundary_points = max(len(x) // 10, 10)
 
         # Calculate time ranges based on domain
         t_max = self.config.time_domain[1]
         t_early = t_max * 0.01  # Use 1% of total time for early points
 
         # Generate more points near t=0 for better initial condition handling
+        n_early = max(num_boundary_points // 4, 1)
+        n_late = num_boundary_points - n_early
         t_boundary = torch.cat(
             [
-                torch.linspace(0, t_early, num_boundary_points // 4, device=self.device),
-                torch.linspace(t_early, t_max, 3 * num_boundary_points // 4, device=self.device),
+                torch.linspace(0, t_early, n_early, device=self.device),
+                torch.linspace(t_early, t_max, n_late, device=self.device),
             ]
         ).reshape(-1, 1)
 
@@ -432,9 +437,12 @@ class HeatEquation(PDEBase):
         boundary_loss += torch.mean((du_dx_left - du_dx_right) ** 2)
 
         # Get number of initial points from config or use default
-        num_initial = self.config.training.get(
-            "num_initial_points", self.config.training.num_collocation_points // 5
-        )
+        if self.config.training is not None:
+            num_initial = self.config.training.get(
+                "num_initial_points", self.config.training.num_collocation_points // 5
+            )
+        else:
+            num_initial = max(len(x) // 5, 10)
 
         # Calculate domain ranges
         x_min, x_max = self.config.domain[0]
@@ -469,7 +477,10 @@ class HeatEquation(PDEBase):
 
         # Compute smoothness loss if weight > 0
         smoothness_loss = torch.tensor(0.0, device=self.device)
-        smoothness_weight = self.config.training.loss_weights.get("smoothness", 0.0)
+        if self.config.training is not None:
+            smoothness_weight = self.config.training.loss_weights.get("smoothness", 0.0)
+        else:
+            smoothness_weight = 0.0
         if smoothness_weight > 0:
             smoothness_loss = self._compute_smoothness_loss(model, x, t)
 
@@ -483,7 +494,8 @@ class HeatEquation(PDEBase):
 
         # Use adaptive weights if enabled
         if (
-            hasattr(self.config.training, "adaptive_weights")
+            self.config.training is not None
+            and hasattr(self.config.training, "adaptive_weights")
             and self.config.training.adaptive_weights.enabled
         ):
             # The total loss will be computed by the trainer using adaptive weights
@@ -493,10 +505,16 @@ class HeatEquation(PDEBase):
             )
         else:
             # Otherwise use fixed weights from config
+            if self.config.training is not None:
+                w_pde = self.config.training.loss_weights.get("pde", 1.0)
+                w_bc = self.config.training.loss_weights.get("boundary", 10.0)
+                w_ic = self.config.training.loss_weights.get("initial", 10.0)
+            else:
+                w_pde, w_bc, w_ic = 1.0, 10.0, 10.0
             total_loss = (
-                self.config.training.loss_weights.get("pde", 1.0) * residual_loss
-                + self.config.training.loss_weights.get("boundary", 10.0) * boundary_loss
-                + self.config.training.loss_weights.get("initial", 10.0) * initial_loss
+                w_pde * residual_loss
+                + w_bc * boundary_loss
+                + w_ic * initial_loss
                 + smoothness_weight * smoothness_loss
             )
             losses["total"] = total_loss
