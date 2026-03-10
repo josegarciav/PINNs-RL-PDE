@@ -4,6 +4,7 @@
 Launched by the dashboard or CLI. Reads config.yaml, accepts PDE/architecture
 overrides via CLI arguments, and runs training to completion.
 """
+
 import argparse
 import json
 import os
@@ -205,7 +206,15 @@ def run_training(config_dict, device):
         # Architecture-specific params
         if arch_type == "resnet":
             config_obj.model.num_blocks = arch_config.get("num_blocks", 4)
-        for key in ["mapping_size", "scale", "omega_0", "num_heads", "hidden_dims", "latent_dim", "periodic"]:
+        for key in [
+            "mapping_size",
+            "scale",
+            "omega_0",
+            "num_heads",
+            "hidden_dims",
+            "latent_dim",
+            "periodic",
+        ]:
             if key in arch_config:
                 setattr(config_obj.model, key, arch_config[key])
 
@@ -302,6 +311,7 @@ def run_training(config_dict, device):
     except Exception as e:
         print(f"Training error: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         metadata["status"] = "failed"
         metadata["error"] = str(e)
@@ -319,8 +329,12 @@ def main():
     parser.add_argument("--epochs", type=int, default=None, help="Override number of epochs")
     parser.add_argument("--lr", type=float, default=None, help="Override learning rate")
     parser.add_argument("--batch-size", type=int, default=None, help="Override batch size")
-    parser.add_argument("--collocation-points", type=int, default=None, help="Override collocation points")
-    parser.add_argument("--boundary-points", type=int, default=None, help="Override boundary points")
+    parser.add_argument(
+        "--collocation-points", type=int, default=None, help="Override collocation points"
+    )
+    parser.add_argument(
+        "--boundary-points", type=int, default=None, help="Override boundary points"
+    )
     parser.add_argument("--initial-points", type=int, default=None, help="Override initial points")
     parser.add_argument("--rl", action="store_true", help="Enable RL adaptive sampling")
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -344,7 +358,9 @@ def main():
 
     # Apply hyperparameter overrides from CLI
     if args.lr is not None:
-        yaml_config.setdefault("training", {}).setdefault("optimizer_config", {})["learning_rate"] = args.lr
+        yaml_config.setdefault("training", {}).setdefault("optimizer_config", {})[
+            "learning_rate"
+        ] = args.lr
     if args.batch_size is not None:
         yaml_config.setdefault("training", {})["batch_size"] = args.batch_size
     if args.collocation_points is not None:

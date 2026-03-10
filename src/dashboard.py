@@ -106,9 +106,335 @@ app.layout = html.Div(
                         # Sub-tabs: Monitor / New Training
                         dcc.Tabs(
                             id="live-subtabs",
-                            value="monitor",
+                            value="new-training",
                             children=[
-                                # ---------- Sub-tab 1a: Monitor ----------
+                                # ---------- Sub-tab 1a: New Training ----------
+                                dcc.Tab(
+                                    label="New Training",
+                                    value="new-training",
+                                    children=[
+                                        html.Div(
+                                            [
+                                                html.H3(
+                                                    "Launch New Training",
+                                                    style={
+                                                        "textAlign": "center",
+                                                        "marginBottom": "20px",
+                                                    },
+                                                ),
+                                                # Two-column layout
+                                                html.Div(
+                                                    [
+                                                        # Left column: PDE & Architecture
+                                                        html.Div(
+                                                            [
+                                                                html.H4(
+                                                                    "Model",
+                                                                    style={
+                                                                        "borderBottom": "2px solid #2196F3",
+                                                                        "paddingBottom": "8px",
+                                                                    },
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "PDE:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Dropdown(
+                                                                            id="train-pde-selector",
+                                                                            options=_PDE_OPTIONS,
+                                                                            value="Heat Equation",
+                                                                            clearable=False,
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Architecture:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Dropdown(
+                                                                            id="train-arch-selector",
+                                                                            options=[
+                                                                                {
+                                                                                    "label": a.capitalize(),
+                                                                                    "value": a,
+                                                                                }
+                                                                                for a in _ARCHITECTURES
+                                                                            ],
+                                                                            value=_PDE_CONFIGS.get(
+                                                                                "heat", {}
+                                                                            ).get(
+                                                                                "architecture",
+                                                                                "fourier",
+                                                                            ),
+                                                                            clearable=False,
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Device:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Dropdown(
+                                                                            id="train-device-selector",
+                                                                            options=[
+                                                                                {
+                                                                                    "label": "CPU",
+                                                                                    "value": "cpu",
+                                                                                },
+                                                                                {
+                                                                                    "label": "MPS (Apple GPU)",
+                                                                                    "value": "mps",
+                                                                                },
+                                                                                {
+                                                                                    "label": "CUDA (NVIDIA GPU)",
+                                                                                    "value": "cuda",
+                                                                                },
+                                                                            ],
+                                                                            value=_YAML_CONFIG.get(
+                                                                                "device", "cpu"
+                                                                            ),
+                                                                            clearable=False,
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "RL Adaptive Sampling:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Checklist(
+                                                                            id="train-rl-toggle",
+                                                                            options=[
+                                                                                {
+                                                                                    "label": " Enable RL",
+                                                                                    "value": "rl",
+                                                                                }
+                                                                            ],
+                                                                            value=[],
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
+                                                            ],
+                                                            style={
+                                                                "width": "48%",
+                                                                "display": "inline-block",
+                                                                "verticalAlign": "top",
+                                                                "paddingRight": "2%",
+                                                            },
+                                                        ),
+                                                        # Right column: Hyperparameters
+                                                        html.Div(
+                                                            [
+                                                                html.H4(
+                                                                    "Hyperparameters",
+                                                                    style={
+                                                                        "borderBottom": "2px solid #4CAF50",
+                                                                        "paddingBottom": "8px",
+                                                                    },
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Epochs:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Input(
+                                                                            id="train-epochs-input",
+                                                                            type="number",
+                                                                            value=_TRAINING_DEFAULTS.get(
+                                                                                "num_epochs", 500
+                                                                            ),
+                                                                            min=10,
+                                                                            step=10,
+                                                                            style={"width": "100%"},
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Learning Rate:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Input(
+                                                                            id="train-lr-input",
+                                                                            type="number",
+                                                                            value=_TRAINING_DEFAULTS.get(
+                                                                                "optimizer_config",
+                                                                                {},
+                                                                            ).get(
+                                                                                "learning_rate",
+                                                                                0.005,
+                                                                            ),
+                                                                            min=1e-7,
+                                                                            max=1.0,
+                                                                            step=1e-4,
+                                                                            style={"width": "100%"},
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Batch Size:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Dropdown(
+                                                                            id="train-batch-size",
+                                                                            options=[
+                                                                                {
+                                                                                    "label": str(v),
+                                                                                    "value": v,
+                                                                                }
+                                                                                for v in [
+                                                                                    256,
+                                                                                    512,
+                                                                                    1024,
+                                                                                    2048,
+                                                                                    4096,
+                                                                                ]
+                                                                            ],
+                                                                            value=_TRAINING_DEFAULTS.get(
+                                                                                "batch_size", 2048
+                                                                            ),
+                                                                            clearable=False,
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Collocation Points:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Input(
+                                                                            id="train-collocation-points",
+                                                                            type="number",
+                                                                            value=_TRAINING_DEFAULTS.get(
+                                                                                "num_collocation_points",
+                                                                                5000,
+                                                                            ),
+                                                                            min=100,
+                                                                            step=500,
+                                                                            style={"width": "100%"},
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Boundary Points:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Input(
+                                                                            id="train-boundary-points",
+                                                                            type="number",
+                                                                            value=_TRAINING_DEFAULTS.get(
+                                                                                "num_boundary_points",
+                                                                                5000,
+                                                                            ),
+                                                                            min=100,
+                                                                            step=500,
+                                                                            style={"width": "100%"},
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Initial Points:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Input(
+                                                                            id="train-initial-points",
+                                                                            type="number",
+                                                                            value=_TRAINING_DEFAULTS.get(
+                                                                                "num_initial_points",
+                                                                                5000,
+                                                                            ),
+                                                                            min=100,
+                                                                            step=500,
+                                                                            style={"width": "100%"},
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
+                                                            ],
+                                                            style={
+                                                                "width": "48%",
+                                                                "display": "inline-block",
+                                                                "verticalAlign": "top",
+                                                                "paddingLeft": "2%",
+                                                            },
+                                                        ),
+                                                    ],
+                                                ),
+                                                # PDE-specific info box
+                                                html.Div(
+                                                    id="pde-info-box",
+                                                    style={
+                                                        "marginTop": "16px",
+                                                        "padding": "12px",
+                                                        "backgroundColor": "#f0f7ff",
+                                                        "borderRadius": "6px",
+                                                        "border": "1px solid #c0d8f0",
+                                                    },
+                                                ),
+                                                # Launch button
+                                                html.Div(
+                                                    [
+                                                        html.Button(
+                                                            "Start Training",
+                                                            id="start-training-button",
+                                                            style={
+                                                                **BUTTON_STYLE,
+                                                                "backgroundColor": "#4CAF50",
+                                                                "padding": "14px 40px",
+                                                                "fontSize": "16px",
+                                                            },
+                                                        ),
+                                                        html.Div(
+                                                            id="trainer-status",
+                                                            style={
+                                                                "marginTop": "12px",
+                                                                "fontSize": "14px",
+                                                            },
+                                                        ),
+                                                    ],
+                                                    style={
+                                                        "textAlign": "center",
+                                                        "marginTop": "24px",
+                                                    },
+                                                ),
+                                            ],
+                                            style={
+                                                "maxWidth": "800px",
+                                                "margin": "20px auto",
+                                                "padding": "24px",
+                                                "backgroundColor": "#fafafa",
+                                                "borderRadius": "8px",
+                                                "border": "1px solid #e0e0e0",
+                                            },
+                                        ),
+                                    ],
+                                ),
+                                # ---------- Sub-tab 1b: Monitor ----------
                                 dcc.Tab(
                                     label="Monitor",
                                     value="monitor",
@@ -123,18 +449,30 @@ app.layout = html.Div(
                                                             placeholder="Select running or recent experiment...",
                                                         ),
                                                     ],
-                                                    style={"width": "60%", "display": "inline-block", "verticalAlign": "top"},
+                                                    style={
+                                                        "width": "60%",
+                                                        "display": "inline-block",
+                                                        "verticalAlign": "top",
+                                                    },
                                                 ),
                                                 html.Div(
                                                     [
                                                         html.Button(
                                                             "Download Report",
                                                             id="download-report-button",
-                                                            style={**BUTTON_STYLE, "backgroundColor": "#4CAF50", "marginTop": "20px"},
+                                                            style={
+                                                                **BUTTON_STYLE,
+                                                                "backgroundColor": "#4CAF50",
+                                                                "marginTop": "20px",
+                                                            },
                                                         ),
                                                         dcc.Download(id="download-report"),
                                                     ],
-                                                    style={"width": "30%", "display": "inline-block", "textAlign": "right"},
+                                                    style={
+                                                        "width": "30%",
+                                                        "display": "inline-block",
+                                                        "textAlign": "right",
+                                                    },
                                                 ),
                                             ],
                                             style={"width": "60%", "margin": "20px auto"},
@@ -144,7 +482,10 @@ app.layout = html.Div(
                                             [
                                                 html.Div(
                                                     id="epoch-progress-text",
-                                                    style={"marginBottom": "4px", "fontWeight": "bold"},
+                                                    style={
+                                                        "marginBottom": "4px",
+                                                        "fontWeight": "bold",
+                                                    },
                                                 ),
                                                 html.Div(
                                                     html.Div(
@@ -166,6 +507,31 @@ app.layout = html.Div(
                                             ],
                                             style={"width": "60%", "margin": "10px auto"},
                                         ),
+                                        # Loss view toggle
+                                        html.Div(
+                                            [
+                                                dcc.RadioItems(
+                                                    id="loss-view-toggle",
+                                                    options=[
+                                                        {
+                                                            "label": "Total Loss",
+                                                            "value": "total",
+                                                        },
+                                                        {
+                                                            "label": "Loss Breakdown",
+                                                            "value": "breakdown",
+                                                        },
+                                                    ],
+                                                    value="total",
+                                                    inline=True,
+                                                    style={"textAlign": "center"},
+                                                ),
+                                            ],
+                                            style={
+                                                "width": "60%",
+                                                "margin": "10px auto",
+                                            },
+                                        ),
                                         # Loss graph
                                         html.Div(
                                             [dcc.Graph(id="loss-graph")],
@@ -175,7 +541,10 @@ app.layout = html.Div(
                                         html.Div(
                                             [
                                                 html.H3("Experiment Details"),
-                                                html.Pre(id="experiment-details", style=PRE_STYLE),
+                                                html.Pre(
+                                                    id="experiment-details",
+                                                    style=PRE_STYLE,
+                                                ),
                                             ],
                                             style={"marginTop": "20px"},
                                         ),
@@ -184,160 +553,6 @@ app.layout = html.Div(
                                             id="interval-component",
                                             interval=10 * 1000,
                                             n_intervals=0,
-                                        ),
-                                    ],
-                                ),
-                                # ---------- Sub-tab 1b: New Training ----------
-                                dcc.Tab(
-                                    label="New Training",
-                                    value="new-training",
-                                    children=[
-                                        html.Div(
-                                            [
-                                                html.H3("Launch New Training", style={"textAlign": "center", "marginBottom": "20px"}),
-                                                # Two-column layout
-                                                html.Div(
-                                                    [
-                                                        # Left column: PDE & Architecture
-                                                        html.Div(
-                                                            [
-                                                                html.H4("Model", style={"borderBottom": "2px solid #2196F3", "paddingBottom": "8px"}),
-                                                                html.Div([
-                                                                    html.Label("PDE:", style=LABEL_STYLE),
-                                                                    dcc.Dropdown(
-                                                                        id="train-pde-selector",
-                                                                        options=_PDE_OPTIONS,
-                                                                        value="Heat Equation",
-                                                                        clearable=False,
-                                                                    ),
-                                                                ], style=FIELD_STYLE),
-                                                                html.Div([
-                                                                    html.Label("Architecture:", style=LABEL_STYLE),
-                                                                    dcc.Dropdown(
-                                                                        id="train-arch-selector",
-                                                                        options=[{"label": a.capitalize(), "value": a} for a in _ARCHITECTURES],
-                                                                        value=_PDE_CONFIGS.get("heat", {}).get("architecture", "fourier"),
-                                                                        clearable=False,
-                                                                    ),
-                                                                ], style=FIELD_STYLE),
-                                                                html.Div([
-                                                                    html.Label("Device:", style=LABEL_STYLE),
-                                                                    dcc.Dropdown(
-                                                                        id="train-device-selector",
-                                                                        options=[
-                                                                            {"label": "CPU", "value": "cpu"},
-                                                                            {"label": "MPS (Apple GPU)", "value": "mps"},
-                                                                            {"label": "CUDA (NVIDIA GPU)", "value": "cuda"},
-                                                                        ],
-                                                                        value=_YAML_CONFIG.get("device", "cpu"),
-                                                                        clearable=False,
-                                                                    ),
-                                                                ], style=FIELD_STYLE),
-                                                                html.Div([
-                                                                    html.Label("RL Adaptive Sampling:", style=LABEL_STYLE),
-                                                                    dcc.Checklist(
-                                                                        id="train-rl-toggle",
-                                                                        options=[{"label": " Enable RL", "value": "rl"}],
-                                                                        value=[],
-                                                                    ),
-                                                                ], style=FIELD_STYLE),
-                                                            ],
-                                                            style={"width": "48%", "display": "inline-block", "verticalAlign": "top", "paddingRight": "2%"},
-                                                        ),
-                                                        # Right column: Hyperparameters
-                                                        html.Div(
-                                                            [
-                                                                html.H4("Hyperparameters", style={"borderBottom": "2px solid #4CAF50", "paddingBottom": "8px"}),
-                                                                html.Div([
-                                                                    html.Label("Epochs:", style=LABEL_STYLE),
-                                                                    dcc.Input(
-                                                                        id="train-epochs-input", type="number",
-                                                                        value=_TRAINING_DEFAULTS.get("num_epochs", 500),
-                                                                        min=10, step=10, style={"width": "100%"},
-                                                                    ),
-                                                                ], style=FIELD_STYLE),
-                                                                html.Div([
-                                                                    html.Label("Learning Rate:", style=LABEL_STYLE),
-                                                                    dcc.Input(
-                                                                        id="train-lr-input", type="number",
-                                                                        value=_TRAINING_DEFAULTS.get("optimizer_config", {}).get("learning_rate", 0.005),
-                                                                        min=1e-7, max=1.0, step=1e-4,
-                                                                        style={"width": "100%"},
-                                                                    ),
-                                                                ], style=FIELD_STYLE),
-                                                                html.Div([
-                                                                    html.Label("Batch Size:", style=LABEL_STYLE),
-                                                                    dcc.Dropdown(
-                                                                        id="train-batch-size",
-                                                                        options=[{"label": str(v), "value": v} for v in [256, 512, 1024, 2048, 4096]],
-                                                                        value=_TRAINING_DEFAULTS.get("batch_size", 2048),
-                                                                        clearable=False,
-                                                                    ),
-                                                                ], style=FIELD_STYLE),
-                                                                html.Div([
-                                                                    html.Label("Collocation Points:", style=LABEL_STYLE),
-                                                                    dcc.Input(
-                                                                        id="train-collocation-points", type="number",
-                                                                        value=_TRAINING_DEFAULTS.get("num_collocation_points", 5000),
-                                                                        min=100, step=500, style={"width": "100%"},
-                                                                    ),
-                                                                ], style=FIELD_STYLE),
-                                                                html.Div([
-                                                                    html.Label("Boundary Points:", style=LABEL_STYLE),
-                                                                    dcc.Input(
-                                                                        id="train-boundary-points", type="number",
-                                                                        value=_TRAINING_DEFAULTS.get("num_boundary_points", 5000),
-                                                                        min=100, step=500, style={"width": "100%"},
-                                                                    ),
-                                                                ], style=FIELD_STYLE),
-                                                                html.Div([
-                                                                    html.Label("Initial Points:", style=LABEL_STYLE),
-                                                                    dcc.Input(
-                                                                        id="train-initial-points", type="number",
-                                                                        value=_TRAINING_DEFAULTS.get("num_initial_points", 5000),
-                                                                        min=100, step=500, style={"width": "100%"},
-                                                                    ),
-                                                                ], style=FIELD_STYLE),
-                                                            ],
-                                                            style={"width": "48%", "display": "inline-block", "verticalAlign": "top", "paddingLeft": "2%"},
-                                                        ),
-                                                    ],
-                                                ),
-                                                # PDE-specific info box
-                                                html.Div(
-                                                    id="pde-info-box",
-                                                    style={
-                                                        "marginTop": "16px", "padding": "12px",
-                                                        "backgroundColor": "#f0f7ff", "borderRadius": "6px",
-                                                        "border": "1px solid #c0d8f0",
-                                                    },
-                                                ),
-                                                # Launch button
-                                                html.Div(
-                                                    [
-                                                        html.Button(
-                                                            "Start Training",
-                                                            id="launch-trainer-button",
-                                                            style={
-                                                                **BUTTON_STYLE,
-                                                                "backgroundColor": "#4CAF50",
-                                                                "padding": "14px 40px",
-                                                                "fontSize": "16px",
-                                                            },
-                                                        ),
-                                                        html.Div(
-                                                            id="trainer-status",
-                                                            style={"marginTop": "12px", "fontSize": "14px"},
-                                                        ),
-                                                    ],
-                                                    style={"textAlign": "center", "marginTop": "24px"},
-                                                ),
-                                            ],
-                                            style={
-                                                "maxWidth": "800px", "margin": "20px auto",
-                                                "padding": "24px", "backgroundColor": "#fafafa",
-                                                "borderRadius": "8px", "border": "1px solid #e0e0e0",
-                                            },
                                         ),
                                     ],
                                 ),
@@ -400,11 +615,20 @@ app.layout = html.Div(
                                 html.Div(
                                     [
                                         html.Div(
-                                            [dcc.Graph(id="exact-solution-3d", style={"height": "50vh"})],
+                                            [
+                                                dcc.Graph(
+                                                    id="exact-solution-3d", style={"height": "50vh"}
+                                                )
+                                            ],
                                             style={"width": "50%", "display": "inline-block"},
                                         ),
                                         html.Div(
-                                            [dcc.Graph(id="predicted-solution-3d", style={"height": "50vh"})],
+                                            [
+                                                dcc.Graph(
+                                                    id="predicted-solution-3d",
+                                                    style={"height": "50vh"},
+                                                )
+                                            ],
                                             style={"width": "50%", "display": "inline-block"},
                                         ),
                                         html.Div(
@@ -416,7 +640,9 @@ app.layout = html.Div(
                                                     max=1,
                                                     step=0.01,
                                                     value=0.5,
-                                                    marks={i / 10: f"{i/10:.1f}" for i in range(11)},
+                                                    marks={
+                                                        i / 10: f"{i/10:.1f}" for i in range(11)
+                                                    },
                                                 ),
                                             ],
                                             style={"width": "100%", "padding": "20px"},
@@ -515,11 +741,13 @@ def get_experiments():
                 if is_running:
                     display_name += " [RUNNING]"
 
-                experiments.append({
-                    "label": display_name,
-                    "value": exp_path,
-                    "is_running": is_running,
-                })
+                experiments.append(
+                    {
+                        "label": display_name,
+                        "value": exp_path,
+                        "is_running": is_running,
+                    }
+                )
 
     experiments.sort(key=lambda x: x["label"], reverse=True)
     return experiments
@@ -554,8 +782,13 @@ def create_empty_figure(message, title=""):
     """Create an empty figure with a message."""
     fig = go.Figure()
     fig.add_annotation(
-        text=message, x=0.5, y=0.5, xref="paper", yref="paper",
-        showarrow=False, font=dict(size=16),
+        text=message,
+        x=0.5,
+        y=0.5,
+        xref="paper",
+        yref="paper",
+        showarrow=False,
+        font=dict(size=16),
     )
     fig.update_layout(
         title=title,
@@ -568,8 +801,16 @@ def create_empty_figure(message, title=""):
 def create_empty_3d_figure(message):
     """Create an empty 3D figure with a message."""
     fig = go.Figure(
-        data=[go.Scatter3d(x=[0], y=[0], z=[0], mode="markers",
-                           marker=dict(size=0.1, opacity=0), showlegend=False)],
+        data=[
+            go.Scatter3d(
+                x=[0],
+                y=[0],
+                z=[0],
+                mode="markers",
+                marker=dict(size=0.1, opacity=0),
+                showlegend=False,
+            )
+        ],
     )
     fig.update_layout(
         title="Solution Visualization",
@@ -577,10 +818,16 @@ def create_empty_3d_figure(message):
             xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, title=""),
             yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, title=""),
             zaxis=dict(showticklabels=False, showgrid=False, zeroline=False, title=""),
-            annotations=[dict(
-                text=message, x=0, y=0, z=0,
-                showarrow=False, font=dict(size=14, color="#666"),
-            )],
+            annotations=[
+                dict(
+                    text=message,
+                    x=0,
+                    y=0,
+                    z=0,
+                    showarrow=False,
+                    font=dict(size=14, color="#666"),
+                )
+            ],
         ),
         margin=dict(l=0, r=0, b=0, t=30),
     )
@@ -668,9 +915,8 @@ def update_epoch_progress(experiment, _):
         return "No metadata available", {**base_style, "width": "0%", "backgroundColor": "#2196F3"}
 
     current = metadata.get("current_epoch", 0)
-    total = (
-        metadata.get("training_params", {}).get("num_epochs", 0)
-        or metadata.get("total_epochs", 0)
+    total = metadata.get("training_params", {}).get("num_epochs", 0) or metadata.get(
+        "total_epochs", 0
     )
     status = metadata.get("status", "unknown")
 
@@ -693,11 +939,18 @@ def update_epoch_progress(experiment, _):
         Output("loss-graph", "figure"),
         Output("experiment-details", "children"),
     ],
-    [Input("experiment-selector", "value"), Input("interval-component", "n_intervals")],
+    [
+        Input("experiment-selector", "value"),
+        Input("interval-component", "n_intervals"),
+        Input("loss-view-toggle", "value"),
+    ],
 )
-def update_graphs(experiment, _):
+def update_graphs(experiment, _, loss_view):
     if not experiment:
-        return create_empty_figure("Select an experiment", "Training Progress"), "No experiment selected"
+        return (
+            create_empty_figure("Select an experiment", "Training Progress"),
+            "No experiment selected",
+        )
 
     try:
         history, metadata, config = load_experiment_data(experiment)
@@ -710,8 +963,13 @@ def update_graphs(experiment, _):
 
         # Build experiment details string
         if metadata:
-            if "training_time_minutes" in metadata and metadata["training_time_minutes"] is not None:
-                metadata["formatted_training_time"] = f"{metadata['training_time_minutes']:.2f} minutes"
+            if (
+                "training_time_minutes" in metadata
+                and metadata["training_time_minutes"] is not None
+            ):
+                metadata["formatted_training_time"] = (
+                    f"{metadata['training_time_minutes']:.2f} minutes"
+                )
             experiment_details = json.dumps(metadata, indent=2)
         elif config:
             experiment_details = f"Experiment: {os.path.basename(experiment)}\nConfiguration:\n{json.dumps(config, indent=2)}"
@@ -738,37 +996,62 @@ def update_graphs(experiment, _):
         train_epochs = list(range(1, len(history["train_loss"]) + 1))
         final_epoch = len(history["train_loss"])
 
-        loss_fig = go.Figure()
-        loss_fig.add_trace(
-            go.Scatter(x=train_epochs, y=history["train_loss"], name="Training Loss")
-        )
-
-        # Validation loss
+        # Compute validation epochs once
+        val_epochs = []
         if "val_loss" in history and history["val_loss"]:
-            val_epochs = list(range(
-                val_frequency,
-                len(history["val_loss"]) * val_frequency + 1,
-                val_frequency,
-            ))
-            val_epochs = val_epochs[: len(history["val_loss"])]
-            loss_fig.add_trace(
-                go.Scatter(x=val_epochs, y=history["val_loss"], name="Validation Loss")
+            val_epochs = list(
+                range(
+                    val_frequency,
+                    len(history["val_loss"]) * val_frequency + 1,
+                    val_frequency,
+                )
             )
+            val_epochs = val_epochs[: len(history["val_loss"])]
 
-        # Component losses
-        for component in ["residual_loss", "boundary_loss", "initial_loss"]:
-            if component in history and history[component]:
-                if "val_loss" in history and history["val_loss"]:
-                    component_epochs = val_epochs[: len(history[component])]
-                else:
-                    component_epochs = list(range(1, len(history[component]) + 1))
+        show_breakdown = loss_view == "breakdown"
+
+        loss_fig = go.Figure()
+
+        if not show_breakdown:
+            # Total loss view: training + validation only
+            loss_fig.add_trace(
+                go.Scatter(
+                    x=train_epochs,
+                    y=history["train_loss"],
+                    name="Training Loss",
+                    line=dict(color="#1f77b4"),
+                )
+            )
+            if val_epochs:
                 loss_fig.add_trace(
                     go.Scatter(
-                        x=component_epochs,
-                        y=history[component],
-                        name=component.replace("_", " ").title(),
+                        x=val_epochs,
+                        y=history["val_loss"],
+                        name="Validation Loss",
+                        line=dict(color="#ff7f0e"),
                     )
                 )
+        else:
+            # Breakdown view: residual, boundary, initial only
+            component_colors = {
+                "residual_loss": "#d62728",
+                "boundary_loss": "#2ca02c",
+                "initial_loss": "#9467bd",
+            }
+            for component in ["residual_loss", "boundary_loss", "initial_loss"]:
+                if component in history and history[component]:
+                    if val_epochs:
+                        component_epochs = val_epochs[: len(history[component])]
+                    else:
+                        component_epochs = list(range(1, len(history[component]) + 1))
+                    loss_fig.add_trace(
+                        go.Scatter(
+                            x=component_epochs,
+                            y=history[component],
+                            name=component.replace("_", " ").title(),
+                            line=dict(color=component_colors[component]),
+                        )
+                    )
 
         # Status annotation
         status_text = ""
@@ -779,9 +1062,17 @@ def update_graphs(experiment, _):
 
         if status_text:
             loss_fig.add_annotation(
-                text=status_text, x=0.5, y=0.05, xref="paper", yref="paper",
-                showarrow=False, font=dict(size=12, color="red"),
-                bordercolor="red", borderwidth=1, borderpad=4, bgcolor="white",
+                text=status_text,
+                x=0.5,
+                y=0.05,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                font=dict(size=12, color="red"),
+                bordercolor="red",
+                borderwidth=1,
+                borderpad=4,
+                bgcolor="white",
             )
 
         loss_fig.update_layout(
@@ -851,8 +1142,19 @@ def update_pde_selection(pde_name):
     State("train-rl-toggle", "value"),
     prevent_initial_call=True,
 )
-def launch_trainer(n_clicks, pde_name, arch, epochs, lr, batch_size,
-                   collocation_pts, boundary_pts, initial_pts, device, rl_toggle):
+def launch_trainer(
+    n_clicks,
+    pde_name,
+    arch,
+    epochs,
+    lr,
+    batch_size,
+    collocation_pts,
+    boundary_pts,
+    initial_pts,
+    device,
+    rl_toggle,
+):
     if not n_clicks:
         return ""
     try:
@@ -869,17 +1171,28 @@ def launch_trainer(n_clicks, pde_name, arch, epochs, lr, batch_size,
         use_rl = "rl" in (rl_toggle or [])
 
         cmd = [
-            sys.executable, train_script,
-            "--pde", pde_name,
-            "--arch", arch,
-            "--epochs", str(epochs or 500),
-            "--lr", str(lr or 0.005),
-            "--batch-size", str(batch_size or 2048),
-            "--collocation-points", str(collocation_pts or 5000),
-            "--boundary-points", str(boundary_pts or 5000),
-            "--initial-points", str(initial_pts or 5000),
-            "--device", device or "cpu",
-            "--config", config_path,
+            sys.executable,
+            train_script,
+            "--pde",
+            pde_name,
+            "--arch",
+            arch,
+            "--epochs",
+            str(epochs or 500),
+            "--lr",
+            str(lr or 0.005),
+            "--batch-size",
+            str(batch_size or 2048),
+            "--collocation-points",
+            str(collocation_pts or 5000),
+            "--boundary-points",
+            str(boundary_pts or 5000),
+            "--initial-points",
+            str(initial_pts or 5000),
+            "--device",
+            device or "cpu",
+            "--config",
+            config_path,
         ]
         if use_rl:
             cmd.append("--rl")
@@ -893,12 +1206,17 @@ def launch_trainer(n_clicks, pde_name, arch, epochs, lr, batch_size,
         )
 
         rl_str = " + RL" if use_rl else ""
-        return html.Div([
-            html.Span("Training started! ", style={"color": "#4CAF50", "fontWeight": "bold"}),
-            html.Span(f"{pde_name} / {arch}{rl_str} / {epochs} epochs / LR={lr}"),
-            html.Br(),
-            html.Span("Switch to the Monitor sub-tab to track progress.", style={"fontSize": "12px", "color": "#888"}),
-        ])
+        return html.Div(
+            [
+                html.Span("Training started! ", style={"color": "#4CAF50", "fontWeight": "bold"}),
+                html.Span(f"{pde_name} / {arch}{rl_str} / {epochs} epochs / LR={lr}"),
+                html.Br(),
+                html.Span(
+                    "Switch to the Monitor sub-tab to track progress.",
+                    style={"fontSize": "12px", "color": "#888"},
+                ),
+            ]
+        )
     except Exception as e:
         return f"Error launching training: {e}"
 
@@ -919,7 +1237,7 @@ def download_report(n_clicks, experiment):
         return None
 
     try:
-        loss_fig = update_graphs(experiment, None)[0]
+        loss_fig = update_graphs(experiment, None, "total")[0]
         colloc_fig = update_collocation_plot(experiment)
         exact_solution, predicted_solution = update_solution_visualizations(experiment, 0.5)
 
@@ -1006,11 +1324,13 @@ def update_architecture_comparison(_):
 
             if architecture not in architectures:
                 architectures[architecture] = []
-            architectures[architecture].append({
-                "name": os.path.basename(exp_dir),
-                "train_loss": hist.get("train_loss", []),
-                "val_loss": hist.get("val_loss", []),
-            })
+            architectures[architecture].append(
+                {
+                    "name": os.path.basename(exp_dir),
+                    "train_loss": hist.get("train_loss", []),
+                    "val_loss": hist.get("val_loss", []),
+                }
+            )
         except Exception:
             continue
 
@@ -1021,17 +1341,21 @@ def update_architecture_comparison(_):
     for arch, experiments in architectures.items():
         for exp in experiments:
             if exp["train_loss"]:
-                fig.add_trace(go.Scatter(
-                    y=exp["train_loss"],
-                    name=f"{arch} - {exp['name']}",
-                    line=dict(color=colors[color_idx % len(colors)], dash="solid"),
-                ))
+                fig.add_trace(
+                    go.Scatter(
+                        y=exp["train_loss"],
+                        name=f"{arch} - {exp['name']}",
+                        line=dict(color=colors[color_idx % len(colors)], dash="solid"),
+                    )
+                )
                 if exp["val_loss"]:
-                    fig.add_trace(go.Scatter(
-                        y=exp["val_loss"],
-                        name=f"{arch} - {exp['name']} (Val)",
-                        line=dict(color=colors[color_idx % len(colors)], dash="dash"),
-                    ))
+                    fig.add_trace(
+                        go.Scatter(
+                            y=exp["val_loss"],
+                            name=f"{arch} - {exp['name']} (Val)",
+                            line=dict(color=colors[color_idx % len(colors)], dash="dash"),
+                        )
+                    )
                 color_idx += 1
 
     fig.update_layout(
@@ -1113,12 +1437,14 @@ def update_pde_comparison(_):
 
             if pde_type not in pdes:
                 pdes[pde_type] = []
-            pdes[pde_type].append({
-                "name": os.path.basename(exp_dir),
-                "train_loss": hist.get("train_loss", []),
-                "computation_time": comp_time,
-                "hover_text": hover_text,
-            })
+            pdes[pde_type].append(
+                {
+                    "name": os.path.basename(exp_dir),
+                    "train_loss": hist.get("train_loss", []),
+                    "computation_time": comp_time,
+                    "hover_text": hover_text,
+                }
+            )
         except Exception:
             continue
 
@@ -1132,12 +1458,14 @@ def update_pde_comparison(_):
                 name = f"{pde_type} - {exp['name']}"
                 if exp["computation_time"]:
                     name += f" ({exp['computation_time']:.2f} min)"
-                fig.add_trace(go.Scatter(
-                    y=exp["train_loss"],
-                    name=name,
-                    line=dict(color=colors[color_idx % len(colors)]),
-                    hovertext=exp["hover_text"],
-                ))
+                fig.add_trace(
+                    go.Scatter(
+                        y=exp["train_loss"],
+                        name=name,
+                        line=dict(color=colors[color_idx % len(colors)]),
+                        hovertext=exp["hover_text"],
+                    )
+                )
                 color_idx += 1
 
     fig.update_layout(
@@ -1181,10 +1509,9 @@ def update_collocation_plot(experiment):
         if os.path.exists(vis_dir):
             vis_files = sorted(
                 [
-                    f for f in os.listdir(vis_dir)
-                    if f.endswith(".png") and (
-                        "collocation" in f or "density" in f
-                    )
+                    f
+                    for f in os.listdir(vis_dir)
+                    if f.endswith(".png") and ("collocation" in f or "density" in f)
                 ],
                 key=lambda x: os.path.getmtime(os.path.join(vis_dir, x)),
                 reverse=True,
@@ -1208,6 +1535,7 @@ def update_collocation_plot(experiment):
 
         try:
             from PIL import Image
+
             img = np.array(Image.open(vis_path))
             colloc_fig = px.imshow(img)
             colloc_fig.update_layout(
@@ -1272,7 +1600,9 @@ def _infer_model_params(state_dict, architecture, input_dim, output_dim):
         ip_key = [k for k in keys if "input_proj.weight" in k]
         if ip_key:
             params["hidden_dim"] = state_dict[ip_key[0]].shape[0]
-        attn_keys = {k.split("attention_layers.")[1].split(".")[0] for k in keys if "attention_layers." in k}
+        attn_keys = {
+            k.split("attention_layers.")[1].split(".")[0] for k in keys if "attention_layers." in k
+        }
         if attn_keys:
             params["num_layers"] = len(attn_keys)
 
@@ -1382,12 +1712,15 @@ def update_solution_visualizations(experiment, time_point):
         if pde is None:
             if "allen" in pde_type and "cahn" in pde_type:
                 from src.pdes.allen_cahn import AllenCahnEquation
+
                 pde = AllenCahnEquation(config=pde_config)
             elif "cahn" in pde_type and "hilliard" in pde_type:
                 from src.pdes.cahn_hilliard import CahnHilliardEquation
+
                 pde = CahnHilliardEquation(config=pde_config)
             elif "black" in pde_type or "scholes" in pde_type:
                 from src.pdes.black_scholes import BlackScholesEquation
+
                 pde = BlackScholesEquation(config=pde_config)
             else:
                 msg = f"Unsupported PDE type: {pde_type}"
@@ -1420,7 +1753,16 @@ def update_solution_visualizations(experiment, time_point):
                 layer_norm=saved_model.get("layer_norm", False),
             )
             # Set architecture-specific params (inferred takes priority)
-            for key in ["mapping_size", "scale", "omega_0", "num_heads", "num_blocks", "latent_dim", "hidden_dims", "periodic"]:
+            for key in [
+                "mapping_size",
+                "scale",
+                "omega_0",
+                "num_heads",
+                "num_blocks",
+                "latent_dim",
+                "hidden_dims",
+                "periodic",
+            ]:
                 val = inferred.get(key, saved_model.get(key))
                 if val is not None:
                     setattr(model_cfg, key, val)
@@ -1438,8 +1780,11 @@ def update_solution_visualizations(experiment, time_point):
 
         try:
             exact_fig, predicted_fig = plot_solution(
-                model=model, pde=pde, num_points=1000,
-                time_point=time_point, return_figs=True,
+                model=model,
+                pde=pde,
+                num_points=1000,
+                time_point=time_point,
+                return_figs=True,
             )
             return exact_fig, predicted_fig
         except Exception as e:

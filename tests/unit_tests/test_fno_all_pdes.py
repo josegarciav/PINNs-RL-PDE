@@ -105,7 +105,7 @@ class TestFNOAllPDEs(unittest.TestCase):
         for _ in range(3):
             x = torch.rand(self.batch_size, input_dim, device=self.device, requires_grad=True)
             out = model(x)
-            step_loss = torch.mean(out ** 2)
+            step_loss = torch.mean(out**2)
             optimizer.zero_grad()
             step_loss.backward()
             optimizer.step()

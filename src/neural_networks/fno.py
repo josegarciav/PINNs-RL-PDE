@@ -32,9 +32,7 @@ class SpectralConv1d(nn.Module):
 
         # Learnable complex weights: (modes, modes) in complex = (modes, modes, 2) real
         scale = 1.0 / (channels * self.modes)
-        self.weights = nn.Parameter(
-            scale * torch.randn(self.modes, self.modes, 2)
-        )
+        self.weights = nn.Parameter(scale * torch.randn(self.modes, self.modes, 2))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply spectral convolution along the feature dimension.
@@ -121,10 +119,9 @@ class FNONetwork(BaseNetwork):
         )
 
         # Spectral convolution blocks
-        self.blocks = nn.ModuleList([
-            FNOBlock(self.hidden_dim, self.modes, activation)
-            for _ in range(self.num_blocks)
-        ])
+        self.blocks = nn.ModuleList(
+            [FNOBlock(self.hidden_dim, self.modes, activation) for _ in range(self.num_blocks)]
+        )
 
         # Projection layers: channel space -> solution
         self.project = nn.Sequential(

@@ -257,6 +257,7 @@ class TestNeuralNetworks(unittest.TestCase):
         self.assertEqual(len(model.blocks), config["num_blocks"])
         for block in model.blocks:
             from src.neural_networks.fno import FNOBlock
+
             self.assertIsInstance(block, FNOBlock)
 
     def test_pinn_model(self):

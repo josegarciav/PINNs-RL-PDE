@@ -273,15 +273,22 @@ class PDETrainer:
                 "total_epochs": num_epochs,
                 "current_epoch": 0,
                 "pde_type": getattr(
-                    self.pde, "pde_type",
+                    self.pde,
+                    "pde_type",
                     getattr(self.pde, "name", type(self.pde).__name__),
                 ),
                 "pde_name": getattr(self.pde.config, "name", getattr(self.pde, "name", "")),
                 "architecture": getattr(
-                    self.model, "architecture_name",
-                    getattr(self.config, "architecture",
-                        getattr(self.config.model, "architecture", "unknown")
-                        if hasattr(self.config, "model") else "unknown"
+                    self.model,
+                    "architecture_name",
+                    getattr(
+                        self.config,
+                        "architecture",
+                        (
+                            getattr(self.config.model, "architecture", "unknown")
+                            if hasattr(self.config, "model")
+                            else "unknown"
+                        ),
                     ),
                 ),
                 "training_params": {
@@ -553,17 +560,19 @@ class PDETrainer:
                         partial_metadata = json.load(f)
                 except (FileNotFoundError, json.JSONDecodeError):
                     partial_metadata = {}
-                partial_metadata.update({
-                    "current_epoch": epoch + 1,
-                    "status": "running",
-                    "final_loss": float(avg_epoch_loss),
-                    "best_val_loss": (
-                        float(self.best_val_loss)
-                        if self.best_val_loss != float("inf")
-                        else None
-                    ),
-                    "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                })
+                partial_metadata.update(
+                    {
+                        "current_epoch": epoch + 1,
+                        "status": "running",
+                        "final_loss": float(avg_epoch_loss),
+                        "best_val_loss": (
+                            float(self.best_val_loss)
+                            if self.best_val_loss != float("inf")
+                            else None
+                        ),
+                        "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    }
+                )
                 with open(metadata_path, "w") as f:
                     json.dump(partial_metadata, f, indent=2)
 
