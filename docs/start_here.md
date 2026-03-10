@@ -26,15 +26,15 @@ Using `pip`:
 pip install pinnrl
 ```
 
-### Step 2 — Run the interactive trainer
+### Step 2 — Run the dashboard
 
-Launch the Tkinter-based interactive trainer:
+Launch the web dashboard:
 
 ```bash
-python src/interactive_trainer.py
+python src/main.py
 ```
 
-Select a PDE (e.g., Heat Equation) and architecture (e.g., Fourier) from the dropdowns, then click **Start Training**. Training output is saved automatically to a timestamped directory under `experiments/`.
+Open http://127.0.0.1:8050/ in your browser. Under the **Live Training** tab, click **New Training** to select a PDE (e.g., Heat Equation) and architecture (e.g., Fourier), adjust hyperparameters, then click **Start Training**. Training runs in the background and results are saved automatically to a timestamped directory under `experiments/`.
 
 ### Step 3 — Inspect results
 
@@ -100,7 +100,7 @@ import torch
 import yaml
 from src.config import Config, ModelConfig, TrainingConfig
 from src.neural_networks import PINNModel
-from src.trainer import PDETrainer
+from src.training.trainer import PDETrainer
 from src.pdes.heat_equation import HeatEquation
 from src.pdes.pde_base import PDEConfig
 

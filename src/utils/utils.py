@@ -165,16 +165,16 @@ def plot_solution(
         )
 
         if time_point is not None:
-            t = torch.tensor([time_point], device=model.device)
+            t = torch.tensor([float(time_point)], device=model.device)
         else:
             t = torch.linspace(
-                pde.config.time_domain[0],
-                pde.config.time_domain[1],
+                float(pde.config.time_domain[0]),
+                float(pde.config.time_domain[1]),
                 int(np.sqrt(num_points)),
                 device=model.device,
             )
 
-        X, Y = torch.meshgrid(x, y, indexing="ij")
+        X, Y = torch.meshgrid(x.float(), y.float(), indexing="ij")
         points = []
         predictions = []
         exact_solutions = []
@@ -187,7 +187,7 @@ def plot_solution(
             # Get predictions and exact solutions
             with torch.no_grad():
                 pred = model(xyz).reshape(X.shape)
-                exact = pde.exact_solution(xyz).reshape(X.shape)
+                exact = pde.exact_solution(xyz[:, 0:2], xyz[:, 2:3]).reshape(X.shape)
 
             points.append(xyz)
             predictions.append(pred)
@@ -274,22 +274,22 @@ def plot_solution(
         )
 
         if time_point is not None:
-            t = torch.tensor([time_point], device=model.device)
+            t = torch.tensor([float(time_point)], device=model.device)
         else:
             t = torch.linspace(
-                pde.config.time_domain[0],
-                pde.config.time_domain[1],
+                float(pde.config.time_domain[0]),
+                float(pde.config.time_domain[1]),
                 int(np.sqrt(num_points)),
                 device=model.device,
             )
 
-        X, T = torch.meshgrid(x, t, indexing="ij")
+        X, T = torch.meshgrid(x.float(), t.float(), indexing="ij")
         xt = torch.stack([X.flatten(), T.flatten()], dim=1)
 
         # Get predictions and exact solutions
         with torch.no_grad():
             u_pred = model(xt).reshape(X.shape)
-            u_exact = pde.exact_solution(xt).reshape(X.shape)
+            u_exact = pde.exact_solution(xt[:, 0:1], xt[:, 1:2]).reshape(X.shape)
 
         # Move tensors to CPU for plotting
         X = X.cpu().numpy()

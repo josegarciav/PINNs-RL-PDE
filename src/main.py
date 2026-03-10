@@ -1,27 +1,10 @@
 import argparse
-import multiprocessing
 import os
 import sys
 import webbrowser
-from time import sleep
 
 # Ensure the project root is on sys.path so `src` is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
-def run_interactive_trainer():
-    """Run the interactive trainer module"""
-    try:
-        from src.interactive_trainer import main as trainer_main
-
-        trainer_main()
-    except ImportError as e:
-        print(f"Error importing interactive trainer: {e}")
-        print("Make sure all dependencies are installed")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error running interactive trainer: {e}")
-        sys.exit(1)
 
 
 def run_dashboard(port=8050):
@@ -29,10 +12,9 @@ def run_dashboard(port=8050):
     try:
         from src.dashboard import app
 
-        print(f"\n🚀 Starting PINNs-RL-PDE Dashboard on port {port}")
-        print(f"📊 Open http://127.0.0.1:{port}/ in your browser")
+        print(f"\nStarting PINNs-RL-PDE Dashboard on port {port}")
+        print(f"Open http://127.0.0.1:{port}/ in your browser")
 
-        # Try different ports if the specified one is in use
         max_retries = 3
         current_port = port
 
@@ -66,17 +48,14 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  Run complete application (trainer first, then dashboard):
+  Run the dashboard (training is launched from within):
     python src/main.py
-
-  Run only the interactive trainer:
-    python src/main.py --trainer-only
-
-  Run only the dashboard viewer:
-    python src/main.py --dashboard-only
 
   Specify dashboard port:
     python src/main.py --port 8051
+
+  Run headless training directly:
+    python -m src.training.train --pde "Heat Equation" --arch fourier --epochs 500
         """,
     )
     parser.add_argument(
@@ -85,68 +64,18 @@ Examples:
         default=8050,
         help="Port to run the dashboard on (default: 8050)",
     )
-    parser.add_argument(
-        "--dashboard-only",
-        action="store_true",
-        help="Run only the dashboard viewer for existing experiments",
-    )
-    parser.add_argument(
-        "--trainer-only",
-        action="store_true",
-        help="Run only the interactive trainer without dashboard",
-    )
     return parser.parse_args()
 
 
 def main():
-    # Parse command line arguments
     args = parse_args()
 
-    # Print welcome message
     print("\n" + "=" * 50)
-    print("🧠 Welcome to PINNs-RL-PDE Framework")
+    print("PINNs-RL-PDE Framework")
     print("=" * 50 + "\n")
 
-    if args.dashboard_only and args.trainer_only:
-        print("Error: Cannot specify both --dashboard-only and --trainer-only")
-        sys.exit(1)
-
-    if args.dashboard_only:
-        # Run only the dashboard viewer
-        print("📊 Starting Dashboard Viewer...")
-        run_dashboard(args.port)
-    elif args.trainer_only:
-        # Run only the interactive trainer
-        print("🎯 Starting Interactive Trainer...")
-        run_interactive_trainer()
-    else:
-        # Run complete application (trainer first, then dashboard)
-        print("🎯 Starting Interactive Trainer...")
-        trainer_process = multiprocessing.Process(target=run_interactive_trainer)
-        trainer_process.start()
-
-        # Wait a bit to let the trainer initialize
-        sleep(2)
-
-        print("\n📊 Starting Dashboard...")
-        dashboard_process = multiprocessing.Process(target=run_dashboard, args=(args.port,))
-        dashboard_process.start()
-
-        # Open the dashboard in the default web browser
-        webbrowser.open(f"http://127.0.0.1:{args.port}/")
-
-        try:
-            # Wait for both processes to complete
-            trainer_process.join()
-            dashboard_process.join()
-        except KeyboardInterrupt:
-            print("\n\n⚠️  Received interrupt signal. Shutting down...")
-            trainer_process.terminate()
-            dashboard_process.terminate()
-            trainer_process.join()
-            dashboard_process.join()
-            print("✅ Shutdown complete")
-            sys.exit(0)
+    webbrowser.open(f"http://127.0.0.1:{args.port}/")
+    run_dashboard(args.port)
 
 
 if __name__ == "__main__":

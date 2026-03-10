@@ -45,24 +45,53 @@ PRE_STYLE = {
     "maxHeight": "400px",
     "overflow": "auto",
 }
+LABEL_STYLE = {"fontWeight": "bold", "marginBottom": "4px", "display": "block"}
+FIELD_STYLE = {"marginBottom": "12px"}
+
+# Load config.yaml defaults at startup for the training form
+_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config", "config.yaml")
+if not os.path.exists(_CONFIG_PATH):
+    _CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+try:
+    with open(_CONFIG_PATH, "r") as _f:
+        _YAML_CONFIG = yaml.safe_load(_f)
+except Exception:
+    _YAML_CONFIG = {}
+
+_TRAINING_DEFAULTS = _YAML_CONFIG.get("training", {})
+_PDE_CONFIGS = _YAML_CONFIG.get("pde_configs", {})
+_ARCHITECTURES = list(_YAML_CONFIG.get("architectures", {}).keys())
+
+# Map PDE display names to config keys
+_PDE_OPTIONS = []
+for _key, _cfg in _PDE_CONFIGS.items():
+    if _key == "heat_2d":
+        continue  # skip 2D variant for now
+    _PDE_OPTIONS.append({"label": _cfg.get("name", _key), "value": _cfg.get("name", _key)})
 
 # ============================================================
 # Layout
 # ============================================================
 app.layout = html.Div(
     [
-        html.H1("PINN-RL Training Monitor", style={"textAlign": "center"}),
-        # Launch trainer button
         html.Div(
-            [
-                html.Button(
-                    "Launch Interactive Trainer",
-                    id="launch-trainer-button",
-                    style={**BUTTON_STYLE, "padding": "12px 24px", "fontSize": "16px"},
-                ),
-                html.Div(id="trainer-status", style={"marginTop": "8px", "color": "#666"}),
-            ],
-            style={"textAlign": "center", "marginBottom": "20px"},
+            html.H1(
+                "PINN-RL Training Monitor",
+                style={
+                    "color": "white",
+                    "margin": "0",
+                    "padding": "24px 0",
+                    "fontWeight": "600",
+                    "letterSpacing": "0.5px",
+                },
+            ),
+            style={
+                "background": "linear-gradient(135deg, #0d1b2a 0%, #1b2d4f 50%, #1a3a5c 100%)",
+                "textAlign": "center",
+                "marginBottom": "20px",
+                "borderRadius": "0 0 8px 8px",
+                "boxShadow": "0 2px 8px rgba(0,0,0,0.15)",
+            },
         ),
         # Tabs
         dcc.Tabs(
@@ -74,77 +103,246 @@ app.layout = html.Div(
                     label="Live Training",
                     value="live-training",
                     children=[
-                        html.Div(
-                            [
-                                html.Div(
-                                    [
-                                        html.Label("Select Experiment:"),
-                                        dcc.Dropdown(
-                                            id="experiment-selector",
-                                            placeholder="Select running or recent experiment...",
+                        # Sub-tabs: Monitor / New Training
+                        dcc.Tabs(
+                            id="live-subtabs",
+                            value="monitor",
+                            children=[
+                                # ---------- Sub-tab 1a: Monitor ----------
+                                dcc.Tab(
+                                    label="Monitor",
+                                    value="monitor",
+                                    children=[
+                                        html.Div(
+                                            [
+                                                html.Div(
+                                                    [
+                                                        html.Label("Select Experiment:"),
+                                                        dcc.Dropdown(
+                                                            id="experiment-selector",
+                                                            placeholder="Select running or recent experiment...",
+                                                        ),
+                                                    ],
+                                                    style={"width": "60%", "display": "inline-block", "verticalAlign": "top"},
+                                                ),
+                                                html.Div(
+                                                    [
+                                                        html.Button(
+                                                            "Download Report",
+                                                            id="download-report-button",
+                                                            style={**BUTTON_STYLE, "backgroundColor": "#4CAF50", "marginTop": "20px"},
+                                                        ),
+                                                        dcc.Download(id="download-report"),
+                                                    ],
+                                                    style={"width": "30%", "display": "inline-block", "textAlign": "right"},
+                                                ),
+                                            ],
+                                            style={"width": "60%", "margin": "20px auto"},
+                                        ),
+                                        # Epoch progress bar
+                                        html.Div(
+                                            [
+                                                html.Div(
+                                                    id="epoch-progress-text",
+                                                    style={"marginBottom": "4px", "fontWeight": "bold"},
+                                                ),
+                                                html.Div(
+                                                    html.Div(
+                                                        id="epoch-progress-bar-inner",
+                                                        style={
+                                                            "width": "0%",
+                                                            "height": "20px",
+                                                            "backgroundColor": "#2196F3",
+                                                            "borderRadius": "4px",
+                                                            "transition": "width 0.5s",
+                                                        },
+                                                    ),
+                                                    style={
+                                                        "width": "100%",
+                                                        "backgroundColor": "#e0e0e0",
+                                                        "borderRadius": "4px",
+                                                    },
+                                                ),
+                                            ],
+                                            style={"width": "60%", "margin": "10px auto"},
+                                        ),
+                                        # Loss graph
+                                        html.Div(
+                                            [dcc.Graph(id="loss-graph")],
+                                            style={"width": "100%"},
+                                        ),
+                                        # Experiment details
+                                        html.Div(
+                                            [
+                                                html.H3("Experiment Details"),
+                                                html.Pre(id="experiment-details", style=PRE_STYLE),
+                                            ],
+                                            style={"marginTop": "20px"},
+                                        ),
+                                        # Auto-refresh interval
+                                        dcc.Interval(
+                                            id="interval-component",
+                                            interval=10 * 1000,
+                                            n_intervals=0,
                                         ),
                                     ],
-                                    style={"width": "60%", "display": "inline-block", "verticalAlign": "top"},
                                 ),
-                                html.Div(
-                                    [
-                                        html.Button(
-                                            "Download Report",
-                                            id="download-report-button",
-                                            style={**BUTTON_STYLE, "backgroundColor": "#4CAF50", "marginTop": "20px"},
+                                # ---------- Sub-tab 1b: New Training ----------
+                                dcc.Tab(
+                                    label="New Training",
+                                    value="new-training",
+                                    children=[
+                                        html.Div(
+                                            [
+                                                html.H3("Launch New Training", style={"textAlign": "center", "marginBottom": "20px"}),
+                                                # Two-column layout
+                                                html.Div(
+                                                    [
+                                                        # Left column: PDE & Architecture
+                                                        html.Div(
+                                                            [
+                                                                html.H4("Model", style={"borderBottom": "2px solid #2196F3", "paddingBottom": "8px"}),
+                                                                html.Div([
+                                                                    html.Label("PDE:", style=LABEL_STYLE),
+                                                                    dcc.Dropdown(
+                                                                        id="train-pde-selector",
+                                                                        options=_PDE_OPTIONS,
+                                                                        value="Heat Equation",
+                                                                        clearable=False,
+                                                                    ),
+                                                                ], style=FIELD_STYLE),
+                                                                html.Div([
+                                                                    html.Label("Architecture:", style=LABEL_STYLE),
+                                                                    dcc.Dropdown(
+                                                                        id="train-arch-selector",
+                                                                        options=[{"label": a.capitalize(), "value": a} for a in _ARCHITECTURES],
+                                                                        value=_PDE_CONFIGS.get("heat", {}).get("architecture", "fourier"),
+                                                                        clearable=False,
+                                                                    ),
+                                                                ], style=FIELD_STYLE),
+                                                                html.Div([
+                                                                    html.Label("Device:", style=LABEL_STYLE),
+                                                                    dcc.Dropdown(
+                                                                        id="train-device-selector",
+                                                                        options=[
+                                                                            {"label": "CPU", "value": "cpu"},
+                                                                            {"label": "MPS (Apple GPU)", "value": "mps"},
+                                                                            {"label": "CUDA (NVIDIA GPU)", "value": "cuda"},
+                                                                        ],
+                                                                        value=_YAML_CONFIG.get("device", "cpu"),
+                                                                        clearable=False,
+                                                                    ),
+                                                                ], style=FIELD_STYLE),
+                                                                html.Div([
+                                                                    html.Label("RL Adaptive Sampling:", style=LABEL_STYLE),
+                                                                    dcc.Checklist(
+                                                                        id="train-rl-toggle",
+                                                                        options=[{"label": " Enable RL", "value": "rl"}],
+                                                                        value=[],
+                                                                    ),
+                                                                ], style=FIELD_STYLE),
+                                                            ],
+                                                            style={"width": "48%", "display": "inline-block", "verticalAlign": "top", "paddingRight": "2%"},
+                                                        ),
+                                                        # Right column: Hyperparameters
+                                                        html.Div(
+                                                            [
+                                                                html.H4("Hyperparameters", style={"borderBottom": "2px solid #4CAF50", "paddingBottom": "8px"}),
+                                                                html.Div([
+                                                                    html.Label("Epochs:", style=LABEL_STYLE),
+                                                                    dcc.Input(
+                                                                        id="train-epochs-input", type="number",
+                                                                        value=_TRAINING_DEFAULTS.get("num_epochs", 500),
+                                                                        min=10, step=10, style={"width": "100%"},
+                                                                    ),
+                                                                ], style=FIELD_STYLE),
+                                                                html.Div([
+                                                                    html.Label("Learning Rate:", style=LABEL_STYLE),
+                                                                    dcc.Input(
+                                                                        id="train-lr-input", type="number",
+                                                                        value=_TRAINING_DEFAULTS.get("optimizer_config", {}).get("learning_rate", 0.005),
+                                                                        min=1e-7, max=1.0, step=1e-4,
+                                                                        style={"width": "100%"},
+                                                                    ),
+                                                                ], style=FIELD_STYLE),
+                                                                html.Div([
+                                                                    html.Label("Batch Size:", style=LABEL_STYLE),
+                                                                    dcc.Dropdown(
+                                                                        id="train-batch-size",
+                                                                        options=[{"label": str(v), "value": v} for v in [256, 512, 1024, 2048, 4096]],
+                                                                        value=_TRAINING_DEFAULTS.get("batch_size", 2048),
+                                                                        clearable=False,
+                                                                    ),
+                                                                ], style=FIELD_STYLE),
+                                                                html.Div([
+                                                                    html.Label("Collocation Points:", style=LABEL_STYLE),
+                                                                    dcc.Input(
+                                                                        id="train-collocation-points", type="number",
+                                                                        value=_TRAINING_DEFAULTS.get("num_collocation_points", 5000),
+                                                                        min=100, step=500, style={"width": "100%"},
+                                                                    ),
+                                                                ], style=FIELD_STYLE),
+                                                                html.Div([
+                                                                    html.Label("Boundary Points:", style=LABEL_STYLE),
+                                                                    dcc.Input(
+                                                                        id="train-boundary-points", type="number",
+                                                                        value=_TRAINING_DEFAULTS.get("num_boundary_points", 5000),
+                                                                        min=100, step=500, style={"width": "100%"},
+                                                                    ),
+                                                                ], style=FIELD_STYLE),
+                                                                html.Div([
+                                                                    html.Label("Initial Points:", style=LABEL_STYLE),
+                                                                    dcc.Input(
+                                                                        id="train-initial-points", type="number",
+                                                                        value=_TRAINING_DEFAULTS.get("num_initial_points", 5000),
+                                                                        min=100, step=500, style={"width": "100%"},
+                                                                    ),
+                                                                ], style=FIELD_STYLE),
+                                                            ],
+                                                            style={"width": "48%", "display": "inline-block", "verticalAlign": "top", "paddingLeft": "2%"},
+                                                        ),
+                                                    ],
+                                                ),
+                                                # PDE-specific info box
+                                                html.Div(
+                                                    id="pde-info-box",
+                                                    style={
+                                                        "marginTop": "16px", "padding": "12px",
+                                                        "backgroundColor": "#f0f7ff", "borderRadius": "6px",
+                                                        "border": "1px solid #c0d8f0",
+                                                    },
+                                                ),
+                                                # Launch button
+                                                html.Div(
+                                                    [
+                                                        html.Button(
+                                                            "Start Training",
+                                                            id="launch-trainer-button",
+                                                            style={
+                                                                **BUTTON_STYLE,
+                                                                "backgroundColor": "#4CAF50",
+                                                                "padding": "14px 40px",
+                                                                "fontSize": "16px",
+                                                            },
+                                                        ),
+                                                        html.Div(
+                                                            id="trainer-status",
+                                                            style={"marginTop": "12px", "fontSize": "14px"},
+                                                        ),
+                                                    ],
+                                                    style={"textAlign": "center", "marginTop": "24px"},
+                                                ),
+                                            ],
+                                            style={
+                                                "maxWidth": "800px", "margin": "20px auto",
+                                                "padding": "24px", "backgroundColor": "#fafafa",
+                                                "borderRadius": "8px", "border": "1px solid #e0e0e0",
+                                            },
                                         ),
-                                        dcc.Download(id="download-report"),
                                     ],
-                                    style={"width": "30%", "display": "inline-block", "textAlign": "right"},
                                 ),
                             ],
-                            style={"width": "60%", "margin": "20px auto"},
-                        ),
-                        # Epoch progress bar
-                        html.Div(
-                            [
-                                html.Div(
-                                    id="epoch-progress-text",
-                                    style={"marginBottom": "4px", "fontWeight": "bold"},
-                                ),
-                                html.Div(
-                                    html.Div(
-                                        id="epoch-progress-bar-inner",
-                                        style={
-                                            "width": "0%",
-                                            "height": "20px",
-                                            "backgroundColor": "#2196F3",
-                                            "borderRadius": "4px",
-                                            "transition": "width 0.5s",
-                                        },
-                                    ),
-                                    style={
-                                        "width": "100%",
-                                        "backgroundColor": "#e0e0e0",
-                                        "borderRadius": "4px",
-                                    },
-                                ),
-                            ],
-                            style={"width": "60%", "margin": "10px auto"},
-                        ),
-                        # Loss graph
-                        html.Div(
-                            [dcc.Graph(id="loss-graph")],
-                            style={"width": "100%"},
-                        ),
-                        # Experiment details
-                        html.Div(
-                            [
-                                html.H3("Experiment Details"),
-                                html.Pre(id="experiment-details", style=PRE_STYLE),
-                            ],
-                            style={"marginTop": "20px"},
-                        ),
-                        # Auto-refresh interval
-                        dcc.Interval(
-                            id="interval-component",
-                            interval=10 * 1000,
-                            n_intervals=0,
+                            style={"marginTop": "10px"},
                         ),
                     ],
                 ),
@@ -369,18 +567,22 @@ def create_empty_figure(message, title=""):
 
 def create_empty_3d_figure(message):
     """Create an empty 3D figure with a message."""
-    fig = go.Figure()
-    fig.add_annotation(
-        text=message, x=0.5, y=0.5, xref="paper", yref="paper",
-        showarrow=False, font=dict(size=16),
+    fig = go.Figure(
+        data=[go.Scatter3d(x=[0], y=[0], z=[0], mode="markers",
+                           marker=dict(size=0.1, opacity=0), showlegend=False)],
     )
     fig.update_layout(
         title="Solution Visualization",
         scene=dict(
-            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
-            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
-            zaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, title=""),
+            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, title=""),
+            zaxis=dict(showticklabels=False, showgrid=False, zeroline=False, title=""),
+            annotations=[dict(
+                text=message, x=0, y=0, z=0,
+                showarrow=False, font=dict(size=14, color="#666"),
+            )],
         ),
+        margin=dict(l=0, r=0, b=0, t=30),
     )
     return fig
 
@@ -601,57 +803,104 @@ def update_graphs(experiment, _):
 # ============================================================
 
 
+# PDE name -> config key mapping
+_PDE_NAME_TO_KEY = {}
+for _k, _c in _PDE_CONFIGS.items():
+    _PDE_NAME_TO_KEY[_c.get("name", _k)] = _k
+
+
+@app.callback(
+    Output("train-arch-selector", "value"),
+    Output("pde-info-box", "children"),
+    Input("train-pde-selector", "value"),
+    prevent_initial_call=True,
+)
+def update_pde_selection(pde_name):
+    """When PDE changes, auto-select recommended architecture and show PDE info."""
+    pde_key = _PDE_NAME_TO_KEY.get(pde_name, "heat")
+    pde_cfg = _PDE_CONFIGS.get(pde_key, {})
+    recommended_arch = pde_cfg.get("architecture", "fourier")
+    params = pde_cfg.get("parameters", {})
+    domain = pde_cfg.get("domain", [])
+    time_domain = pde_cfg.get("time_domain", [])
+    dim = pde_cfg.get("dimension", 1)
+
+    info = [
+        html.Strong(f"{pde_name}"),
+        html.Span(f"  |  {dim}D  |  Recommended arch: {recommended_arch}"),
+        html.Br(),
+        html.Span(f"Domain: {domain}  |  Time: {time_domain}"),
+        html.Br(),
+        html.Span(f"Parameters: {params}"),
+    ]
+    return recommended_arch, info
+
+
 @app.callback(
     Output("trainer-status", "children"),
     Input("launch-trainer-button", "n_clicks"),
+    State("train-pde-selector", "value"),
+    State("train-arch-selector", "value"),
+    State("train-epochs-input", "value"),
+    State("train-lr-input", "value"),
+    State("train-batch-size", "value"),
+    State("train-collocation-points", "value"),
+    State("train-boundary-points", "value"),
+    State("train-initial-points", "value"),
+    State("train-device-selector", "value"),
+    State("train-rl-toggle", "value"),
     prevent_initial_call=True,
 )
-def launch_trainer(n_clicks):
+def launch_trainer(n_clicks, pde_name, arch, epochs, lr, batch_size,
+                   collocation_pts, boundary_pts, initial_pts, device, rl_toggle):
     if not n_clicks:
         return ""
     try:
-        trainer_path = os.path.join(os.path.dirname(__file__), "interactive_trainer.py")
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        train_script = os.path.join(project_root, "src", "training", "train.py")
+        config_path = os.path.join(project_root, "src", "config", "config.yaml")
+        if not os.path.exists(config_path):
+            config_path = os.path.join(project_root, "config.yaml")
+        log_file = os.path.join(project_root, "trainer_launch.log")
 
-        python_cmd = None
-        candidates = [
-            sys.executable,
-            os.path.join(os.path.dirname(os.path.dirname(__file__)), "pinn", "bin", "python3"),
-            "python3",
-            "python",
+        if not os.path.exists(train_script):
+            return "Error: src/training/train.py not found"
+
+        use_rl = "rl" in (rl_toggle or [])
+
+        cmd = [
+            sys.executable, train_script,
+            "--pde", pde_name,
+            "--arch", arch,
+            "--epochs", str(epochs or 500),
+            "--lr", str(lr or 0.005),
+            "--batch-size", str(batch_size or 2048),
+            "--collocation-points", str(collocation_pts or 5000),
+            "--boundary-points", str(boundary_pts or 5000),
+            "--initial-points", str(initial_pts or 5000),
+            "--device", device or "cpu",
+            "--config", config_path,
         ]
-        for candidate in candidates:
-            try:
-                result = subprocess.run(
-                    [candidate, "-c", "import tkinter"],
-                    capture_output=True,
-                    timeout=5,
-                )
-                if result.returncode == 0:
-                    python_cmd = candidate
-                    break
-            except (FileNotFoundError, subprocess.TimeoutExpired):
-                continue
+        if use_rl:
+            cmd.append("--rl")
 
-        if python_cmd is None:
-            return "Error: No Python with tkinter found. Install tk: brew install python-tk"
-
-        log_file = os.path.join(os.path.dirname(__file__), "..", "trainer_launch.log")
         log_fh = open(log_file, "w")
-        proc = subprocess.Popen(
-            [python_cmd, trainer_path],
+        subprocess.Popen(
+            cmd,
             stdout=log_fh,
             stderr=log_fh,
+            cwd=project_root,
         )
-        try:
-            proc.wait(timeout=2)
-            log_fh.close()
-            with open(log_file, "r") as f:
-                log_content = f.read().strip()
-            return f"Error: Trainer exited immediately. {log_content[-500:]}"
-        except subprocess.TimeoutExpired:
-            return f"Interactive Trainer launched. (log: {log_file})"
+
+        rl_str = " + RL" if use_rl else ""
+        return html.Div([
+            html.Span("Training started! ", style={"color": "#4CAF50", "fontWeight": "bold"}),
+            html.Span(f"{pde_name} / {arch}{rl_str} / {epochs} epochs / LR={lr}"),
+            html.Br(),
+            html.Span("Switch to the Monitor sub-tab to track progress.", style={"fontSize": "12px", "color": "#888"}),
+        ])
     except Exception as e:
-        return f"Error launching trainer: {e}"
+        return f"Error launching training: {e}"
 
 
 # ============================================================
@@ -981,16 +1230,6 @@ def update_collocation_plot(experiment):
         )
 
 
-@app.callback(
-    [
-        Output("exact-solution-3d", "figure"),
-        Output("predicted-solution-3d", "figure"),
-    ],
-    [
-        Input("collocation-experiment-selector", "value"),
-        Input("time-slider", "value"),
-    ],
-)
 def _infer_model_params(state_dict, architecture, input_dim, output_dim):
     """Infer model architecture parameters from checkpoint state_dict shapes.
 
@@ -1001,83 +1240,54 @@ def _infer_model_params(state_dict, architecture, input_dim, output_dim):
     keys = list(state_dict.keys())
 
     if architecture == "fourier":
-        # model.fourier.B has shape [input_dim, mapping_size]
         b_key = [k for k in keys if "fourier.B" in k]
         if b_key:
             params["mapping_size"] = state_dict[b_key[0]].shape[1]
-
-        # Hidden layers: model.layers.{i}.weight
         layer_keys = sorted([k for k in keys if "layers" in k and "weight" in k])
         if layer_keys:
-            # First hidden layer input = 2 * mapping_size (sin + cos)
-            # Hidden dim = first layer output
             params["hidden_dim"] = state_dict[layer_keys[0]].shape[0]
-            # num_layers = total layer count (including output layer)
             params["num_layers"] = len(layer_keys)
-            # Build hidden_dims from layer shapes (exclude output layer)
-            hidden_dims = []
-            for lk in layer_keys[:-1]:  # skip output layer
-                hidden_dims.append(state_dict[lk].shape[0])
+            hidden_dims = [state_dict[lk].shape[0] for lk in layer_keys[:-1]]
             if hidden_dims:
                 params["hidden_dims"] = hidden_dims
 
     elif architecture == "resnet":
-        # model.input_layer.weight shape [hidden_dim, input_dim]
         il_key = [k for k in keys if "input_layer.weight" in k]
         if il_key:
             params["hidden_dim"] = state_dict[il_key[0]].shape[0]
-        # Count residual blocks
-        block_keys = set()
-        for k in keys:
-            if "blocks." in k:
-                block_idx = k.split("blocks.")[1].split(".")[0]
-                block_keys.add(block_idx)
+        block_keys = {k.split("blocks.")[1].split(".")[0] for k in keys if "blocks." in k}
         if block_keys:
             params["num_blocks"] = len(block_keys)
 
     elif architecture == "siren":
-        # model.layers.{i}.weight
         layer_keys = sorted([k for k in keys if "layers" in k and "weight" in k])
         if layer_keys:
-            hidden_dims = []
-            for lk in layer_keys[:-1]:  # skip output layer
-                hidden_dims.append(state_dict[lk].shape[0])
+            hidden_dims = [state_dict[lk].shape[0] for lk in layer_keys[:-1]]
             if hidden_dims:
                 params["hidden_dims"] = hidden_dims
                 params["hidden_dim"] = hidden_dims[0]
             params["num_layers"] = len(layer_keys)
 
     elif architecture == "attention":
-        # model.input_proj.weight shape [hidden_dim, input_dim]
         ip_key = [k for k in keys if "input_proj.weight" in k]
         if ip_key:
             params["hidden_dim"] = state_dict[ip_key[0]].shape[0]
-        # Count attention layers
-        attn_keys = set()
-        for k in keys:
-            if "attention_layers." in k:
-                idx = k.split("attention_layers.")[1].split(".")[0]
-                attn_keys.add(idx)
+        attn_keys = {k.split("attention_layers.")[1].split(".")[0] for k in keys if "attention_layers." in k}
         if attn_keys:
             params["num_layers"] = len(attn_keys)
 
     elif architecture == "autoencoder":
-        # Infer encoder hidden dims from encoder layer weights
         enc_keys = sorted([k for k in keys if "encoder" in k and "weight" in k])
         if enc_keys:
-            hidden_dims = []
-            for ek in enc_keys:
-                hidden_dims.append(state_dict[ek].shape[0])
+            hidden_dims = [state_dict[ek].shape[0] for ek in enc_keys]
             if hidden_dims:
-                params["hidden_dims"] = hidden_dims[:-1]  # last is latent_dim
+                params["hidden_dims"] = hidden_dims[:-1]
                 params["latent_dim"] = hidden_dims[-1]
 
     elif architecture == "feedforward":
         layer_keys = sorted([k for k in keys if "layers" in k and "weight" in k])
         if layer_keys:
-            hidden_dims = []
-            for lk in layer_keys[:-1]:
-                hidden_dims.append(state_dict[lk].shape[0])
+            hidden_dims = [state_dict[lk].shape[0] for lk in layer_keys[:-1]]
             if hidden_dims:
                 params["hidden_dims"] = hidden_dims
                 params["hidden_dim"] = hidden_dims[0]
@@ -1086,6 +1296,16 @@ def _infer_model_params(state_dict, architecture, input_dim, output_dim):
     return params
 
 
+@app.callback(
+    [
+        Output("exact-solution-3d", "figure"),
+        Output("predicted-solution-3d", "figure"),
+    ],
+    [
+        Input("collocation-experiment-selector", "value"),
+        Input("time-slider", "value"),
+    ],
+)
 def update_solution_visualizations(experiment, time_point):
     if not experiment:
         return create_empty_3d_figure("Select an experiment"), create_empty_3d_figure(
@@ -1104,9 +1324,14 @@ def update_solution_visualizations(experiment, time_point):
         config_path = os.path.join(experiment, "config.yaml")
 
         if not os.path.exists(model_path) or not os.path.exists(config_path):
-            return create_empty_3d_figure("No model data available"), create_empty_3d_figure(
-                "No model data available"
-            )
+            missing = []
+            if not os.path.exists(model_path):
+                missing.append("final_model.pt")
+            if not os.path.exists(config_path):
+                missing.append("config.yaml")
+            msg = f"Missing: {', '.join(missing)}"
+            print(f"[Solution Viz] {msg} in {experiment}")
+            return create_empty_3d_figure(msg), create_empty_3d_figure(msg)
 
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
