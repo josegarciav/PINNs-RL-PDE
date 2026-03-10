@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 from .autoencoder import AutoEncoder
 from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 from .feedforward import FeedForwardNetwork
+from .fno import FNOBlock, FNONetwork, SpectralConv1d
 from .fourier import FourierFeatures, FourierNetwork
 from .resnet import ResNet, ResNetBlock
 from .siren import SIREN, SIRENLayer
@@ -28,6 +29,9 @@ try:
         "SIRENLayer",
         "FourierNetwork",
         "FourierFeatures",
+        "FNONetwork",
+        "FNOBlock",
+        "SpectralConv1d",
         "AutoEncoder",
         "AttentionNetwork",
         "SelfAttention",
@@ -46,6 +50,9 @@ except ImportError:
         "SIRENLayer",
         "FourierNetwork",
         "FourierFeatures",
+        "FNONetwork",
+        "FNOBlock",
+        "SpectralConv1d",
         "AutoEncoder",
         "PINNModel",
     ]
@@ -116,6 +123,17 @@ class PINNModel(BaseNetwork):
             self.model = AttentionNetwork(config_with_device)
         elif self.architecture == "autoencoder":
             self.model = AutoEncoder(config_with_device)
+        elif self.architecture == "fno":
+            fno_config = {
+                "input_dim": config.model.input_dim,
+                "hidden_dim": config.model.hidden_dim,
+                "output_dim": config.model.output_dim,
+                "num_blocks": getattr(config.model, "num_blocks", None) or config.model.num_layers,
+                "modes": getattr(config.model, "modes", 16),
+                "activation": config.model.activation,
+                "device": self.device,
+            }
+            self.model = FNONetwork(fno_config)
         else:  # Default to feedforward
             self.model = FeedForwardNetwork(config_with_device)
 

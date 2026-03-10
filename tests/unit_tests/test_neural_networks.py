@@ -8,6 +8,7 @@ from src.neural_networks import (
     AttentionNetwork,
     AutoEncoder,
     FeedForwardNetwork,
+    FNONetwork,
     FourierFeatures,
     FourierNetwork,
     PINNModel,
@@ -56,6 +57,9 @@ def _make_config(
         cfg.model.latent_dim = hidden_dim // 2
     elif architecture == "resnet":
         cfg.model.num_blocks = num_layers
+    elif architecture == "fno":
+        cfg.model.num_blocks = num_layers
+        cfg.model.modes = 16
     cfg.model.device = device
     return cfg
 
@@ -229,6 +233,32 @@ class TestNeuralNetworks(unittest.TestCase):
         loss = torch.mean(output)
         loss.backward()
 
+    def test_fno_network(self):
+        """Test FNONetwork architecture."""
+        config = {
+            "input_dim": self.input_dim,
+            "hidden_dim": self.hidden_dim,
+            "output_dim": self.output_dim,
+            "num_blocks": 3,
+            "modes": 8,
+            "activation": "gelu",
+            "device": self.device,
+        }
+
+        model = FNONetwork(config)
+        output = model(self.sample_input)
+
+        # Check output shape
+        self.assertEqual(output.shape, (self.batch_size, self.output_dim))
+        # Test gradients
+        loss = torch.mean(output)
+        loss.backward()
+        # Verify FNO architecture components
+        self.assertEqual(len(model.blocks), config["num_blocks"])
+        for block in model.blocks:
+            from src.neural_networks.fno import FNOBlock
+            self.assertIsInstance(block, FNOBlock)
+
     def test_pinn_model(self):
         """Test PINNModel with different architectures."""
         architectures = [
@@ -238,6 +268,7 @@ class TestNeuralNetworks(unittest.TestCase):
             "attention",
             "autoencoder",
             "feedforward",
+            "fno",
         ]
 
         for arch in architectures:
@@ -246,7 +277,7 @@ class TestNeuralNetworks(unittest.TestCase):
                 hidden_dim=self.hidden_dim,
                 output_dim=self.output_dim,
                 num_layers=3,
-                activation="tanh",
+                activation="tanh" if arch != "fno" else "gelu",
                 architecture=arch,
                 device=self.device,
             )

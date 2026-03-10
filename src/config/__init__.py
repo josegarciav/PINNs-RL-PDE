@@ -99,6 +99,7 @@ class ModelConfig:
     latent_dim: Optional[int] = None  # For autoencoder
     mapping_size: int = 32  # Default mapping size for Fourier features
     scale: float = 10.0  # Default scale for Fourier features
+    modes: Optional[int] = None  # For FNO (number of Fourier modes)
 
     def __init__(
         self,
@@ -127,8 +128,8 @@ class ModelConfig:
         # Configure hidden_dims as a list based on hidden_dim when not explicitly set
         self.hidden_dims = [hidden_dim] * num_layers
 
-        # For ResNet, set num_blocks to be the same as num_layers
-        if architecture == "resnet":
+        # For ResNet and FNO, set num_blocks to be the same as num_layers
+        if architecture in ("resnet", "fno"):
             self.num_blocks = num_layers
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -290,6 +291,8 @@ class Config:
             self.model.num_blocks = arch_specific["num_blocks"]
         if "latent_dim" in arch_specific:
             self.model.latent_dim = arch_specific["latent_dim"]
+        if "modes" in arch_specific:
+            self.model.modes = arch_specific["modes"]
 
         # PDE configuration
         pde_config = config_dict.get("pde", {})
@@ -440,7 +443,7 @@ class Config:
             raise ValueError("output_dim must be positive")
         if self.model.num_layers <= 0:
             raise ValueError("num_layers must be positive")
-        if self.model.activation not in ["tanh", "relu", "gelu"]:
+        if self.model.activation not in ["tanh", "relu", "gelu", "leaky_relu", "sigmoid"]:
             raise ValueError(f"Invalid activation: {self.model.activation}")
 
         # Validate PDE configuration - adapted for new structure

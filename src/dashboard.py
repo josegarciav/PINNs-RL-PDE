@@ -1284,6 +1284,14 @@ def _infer_model_params(state_dict, architecture, input_dim, output_dim):
                 params["hidden_dims"] = hidden_dims[:-1]
                 params["latent_dim"] = hidden_dims[-1]
 
+    elif architecture == "fno":
+        lift_key = [k for k in keys if "lift.0.weight" in k]
+        if lift_key:
+            params["hidden_dim"] = state_dict[lift_key[0]].shape[0]
+        block_keys = {k.split("blocks.")[1].split(".")[0] for k in keys if "blocks." in k}
+        if block_keys:
+            params["num_blocks"] = len(block_keys)
+
     elif architecture == "feedforward":
         layer_keys = sorted([k for k in keys if "layers" in k and "weight" in k])
         if layer_keys:
