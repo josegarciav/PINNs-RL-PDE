@@ -57,6 +57,7 @@ nav:
   - Getting Started:
     - Start Here: start_here.md
     - Installation & Setup: setup.md
+    - Dashboard Guide: dashboard.md
   - Architecture: ARCHITECTURE.md
   - Sampling Strategies: sampling_strategies.md
   - Roadmap: roadmap.md

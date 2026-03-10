@@ -34,7 +34,15 @@ Launch the web dashboard:
 python src/main.py
 ```
 
-Open http://127.0.0.1:8050/ in your browser. Under the **Live Training** tab, click **New Training** to select a PDE (e.g., Heat Equation) and architecture (e.g., Fourier), adjust hyperparameters, then click **Start Training**. Training runs in the background and results are saved automatically to a timestamped directory under `experiments/`.
+Open [http://127.0.0.1:8050/](http://127.0.0.1:8050/) in your browser. You will see the dashboard landing page:
+
+![Dashboard monitor view](assets/screenshots/dashboard-landing.png)
+
+Click the **New Training** sub-tab to configure your first experiment. Select a PDE (e.g., Heat Equation) and architecture (e.g., Fourier), adjust hyperparameters, then click **Start Training**.
+
+![New Training form](assets/screenshots/dashboard-new-training.png)
+
+Training runs in the background and results are saved automatically to a timestamped directory under `experiments/`. See the [Dashboard Guide](dashboard.md) for full details on all tabs and features.
 
 ### Step 3 — Inspect results
 
@@ -167,6 +175,7 @@ The loss curve descends monotonically (with minor fluctuations from cosine LR an
 | Goal | Where to go |
 |---|---|
 | Full installation, GPU setup, troubleshooting | [docs/setup.md](setup.md) |
+| Dashboard features and workflow | [docs/dashboard.md](dashboard.md) |
 | Architecture selection and training loop internals | [docs/ARCHITECTURE.md](ARCHITECTURE.md) |
 | Interactive examples and comparisons | `notebooks/PINN_intro_workshop.ipynb` |
 | Sampling strategies (uniform, stratified, RAR, RL) | [Sampling Strategies](sampling_strategies.md) |

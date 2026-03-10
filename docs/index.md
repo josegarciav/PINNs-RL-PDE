@@ -10,6 +10,7 @@
 |---|---|
 | Get running in 5 minutes | [Start Here](start_here.md) |
 | Install and configure the library | [Setup](setup.md) |
+| Launch and use the web dashboard | [Dashboard Guide](dashboard.md) |
 | Understand how the architecture works | [Architecture Overview](ARCHITECTURE.md) |
 | See where the project is going | [Roadmap](roadmap.md) |
 | Understand sampling strategies | [Sampling Strategies](sampling_strategies.md) |
