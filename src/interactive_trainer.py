@@ -854,13 +854,21 @@ class InteractiveTrainer:
 
             except Exception as e:
                 self.logger.error(f"Error during training: {str(e)}")
+                # Clean up .running on error
+                if hasattr(self, "experiment_dir") and self.experiment_dir:
+                    running_file = self.experiment_dir / ".running"
+                    if running_file.exists():
+                        try:
+                            running_file.unlink()
+                        except OSError:
+                            pass
                 self.training_running = False
-                self.on_training_complete()
+                self.on_training_error(f"Training error: {str(e)}")
 
         except Exception as e:
             self.logger.error(f"Error setting up training: {str(e)}")
             self.training_running = False
-            self.on_training_complete()
+            self.on_training_error(f"Setup error: {str(e)}")
 
     def update_progress(self):
         """Update training progress in the UI"""
@@ -912,6 +920,25 @@ class InteractiveTrainer:
         if self.training_running:
             self.root.after(1000, self.update_progress)
 
+    def on_training_error(self, error_msg):
+        """Method called when training fails with an error."""
+        self.start_btn.config(state="normal")
+        self.stop_btn.config(state="disabled")
+        self.progress_bar["value"] = 0
+
+        # Show error in UI
+        self.status_label.config(text=error_msg)
+        self.epoch_label.config(text="Error")
+
+        # Clean up .running marker file
+        if hasattr(self, "experiment_dir"):
+            running_file = self.experiment_dir / ".running"
+            if running_file.exists():
+                try:
+                    running_file.unlink()
+                except OSError:
+                    pass
+
     def on_training_complete(self):
         """Method called when training completes"""
         self.start_btn.config(state="normal")
@@ -943,6 +970,15 @@ class InteractiveTrainer:
             ):
                 self.best_loss = min(self.current_trainer.history["val_loss"])
                 self.loss_label.config(text=f"{self.best_loss:.4f}")
+
+        # Clean up .running marker file
+        if hasattr(self, "experiment_dir"):
+            running_file = self.experiment_dir / ".running"
+            if running_file.exists():
+                try:
+                    running_file.unlink()
+                except OSError:
+                    pass
 
         # Show final message
         if hasattr(self, "experiment_dir"):

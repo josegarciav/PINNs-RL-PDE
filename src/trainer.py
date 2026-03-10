@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from datetime import datetime
@@ -261,6 +262,40 @@ class PDETrainer:
             viz_dir = os.path.join(experiment_dir, "visualizations")
             os.makedirs(viz_dir, exist_ok=True)
 
+            # Create .running marker file
+            running_file = os.path.join(experiment_dir, ".running")
+            open(running_file, "w").close()
+
+            # Save initial metadata
+            initial_metadata = {
+                "status": "running",
+                "start_time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                "total_epochs": num_epochs,
+                "current_epoch": 0,
+                "pde_type": getattr(
+                    self.pde, "pde_type",
+                    getattr(self.pde, "name", type(self.pde).__name__),
+                ),
+                "pde_name": getattr(self.pde.config, "name", getattr(self.pde, "name", "")),
+                "architecture": getattr(
+                    self.model, "architecture_name",
+                    getattr(self.config, "architecture",
+                        getattr(self.config.model, "architecture", "unknown")
+                        if hasattr(self.config, "model") else "unknown"
+                    ),
+                ),
+                "training_params": {
+                    "num_epochs": num_epochs,
+                    "batch_size": batch_size,
+                    "num_points": num_points,
+                    "validation_frequency": self.validation_frequency,
+                },
+                "rl_enabled": self.rl_agent is not None,
+            }
+            metadata_path = os.path.join(experiment_dir, "metadata.json")
+            with open(metadata_path, "w") as f:
+                json.dump(initial_metadata, f, indent=2)
+
         self.logger.info("Starting training...")
 
         # Initialize points history
@@ -509,6 +544,29 @@ class PDETrainer:
                     f"LR: {current_lr:.6f}{weights_str}"
                 )
 
+            # Periodic save of history and metadata
+            if experiment_dir and epoch % self.validation_frequency == 0:
+                save_training_metrics(self.history, experiment_dir)
+                metadata_path = os.path.join(experiment_dir, "metadata.json")
+                try:
+                    with open(metadata_path, "r") as f:
+                        partial_metadata = json.load(f)
+                except (FileNotFoundError, json.JSONDecodeError):
+                    partial_metadata = {}
+                partial_metadata.update({
+                    "current_epoch": epoch + 1,
+                    "status": "running",
+                    "final_loss": float(avg_epoch_loss),
+                    "best_val_loss": (
+                        float(self.best_val_loss)
+                        if self.best_val_loss != float("inf")
+                        else None
+                    ),
+                    "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                })
+                with open(metadata_path, "w") as f:
+                    json.dump(partial_metadata, f, indent=2)
+
         # End of training
         train_time = (datetime.now() - start_time).total_seconds() / 60.0
         self.logger.info(f"Training completed in {train_time} minutes")
@@ -517,6 +575,7 @@ class PDETrainer:
         if experiment_dir:
             # Create metadata with training information
             metadata = {
+                "status": "completed",
                 "training_time_minutes": train_time,
                 "total_epochs": num_epochs,
                 "final_loss": (
@@ -570,6 +629,14 @@ class PDETrainer:
             # Save training history as metrics.json and history.json
             self.logger.info("Saving training metrics...")
             save_training_metrics(self.history, experiment_dir, metadata=metadata)
+
+            # Remove .running marker
+            running_file = os.path.join(experiment_dir, ".running")
+            if os.path.exists(running_file):
+                try:
+                    os.remove(running_file)
+                except OSError:
+                    pass
 
             # Save the model directly in the experiment directory
             self.logger.info("Saving model...")
