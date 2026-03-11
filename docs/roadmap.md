@@ -56,7 +56,6 @@ Core solver with 9 PDEs, 7 architectures, RL adaptive sampling, and a Dash dashb
 | `mkdocstrings` API reference from docstrings | Done | 2 | 1 | 1 |
 | Jupyter tutorial: RL vs uniform sampling | Done | 2 | 3 | 2 |
 | PyPI release (`pip install pinnrl`) | To do | 2 | 2 | 1 |
-| Code coverage badge (>80% target) | To do | 1 | 1 | 1 |
 
 **Remaining priority:** PyPI release — prerequisite for researchers using `pinnrl` as a dependency.
 
