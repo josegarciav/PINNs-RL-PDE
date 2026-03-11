@@ -40,8 +40,16 @@ PDE_REGISTRY = {
     "KdV Equation": ("pinnrl.pdes.kdv_equation", "KdVEquation", "kdv"),
     "Pendulum Equation": ("pinnrl.pdes.pendulum_equation", "PendulumEquation", "pendulum"),
     "Allen-Cahn Equation": ("pinnrl.pdes.allen_cahn", "AllenCahnEquation", "allen_cahn"),
-    "Cahn-Hilliard Equation": ("pinnrl.pdes.cahn_hilliard", "CahnHilliardEquation", "cahn_hilliard"),
-    "Black-Scholes Equation": ("pinnrl.pdes.black_scholes", "BlackScholesEquation", "black_scholes"),
+    "Cahn-Hilliard Equation": (
+        "pinnrl.pdes.cahn_hilliard",
+        "CahnHilliardEquation",
+        "cahn_hilliard",
+    ),
+    "Black-Scholes Equation": (
+        "pinnrl.pdes.black_scholes",
+        "BlackScholesEquation",
+        "black_scholes",
+    ),
 }
 
 
