@@ -2,7 +2,7 @@
 
 ## What is pinnrl?
 
-`pinnrl` is an open-source Python library for solving partial differential equations (PDEs) using Physics-Informed Neural Networks (PINNs), with an optional reinforcement learning layer that adaptively selects collocation points to improve training efficiency. It supports nine PDEs out of the box, six neural network architectures, and runs on CPU, CUDA, and Apple Silicon (MPS) with a single configuration change.
+`pinnrl` is an open-source Python library for solving partial differential equations (PDEs) using Physics-Informed Neural Networks (PINNs), with an optional reinforcement learning layer that adaptively selects collocation points to improve training efficiency. It supports nine PDEs out of the box, seven neural network architectures, and runs on CPU, CUDA, and Apple Silicon (MPS) with a single configuration change.
 
 ---
 

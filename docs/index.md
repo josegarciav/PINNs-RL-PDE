@@ -18,7 +18,7 @@
 
 ## Supported PDEs and architectures
 
-Nine PDEs, six neural architectures, one consistent API. See the [README](https://github.com/josegarciav/PINNs-RL-PDE#readme) for the full table.
+Nine PDEs, seven neural architectures, one consistent API. See the [README](https://github.com/josegarciav/PINNs-RL-PDE#readme) for the full table.
 
 ## Install
 

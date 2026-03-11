@@ -58,7 +58,7 @@ Core solver with 9 PDEs, 7 architectures, RL adaptive sampling, and a Dash dashb
 | PyPI release (`pip install pinnrl`) | Done | 2 | 2 | 1 |
 | Linkedin post | To do | 1 | 2 | 1 |
 
-**Remaining priority:** PyPI release — prerequisite for researchers using `pinnrl` as a dependency.
+**Remaining:** LinkedIn announcement post.
 
 ---
 

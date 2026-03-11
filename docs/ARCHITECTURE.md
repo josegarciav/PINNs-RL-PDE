@@ -20,7 +20,7 @@
               ┌──────────────────────────────┐
               │          PINNModel           │  Wraps one of seven architectures:
               │  (neural_networks/__init__)  │  FeedForward / ResNet / SIREN /
-              └──────────────┬───────────────┘  Fourier / Attention / Autoencoder
+              └──────────────┬───────────────┘  Fourier / FNO / Attention / Autoencoder
                              │
               ┌──────────────▼───────────────┐
               │          PDETrainer          │  Training loop, loss aggregation,
@@ -199,6 +199,32 @@ The Fourier transform is implemented with TorchScript (`@torch.jit.script`) for 
 - Any problem with periodic BCs or spectral-like accuracy requirements
 
 **Characteristics:** The random Fourier embedding is a kernel approximation of the RBF kernel. The `scale` parameter controls the frequency bandwidth — larger values capture higher frequencies but may cause spectral aliasing if set too aggressively. `scale=4.0` is a robust default for most 1D PDEs.
+
+---
+
+### Fourier Neural Operator (FNO)
+
+**File:** `pinnrl/neural_networks/fno.py`
+
+An operator-learning architecture that performs convolutions in the Fourier domain. Each spectral convolution layer applies a learnable filter in frequency space, retaining only the lowest `modes` frequencies to capture multi-scale structure efficiently.
+
+```yaml
+architectures:
+  fno:
+    hidden_dim: 256
+    num_blocks: 4
+    modes: 16
+    activation: "gelu"
+    dropout: 0.0
+```
+
+**When to use:**
+- Multi-scale PDEs where spatial patterns span a wide frequency range
+- Operator learning tasks (generalizing across initial/boundary conditions)
+- Problems where spectral methods traditionally outperform finite differences
+- KdV equation (soliton interactions across scales)
+
+**Characteristics:** FNO learns directly in the frequency domain via FFT, making it naturally suited to periodic or quasi-periodic problems. The `modes` parameter controls how many Fourier modes are retained — higher values capture finer features but increase memory. With `hidden_dim=256` and `num_blocks=4`, the default FNO has approximately 1.1M parameters. Unlike Fourier Features (which use a fixed random projection), FNO learns the spectral filter end-to-end.
 
 ---
 

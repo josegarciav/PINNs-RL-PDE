@@ -18,7 +18,7 @@ labels: enhancement, PDE
 
 ## Recommended architecture
 
-<!-- Which of the 6 architectures do you think fits best, and why? -->
+<!-- Which of the 7 architectures (feedforward, resnet, siren, fourier, fno, attention, autoencoder) do you think fits best, and why? -->
 
 ## Use case / motivation
 
