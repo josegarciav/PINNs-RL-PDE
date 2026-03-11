@@ -53,8 +53,8 @@ Core solver with 9 PDEs, 7 architectures, RL adaptive sampling, and a Dash dashb
 | GitHub Actions: docs deployment | Done | 1 | 1 | 1 |
 | Jupyter tutorial: heat equation | Done | 1 | 2 | 1 |
 | Jupyter tutorial: architecture comparison | Done | 1 | 2 | 1 |
-| `mkdocstrings` API reference from docstrings | To do | 2 | 1 | 1 |
-| Jupyter tutorial: RL vs uniform sampling | To do | 2 | 3 | 2 |
+| `mkdocstrings` API reference from docstrings | Done | 2 | 1 | 1 |
+| Jupyter tutorial: RL vs uniform sampling | Done | 2 | 3 | 2 |
 | PyPI release (`pip install pinnrl`) | To do | 2 | 2 | 1 |
 | Code coverage badge (>80% target) | To do | 1 | 1 | 1 |
 
