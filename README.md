@@ -7,7 +7,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![PyPI](https://img.shields.io/badge/PyPI-coming%20soon-lightgrey)](https://github.com/josegarciav/PINNs-RL-PDE)
-[![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/josegarciav/PINNs-RL-PDE)
+[![Build](https://github.com/josegarciav/PINNs-RL-PDE/actions/workflows/checks.yml/badge.svg)](https://github.com/josegarciav/PINNs-RL-PDE/actions/workflows/checks.yml)
+[![codecov](https://codecov.io/gh/josegarciav/PINNs-RL-PDE/branch/main/graph/badge.svg)](https://codecov.io/gh/josegarciav/PINNs-RL-PDE)
 
 **Solve PDEs with neural networks that learn where to look.**
 
