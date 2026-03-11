@@ -1,3 +1,5 @@
+"""Dash web dashboard for monitoring and comparing PINN training runs."""
+
 import argparse
 import glob
 import json
@@ -17,6 +19,7 @@ from dash.dependencies import Input, Output, State
 
 # Parse command line arguments for port
 def parse_args():
+    """Parse command-line arguments for the dashboard server."""
     parser = argparse.ArgumentParser(description="PINNs-RL-PDE Training Monitor Dashboard")
     parser.add_argument("--port", type=int, default=8050, help="Port to run the dashboard on")
     return parser.parse_args()
@@ -891,6 +894,7 @@ def load_experiment_data(experiment):
     Input("interval-component", "n_intervals"),
 )
 def update_live_experiments(_):
+    """Refresh the list of live training experiments."""
     return get_live_experiments()
 
 
@@ -902,6 +906,7 @@ def update_live_experiments(_):
     [Input("experiment-selector", "value"), Input("interval-component", "n_intervals")],
 )
 def update_epoch_progress(experiment, _):
+    """Update the epoch progress bar for the selected experiment."""
     base_style = {
         "height": "20px",
         "borderRadius": "4px",
@@ -946,6 +951,7 @@ def update_epoch_progress(experiment, _):
     ],
 )
 def update_graphs(experiment, _, loss_view):
+    """Update the training loss and metric graphs for the selected experiment."""
     if not experiment:
         return (
             create_empty_figure("Select an experiment", "Training Progress"),
@@ -1155,6 +1161,7 @@ def launch_trainer(
     device,
     rl_toggle,
 ):
+    """Launch a headless training subprocess with the selected parameters."""
     if not n_clicks:
         return ""
     try:
@@ -1233,6 +1240,7 @@ def launch_trainer(
     prevent_initial_call=True,
 )
 def download_report(n_clicks, experiment):
+    """Generate and download a JSON report for the selected experiment."""
     if not experiment or not n_clicks:
         return None
 
@@ -1274,6 +1282,7 @@ def download_report(n_clicks, experiment):
     prevent_initial_call=False,
 )
 def update_architecture_comparison(_):
+    """Refresh the architecture comparison chart from completed experiments."""
     architectures = {}
 
     experiment_dirs = []
@@ -1374,6 +1383,7 @@ def update_architecture_comparison(_):
     prevent_initial_call=False,
 )
 def update_pde_comparison(_):
+    """Refresh the PDE comparison chart from completed experiments."""
     pdes = {}
 
     experiment_dirs = []
@@ -1488,6 +1498,7 @@ def update_pde_comparison(_):
     Input("main-tabs", "value"),
 )
 def update_collocation_experiments(tab):
+    """Populate the experiment selector when the collocation tab is active."""
     if tab == "collocation":
         return get_experiments()
     return dash.no_update
@@ -1498,6 +1509,7 @@ def update_collocation_experiments(tab):
     Input("collocation-experiment-selector", "value"),
 )
 def update_collocation_plot(experiment):
+    """Render the collocation-point distribution plot for the selected experiment."""
     if not experiment:
         return create_empty_figure("Select an experiment", "Collocation Points Distribution")
 
@@ -1645,6 +1657,7 @@ def _infer_model_params(state_dict, architecture, input_dim, output_dim):
     ],
 )
 def update_solution_visualizations(experiment, time_point):
+    """Update the exact and predicted 3-D solution surfaces."""
     if not experiment:
         return create_empty_3d_figure("Select an experiment"), create_empty_3d_figure(
             "Select an experiment"

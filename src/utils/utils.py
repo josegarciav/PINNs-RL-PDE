@@ -25,8 +25,11 @@ def setup_logging(log_dir: str = "logs") -> logging.Logger:
     """
     Setup logging configuration.
 
-    :param log_dir: Directory to store log files
-    :return: Logger instance
+    Args:
+        log_dir: Directory to store log files.
+
+    Returns:
+        Logger instance.
     """
     os.makedirs(log_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -52,12 +55,15 @@ def generate_collocation_points(
     """
     Generate collocation points with different sampling strategies.
 
-    :param num_points: Number of points to generate
-    :param domain: Domain range (min, max)
-    :param device: Device to place the tensor
-    :param distribution: Sampling distribution ('uniform')
-    :param kwargs: Additional parameters for specific distributions
-    :return: Tensor of collocation points
+    Args:
+        num_points: Number of points to generate.
+        domain: Domain range (min, max).
+        device: Device to place the tensor.
+        distribution: Sampling distribution (``"uniform"``).
+        **kwargs: Additional parameters for specific distributions.
+
+    Returns:
+        Tensor of collocation points.
     """
     device = device or torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
@@ -74,9 +80,10 @@ def save_model(model: Union[torch.nn.Module, "RLAgent"], path: str, config: Opti
     """
     Save the trained model and configuration.
 
-    :param model: Trained model (PyTorch model or RLAgent)
-    :param path: Path to save the model
-    :param config: Optional configuration dictionary
+    Args:
+        model: Trained model (PyTorch model or RLAgent).
+        path: Path to save the model.
+        config: Optional configuration dictionary.
     """
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
@@ -104,11 +111,14 @@ def load_model(
     """
     Load a trained model and its configuration.
 
-    :param model: Model instance to load weights into
-    :param path: Path to the saved model
-    :param device: Device to load the model to
-    :param load_config: Whether to load the configuration
-    :return: Tuple of (loaded model, configuration dictionary)
+    Args:
+        model: Model instance to load weights into.
+        path: Path to the saved model.
+        device: Device to load the model to.
+        load_config: Whether to load the configuration.
+
+    Returns:
+        Tuple of (loaded model, configuration dictionary).
     """
     device = device or torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 

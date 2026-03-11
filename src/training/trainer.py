@@ -42,15 +42,16 @@ class PDETrainer:
         """
         Initialize trainer.
 
-        :param model: PINN model
-        :param pde: PDE instance
-        :param optimizer_config: Optimizer configuration
-        :param config: Full configuration object
-        :param device: Device to train on
-        :param rl_agent: Reinforcement Learning agent
-        :param viz_frequency: Frequency of visualization
-        :param validation_frequency: Frequency of validation checks
-        :param early_stopping_config: Early stopping configuration
+        Args:
+            model: PINN model.
+            pde: PDE instance.
+            optimizer_config: Optimizer configuration.
+            config: Full configuration object.
+            device: Device to train on.
+            rl_agent: Reinforcement Learning agent.
+            viz_frequency: Frequency of visualization.
+            validation_frequency: Frequency of validation checks.
+            early_stopping_config: Early stopping configuration.
         """
         # Use device from config by default, fall back to provided device or cpu
         self.device = device or (

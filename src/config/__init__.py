@@ -11,6 +11,16 @@ DEFAULT_CONFIG_PATH = str(Path(__file__).parent / "config.yaml")
 
 @dataclass
 class LearningRateSchedulerConfig:
+    """Learning rate scheduler settings.
+
+    Attributes:
+        type: Scheduler type (``"cosine"`` or ``"reduce_lr"``).
+        warmup_epochs: Number of linear-warmup epochs.
+        min_lr: Minimum learning rate.
+        factor: Multiplicative factor for ``reduce_lr`` scheduler.
+        patience: Epochs to wait before reducing LR.
+    """
+
     type: str
     warmup_epochs: int
     min_lr: float
@@ -20,6 +30,14 @@ class LearningRateSchedulerConfig:
 
 @dataclass
 class EarlyStoppingConfig:
+    """Early-stopping criteria for training.
+
+    Attributes:
+        enabled: Whether early stopping is active.
+        patience: Epochs without improvement before stopping.
+        min_delta: Minimum loss decrease to count as improvement.
+    """
+
     enabled: bool
     patience: int
     min_delta: float
@@ -27,6 +45,16 @@ class EarlyStoppingConfig:
 
 @dataclass
 class AdaptiveWeightsConfig:
+    """Configuration for adaptive loss weighting.
+
+    Attributes:
+        enabled: Whether adaptive weighting is active.
+        strategy: Weight adaptation strategy (``"lrw"`` or ``"rbw"``).
+        alpha: Moving average factor (0–1).
+        eps: Small constant for numerical stability.
+        initial_weights: Initial weights for [residual, boundary, initial] components.
+    """
+
     enabled: bool = False
     strategy: str = "rbw"  # Options: "lrw" or "rbw"
     alpha: float = 0.9  # Moving average factor (0-1)
@@ -40,6 +68,24 @@ class AdaptiveWeightsConfig:
 
 @dataclass
 class TrainingConfig:
+    """Training hyper-parameters and sub-configurations.
+
+    Attributes:
+        num_epochs: Total training epochs.
+        batch_size: Mini-batch size.
+        num_collocation_points: Number of interior collocation points.
+        num_boundary_points: Number of boundary condition points.
+        num_initial_points: Number of initial condition points.
+        learning_rate: Optimizer learning rate.
+        weight_decay: L2 regularisation coefficient.
+        gradient_clipping: Max gradient norm for clipping.
+        early_stopping: Early-stopping configuration.
+        learning_rate_scheduler: LR scheduler configuration.
+        collocation_distribution: Sampling distribution for collocation points.
+        adaptive_weights: Adaptive loss weighting configuration.
+        loss_weights: Static loss component weights.
+    """
+
     num_epochs: int
     batch_size: int
     num_collocation_points: int
@@ -80,7 +126,28 @@ class TrainingConfig:
 
 @dataclass
 class ModelConfig:
-    """Configuration for neural network models"""
+    """Configuration for neural network models.
+
+    Attributes:
+        input_dim: Number of input features (e.g. 2 for (x, t)).
+        hidden_dim: Width of hidden layers.
+        output_dim: Number of output features.
+        num_layers: Depth of the network.
+        activation: Activation function name.
+        fourier_features: Whether to use Fourier feature mapping.
+        fourier_scale: Scale parameter for Fourier features.
+        dropout: Dropout rate (0.0 disables).
+        layer_norm: Whether to apply layer normalisation.
+        architecture: Architecture backend name.
+        hidden_dims: Per-layer widths (overrides ``hidden_dim``).
+        omega_0: Frequency factor for SIREN networks.
+        num_blocks: Number of residual / FNO blocks.
+        num_heads: Number of attention heads.
+        latent_dim: Latent dimension for the AutoEncoder.
+        mapping_size: Size of the Fourier feature mapping.
+        scale: Scale for Fourier feature mapping.
+        modes: Number of Fourier modes for FNO.
+    """
 
     input_dim: int
     hidden_dim: int
@@ -143,6 +210,17 @@ class ModelConfig:
 
 @dataclass
 class PDEConfig:
+    """PDE-specific parameters loaded from ``config.yaml``.
+
+    Attributes:
+        domain: Spatial domain bounds ``[min, max]`` or list of ``[min, max]`` per dimension.
+        t_domain: Time domain bounds ``[t_min, t_max]``.
+        initial_condition: Expression string for the initial condition.
+        boundary_conditions: Mapping of boundary names to expression strings.
+        diffusion_coefficient: Diffusion/viscosity coefficient.
+        source_term: Expression string for the source term.
+    """
+
     domain: List[float]
     t_domain: List[float]
     initial_condition: str
@@ -153,6 +231,24 @@ class PDEConfig:
 
 @dataclass
 class RLConfig:
+    """Reinforcement-learning agent hyper-parameters.
+
+    Attributes:
+        enabled: Whether RL-based adaptive sampling is active.
+        state_dim: Dimension of the RL state vector.
+        action_dim: Dimension of the RL action space.
+        hidden_dim: Hidden layer width of the DQN.
+        learning_rate: Optimizer learning rate for the DQN.
+        gamma: Discount factor.
+        epsilon_start: Initial exploration rate.
+        epsilon_end: Final exploration rate.
+        epsilon_decay: Multiplicative decay per step.
+        memory_size: Replay buffer capacity.
+        batch_size: Mini-batch size for DQN updates.
+        target_update: Steps between target-network syncs.
+        reward_weights: Component weights for the reward function.
+    """
+
     enabled: bool
     state_dim: int
     action_dim: int
@@ -170,6 +266,16 @@ class RLConfig:
 
 @dataclass
 class EvaluationConfig:
+    """Evaluation and plotting settings.
+
+    Attributes:
+        resolution: Grid resolution for evaluation plots.
+        num_test_points: Number of test points for error metrics.
+        metrics: List of metric names to compute.
+        save_plots: Whether to persist plots to disk.
+        plot_frequency: Epochs between plot snapshots.
+    """
+
     resolution: int
     num_test_points: int
     metrics: List[str]
@@ -179,6 +285,14 @@ class EvaluationConfig:
 
 @dataclass
 class LoggingConfig:
+    """Logging and TensorBoard settings.
+
+    Attributes:
+        level: Python logging level string.
+        save_tensorboard: Whether to write TensorBoard logs.
+        log_frequency: Epochs between log entries.
+    """
+
     level: str
     save_tensorboard: bool
     log_frequency: int
@@ -186,6 +300,15 @@ class LoggingConfig:
 
 @dataclass
 class PathsConfig:
+    """File-system paths for experiment outputs.
+
+    Attributes:
+        experiments_dir: Root directory for experiment results.
+        model_dir: Directory for saved model checkpoints.
+        log_dir: Directory for log files.
+        tensorboard_dir: Directory for TensorBoard event files.
+    """
+
     experiments_dir: str
     model_dir: str
     log_dir: str
@@ -495,8 +618,11 @@ class Config:
         """
         Get the appropriate device based on availability.
 
-        :param device_str: Desired device string
-        :return: Available device as torch.device
+        Args:
+            device_str: Desired device string.
+
+        Returns:
+            Available device as ``torch.device``.
         """
         if device_str == "cuda" and torch.cuda.is_available():
             return torch.device("cuda")
@@ -508,7 +634,8 @@ class Config:
         """
         Convert configuration to dictionary.
 
-        :return: Dictionary representation of configuration
+        Returns:
+            Dictionary representation of configuration.
         """
         return {
             "device": self.device,

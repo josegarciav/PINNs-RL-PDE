@@ -1,3 +1,5 @@
+"""Entry point for the PINNs-RL-PDE framework."""
+
 import argparse
 import os
 import sys
@@ -8,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def run_dashboard(port=8050):
-    """Run the dashboard module"""
+    """Run the dashboard module."""
     try:
         from src.dashboard import app
 
@@ -43,6 +45,7 @@ def run_dashboard(port=8050):
 
 
 def parse_args():
+    """Parse command-line arguments for the main application."""
     parser = argparse.ArgumentParser(
         description="PINNs-RL-PDE Main Application",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -68,6 +71,7 @@ Examples:
 
 
 def main():
+    """Entry point: launch the PINNs-RL-PDE dashboard."""
     args = parse_args()
 
     print("\n" + "=" * 50)
