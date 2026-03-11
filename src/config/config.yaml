@@ -45,6 +45,13 @@ architectures:
     dropout: 0.0  # No dropout for PINN training
     layer_norm: true
 
+  fno:
+    hidden_dim: 256
+    num_blocks: 4  # Number of spectral convolution blocks
+    modes: 16  # Number of Fourier modes to keep (frequency cutoff)
+    activation: "gelu"
+    dropout: 0.0  # No dropout for PINN training
+
 # Default PDE type to train
 pde_type: "heat"  # Options: "heat", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
 

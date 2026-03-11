@@ -11,7 +11,7 @@
 
 **Solve PDEs with neural networks that learn where to look.**
 
-`pinnrl` combines Physics-Informed Neural Networks (PINNs) with Deep Q-Network reinforcement learning to place collocation points adaptively — concentrating compute where the residual is highest, not where a grid happens to land. Integrate your chosen architecture, your custom equations, a GUI trainer, and add exact/quasi-exact analytical solutions for validation.
+`pinnrl` combines Physics-Informed Neural Networks (PINNs) with Deep Q-Network reinforcement learning to place collocation points adaptively — concentrating compute where the residual is highest, not where a grid happens to land. Integrate your chosen architecture, your custom equations, a Dashboard trainer, and add exact/quasi-exact analytical solutions for validation.
 
 ---
 
@@ -54,6 +54,7 @@ Traditional PDE solvers (FEM, FDM) require meshes that become expensive in high 
 | `resnet` | Deep networks, stiff equations | `num_blocks`, `hidden_dim` |
 | `siren` | Oscillatory, wave-type problems | `omega_0` (frequency scale) |
 | `fourier` | High-frequency, spectral accuracy | `mapping_size`, `scale` |
+| `fno` | Operator learning, multi-scale PDEs | `modes` (frequency cutoff), `num_blocks` |
 | `attention` | Multi-scale, complex geometry | `num_heads`, `num_blocks` |
 | `autoencoder` | Latent-space compression tasks | `latent_dim`, `hidden_dim` |
 
@@ -81,7 +82,7 @@ from src.config import Config, ModelConfig, TrainingConfig, EarlyStoppingConfig
 from src.neural_networks import PINNModel
 from src.pdes.heat_equation import HeatEquation
 from src.pdes.pde_base import PDEConfig
-from src.trainer import PDETrainer
+from src.training.trainer import PDETrainer
 
 device = torch.device("cpu")
 
@@ -119,31 +120,17 @@ metrics = pde.validate(model, num_points=5000)
 print(f"L2 error: {metrics['l2_error']:.2e}  |  Max error: {metrics['max_error']:.2e}")
 ```
 
-### Interactive GUI
-
-```bash
-# Trainer + live Dash dashboard (opens browser automatically)
-python3 src/main.py
-
-# Trainer only
-python3 src/main.py --trainer-only
-
-# Dashboard only — inspect previously saved experiments
-python3 src/main.py --dashboard-only --port 8051
-```
-
-The GUI launches an interactive trainer (`src/interactive_trainer.py`) alongside a Plotly/Dash dashboard that streams loss curves, residual fields, and exact-vs-predicted comparisons in real time.
 
 ---
 
 ## Features
 
 - **RL-adaptive collocation** — a DQN agent (`src/rl/rl_agent.py`) observes the current residual field and steers point sampling toward high-error regions, reducing wasted forward passes on low-residual areas.
-- **Six neural architectures** — FeedForward, ResNet, SIREN (periodic activations), Fourier Features (random Fourier mapping), Self-Attention Transformer, and Autoencoder, all exposed through a single `PINNModel` factory class.
+- **Seven neural architectures** — FeedForward, ResNet, SIREN (periodic activations), Fourier Features (random Fourier mapping), Fourier Neural Operator (spectral convolutions), Self-Attention Transformer, and Autoencoder, all exposed through a single `PINNModel` factory class.
 - **Nine PDEs** — linear to nonlinear, parabolic to hyperbolic, 1D to 2D, spanning thermal diffusion, soliton dynamics, phase-field models, and financial derivatives.
 - **Exact analytical solutions** — every PDE ships with an `exact_solution` method for L2 and max-error validation during and after training; no external reference solver is required.
 - **Adaptive loss weighting** — residual-balancing weights (RBW) and learning-rate-based weights (LRW) automatically re-balance physics, boundary, and initial condition loss terms.
-- **GUI trainer and Dash dashboard** — configure and launch experiments, monitor convergence metrics, and compare runs without writing plotting code.
+- **Dash dashboard** — configure and launch experiments, monitor convergence metrics, and compare runs without writing plotting code.
 - **Hardware-aware** — automatically selects CUDA, Apple MPS, or CPU; configurable via the `--device` flag or `config.yaml`.
 
 ---
@@ -153,8 +140,8 @@ The GUI launches an interactive trainer (`src/interactive_trainer.py`) alongside
 | Feature | pinnrl | DeepXDE | NeuralPDE.jl |
 |---|---|---|---|
 | RL-based adaptive sampling | Yes | No | No |
-| Architectures bundled | 6 | 3 | 2 |
-| GUI trainer | Yes | No | No |
+| Architectures bundled | 7 | 3 | 2 |
+| Dashboard trainer | Yes | No | No |
 | Exact solutions built in | Yes | Partial | Partial |
 | Language | Python | Python | Julia |
 | Install | `pip install pinnrl` | `pip install deepxde` | Julia pkg manager |
@@ -165,7 +152,7 @@ The GUI launches an interactive trainer (`src/interactive_trainer.py`) alongside
 
 | Version | Status | Milestones |
 |---|---|---|
-| v0.1 | Now | 9 PDEs, 6 architectures, DQN adaptive sampling, GUI, Dash dashboard, exact-solution validation |
+| v0.1 | Now | 9 PDEs, 7 architectures, DQN adaptive sampling, Dash dashboard, exact-solution validation |
 | v0.2 | Planned | PyPI release, 2D/3D geometry, PPO agent option, YAML config schema validation |
 | v0.3 | Planned | Operator learning (DeepONet-style), uncertainty quantification, JAX backend |
 | v1.0 | Future | Stable public API, community PDE registry, full documentation site |

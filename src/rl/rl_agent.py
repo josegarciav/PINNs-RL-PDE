@@ -26,11 +26,12 @@ class DQNNetwork(nn.Module):
         """
         Initialize DQN network.
 
-        :param state_dim: State dimension
-        :param action_dim: Action dimension
-        :param hidden_dim: Hidden layer dimension
-        :param num_layers: Number of layers
-        :param dropout: Dropout rate
+        Args:
+            state_dim: State dimension.
+            action_dim: Action dimension.
+            hidden_dim: Hidden layer dimension.
+            num_layers: Number of layers.
+            dropout: Dropout rate.
         """
         super().__init__()
 
@@ -78,8 +79,11 @@ class DQNNetwork(nn.Module):
         """
         Forward pass through the network.
 
-        :param x: Input tensor
-        :return: Q-values
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Q-values.
         """
         return self.layers(x)
 
@@ -91,7 +95,8 @@ class ReplayBuffer:
         """
         Initialize replay buffer.
 
-        :param capacity: Maximum number of experiences to store
+        Args:
+            capacity: Maximum number of experiences to store.
         """
         self.buffer = deque(maxlen=capacity)
 
@@ -106,11 +111,12 @@ class ReplayBuffer:
         """
         Add experience to buffer.
 
-        :param state: Current state
-        :param action: Action taken
-        :param reward: Reward received
-        :param next_state: Next state
-        :param done: Whether episode is done
+        Args:
+            state: Current state.
+            action: Action taken.
+            reward: Reward received.
+            next_state: Next state.
+            done: Whether episode is done.
         """
         self.buffer.append((state, action, reward, next_state, done))
 
@@ -118,8 +124,11 @@ class ReplayBuffer:
         """
         Sample batch of experiences.
 
-        :param batch_size: Size of batch to sample
-        :return: List of experiences
+        Args:
+            batch_size: Size of batch to sample.
+
+        Returns:
+            List of experiences.
         """
         return random.sample(self.buffer, batch_size)
 
@@ -150,19 +159,20 @@ class RLAgent:
         """
         Initialize RL agent.
 
-        :param state_dim: State dimension
-        :param action_dim: Action dimension
-        :param hidden_dim: Hidden layer dimension
-        :param learning_rate: Learning rate
-        :param gamma: Discount factor
-        :param epsilon_start: Initial exploration rate
-        :param epsilon_end: Final exploration rate
-        :param epsilon_decay: Exploration decay rate
-        :param memory_size: Size of replay buffer
-        :param batch_size: Batch size for training
-        :param target_update: Frequency of target network updates
-        :param reward_weights: Weights for different reward components
-        :param device: Device to place the model on
+        Args:
+            state_dim: State dimension.
+            action_dim: Action dimension.
+            hidden_dim: Hidden layer dimension.
+            learning_rate: Learning rate.
+            gamma: Discount factor.
+            epsilon_start: Initial exploration rate.
+            epsilon_end: Final exploration rate.
+            epsilon_decay: Exploration decay rate.
+            memory_size: Size of replay buffer.
+            batch_size: Batch size for training.
+            target_update: Frequency of target network updates.
+            reward_weights: Weights for different reward components.
+            device: Device to place the model on.
         """
         self.device = device or torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
@@ -205,8 +215,11 @@ class RLAgent:
         """
         Select an action using epsilon-greedy policy.
 
-        :param state: Current state tensor
-        :return: Selected action tensor
+        Args:
+            state: Current state tensor.
+
+        Returns:
+            Selected action tensor.
         """
         if torch.rand(1).to(self.device).item() > self.epsilon:
             with torch.no_grad():
@@ -219,8 +232,11 @@ class RLAgent:
         """
         Convert action to collocation points.
 
-        :param action: Selected action
-        :return: Tuple of (x, t) coordinates
+        Args:
+            action: Selected action.
+
+        Returns:
+            Tuple of (x, t) coordinates.
         """
         # Convert action to point coordinates
         x = torch.rand(self.action_dim, 1, device=self.device)
@@ -242,11 +258,14 @@ class RLAgent:
         """
         Compute reward from losses.
 
-        :param residual_loss: PDE residual loss
-        :param boundary_loss: Boundary condition loss
-        :param initial_loss: Initial condition loss
-        :param exploration_bonus: Bonus for exploring new regions
-        :return: Computed reward
+        Args:
+            residual_loss: PDE residual loss.
+            boundary_loss: Boundary condition loss.
+            initial_loss: Initial condition loss.
+            exploration_bonus: Bonus for exploring new regions.
+
+        Returns:
+            Computed reward.
         """
         reward = (
             -self.reward_weights["residual"] * residual_loss
@@ -267,11 +286,12 @@ class RLAgent:
         """
         Update agent with new experience.
 
-        :param state: Current state
-        :param action: Action taken
-        :param reward: Reward received
-        :param next_state: Next state
-        :param done: Whether episode is done
+        Args:
+            state: Current state.
+            action: Action taken.
+            reward: Reward received.
+            next_state: Next state.
+            done: Whether episode is done.
         """
         # Store experience
         self.memory.push(state, action, reward, next_state, done)
@@ -330,7 +350,8 @@ class RLAgent:
         """
         Save agent state.
 
-        :param path: Path to save the agent
+        Args:
+            path: Path to save the agent.
         """
         state = {
             "policy_net_state_dict": self.policy_net.state_dict(),
@@ -347,7 +368,8 @@ class RLAgent:
         """
         Load agent state.
 
-        :param path: Path to load the agent from
+        Args:
+            path: Path to load the agent from.
         """
         state = torch.load(path, map_location=self.device)
         self.policy_net.load_state_dict(state["policy_net_state_dict"])
@@ -362,7 +384,8 @@ class RLAgent:
         """
         Get training statistics.
 
-        :return: Dictionary of statistics
+        Returns:
+            Dictionary of statistics.
         """
         return {
             "epsilon": self.epsilon,
