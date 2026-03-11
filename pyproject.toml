@@ -90,15 +90,16 @@ pinnrl-train = "pinnrl.training.train:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pinnrl"]
+exclude = ["pinnrl/numerical_solvers/"]
 
 [tool.hatch.build.targets.sdist]
 include = [
     "pinnrl/",
     "tests/",
-    "config.yaml",
     "README.md",
     "LICENSE",
 ]
+exclude = ["pinnrl/numerical_solvers/"]
 
 [dependency-groups]
 dev = [
