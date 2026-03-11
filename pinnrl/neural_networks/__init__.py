@@ -3,7 +3,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.config import Config
+    from pinnrl.config import Config
 
 from .autoencoder import AutoEncoder
 from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType

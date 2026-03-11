@@ -1667,9 +1667,9 @@ def update_solution_visualizations(experiment, time_point):
         import torch
 
         sys.path.append(".")
-        from src.neural_networks import PINNModel
-        from src.pdes.pde_base import PDEConfig
-        from src.utils.utils import plot_solution
+        from pinnrl.neural_networks import PINNModel
+        from pinnrl.pdes.pde_base import PDEConfig
+        from pinnrl.utils.utils import plot_solution
 
         model_path = os.path.join(experiment, "final_model.pt")
         config_path = os.path.join(experiment, "config.yaml")
@@ -1724,15 +1724,15 @@ def update_solution_visualizations(experiment, time_point):
 
         if pde is None:
             if "allen" in pde_type and "cahn" in pde_type:
-                from src.pdes.allen_cahn import AllenCahnEquation
+                from pinnrl.pdes.allen_cahn import AllenCahnEquation
 
                 pde = AllenCahnEquation(config=pde_config)
             elif "cahn" in pde_type and "hilliard" in pde_type:
-                from src.pdes.cahn_hilliard import CahnHilliardEquation
+                from pinnrl.pdes.cahn_hilliard import CahnHilliardEquation
 
                 pde = CahnHilliardEquation(config=pde_config)
             elif "black" in pde_type or "scholes" in pde_type:
-                from src.pdes.black_scholes import BlackScholesEquation
+                from pinnrl.pdes.black_scholes import BlackScholesEquation
 
                 pde = BlackScholesEquation(config=pde_config)
             else:
@@ -1742,7 +1742,7 @@ def update_solution_visualizations(experiment, time_point):
         # Load model — infer architecture from checkpoint state_dict
         # because saved config.yaml may not match actual trained weights
         device = torch.device("cpu")
-        from src.config import Config, ModelConfig
+        from pinnrl.config import Config, ModelConfig
 
         saved_model = config.get("model", {})
         architecture = saved_model.get("architecture", "feedforward")

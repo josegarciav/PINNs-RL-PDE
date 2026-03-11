@@ -31,7 +31,7 @@ pip install pinnrl
 Launch the web dashboard:
 
 ```bash
-python src/main.py
+pinnrl-dashboard
 ```
 
 Open [http://127.0.0.1:8050/](http://127.0.0.1:8050/) in your browser. You will see the dashboard landing page:

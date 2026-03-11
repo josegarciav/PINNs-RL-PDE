@@ -4,7 +4,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from src.rl.rl_agent import CollocationRLAgent, DQNNetwork, RLAgent
+from pinnrl.rl.rl_agent import CollocationRLAgent, DQNNetwork, RLAgent
 
 DEVICE = torch.device("cpu")
 STATE_DIM = 2

@@ -989,7 +989,7 @@ class PDEBase:
         """
         try:
             # Import the PINNModel class.
-            from src.neural_networks import PINNModel
+            from pinnrl.neural_networks import PINNModel
 
             # Determine the current PDE type. Default to "wave" if not specified.
             # Access configuration attributes safely since PDEConfig may not

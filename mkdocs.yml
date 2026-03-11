@@ -46,7 +46,7 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: [src]
+          paths: [pinnrl]
           options:
             docstring_style: google
             show_source: true

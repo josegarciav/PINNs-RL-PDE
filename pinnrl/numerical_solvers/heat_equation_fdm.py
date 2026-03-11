@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import torch
 
-from src.pdes.heat_equation import HeatEquation
-from src.pdes.pde_base import PDEConfig
+from pinnrl.pdes.heat_equation import HeatEquation
+from pinnrl.pdes.pde_base import PDEConfig
 
 
 @dataclass
