@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import torch
 
-from src.utils.utils import (
+from pinnrl.utils.utils import (
     generate_collocation_points,
     load_model,
     save_model,
@@ -51,7 +51,7 @@ class TestSetupLogging:
 
     def test_logger_name(self, tmp_path):
         logger = setup_logging(str(tmp_path / "logs"))
-        assert logger.name == "src.utils.utils"
+        assert logger.name == "pinnrl.utils.utils"
 
 
 # ---------------------------------------------------------------------------

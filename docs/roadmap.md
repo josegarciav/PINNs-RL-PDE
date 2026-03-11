@@ -56,6 +56,7 @@ Core solver with 9 PDEs, 7 architectures, RL adaptive sampling, and a Dash dashb
 | `mkdocstrings` API reference from docstrings | Done | 2 | 1 | 1 |
 | Jupyter tutorial: RL vs uniform sampling | Done | 2 | 3 | 2 |
 | PyPI release (`pip install pinnrl`) | To do | 2 | 2 | 1 |
+| Linkedin post | To do | 1 | 2 | 1 |
 
 **Remaining priority:** PyPI release — prerequisite for researchers using `pinnrl` as a dependency.
 
@@ -78,6 +79,7 @@ Extends scientific capability with methods actively used in the PINN research co
 | Stratified + RAR sampling benchmarks vs RL | To do | 2 | 3 | 3 |
 | `pinnrl-benchmark` CLI subcommand | To do | 2 | 2 | 2 |
 | Configurable loss functions (MSE, MAE, Huber) | To do | 1 | 2 | 1 |
+| Linkedin post | To do | 1 | 2 | 1 |
 
 **On inverse problems:** Recovering unknown PDE parameters (e.g., identifying `alpha` in the heat equation from noisy sensor data) is one of the highest-value capabilities PINNs offer over classical solvers. Implementation path: add a `trainable_parameters` field to `PDEConfig`, modify `PDEBase.compute_residual` to use `nn.Parameter` tensors, add a data-fitting loss term, and expose via `--mode inverse` CLI flag.
 
@@ -100,6 +102,7 @@ Makes the RL adaptive sampler a first-class, benchmarked feature rather than an 
 | Per-PDE RL configuration presets (tuned defaults) | To do | 2 | 2 | 2 |
 | Dashboard: live RL reward + sampling density | To do | 2 | 2 | 3 |
 | Reproducible benchmark artifacts (seeds, configs, logs) | To do | 1 | 3 | 1 |
+| Linkedin post | To do | 1 | 2 | 1 |
 
 **On the benchmark paper:** A rigorous comparison of RL-based adaptive sampling against RAR and uniform strategies across all nine PDEs, with fixed compute budgets, would be a publishable contribution. Key metrics: L2 error at convergence, wall-clock time to target loss, and collocation efficiency (accuracy per point). This is `pinnrl`'s strongest scientific differentiator.
 
@@ -121,6 +124,7 @@ Stable API, production packaging, community infrastructure, and validation again
 | Docker image with GPU support | To do | 2 | 1 | 1 |
 | Citation metadata (CITATION.cff, Zenodo DOI) | To do | 1 | 2 | 1 |
 | Community forum or GitHub Discussions | To do | 1 | 1 | 1 |
+| Linkedin post | To do | 1 | 2 | 1 |
 
 ---
 

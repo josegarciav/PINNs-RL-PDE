@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def run_dashboard(port=8050):
     """Run the dashboard module."""
     try:
-        from src.dashboard import app
+        from pinnrl.dashboard import app
 
         print(f"\nStarting PINNs-RL-PDE Dashboard on port {port}")
         print(f"Open http://127.0.0.1:{port}/ in your browser")

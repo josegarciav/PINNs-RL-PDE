@@ -4,18 +4,18 @@ import numpy as np
 import pytest
 import torch
 
-from src.neural_networks import FeedForwardNetwork
-from src.pdes.allen_cahn import AllenCahnEquation
-from src.pdes.black_scholes import BlackScholesEquation
-from src.pdes.burgers_equation import BurgersEquation
-from src.pdes.cahn_hilliard import CahnHilliardEquation
-from src.pdes.convection_equation import ConvectionEquation
-from src.pdes.heat_equation import HeatEquation
-from src.pdes.kdv_equation import KdVEquation
-from src.pdes.pde_base import PDEConfig
-from src.pdes.pendulum_equation import PendulumEquation
-from src.pdes.wave_equation import WaveEquation
-from src.rl.rl_agent import RLAgent
+from pinnrl.neural_networks import FeedForwardNetwork
+from pinnrl.pdes.allen_cahn import AllenCahnEquation
+from pinnrl.pdes.black_scholes import BlackScholesEquation
+from pinnrl.pdes.burgers_equation import BurgersEquation
+from pinnrl.pdes.cahn_hilliard import CahnHilliardEquation
+from pinnrl.pdes.convection_equation import ConvectionEquation
+from pinnrl.pdes.heat_equation import HeatEquation
+from pinnrl.pdes.kdv_equation import KdVEquation
+from pinnrl.pdes.pde_base import PDEConfig
+from pinnrl.pdes.pendulum_equation import PendulumEquation
+from pinnrl.pdes.wave_equation import WaveEquation
+from pinnrl.rl.rl_agent import RLAgent
 from tests.unit_tests.test_utils import create_pde_from_config
 
 

@@ -3,8 +3,8 @@ import unittest
 import torch
 import torch.nn as nn
 
-from src.pdes.heat_equation import HeatEquation
-from src.rl.rl_agent import CollocationRLAgent, RLAgent
+from pinnrl.pdes.heat_equation import HeatEquation
+from pinnrl.rl.rl_agent import CollocationRLAgent, RLAgent
 from tests.unit_tests.test_utils import create_pde_from_config
 
 

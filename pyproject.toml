@@ -56,6 +56,7 @@ dev = [
     "mypy>=1.5.0",
     "pre-commit>=3.4.0",
     "pydocstyle>=6.3.0",
+    "twine>=5.0.0",
 ]
 viz = [
     "dash>=3.0.0",
@@ -85,19 +86,20 @@ Issues = "https://github.com/josegarciav/PINNs-RL-PDE/issues"
 Changelog = "https://github.com/josegarciav/PINNs-RL-PDE/blob/main/CHANGELOG.md"
 
 [project.scripts]
-pinnrl-train = "scripts.train:main"
+pinnrl-train = "pinnrl.training.train:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["pinnrl"]
+exclude = ["pinnrl/numerical_solvers/"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "src/",
+    "pinnrl/",
     "tests/",
-    "config.yaml",
     "README.md",
     "LICENSE",
 ]
+exclude = ["pinnrl/numerical_solvers/"]
 
 [dependency-groups]
 dev = [
@@ -131,14 +133,14 @@ select = ["E", "F", "W", "I"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["src"]
+known-first-party = ["pinnrl"]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["pinnrl"]
 omit = [
-    "src/dashboard.py",
-    "src/main.py",
-    "src/training/train.py",
+    "pinnrl/dashboard.py",
+    "pinnrl/main.py",
+    "pinnrl/training/train.py",
 ]
 
 [tool.coverage.report]
@@ -153,7 +155,7 @@ exclude_lines = [
 [tool.pydocstyle]
 convention = "google"
 match = ".*\\.py"
-match-dir = "src"
+match-dir = "pinnrl"
 
 [tool.mypy]
 python_version = "3.10"

@@ -5,7 +5,7 @@ The pinnrl dashboard is a browser-based interface for configuring, launching, an
 ## Launching the dashboard
 
 ```bash
-python src/main.py
+pinnrl-dashboard
 ```
 
 Open [http://127.0.0.1:8050/](http://127.0.0.1:8050/) in your browser.
@@ -51,7 +51,7 @@ Configure and launch a new training run directly from the browser.
 **Model Configuration** (left column):
 
 - **PDE** — select from 9 supported PDEs. Changing the PDE auto-selects the recommended architecture.
-- **Architecture** — choose from 6 neural architectures (feedforward, resnet, siren, fourier, attention, autoencoder).
+- **Architecture** — choose from 7 neural architectures (feedforward, resnet, siren, fourier, fno, attention, autoencoder).
 - **Device** — CPU, MPS (Apple Silicon), or CUDA.
 - **RL Adaptive Sampling** — toggle to enable the DQN-based collocation agent.
 

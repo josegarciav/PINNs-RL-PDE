@@ -203,8 +203,8 @@ For benchmarking, run all four strategies on the same PDE and compare:
 ## Usage
 
 ```python
-from src.pdes.heat_equation import HeatEquation
-from src.rl.rl_agent import RLAgent
+from pinnrl.pdes.heat_equation import HeatEquation
+from pinnrl.rl.rl_agent import RLAgent
 
 pde = HeatEquation(...)
 

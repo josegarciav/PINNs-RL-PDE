@@ -35,7 +35,7 @@ jobs:
 
       - name: Check coverage (>=80%)
         if: matrix.python-version == '3.11'
-        run: uv run pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=80
+        run: uv run pytest tests/ --cov=pinnrl --cov-report=term-missing --cov-fail-under=80
 
   lint:
     name: Lint & format
@@ -54,13 +54,13 @@ jobs:
         run: uv sync --frozen --group dev
 
       - name: Run black
-        run: uv run black --check src/ tests/
+        run: uv run black --check pinnrl/ tests/
 
       - name: Run ruff
-        run: uv run ruff check src/ tests/
+        run: uv run ruff check pinnrl/ tests/
 
       - name: Check docstrings (pydocstyle)
-        run: uv run pydocstyle src/
+        run: uv run pydocstyle pinnrl/
 
       - name: Verify uv.lock is up to date
         run: uv lock --check

@@ -101,12 +101,12 @@ Tests are discovered automatically from the `tests/` directory. The suite covers
 
 Adding a new PDE requires changes in five places. The steps below walk through each one using a hypothetical `FisherEquation` (reaction-diffusion) as a running example.
 
-### Step 1 — Create `src/pdes/my_equation.py`
+### Step 1 — Create `pinnrl/pdes/my_equation.py`
 
-All PDEs subclass `PDEBase` from `src/pdes/pde_base.py`. Create a new file:
+All PDEs subclass `PDEBase` from `pinnrl/pdes/pde_base.py`. Create a new file:
 
 ```bash
-touch src/pdes/fisher_equation.py
+touch pinnrl/pdes/fisher_equation.py
 ```
 
 The required structure is:
@@ -119,7 +119,7 @@ The required structure is:
 import torch
 from .pde_base import PDEBase, PDEConfig
 from typing import Dict, Any, Optional
-from src.rl_agent import RLAgent
+from pinnrl.rl_agent import RLAgent
 
 
 class FisherEquation(PDEBase):
@@ -274,13 +274,13 @@ pde_configs:
 
 Also add `"fisher"` to the `pde_type` options comment at the top of the file.
 
-### Step 3 — Register in `src/interactive_trainer.py`
+### Step 3 — Register in `pinnrl/dashboard.py`
 
 Add an import and register the class in the `create_pde()` method:
 
 ```python
 # At the top of the file, with the other imports:
-from src.pdes.fisher_equation import FisherEquation
+from pinnrl.pdes.fisher_equation import FisherEquation
 
 # Inside create_pde(), in the pde_class_map dictionary:
 pde_class_map = {
@@ -291,12 +291,12 @@ pde_class_map = {
 }
 ```
 
-### Step 4 — Register in `src/interactive_trainer.py`
+### Step 4 — Register in `pinnrl/dashboard.py`
 
 Add the import and case in `create_pde()`:
 
 ```python
-from src.pdes.fisher_equation import FisherEquation
+from pinnrl.pdes.fisher_equation import FisherEquation
 
 # Inside create_pde(), in the pde_class_map dictionary:
 pde_class_map = {
@@ -363,16 +363,16 @@ After all steps are complete, verify end-to-end with:
 
 ```bash
 uv run pytest tests/unit_tests/test_pdes.py::TestFisherEquation -v
-uv run python src/interactive_trainer.py  # Select "Fisher" PDE and "Fourier" architecture
+pinnrl-dashboard  # Select "Fisher" PDE and "Fourier" architecture
 ```
 
 ---
 
 ## 4. How to add a new neural network architecture
 
-### Step 1 — Create `src/neural_networks/my_arch.py`
+### Step 1 — Create `pinnrl/neural_networks/my_arch.py`
 
-All architectures subclass `BaseNetwork` from `src/neural_networks/base_network.py`. The `BaseNetwork` class inherits from `torch.nn.Module` and provides `save_state()`, `load_state()`, `count_parameters()`, and `_prepare_input()`. You only need to implement `__init__` and `forward`.
+All architectures subclass `BaseNetwork` from `pinnrl/neural_networks/base_network.py`. The `BaseNetwork` class inherits from `torch.nn.Module` and provides `save_state()`, `load_state()`, `count_parameters()`, and `_prepare_input()`. You only need to implement `__init__` and `forward`.
 
 ```python
 """Kolmogorov-Arnold Network (KAN) approximation for PINNs."""
@@ -419,7 +419,7 @@ Docstring conventions:
 - Note any hyperparameter choices that differ from defaults.
 - Keep the file under 300 lines; split into a separate file for helper modules (e.g., `kan_layers.py`).
 
-### Step 2 — Add to `src/neural_networks/__init__.py`
+### Step 2 — Add to `pinnrl/neural_networks/__init__.py`
 
 ```python
 from .kan_network import KANNetwork
@@ -431,7 +431,7 @@ __all__ = [
 ]
 ```
 
-### Step 3 — Add to `PINNModel` factory in `src/neural_networks/__init__.py`
+### Step 3 — Add to `PINNModel` factory in `pinnrl/neural_networks/__init__.py`
 
 Inside the `PINNModel.__init__` method, add a branch:
 
@@ -484,8 +484,8 @@ pinnrl uses **black** for formatting and **ruff** for linting. Both are enforced
 To format and lint before committing:
 
 ```bash
-uv run black src/ tests/ scripts/
-uv run ruff check src/ tests/ scripts/ --fix
+uv run black pinnrl/ tests/
+uv run ruff check pinnrl/ tests/ --fix
 ```
 
 ---
@@ -515,7 +515,7 @@ A well-scoped PR does one thing — adds a PDE, fixes a bug, or improves a speci
 - New PDE classes must include tests for `compute_residual` shape, `initial_condition` finiteness, and `boundary_condition` correctness.
 - New architecture classes must include a forward-pass test covering batch sizes of 1 and 64.
 - Bug fixes must include a regression test that fails before the fix and passes after.
-- Coverage for `src/` should not decrease. Check with `uv run pytest --cov=src --cov-report=term-missing`.
+- Coverage for `pinnrl/` should not decrease. Check with `uv run pytest --cov=pinnrl --cov-report=term-missing`.
 
 ### Commit message convention
 
