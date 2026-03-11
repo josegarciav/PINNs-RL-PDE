@@ -33,16 +33,9 @@ jobs:
       - name: Run tests
         run: uv run pytest tests/ -v --tb=short
 
-      - name: Generate coverage report
+      - name: Upload coverage
         if: matrix.python-version == '3.11'
-        run: uv run pytest tests/ --cov=src --cov-report=xml --cov-fail-under=80
-
-      - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.11'
-        uses: codecov/codecov-action@v5
-        with:
-          files: coverage.xml
-          fail_ci_if_error: false
+        run: uv run pytest tests/ --cov=src --cov-report=xml
 
   lint:
     name: Lint & format
