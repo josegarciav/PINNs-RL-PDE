@@ -32,7 +32,7 @@ uv run pre-commit install
 
 ```bash
 uv run pytest tests/ -v
-uv run pytest tests/ --cov=src --cov-report=term-missing  # with coverage
+uv run pytest tests/ --cov=pinnrl --cov-report=term-missing  # with coverage
 ```
 
 ## Device
@@ -61,8 +61,8 @@ All behavior is controlled by `config.yaml`. Key sections:
 ```bash
 uv run python -c "
 import torch
-from src.config import ModelConfig
-from src.neural_networks import PINNModel
+from pinnrl.config import ModelConfig
+from pinnrl.neural_networks import PINNModel
 cfg = ModelConfig(input_dim=2, hidden_dim=64, output_dim=1, num_layers=3, activation='tanh', architecture='fourier')
 model = PINNModel(cfg)
 print('OK —', model(torch.rand(4, 2)).shape)

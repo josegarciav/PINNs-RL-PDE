@@ -78,11 +78,11 @@ Available PDE keys: `heat`, `wave`, `burgers`, `kdv`, `convection`, `allen_cahn`
 
 ```python
 import torch
-from src.config import Config, ModelConfig, TrainingConfig, EarlyStoppingConfig
-from src.neural_networks import PINNModel
-from src.pdes.heat_equation import HeatEquation
-from src.pdes.pde_base import PDEConfig
-from src.training.trainer import PDETrainer
+from pinnrl.config import Config, ModelConfig, TrainingConfig, EarlyStoppingConfig
+from pinnrl.neural_networks import PINNModel
+from pinnrl.pdes.heat_equation import HeatEquation
+from pinnrl.pdes.pde_base import PDEConfig
+from pinnrl.training.trainer import PDETrainer
 
 device = torch.device("cpu")
 

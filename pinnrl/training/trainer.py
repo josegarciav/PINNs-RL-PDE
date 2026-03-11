@@ -13,12 +13,12 @@ import torch.optim as optim
 from plotly.subplots import make_subplots
 from tqdm import tqdm
 
-from src.components.adaptive_weights import AdaptiveLossWeights
-from src.utils.utils import save_training_metrics
+from pinnrl.components.adaptive_weights import AdaptiveLossWeights
+from pinnrl.utils.utils import save_training_metrics
 
 if TYPE_CHECKING:
-    from src.config import Config
-    from src.pdes.pde_base import PDEBase
+    from pinnrl.config import Config
+    from pinnrl.pdes.pde_base import PDEBase
 
 matplotlib.use("agg")
 import matplotlib.pyplot as plt
@@ -1363,7 +1363,7 @@ class PDETrainer:
         """
         try:
             # Import required components
-            from src.numerical_solvers.heat_equation_fdm import HeatEquationFDM
+            from pinnrl.numerical_solvers.heat_equation_fdm import HeatEquationFDM
 
             # Check if the PDE type is supported
             pde_type = getattr(self.pde, "pde_type", None)

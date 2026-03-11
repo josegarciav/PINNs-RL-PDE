@@ -7,9 +7,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 if TYPE_CHECKING:
-    from src.neural_networks import PINNModel
-    from src.pdes.pde_base import PDEBase
-    from src.rl.rl_agent import RLAgent
+    from pinnrl.neural_networks import PINNModel
+    from pinnrl.pdes.pde_base import PDEBase
+    from pinnrl.rl.rl_agent import RLAgent
 
 import numpy as np
 import plotly.graph_objects as go

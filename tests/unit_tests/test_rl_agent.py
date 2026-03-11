@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from src.rl.rl_agent import CollocationRLAgent, DQNNetwork, ReplayBuffer, RLAgent
+from pinnrl.rl.rl_agent import CollocationRLAgent, DQNNetwork, ReplayBuffer, RLAgent
 
 
 class TestRLAgent(unittest.TestCase):

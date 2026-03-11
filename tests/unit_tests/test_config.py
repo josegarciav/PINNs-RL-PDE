@@ -13,7 +13,7 @@ import pytest
 import torch
 import yaml
 
-from src.config import (
+from pinnrl.config import (
     DEFAULT_CONFIG_PATH,
     AdaptiveWeightsConfig,
     Config,

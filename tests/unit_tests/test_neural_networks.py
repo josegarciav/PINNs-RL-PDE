@@ -2,8 +2,8 @@ import unittest
 
 import torch
 
-from src.config import Config, ModelConfig
-from src.neural_networks import (
+from pinnrl.config import Config, ModelConfig
+from pinnrl.neural_networks import (
     SIREN,
     AttentionNetwork,
     AutoEncoder,
@@ -18,7 +18,7 @@ from src.neural_networks import (
 )
 
 # Import FeedForwardBlock from attention module instead of feedforward
-from src.neural_networks.attention import FeedForwardBlock
+from pinnrl.neural_networks.attention import FeedForwardBlock
 
 
 def _make_config(
@@ -256,7 +256,7 @@ class TestNeuralNetworks(unittest.TestCase):
         # Verify FNO architecture components
         self.assertEqual(len(model.blocks), config["num_blocks"])
         for block in model.blocks:
-            from src.neural_networks.fno import FNOBlock
+            from pinnrl.neural_networks.fno import FNOBlock
 
             self.assertIsInstance(block, FNOBlock)
 

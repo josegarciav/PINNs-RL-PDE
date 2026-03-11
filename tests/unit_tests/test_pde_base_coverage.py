@@ -6,14 +6,14 @@ import tempfile
 import pytest
 import torch
 
-from src.config import (
+from pinnrl.config import (
     AdaptiveWeightsConfig,
     EarlyStoppingConfig,
     LearningRateSchedulerConfig,
     TrainingConfig,
 )
-from src.pdes.heat_equation import HeatEquation
-from src.pdes.pde_base import PDEBase, PDEConfig
+from pinnrl.pdes.heat_equation import HeatEquation
+from pinnrl.pdes.pde_base import PDEBase, PDEConfig
 
 DEVICE = torch.device("cpu")
 
@@ -60,7 +60,7 @@ def _make_heat_pde(**overrides):
 
 def _simple_model():
     """Tiny feedforward model for testing."""
-    from src.config import Config, ModelConfig
+    from pinnrl.config import Config, ModelConfig
 
     config = Config.__new__(Config)
     config.device = DEVICE
@@ -73,7 +73,7 @@ def _simple_model():
         architecture="feedforward",
     )
     config.training = _training_config()
-    from src.neural_networks import PINNModel
+    from pinnrl.neural_networks import PINNModel
 
     return PINNModel(config=config, device=DEVICE)
 
@@ -586,7 +586,7 @@ def test_validate_parameters_base():
 
 def test_create_pde_factory():
     """pdes/__init__.py create_pde covers the if/elif chain."""
-    from src.pdes import create_pde
+    from pinnrl.pdes import create_pde
 
     tc = _training_config()
     # Each PDE type with its compatible IC
@@ -620,7 +620,7 @@ def test_create_pde_factory():
 
 def test_create_pde_cahn_hilliard():
     """create_pde for cahn_hilliard (2D PDE)."""
-    from src.pdes import create_pde
+    from pinnrl.pdes import create_pde
 
     cfg = PDEConfig(
         name="cahn_hilliard",
@@ -641,7 +641,7 @@ def test_create_pde_cahn_hilliard():
 
 def test_create_pde_unknown():
     """create_pde raises for unknown PDE type."""
-    from src.pdes import create_pde
+    from pinnrl.pdes import create_pde
 
     cfg = PDEConfig(
         name="unknown",
@@ -665,7 +665,7 @@ def test_create_pde_unknown():
 
 def test_sample_uniform_2d():
     """2D uniform sampling returns multi-column x."""
-    from src.pdes.cahn_hilliard import CahnHilliardEquation as CahnHilliard
+    from pinnrl.pdes.cahn_hilliard import CahnHilliardEquation as CahnHilliard
 
     cfg = PDEConfig(
         name="cahn_hilliard",
@@ -687,7 +687,7 @@ def test_sample_uniform_2d():
 
 def test_sample_stratified_2d():
     """2D stratified sampling returns multi-column x."""
-    from src.pdes.cahn_hilliard import CahnHilliardEquation as CahnHilliard
+    from pinnrl.pdes.cahn_hilliard import CahnHilliardEquation as CahnHilliard
 
     cfg = PDEConfig(
         name="cahn_hilliard",

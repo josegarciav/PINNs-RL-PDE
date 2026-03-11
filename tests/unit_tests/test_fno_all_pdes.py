@@ -10,8 +10,8 @@ import unittest
 
 import torch
 
-from src.config import Config, ModelConfig
-from src.neural_networks import PINNModel
+from pinnrl.config import Config, ModelConfig
+from pinnrl.neural_networks import PINNModel
 from tests.unit_tests.test_utils import create_pde_from_config
 
 ALL_PDES = [

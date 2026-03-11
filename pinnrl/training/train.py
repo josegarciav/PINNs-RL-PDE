@@ -18,7 +18,7 @@ import yaml
 # Ensure project root is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.config import (
+from pinnrl.config import (
     AdaptiveWeightsConfig,
     Config,
     EarlyStoppingConfig,
@@ -26,10 +26,10 @@ from src.config import (
     ModelConfig,
     TrainingConfig,
 )
-from src.neural_networks import PINNModel
-from src.pdes.pde_base import PDEConfig
-from src.rl.rl_agent import RLAgent
-from src.training.trainer import PDETrainer
+from pinnrl.neural_networks import PINNModel
+from pinnrl.pdes.pde_base import PDEConfig
+from pinnrl.rl.rl_agent import RLAgent
+from pinnrl.training.trainer import PDETrainer
 
 # PDE name -> (module, class, config key)
 PDE_REGISTRY = {
@@ -298,7 +298,7 @@ def run_training(config_dict, device):
         torch.save(model.state_dict(), experiment_dir / "final_model.pt")
 
         # Save metrics
-        from src.utils.utils import save_training_metrics
+        from pinnrl.utils.utils import save_training_metrics
 
         final_metadata = {
             **metadata,
