@@ -1,29 +1,34 @@
 # Roadmap
 
-This document tracks what has been built, what is in progress, and what is planned for `pinnrl`. Items within each milestone are ordered by combined score of adoption difficulty, scientific impact, and innovation level.
+This document tracks what has been built, what is in progress, and what is planned for `pinnrl`. Items within each milestone are scored on three dimensions (1–5 scale):
+
+- **Adoption difficulty** — how hard it is to implement and ship
+- **Scientific impact** — value to the PINN research community
+- **Innovation level** — novelty relative to existing tools
 
 ---
 
-## v0.1 — Stabilization
+## v0.1 — Current (Stabilization)
 
 **Status: Complete**
 
 Core solver with 9 PDEs, 7 architectures, RL adaptive sampling, and a Dash dashboard for experiment management.
 
-| Item | Status | Notes |
-|---|---|---|
-| 9 PDEs trainable end-to-end | Done | Heat, Wave, Burgers, Convection, KdV, Allen-Cahn, Cahn-Hilliard, Black-Scholes, Pendulum |
-| 7 neural architectures | Done | FeedForward, ResNet, SIREN, Fourier Features, FNO, Attention, AutoEncoder |
-| DQN-based RL collocation agent | Done | Epsilon-greedy exploration, experience replay |
-| Adaptive loss weighting (LRW + RBW) | Done | Residual-balancing and learning-rate-based strategies |
-| Cosine LR annealing + early stopping | Done | Configurable via `config.yaml` |
-| Dash training dashboard | Done | 3 tabs: Live Training (monitor + new training), Comparison, Collocation & Solution |
-| Experiment directory with config snapshots | Done | Timestamped dirs, metadata.json, .running marker |
-| Apple Silicon (MPS) + CUDA + CPU | Done | Auto-detected or `--device` override |
-| Exact analytical solutions for all 9 PDEs | Done | L2 and max-error validation built in |
-| Headless CLI training script | Done | `src/training/train.py` with full hyperparameter overrides |
+| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
+|---|---|---|---|---|
+| 9 PDEs × 7 architectures trainable end-to-end | Done | 2 | 3 | 2 |
+| DQN-based RL collocation agent (epsilon-greedy) | Done | 3 | 4 | 3 |
+| Adaptive loss weighting (LRW and RBW strategies) | Done | 2 | 3 | 2 |
+| Cosine LR annealing + early stopping | Done | 1 | 2 | 1 |
+| Plotly/Matplotlib solution visualization | Done | 1 | 1 | 1 |
+| Dash real-time training dashboard | Done | 2 | 2 | 2 |
+| Experiment directory with config snapshots | Done | 1 | 1 | 1 |
+| Apple Silicon (MPS) + CUDA + CPU support | Done | 2 | 1 | 1 |
+| Exact analytical solutions for all 9 PDEs | Done | 1 | 2 | 1 |
+| Headless CLI training script | Done | 1 | 1 | 1 |
 
 **Known limitations:**
+
 - RL agent requires per-PDE tuning; not plug-and-play
 - 2D PDEs partially configured but not fully validated
 - No formal benchmark against FEM/FDM solvers
@@ -34,24 +39,24 @@ Core solver with 9 PDEs, 7 architectures, RL adaptive sampling, and a Dash dashb
 
 **Status: Mostly complete**
 
-| Item | Status | Notes |
-|---|---|---|
-| MkDocs site with Material theme | Done | `mkdocs.yml` + `docs/` directory, auto-built via GitHub Actions |
-| Start Here guide (5-minute onboarding) | Done | `docs/start_here.md` with dashboard screenshots |
-| Installation & Setup guide | Done | `docs/setup.md` — uv, pip, GPU configuration |
-| Architecture overview | Done | `docs/ARCHITECTURE.md` — system diagram, PINN training loop |
-| Sampling strategies guide | Done | `docs/sampling_strategies.md` |
-| Dashboard guide | Done | `docs/dashboard.md` — all tabs, screenshots, workflow |
-| CONTRIBUTING.md and issue templates | Done | Bug report + new PDE templates |
-| Versioned changelog (CHANGELOG.md) | Done | Full bug-fix record from v0.1 |
-| GitHub Actions CI: lint + test on push | Done | `.github/workflows/checks.yml` |
-| GitHub Actions: docs deployment | Done | `.github/workflows/docs.yml` |
-| Jupyter tutorial: heat equation | Done | `notebooks/01_your_first_pinn.ipynb` |
-| Jupyter tutorial: architecture comparison | Done | `notebooks/02_comparing_architectures.ipynb` |
-| `mkdocstrings` API reference from docstrings | Not started | Needs docstring coverage pass across src/ |
-| Jupyter tutorial: RL vs uniform sampling | Not started | Requires standardized benchmark harness |
-| PyPI release (`pip install pinnrl`) | Not started | Blocked on final API stabilization |
-| Code coverage badge (>80% target) | Not started | CI runs tests but no coverage reporting yet |
+| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
+|---|---|---|---|---|
+| MkDocs site with Material theme | Done | 1 | 1 | 1 |
+| Start Here guide (5-minute onboarding) | Done | 1 | 1 | 1 |
+| Installation & Setup guide | Done | 1 | 1 | 1 |
+| Architecture overview | Done | 1 | 2 | 1 |
+| Sampling strategies guide | Done | 1 | 2 | 1 |
+| Dashboard guide | Done | 1 | 1 | 1 |
+| CONTRIBUTING.md and issue templates | Done | 1 | 1 | 1 |
+| Versioned changelog (CHANGELOG.md) | Done | 1 | 1 | 1 |
+| GitHub Actions CI: lint + test on push | Done | 1 | 1 | 1 |
+| GitHub Actions: docs deployment | Done | 1 | 1 | 1 |
+| Jupyter tutorial: heat equation | Done | 1 | 2 | 1 |
+| Jupyter tutorial: architecture comparison | Done | 1 | 2 | 1 |
+| `mkdocstrings` API reference from docstrings | To do | 2 | 1 | 1 |
+| Jupyter tutorial: RL vs uniform sampling | To do | 2 | 3 | 2 |
+| PyPI release (`pip install pinnrl`) | To do | 2 | 2 | 1 |
+| Code coverage badge (>80% target) | To do | 1 | 1 | 1 |
 
 **Remaining priority:** PyPI release — prerequisite for researchers using `pinnrl` as a dependency.
 
@@ -63,17 +68,17 @@ Core solver with 9 PDEs, 7 architectures, RL adaptive sampling, and a Dash dashb
 
 Extends scientific capability with methods actively used in the PINN research community.
 
-| Item | Status | Notes |
-|---|---|---|
-| FNO architecture (spectral convolutions) | Done | `src/neural_networks/fno.py`, tested against all 9 PDEs |
-| RAR (Residual-Adaptive Refinement) sampling | Not started | |
-| L-BFGS second-order optimizer | Not started | Adam warm-up → L-BFGS refinement pattern |
-| 2D PDEs: full heat_2d training | Not started | Config exists, residual computation needs fixing |
-| Inverse problems: parameter identification | Not started | Highest scientific value — see details below |
-| Formal FDM comparison on heat/wave | Not started | |
-| Stratified + RAR sampling benchmarks vs RL | Not started | |
-| `pinnrl-benchmark` CLI subcommand | Not started | |
-| Configurable loss functions (MSE, MAE, Huber) | Not started | |
+| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
+|---|---|---|---|---|
+| FNO architecture (spectral convolutions) | Done | 3 | 4 | 3 |
+| Inverse problems: parameter identification | To do | 3 | 5 | 4 |
+| L-BFGS second-order optimizer | To do | 2 | 3 | 2 |
+| 2D PDEs: full heat_2d training | To do | 3 | 4 | 2 |
+| RAR (Residual-Adaptive Refinement) sampling | To do | 2 | 3 | 2 |
+| Formal FDM comparison on heat/wave | To do | 2 | 3 | 2 |
+| Stratified + RAR sampling benchmarks vs RL | To do | 2 | 3 | 3 |
+| `pinnrl-benchmark` CLI subcommand | To do | 2 | 2 | 2 |
+| Configurable loss functions (MSE, MAE, Huber) | To do | 1 | 2 | 1 |
 
 **On inverse problems:** Recovering unknown PDE parameters (e.g., identifying `alpha` in the heat equation from noisy sensor data) is one of the highest-value capabilities PINNs offer over classical solvers. Implementation path: add a `trainable_parameters` field to `PDEConfig`, modify `PDEBase.compute_residual` to use `nn.Parameter` tensors, add a data-fitting loss term, and expose via `--mode inverse` CLI flag.
 
@@ -87,15 +92,15 @@ Extends scientific capability with methods actively used in the PINN research co
 
 Makes the RL adaptive sampler a first-class, benchmarked feature rather than an experimental add-on.
 
-| Item | Status | Notes |
-|---|---|---|
-| Formal RL benchmark: RL vs uniform vs RAR vs stratified | Not started | Publishable contribution — see details below |
-| Policy gradient (PPO) alternative to DQN | Not started | |
-| Curriculum learning: coarse-to-fine collocation | Not started | |
-| RL agent pre-training on synthetic PDE families | Not started | |
-| Per-PDE RL configuration presets (tuned defaults) | Not started | |
-| Dashboard: live RL reward + sampling density | Not started | |
-| Reproducible benchmark artifacts (seeds, configs, logs) | Not started | |
+| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
+|---|---|---|---|---|
+| Formal RL benchmark: RL vs uniform vs RAR vs stratified | To do | 3 | 5 | 4 |
+| Policy gradient (PPO) alternative to DQN | To do | 3 | 3 | 3 |
+| Curriculum learning: coarse-to-fine collocation | To do | 3 | 4 | 4 |
+| RL agent pre-training on synthetic PDE families | To do | 4 | 4 | 5 |
+| Per-PDE RL configuration presets (tuned defaults) | To do | 2 | 2 | 2 |
+| Dashboard: live RL reward + sampling density | To do | 2 | 2 | 3 |
+| Reproducible benchmark artifacts (seeds, configs, logs) | To do | 1 | 3 | 1 |
 
 **On the benchmark paper:** A rigorous comparison of RL-based adaptive sampling against RAR and uniform strategies across all nine PDEs, with fixed compute budgets, would be a publishable contribution. Key metrics: L2 error at convergence, wall-clock time to target loss, and collocation efficiency (accuracy per point). This is `pinnrl`'s strongest scientific differentiator.
 
@@ -107,16 +112,16 @@ Makes the RL adaptive sampler a first-class, benchmarked feature rather than an 
 
 Stable API, production packaging, community infrastructure, and validation against established solvers.
 
-| Item | Status | Notes |
-|---|---|---|
-| Benchmark vs FEniCS (FEM) on heat, wave, Burgers | Not started | |
-| Benchmark vs DeepXDE on matching problem set | Not started | |
-| Plugin system for custom PDEs and architectures | Not started | |
-| Stable public API with semantic versioning | Not started | |
-| Conda-forge package | Not started | |
-| Docker image with GPU support | Not started | |
-| Citation metadata (CITATION.cff, Zenodo DOI) | Not started | |
-| Community forum or GitHub Discussions | Not started | |
+| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
+|---|---|---|---|---|
+| Benchmark vs FEniCS (FEM) on heat, wave, Burgers | To do | 3 | 4 | 3 |
+| Benchmark vs DeepXDE on matching problem set | To do | 3 | 4 | 2 |
+| Plugin system for custom PDEs and architectures | To do | 4 | 3 | 3 |
+| Stable public API with semantic versioning | To do | 2 | 2 | 1 |
+| Conda-forge package | To do | 2 | 1 | 1 |
+| Docker image with GPU support | To do | 2 | 1 | 1 |
+| Citation metadata (CITATION.cff, Zenodo DOI) | To do | 1 | 2 | 1 |
+| Community forum or GitHub Discussions | To do | 1 | 1 | 1 |
 
 ---
 
