@@ -213,6 +213,7 @@ def run_training(config_dict, device):
             "num_heads",
             "hidden_dims",
             "latent_dim",
+            "modes",
             "periodic",
         ]:
             if key in arch_config:

@@ -1774,6 +1774,7 @@ def update_solution_visualizations(experiment, time_point):
                 "num_blocks",
                 "latent_dim",
                 "hidden_dims",
+                "modes",
                 "periodic",
             ]:
                 val = inferred.get(key, saved_model.get(key))
