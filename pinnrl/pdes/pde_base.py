@@ -81,7 +81,7 @@ class PDEBase:
         for class_name in alternative_class_names:
             try:
                 # Import from module, assuming module name is lowercase
-                module_path = f"src.pdes.{pde_type.lower().replace('equation', '')}"
+                module_path = f"pinnrl.pdes.{pde_type.lower().replace('equation', '')}"
                 if module_path.endswith("_"):
                     module_path = module_path[:-1]
 

@@ -1707,12 +1707,12 @@ def update_solution_visualizations(experiment, time_point):
 
         # Create PDE instance
         pde_classes = {
-            "heat": ("src.pdes.heat_equation", "HeatEquation"),
-            "wave": ("src.pdes.wave_equation", "WaveEquation"),
-            "burgers": ("src.pdes.burgers_equation", "BurgersEquation"),
-            "convection": ("src.pdes.convection_equation", "ConvectionEquation"),
-            "kdv": ("src.pdes.kdv_equation", "KdVEquation"),
-            "pendulum": ("src.pdes.pendulum_equation", "PendulumEquation"),
+            "heat": ("pinnrl.pdes.heat_equation", "HeatEquation"),
+            "wave": ("pinnrl.pdes.wave_equation", "WaveEquation"),
+            "burgers": ("pinnrl.pdes.burgers_equation", "BurgersEquation"),
+            "convection": ("pinnrl.pdes.convection_equation", "ConvectionEquation"),
+            "kdv": ("pinnrl.pdes.kdv_equation", "KdVEquation"),
+            "pendulum": ("pinnrl.pdes.pendulum_equation", "PendulumEquation"),
         }
 
         pde = None

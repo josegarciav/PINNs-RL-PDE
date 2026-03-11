@@ -55,10 +55,10 @@ Examples:
     python src/main.py
 
   Specify dashboard port:
-    python src/main.py --port 8051
+    pinnrl-dashboard --port 8051
 
   Run headless training directly:
-    python -m src.training.train --pde "Heat Equation" --arch fourier --epochs 500
+    pinnrl-train --pde "Heat Equation" --arch fourier --epochs 500
         """,
     )
     parser.add_argument(

@@ -33,15 +33,15 @@ from pinnrl.training.trainer import PDETrainer
 
 # PDE name -> (module, class, config key)
 PDE_REGISTRY = {
-    "Heat Equation": ("src.pdes.heat_equation", "HeatEquation", "heat"),
-    "Burgers Equation": ("src.pdes.burgers_equation", "BurgersEquation", "burgers"),
-    "Wave Equation": ("src.pdes.wave_equation", "WaveEquation", "wave"),
-    "Convection Equation": ("src.pdes.convection_equation", "ConvectionEquation", "convection"),
-    "KdV Equation": ("src.pdes.kdv_equation", "KdVEquation", "kdv"),
-    "Pendulum Equation": ("src.pdes.pendulum_equation", "PendulumEquation", "pendulum"),
-    "Allen-Cahn Equation": ("src.pdes.allen_cahn", "AllenCahnEquation", "allen_cahn"),
-    "Cahn-Hilliard Equation": ("src.pdes.cahn_hilliard", "CahnHilliardEquation", "cahn_hilliard"),
-    "Black-Scholes Equation": ("src.pdes.black_scholes", "BlackScholesEquation", "black_scholes"),
+    "Heat Equation": ("pinnrl.pdes.heat_equation", "HeatEquation", "heat"),
+    "Burgers Equation": ("pinnrl.pdes.burgers_equation", "BurgersEquation", "burgers"),
+    "Wave Equation": ("pinnrl.pdes.wave_equation", "WaveEquation", "wave"),
+    "Convection Equation": ("pinnrl.pdes.convection_equation", "ConvectionEquation", "convection"),
+    "KdV Equation": ("pinnrl.pdes.kdv_equation", "KdVEquation", "kdv"),
+    "Pendulum Equation": ("pinnrl.pdes.pendulum_equation", "PendulumEquation", "pendulum"),
+    "Allen-Cahn Equation": ("pinnrl.pdes.allen_cahn", "AllenCahnEquation", "allen_cahn"),
+    "Cahn-Hilliard Equation": ("pinnrl.pdes.cahn_hilliard", "CahnHilliardEquation", "cahn_hilliard"),
+    "Black-Scholes Equation": ("pinnrl.pdes.black_scholes", "BlackScholesEquation", "black_scholes"),
 }
 
 
