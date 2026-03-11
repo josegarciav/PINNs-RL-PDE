@@ -106,14 +106,14 @@ Default weights in `config.yaml`: `residual=15.0`, `boundary=20.0`, `initial=10.
 ```python
 import torch
 import yaml
-from src.config import Config, ModelConfig, TrainingConfig
-from src.neural_networks import PINNModel
-from src.training.trainer import PDETrainer
-from src.pdes.heat_equation import HeatEquation
-from src.pdes.pde_base import PDEConfig
+from pinnrl.config import Config, ModelConfig, TrainingConfig
+from pinnrl.neural_networks import PINNModel
+from pinnrl.training.trainer import PDETrainer
+from pinnrl.pdes.heat_equation import HeatEquation
+from pinnrl.pdes.pde_base import PDEConfig
 
 # Load default config
-from src.config import DEFAULT_CONFIG_PATH
+from pinnrl.config import DEFAULT_CONFIG_PATH
 with open(DEFAULT_CONFIG_PATH) as f:
     cfg = yaml.safe_load(f)
 

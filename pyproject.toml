@@ -56,6 +56,7 @@ dev = [
     "mypy>=1.5.0",
     "pre-commit>=3.4.0",
     "pydocstyle>=6.3.0",
+    "twine>=5.0.0",
 ]
 viz = [
     "dash>=3.0.0",
