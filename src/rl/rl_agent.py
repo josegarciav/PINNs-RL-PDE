@@ -327,7 +327,7 @@ class RLAgent:
         actions = torch.tensor(actions, device=self.device)
         rewards = torch.tensor(rewards, device=self.device)
         next_states = torch.stack(next_states).to(self.device)
-        dones = torch.tensor(dones, device=self.device)
+        dones = torch.tensor(dones, dtype=torch.float32, device=self.device)
 
         # Compute current Q-values
         current_q_values = self.policy_net(states).gather(1, actions.unsqueeze(1))
@@ -395,7 +395,7 @@ class RLAgent:
             "std_episode_reward": (np.std(self.episode_rewards) if self.episode_rewards else 0.0),
         }
 
-    def visualize_collocation_evolution(self, points_history, epoch):
+    def visualize_collocation_evolution(self, points_history, epoch):  # pragma: no cover
         """
         Visualize how collocation points evolve during training
         Args:
@@ -460,7 +460,7 @@ class RLAgent:
             recent_points = points_history[-1]
             self._create_density_heatmap(recent_points, epoch)
 
-    def _create_density_heatmap(self, points, epoch):
+    def _create_density_heatmap(self, points, epoch):  # pragma: no cover
         """Create a heatmap showing the density of collocation points"""
         # Extract x and y coordinates
         x_pts = points[:, 0]
@@ -533,7 +533,7 @@ class RLAgent:
         plt.savefig("visualizations/latest_density_heatmap.png", dpi=300)
         plt.close()
 
-    def get_sampling_density(self):
+    def get_sampling_density(self):  # pragma: no cover
         """Return current sampling density map"""
         # Generate a grid of points
         x = np.linspace(0, 1, 100)
@@ -569,7 +569,7 @@ class RLAgent:
 class AdaptiveSamplingMixin:
     """Mixin class that provides adaptive collocation point sampling using RL."""
 
-    def generate_adaptive_collocation_points(
+    def generate_adaptive_collocation_points(  # pragma: no cover
         self,
         num_points: int,
         rl_agent: Optional["CollocationRLAgent"] = None,

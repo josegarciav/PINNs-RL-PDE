@@ -7,7 +7,6 @@ EvaluationConfig, LoggingConfig, PathsConfig, and bug-fix validations.
 
 import os
 import tempfile
-from copy import deepcopy
 from unittest.mock import patch
 
 import pytest
@@ -29,10 +28,10 @@ from src.config import (
     TrainingConfig,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write_yaml(path: str, data: dict) -> str:
     """Write a dict as YAML to *path* and return the path."""
@@ -103,7 +102,12 @@ def _minimal_config_dict() -> dict:
             "memory_size": 1000,
             "batch_size": 32,
             "target_update": 10,
-            "reward_weights": {"residual": 1.0, "boundary": 1.0, "initial": 1.0, "exploration": 0.1},
+            "reward_weights": {
+                "residual": 1.0,
+                "boundary": 1.0,
+                "initial": 1.0,
+                "exploration": 0.1,
+            },
         },
         "evaluation": {
             "resolution": 50,
@@ -136,6 +140,7 @@ def _config_from_dict(data: dict) -> Config:
 # ===========================================================================
 # 1. Config — default loading from config.yaml
 # ===========================================================================
+
 
 class TestConfigDefaultLoading:
     """Loading from the project's config.yaml should populate every attribute."""
@@ -209,6 +214,7 @@ class TestConfigNonexistentPath:
 # ===========================================================================
 # 2. Config._validate_config()
 # ===========================================================================
+
 
 class TestValidateConfig:
 
@@ -348,6 +354,7 @@ class TestValidateConfig:
 # 3. Config._get_device()
 # ===========================================================================
 
+
 class TestGetDevice:
 
     def test_cpu_always_returns_cpu(self):
@@ -398,6 +405,7 @@ class TestGetDevice:
 # 4. Config.to_dict() — round-trip
 # ===========================================================================
 
+
 class TestToDict:
 
     def test_to_dict_returns_dict(self):
@@ -408,7 +416,16 @@ class TestToDict:
     def test_to_dict_has_all_top_level_keys(self):
         cfg = _config_from_dict(_minimal_config_dict())
         result = cfg.to_dict()
-        expected_keys = {"device", "model", "pde", "training", "rl", "evaluation", "logging", "paths"}
+        expected_keys = {
+            "device",
+            "model",
+            "pde",
+            "training",
+            "rl",
+            "evaluation",
+            "logging",
+            "paths",
+        }
         assert expected_keys == set(result.keys())
 
     def test_to_dict_model_section(self):
@@ -460,6 +477,7 @@ class TestToDict:
 # 5. Config.get() and Config.__getitem__()
 # ===========================================================================
 
+
 class TestConfigDictAccess:
 
     def test_getitem_model(self):
@@ -497,6 +515,7 @@ class TestConfigDictAccess:
 # 6. ModelConfig
 # ===========================================================================
 
+
 class TestModelConfig:
 
     def test_basic_construction(self):
@@ -520,22 +539,34 @@ class TestModelConfig:
 
     def test_resnet_sets_num_blocks(self):
         mc = ModelConfig(
-            input_dim=2, hidden_dim=64, output_dim=1, num_layers=6,
-            activation="tanh", architecture="resnet",
+            input_dim=2,
+            hidden_dim=64,
+            output_dim=1,
+            num_layers=6,
+            activation="tanh",
+            architecture="resnet",
         )
         assert mc.num_blocks == 6
 
     def test_fno_sets_num_blocks(self):
         mc = ModelConfig(
-            input_dim=2, hidden_dim=64, output_dim=1, num_layers=4,
-            activation="gelu", architecture="fno",
+            input_dim=2,
+            hidden_dim=64,
+            output_dim=1,
+            num_layers=4,
+            activation="gelu",
+            architecture="fno",
         )
         assert mc.num_blocks == 4
 
     def test_feedforward_no_num_blocks(self):
         mc = ModelConfig(
-            input_dim=2, hidden_dim=64, output_dim=1, num_layers=4,
-            activation="tanh", architecture="feedforward",
+            input_dim=2,
+            hidden_dim=64,
+            output_dim=1,
+            num_layers=4,
+            activation="tanh",
+            architecture="feedforward",
         )
         assert not hasattr(mc, "num_blocks") or mc.num_blocks is None
 
@@ -568,6 +599,7 @@ class TestModelConfig:
 # ===========================================================================
 # 7. TrainingConfig
 # ===========================================================================
+
 
 class TestTrainingConfig:
 
@@ -645,6 +677,7 @@ class TestTrainingConfig:
 # 8. AdaptiveWeightsConfig
 # ===========================================================================
 
+
 class TestAdaptiveWeightsConfig:
 
     def test_defaults(self):
@@ -671,6 +704,7 @@ class TestAdaptiveWeightsConfig:
 # ===========================================================================
 # 9. All dataclasses instantiation
 # ===========================================================================
+
 
 class TestDataclassInstantiation:
 
@@ -752,6 +786,7 @@ class TestDataclassInstantiation:
 # 10. Bug-fix validations
 # ===========================================================================
 
+
 class TestBugFixLossWeightsNormalization:
     """Bug #12: loss_weights key 'pde' should be normalized to 'residual'."""
 
@@ -808,6 +843,7 @@ class TestBugFixOptimizerConfigLR:
 # ===========================================================================
 # Architecture-specific param injection (Bug #1)
 # ===========================================================================
+
 
 class TestArchitectureParamInjection:
     """Bug #1: Architecture-specific params should be injected into ModelConfig."""
@@ -882,6 +918,7 @@ class TestArchitectureParamInjection:
 # PDE-specific config selection
 # ===========================================================================
 
+
 class TestPDEConfigSelection:
 
     def test_heat_pde_selected_by_default(self):
@@ -917,6 +954,7 @@ class TestPDEConfigSelection:
 # ===========================================================================
 # Scheduler config loading
 # ===========================================================================
+
 
 class TestSchedulerConfigLoading:
 
@@ -955,6 +993,7 @@ class TestSchedulerConfigLoading:
 # ===========================================================================
 # Default config.yaml values from real project config
 # ===========================================================================
+
 
 class TestDefaultConfigYAMLValues:
     """Verify specific values from the project's config.yaml are loaded correctly."""

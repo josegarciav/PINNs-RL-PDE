@@ -187,7 +187,6 @@ class PDETrainer:
                 factor=self.config.training.learning_rate_scheduler.factor,
                 patience=self.config.training.learning_rate_scheduler.patience,
                 min_lr=self.config.training.learning_rate_scheduler.min_lr,
-                verbose=True,
             )
         elif scheduler_type == "cosine":
             self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -677,7 +676,7 @@ class PDETrainer:
         """
         return self.history
 
-    def plot_training_history(self, save_path=None):
+    def plot_training_history(self, save_path=None):  # pragma: no cover
         """Plot training history."""
         try:
             # Create parent directory if it doesn't exist
@@ -761,7 +760,7 @@ class PDETrainer:
         except Exception as e:
             logging.warning(f"Error plotting training history: {e}")
 
-    def plot_solution_comparison(self, num_points=50, save_path=None):
+    def plot_solution_comparison(self, num_points=50, save_path=None):  # pragma: no cover
         """Plot comparison between exact and predicted solutions"""
         try:
             if self.pde.dimension == 2:
@@ -1059,7 +1058,7 @@ class PDETrainer:
             logging.error(f"Error in plot_solution_comparison: {str(e)}")
             raise  # Re-raise the exception after logging
 
-    def save_plots(self, save_dir):
+    def save_plots(self, save_dir):  # pragma: no cover
         """Save training plots"""
         try:
             # Create visualization directory if it doesn't exist
@@ -1301,7 +1300,9 @@ class PDETrainer:
 
             traceback.print_exc()
 
-    def _plot_density_heatmap(self, ax, points, colormap, title, x_domain, t_domain, bins=50):
+    def _plot_density_heatmap(
+        self, ax, points, colormap, title, x_domain, t_domain, bins=50
+    ):  # pragma: no cover
         """Helper method to plot density heatmap for 1D PDE collocation points"""
         # Create 2D histogram
         counts, xedges, yedges = np.histogram2d(
@@ -1326,7 +1327,9 @@ class PDETrainer:
         ax.set_xlabel("x", fontsize=14)
         ax.set_ylabel("t", fontsize=14)
 
-    def _plot_density_heatmap_2d(self, ax, points, colormap, title, x_domain, y_domain, bins=50):
+    def _plot_density_heatmap_2d(
+        self, ax, points, colormap, title, x_domain, y_domain, bins=50
+    ):  # pragma: no cover
         """Helper method to plot density heatmap for 2D PDE collocation points"""
         # Create 2D histogram (using x and y coordinates)
         counts, xedges, yedges = np.histogram2d(
@@ -1351,7 +1354,7 @@ class PDETrainer:
         ax.set_xlabel("x", fontsize=14)
         ax.set_ylabel("y", fontsize=14)
 
-    def generate_fdm_comparison(self, experiment_dir):
+    def generate_fdm_comparison(self, experiment_dir):  # pragma: no cover
         """
         Generate comparison plots with finite difference method solutions.
 

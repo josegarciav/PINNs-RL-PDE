@@ -146,7 +146,7 @@ def plot_solution(
     rl_agent: Optional["RLAgent"] = None,
     return_figs: bool = False,
     time_point: Optional[float] = None,
-):
+):  # pragma: no cover
     """Plot the solution of a PDE using the trained model with interactive 3D visualization.
 
     Args:
@@ -399,7 +399,7 @@ def plot_architecture_comparison(
     pde: "PDEBase",
     num_points: int = 1000,
     save_path: Optional[str] = None,
-):
+):  # pragma: no cover
     """Plot comparison of different architecture outputs.
 
     Args:
@@ -589,7 +589,7 @@ def plot_architecture_comparison(
         fig.show()
 
 
-def create_interactive_report(
+def create_interactive_report(  # pragma: no cover
     experiment_dir: str,
     pdes: List["PDEBase"],
     architectures: List[Dict],

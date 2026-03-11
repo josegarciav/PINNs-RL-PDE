@@ -16,7 +16,6 @@ from src.utils.utils import (
     setup_logging,
 )
 
-
 # ---------------------------------------------------------------------------
 # setup_logging
 # ---------------------------------------------------------------------------
@@ -90,9 +89,7 @@ class TestGenerateCollocationPoints:
         assert points.shape == (10000, 1)
 
     def test_negative_domain(self):
-        points = generate_collocation_points(
-            500, (-10.0, -5.0), device=torch.device("cpu")
-        )
+        points = generate_collocation_points(500, (-10.0, -5.0), device=torch.device("cpu"))
         assert points.min().item() >= -10.0
         assert points.max().item() <= -5.0
 
@@ -244,9 +241,7 @@ class TestLoadModel:
         torch.save(model.state_dict(), path)
 
         new_model = torch.nn.Linear(2, 1)
-        _, loaded_config = load_model(
-            new_model, path, device=torch.device("cpu"), load_config=True
-        )
+        _, loaded_config = load_model(new_model, path, device=torch.device("cpu"), load_config=True)
         assert loaded_config is None
 
     def test_model_in_eval_mode(self, tmp_path):
@@ -280,9 +275,7 @@ class TestLoadModel:
         save_model(model, path, config=config)
 
         new_model = torch.nn.Linear(2, 1)
-        loaded_model, loaded_config = load_model(
-            new_model, path, device=torch.device("cpu")
-        )
+        loaded_model, loaded_config = load_model(new_model, path, device=torch.device("cpu"))
         assert torch.allclose(loaded_model.weight, torch.tensor([[0.42, 0.42]]))
         assert torch.allclose(loaded_model.bias, torch.tensor([-0.1]))
         assert loaded_config == config

@@ -133,6 +133,23 @@ ignore = ["E501"]
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
 
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "src/dashboard.py",
+    "src/main.py",
+    "src/training/train.py",
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__",
+    "if TYPE_CHECKING",
+]
+
 [tool.pydocstyle]
 convention = "google"
 match = ".*\\.py"

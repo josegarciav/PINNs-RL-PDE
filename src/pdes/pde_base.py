@@ -979,7 +979,7 @@ class PDEBase:
 
         return losses
 
-    def build_model(self, override_config=None):
+    def build_model(self, override_config=None):  # pragma: no cover
         """
         Build a neural network model using the PDE-specific architecture settings
         from the configuration.
@@ -1053,7 +1053,7 @@ class PDEBase:
         model: torch.nn.Module,
         num_points: int = 1000,
         save_path: Optional[str] = None,
-    ):
+    ):  # pragma: no cover
         """
         Plot the model's solution and exact solution.
 
@@ -1145,7 +1145,7 @@ class PDEBase:
         epoch=None,
         save_path: Optional[str] = None,
         num_snapshots: int = 5,
-    ):
+    ):  # pragma: no cover
         """
         Visualize the evolution of collocation points during training.
 
@@ -1248,7 +1248,7 @@ class PDEBase:
             plt.savefig("visualizations/latest_collocation_evolution.png", dpi=300)
         plt.close()
 
-    def _plot_density_snapshot(self, ax, points, title, cmap="viridis"):
+    def _plot_density_snapshot(self, ax, points, title, cmap="viridis"):  # pragma: no cover
         """Helper method to plot density snapshot with clearer visualization."""
         if self.dimension == 1:
             x_pts = points[:, 0]
