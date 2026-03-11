@@ -379,9 +379,14 @@ class HeatEquation(PDEBase):
 
         # Get number of points from config or use default
         if self.config.training is not None:
-            num_boundary_points = self.config.training.get(
-                "num_boundary_points", self.config.training.num_collocation_points // 10
-            )
+            training = self.config.training
+            if isinstance(training, dict):
+                default_bp = training.get("num_collocation_points", len(x)) // 10
+                num_boundary_points = training.get("num_boundary_points", default_bp)
+            else:
+                num_boundary_points = getattr(
+                    training, "num_boundary_points", training.num_collocation_points // 10
+                )
         else:
             num_boundary_points = max(len(x) // 10, 10)
 
@@ -438,9 +443,14 @@ class HeatEquation(PDEBase):
 
         # Get number of initial points from config or use default
         if self.config.training is not None:
-            num_initial = self.config.training.get(
-                "num_initial_points", self.config.training.num_collocation_points // 5
-            )
+            training = self.config.training
+            if isinstance(training, dict):
+                default_ip = training.get("num_collocation_points", len(x)) // 5
+                num_initial = training.get("num_initial_points", default_ip)
+            else:
+                num_initial = getattr(
+                    training, "num_initial_points", training.num_collocation_points // 5
+                )
         else:
             num_initial = max(len(x) // 5, 10)
 
@@ -478,7 +488,15 @@ class HeatEquation(PDEBase):
         # Compute smoothness loss if weight > 0
         smoothness_loss = torch.tensor(0.0, device=self.device)
         if self.config.training is not None:
-            smoothness_weight = self.config.training.loss_weights.get("smoothness", 0.0)
+            training = self.config.training
+            if isinstance(training, dict):
+                lw = training.get("loss_weights", {})
+            else:
+                lw = getattr(training, "loss_weights", {}) or {}
+            if isinstance(lw, dict):
+                smoothness_weight = lw.get("smoothness", 0.0)
+            else:
+                smoothness_weight = getattr(lw, "smoothness", 0.0)
         else:
             smoothness_weight = 0.0
         if smoothness_weight > 0:
@@ -493,11 +511,15 @@ class HeatEquation(PDEBase):
         }
 
         # Use adaptive weights if enabled
-        if (
-            self.config.training is not None
-            and hasattr(self.config.training, "adaptive_weights")
-            and self.config.training.adaptive_weights.enabled
-        ):
+        _aw_enabled = False
+        if self.config.training is not None:
+            training = self.config.training
+            if isinstance(training, dict):
+                aw = training.get("adaptive_weights", {})
+                _aw_enabled = aw.get("enabled", False) if isinstance(aw, dict) else False
+            elif hasattr(training, "adaptive_weights") and training.adaptive_weights is not None:
+                _aw_enabled = getattr(training.adaptive_weights, "enabled", False)
+        if _aw_enabled:
             # The total loss will be computed by the trainer using adaptive weights
             # We just return the individual components
             losses["total"] = (
@@ -506,9 +528,19 @@ class HeatEquation(PDEBase):
         else:
             # Otherwise use fixed weights from config
             if self.config.training is not None:
-                w_pde = self.config.training.loss_weights.get("pde", 1.0)
-                w_bc = self.config.training.loss_weights.get("boundary", 10.0)
-                w_ic = self.config.training.loss_weights.get("initial", 10.0)
+                training = self.config.training
+                if isinstance(training, dict):
+                    lw = training.get("loss_weights", {})
+                else:
+                    lw = getattr(training, "loss_weights", {}) or {}
+                if isinstance(lw, dict):
+                    w_pde = lw.get("pde", lw.get("residual", 1.0))
+                    w_bc = lw.get("boundary", 10.0)
+                    w_ic = lw.get("initial", 10.0)
+                else:
+                    w_pde = getattr(lw, "pde", getattr(lw, "residual", 1.0))
+                    w_bc = getattr(lw, "boundary", 10.0)
+                    w_ic = getattr(lw, "initial", 10.0)
             else:
                 w_pde, w_bc, w_ic = 1.0, 10.0, 10.0
             total_loss = (
