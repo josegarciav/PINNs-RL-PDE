@@ -56,9 +56,7 @@ Core solver with 9 PDEs, 7 architectures, RL adaptive sampling, and a Dash dashb
 | `mkdocstrings` API reference from docstrings | Done | 2 | 1 | 1 |
 | Jupyter tutorial: RL vs uniform sampling | Done | 2 | 3 | 2 |
 | PyPI release (`pip install pinnrl`) | Done | 2 | 2 | 1 |
-| Linkedin post | To do | 1 | 2 | 1 |
-
-**Remaining:** LinkedIn announcement post.
+| Linkedin post | Done | 1 | 2 | 1 |
 
 ---
 
@@ -119,12 +117,35 @@ Stable API, production packaging, community infrastructure, and validation again
 | Benchmark vs FEniCS (FEM) on heat, wave, Burgers | To do | 3 | 4 | 3 |
 | Benchmark vs DeepXDE on matching problem set | To do | 3 | 4 | 2 |
 | Plugin system for custom PDEs and architectures | To do | 4 | 3 | 3 |
+| Dashboard: custom PDE builder with guided input | To do | 4 | 4 | 4 |
 | Stable public API with semantic versioning | To do | 2 | 2 | 1 |
 | Conda-forge package | To do | 2 | 1 | 1 |
 | Docker image with GPU support | To do | 2 | 1 | 1 |
 | Citation metadata (CITATION.cff, Zenodo DOI) | To do | 1 | 2 | 1 |
 | Community forum or GitHub Discussions | To do | 1 | 1 | 1 |
 | Linkedin post | To do | 1 | 2 | 1 |
+
+**On the custom PDE builder:** Users should be able to define and solve arbitrary PDEs directly from the dashboard without writing code. The builder would provide a guided form for specifying the PDE expression, spatial and temporal domain bounds, dimensionality, initial conditions, and boundary conditions. Input validation must enforce logical constraints: dimensional consistency between the PDE and its IC/BCs, well-posedness checks (e.g., ensuring boundary conditions cover the full domain boundary), and compatibility with `pinnrl`'s supported differential operators. The builder does not require an analytical solution — it runs the PINN in forward mode and reports residual convergence. This lowers the barrier for experimentalists and educators who want to test PINNs on their own equations without touching Python.
+
+---
+
+## v1.1 — Platform and Monetization
+
+**Target:** H2 2027
+
+Explores hosting `pinnrl` as a service and sustainable monetization paths.
+
+| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
+|---|---|---|---|---|
+| Cloud-hosted solver API (REST/gRPC) | To do | 4 | 3 | 3 |
+| Hosted dashboard with user accounts and job queues | To do | 5 | 3 | 3 |
+| Freemium tier: free CPU training, paid GPU acceleration | To do | 3 | 2 | 2 |
+| Paid features: priority queues, extended training budgets, private experiment storage | To do | 3 | 2 | 2 |
+| API key management and usage metering | To do | 3 | 1 | 1 |
+| Platform or marketplace distribution (API-as-a-service) | To do | 4 | 2 | 3 |
+| Linkedin post | To do | 1 | 2 | 1 |
+
+**On monetization:** `pinnrl` could be offered as a hosted platform where users submit PDE configurations and receive trained solutions via API or web dashboard. A freemium model — free CPU-bound training with paid tiers for GPU acceleration, longer training budgets, batch jobs, and private experiment storage — aligns with how research tools monetize. Distribution through API marketplaces or integration platforms broadens reach beyond the Python-native audience. The custom PDE builder (v1.0) becomes the natural frontend for this service.
 
 ---
 
@@ -156,7 +177,17 @@ Ranked by expected return — combining scientific demand, differentiation from 
 
 **Status: Partially addressed.** The dashboard now supports experiment launching, monitoring, comparison, and solution visualization. Remaining opportunities: live residual heatmaps, RL reward visualization, and static HTML export for sharing.
 
-### 5. High-dimensional PDEs
+### 5. Custom PDE builder (dashboard)
+
+**Scientific demand:** High among experimentalists and educators. Users who have their own PDEs but lack Python fluency currently cannot use `pinnrl` without writing glue code. A guided dashboard form that validates dimensional consistency, boundary coverage, and operator support would make `pinnrl` accessible to a much wider audience — particularly in teaching settings where students explore PDE behavior interactively.
+
+**Implementation path:** Build a form-based PDE specification UI in the dashboard. Parse user-supplied PDE expressions (e.g., via `sympy` or a lightweight DSL) into the residual computation graph. Validate IC/BC coverage against the declared domain. No analytical solution required — training runs in forward mode with residual-only convergence metrics.
+
+### 6. Platform monetization
+
+**Scientific demand:** Low directly, but high strategic value. Hosting `pinnrl` as a cloud service removes installation friction and enables users without local GPU hardware to train models. A freemium API model (free CPU, paid GPU) creates a sustainable funding path for continued development. Marketplace or platform distribution expands reach to users outside the Python/ML ecosystem.
+
+### 7. High-dimensional PDEs
 
 **Scientific demand:** Growing. PINNs avoid the curse of dimensionality that limits FEM. PDEs in 10–100 dimensions arise in multi-asset options pricing, quantum many-body problems, and stochastic control. All 7 architectures already support arbitrary `input_dim`. The work is in defining sampling strategies, boundary conditions, and reference solutions for high-dimensional test cases.
 
