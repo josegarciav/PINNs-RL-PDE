@@ -1,0 +1,1814 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Physics-Informed Neural Networks with RL-based adaptive sampling for solving PDEs">
+      
+      
+      
+        <link rel="canonical" href="https://josegarciav.github.io/PINNs-RL-PDE/ARCHITECTURE/">
+      
+      
+        <link rel="prev" href="../dashboard/">
+      
+      
+        <link rel="next" href="../sampling_strategies/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Architecture - pinnrl</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#architecture-overview" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="pinnrl" class="md-header__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            pinnrl
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../start_here/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Architecture
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../sampling_strategies/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Sampling Strategies
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="pinnrl" class="md-nav__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    pinnrl
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../start_here/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start Here
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation & Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#high-level-system-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High-level system diagram
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-pinn-training-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The PINN training loop
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The PINN training loop">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#loss-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loss components
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optimizer-and-scheduler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimizer and scheduler
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#neural-architectures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neural architectures
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Neural architectures">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#feedforward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FeedForward
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resnet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ResNet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#siren-sinusoidal-representation-networks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SIREN (Sinusoidal Representation Networks)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fourier-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fourier Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fourier-neural-operator-fno" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fourier Neural Operator (FNO)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#self-attention-transformer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Attention Transformer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#autoencoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Autoencoder
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rl-adaptive-sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RL adaptive sampling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RL adaptive sampling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dqn-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DQN architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-enable-rl-sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to enable RL sampling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#loss-weighting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loss weighting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Loss weighting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adaptive-weights-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adaptive weights (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-injection-how-configyaml-maps-to-modelconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config injection: how config.yaml maps to ModelConfig
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sampling_strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/neural_networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neural Networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/pdes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDEs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/rl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL Agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Utilities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#high-level-system-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High-level system diagram
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-pinn-training-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The PINN training loop
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The PINN training loop">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#loss-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loss components
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optimizer-and-scheduler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimizer and scheduler
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#neural-architectures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neural architectures
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Neural architectures">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#feedforward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FeedForward
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resnet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ResNet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#siren-sinusoidal-representation-networks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SIREN (Sinusoidal Representation Networks)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fourier-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fourier Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fourier-neural-operator-fno" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fourier Neural Operator (FNO)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#self-attention-transformer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Attention Transformer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#autoencoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Autoencoder
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rl-adaptive-sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RL adaptive sampling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RL adaptive sampling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dqn-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DQN architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-enable-rl-sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to enable RL sampling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#loss-weighting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loss weighting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Loss weighting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adaptive-weights-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adaptive weights (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-injection-how-configyaml-maps-to-modelconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config injection: how config.yaml maps to ModelConfig
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="architecture-overview">Architecture Overview<a class="headerlink" href="#architecture-overview" title="Permanent link">&para;</a></h1>
+<h2 id="high-level-system-diagram">High-level system diagram<a class="headerlink" href="#high-level-system-diagram" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>┌──────────────┐
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>│  config.yaml │  ← Device, architecture hyperparameters, PDE parameters,
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>└──────┬───────┘    training settings, RL configuration
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>       │
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>       ▼
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>┌──────────────┐      ┌─────────────────────┐
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│   PDEConfig  │─────▶│   PDE Instance       │  HeatEquation, BurgersEquation, ...
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>└──────────────┘      │  (PDEBase subclass)  │  Owns: domain, BCs, ICs, exact solution,
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>                      └──────────┬──────────┘  residual computation via autograd
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>                                 │
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>┌──────────────┐                 │
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│  ModelConfig │──┐              │
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>└──────────────┘  │              │
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>                  ▼              ▼
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>              ┌──────────────────────────────┐
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>              │          PINNModel           │  Wraps one of seven architectures:
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>              │  (neural_networks/__init__)  │  FeedForward / ResNet / SIREN /
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>              └──────────────┬───────────────┘  Fourier / FNO / Attention / Autoencoder
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>                             │
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>              ┌──────────────▼───────────────┐
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>              │          PDETrainer          │  Training loop, loss aggregation,
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>              │        (trainer.py)          │  LR scheduler, early stopping,
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>              └──────────────┬───────────────┘  visualization, metrics saving
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>                             │
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>              ┌──────────────▼───────────────┐     ┌──────────────────────┐
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>              │       CollocationRLAgent     │◀────│  Residual reward     │
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>              │         (rl_agent.py)        │     │  from PDE evaluation │
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>              │    DQN-based point selector  │     └──────────────────────┘
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>              └──────────────────────────────┘
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>                             │
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>                             ▼
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>              ┌──────────────────────────────┐
+<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>              │       experiments/           │  config snapshot, loss curves,
+<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>              │  Timestamped output dir      │  solution plots, metrics.json
+<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>              └──────────────────────────────┘
+</code></pre></div>
+<hr />
+<h2 id="the-pinn-training-loop">The PINN training loop<a class="headerlink" href="#the-pinn-training-loop" title="Permanent link">&para;</a></h2>
+<p>Physics-Informed Neural Networks embed physical laws directly into the loss function. The network <code>u_θ(x, t)</code> is trained to minimize a composite loss that penalizes violations of the PDE, its boundary conditions, and its initial condition.</p>
+<h3 id="loss-components">Loss components<a class="headerlink" href="#loss-components" title="Permanent link">&para;</a></h3>
+<p><strong>PDE residual loss</strong> — evaluated at randomly sampled interior collocation points <code>{(x_i, t_i)}</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>L_residual = (1/N_r) * Σ |F[u_θ](x_i, t_i)|²
+</code></pre></div>
+<p>where <code>F[u_θ]</code> is the differential operator applied to the network output. Derivatives are computed with PyTorch autograd (<code>torch.autograd.grad</code>) so the computation graph flows through the network.</p>
+<p>For the heat equation: <code>F[u_θ] = ∂u_θ/∂t − α ∂²u_θ/∂x²</code></p>
+<p><strong>Boundary condition loss</strong> — evaluated at points <code>{(x_b, t_b)}</code> on the domain boundary:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>L_bc = (1/N_b) * Σ |u_θ(x_b, t_b) − g(x_b, t_b)|²
+</code></pre></div>
+<p>where <code>g</code> is the prescribed boundary value (Dirichlet) or flux (Neumann). Periodic BCs enforce <code>u_θ(x_left, t) = u_θ(x_right, t)</code>.</p>
+<p><strong>Initial condition loss</strong> — evaluated at <code>t=0</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>L_ic = (1/N_i) * Σ |u_θ(x_i, 0) − u_0(x_i)|²
+</code></pre></div>
+<p><strong>Total loss:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>L_total = w_r * L_residual + w_b * L_bc + w_i * L_ic + w_s * L_smooth
+</code></pre></div>
+<p>Default weights: <code>w_r = 15.0</code>, <code>w_b = 20.0</code>, <code>w_i = 10.0</code>, <code>w_s = 0.1</code>.</p>
+<h3 id="optimizer-and-scheduler">Optimizer and scheduler<a class="headerlink" href="#optimizer-and-scheduler" title="Permanent link">&para;</a></h3>
+<p>The default optimizer is Adam (<code>lr=0.005</code>, <code>β₁=0.9</code>, <code>β₂=0.999</code>, <code>weight_decay=0.0005</code>). The learning rate follows a cosine annealing schedule (<code>T_max=400</code>, <code>η_min=1e-7</code>). An alternative <code>reduce_lr</code> scheduler is available (ReduceLROnPlateau, <code>factor=0.5</code>, <code>patience=50</code>).</p>
+<p>Early stopping monitors validation loss with <code>patience=100</code> epochs and <code>min_delta=1e-7</code>.</p>
+<hr />
+<h2 id="neural-architectures">Neural architectures<a class="headerlink" href="#neural-architectures" title="Permanent link">&para;</a></h2>
+<p>The seven architectures are registered in <code>pinnrl/neural_networks/__init__.py</code> and selected via the <code>architecture</code> field in <code>ModelConfig</code> or <code>config.yaml</code>.</p>
+<h3 id="feedforward">FeedForward<a class="headerlink" href="#feedforward" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>pinnrl/neural_networks/feedforward.py</code></p>
+<p>A standard multi-layer perceptron with configurable depth and width.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">architectures</span><span class="p">:</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">feedforward</span><span class="p">:</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">hidden_dims</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">128</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">128</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">128</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">128</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">128</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">128</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">128</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># 7 layers</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;tanh&quot;</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nt">dropout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.0</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="nt">layer_norm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p><strong>When to use:</strong>
+- Baseline comparison against more specialized architectures
+- Black-Scholes equation (smooth, low-frequency solution)
+- Problems where interpretability matters more than accuracy
+- Quick prototyping</p>
+<p><strong>Characteristics:</strong> Tanh activation is preferred over ReLU for PDEs because it is smooth (infinitely differentiable), which is required for computing higher-order derivatives via autograd.</p>
+<hr />
+<h3 id="resnet">ResNet<a class="headerlink" href="#resnet" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>pinnrl/neural_networks/resnet.py</code></p>
+<p>A residual network with skip connections. Each block computes <code>H(x) = F(x) + x</code>, helping gradients flow through deep networks.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">architectures</span><span class="p">:</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">resnet</span><span class="p">:</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">hidden_dim</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">512</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">num_blocks</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;tanh&quot;</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nt">dropout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.0</span>
+</code></pre></div>
+<p><strong>When to use:</strong>
+- Burgers equation (shock formation, steep gradients)
+- Cahn-Hilliard equation (higher-order, phase separation)
+- Pendulum (nonlinear dynamics)
+- Any problem where a plain FeedForward fails to converge</p>
+<p><strong>Characteristics:</strong> Skip connections prevent gradient vanishing in deep networks, making ResNet more expressive than FeedForward for the same parameter budget. The 7-block default with <code>hidden_dim=512</code> gives approximately 3.7M parameters.</p>
+<hr />
+<h3 id="siren-sinusoidal-representation-networks">SIREN (Sinusoidal Representation Networks)<a class="headerlink" href="#siren-sinusoidal-representation-networks" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>pinnrl/neural_networks/siren.py</code></p>
+<p>Replaces standard activations with <code>sin(ω₀ · Wx + b)</code>. The frequency parameter <code>ω₀</code> controls the bandwidth of representable functions.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">architectures</span><span class="p">:</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">siren</span><span class="p">:</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="nt">hidden_dims</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">124</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">124</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">124</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">124</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">124</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">124</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">124</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">omega_0</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30.0</span>
+</code></pre></div>
+<p>Weights are initialized with a special scheme (<code>U[-√(6/n)/ω₀, √(6/n)/ω₀]</code>) that preserves the distribution of activations across layers (Sitzmann et al., 2020).</p>
+<p><strong>When to use:</strong>
+- Wave equation (oscillatory, time-periodic solutions)
+- KdV equation (soliton dynamics, multi-scale structure)
+- Any problem with high-frequency spatial or temporal features
+- Implicit neural representations</p>
+<p><strong>Characteristics:</strong> SIREN can represent fine-scale oscillations that tanh networks require exponentially more neurons to approximate. The tradeoff is sensitivity to the <code>omega_0</code> hyperparameter — values between 10 and 30 work for most PDEs in this library.</p>
+<hr />
+<h3 id="fourier-features">Fourier Features<a class="headerlink" href="#fourier-features" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>pinnrl/neural_networks/fourier.py</code></p>
+<p>Applies a random Fourier feature embedding before the MLP layers. Input coordinates <code>(x, t)</code> are lifted to a high-dimensional space via:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>φ(x) = [sin(B·x), cos(B·x)]
+</code></pre></div>
+<p>where <code>B ~ N(0, scale²)</code> is a fixed random matrix sampled at initialization.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">architectures</span><span class="p">:</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">fourier</span><span class="p">:</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="nt">mapping_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">512</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="nt">hidden_dims</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">512</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">512</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">512</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">512</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="nt">scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4.0</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;tanh&quot;</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span><span class="nt">layer_norm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span><span class="nt">periodic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p>The Fourier transform is implemented with TorchScript (<code>@torch.jit.script</code>) for additional inference speed.</p>
+<p><strong>When to use:</strong>
+- Heat equation with periodic boundary conditions
+- Convection equation (transport, phase shifts)
+- Allen-Cahn equation (sharp interfaces)
+- Any problem with periodic BCs or spectral-like accuracy requirements</p>
+<p><strong>Characteristics:</strong> The random Fourier embedding is a kernel approximation of the RBF kernel. The <code>scale</code> parameter controls the frequency bandwidth — larger values capture higher frequencies but may cause spectral aliasing if set too aggressively. <code>scale=4.0</code> is a robust default for most 1D PDEs.</p>
+<hr />
+<h3 id="fourier-neural-operator-fno">Fourier Neural Operator (FNO)<a class="headerlink" href="#fourier-neural-operator-fno" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>pinnrl/neural_networks/fno.py</code></p>
+<p>An operator-learning architecture that performs convolutions in the Fourier domain. Each spectral convolution layer applies a learnable filter in frequency space, retaining only the lowest <code>modes</code> frequencies to capture multi-scale structure efficiently.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">architectures</span><span class="p">:</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">fno</span><span class="p">:</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">hidden_dim</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">256</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="nt">num_blocks</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span><span class="nt">modes</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">16</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;gelu&quot;</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span><span class="nt">dropout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.0</span>
+</code></pre></div>
+<p><strong>When to use:</strong>
+- Multi-scale PDEs where spatial patterns span a wide frequency range
+- Operator learning tasks (generalizing across initial/boundary conditions)
+- Problems where spectral methods traditionally outperform finite differences
+- KdV equation (soliton interactions across scales)</p>
+<p><strong>Characteristics:</strong> FNO learns directly in the frequency domain via FFT, making it naturally suited to periodic or quasi-periodic problems. The <code>modes</code> parameter controls how many Fourier modes are retained — higher values capture finer features but increase memory. With <code>hidden_dim=256</code> and <code>num_blocks=4</code>, the default FNO has approximately 1.1M parameters. Unlike Fourier Features (which use a fixed random projection), FNO learns the spectral filter end-to-end.</p>
+<hr />
+<h3 id="self-attention-transformer">Self-Attention Transformer<a class="headerlink" href="#self-attention-transformer" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>pinnrl/neural_networks/attention.py</code></p>
+<p>A transformer-style architecture where each layer applies multi-head self-attention over the input sequence, followed by a feed-forward block.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">architectures</span><span class="p">:</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">attention</span><span class="p">:</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="nt">hidden_dim</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">124</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="nt">num_layers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">    </span><span class="nt">num_heads</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span><span class="nt">dropout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.0</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">    </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;gelu&quot;</span>
+</code></pre></div>
+<p><strong>When to use:</strong>
+- Multi-scale problems where long-range spatial correlations matter
+- Sequence-like problems (e.g., time series of PDE states)
+- High-dimensional PDEs where positional structure is important
+- Experimental use — attention is not yet the default recommendation for any PDE in this library, but is available for research comparisons</p>
+<p><strong>Characteristics:</strong> GELU activation is used rather than tanh because it is empirically more stable for attention-based architectures. With <code>num_heads=4</code> and <code>hidden_dim=124</code>, the model has roughly 600K parameters — lighter than ResNet or Fourier.</p>
+<hr />
+<h3 id="autoencoder">Autoencoder<a class="headerlink" href="#autoencoder" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>pinnrl/neural_networks/autoencoder.py</code></p>
+<p>An encoder-decoder architecture where the input <code>(x, t)</code> is compressed to a latent space before being decoded to the solution.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">architectures</span><span class="p">:</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">autoencoder</span><span class="p">:</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="nt">latent_dim</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">64</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span><span class="nt">hidden_dims</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">124</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">248</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">124</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># encoder → latent → decoder</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">    </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;relu&quot;</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">    </span><span class="nt">dropout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.0</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">    </span><span class="nt">layer_norm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p><strong>When to use:</strong>
+- Dimensionality reduction combined with PDE solving
+- Problems where a low-dimensional latent representation of the solution is scientifically meaningful
+- Multi-query inference where the latent vector is reused across parameter sweeps
+- Experimental — recommended for research exploration rather than production accuracy</p>
+<p><strong>Characteristics:</strong> The latent dimension <code>latent_dim=64</code> acts as an information bottleneck. This forces the network to learn a compressed representation of the PDE solution manifold. ReLU is used here (rather than tanh) because the encoder-decoder structure provides sufficient smoothness through architecture depth.</p>
+<hr />
+<h2 id="rl-adaptive-sampling">RL adaptive sampling<a class="headerlink" href="#rl-adaptive-sampling" title="Permanent link">&para;</a></h2>
+<p>When <code>rl.enabled: true</code> in <code>config.yaml</code>, the <code>CollocationRLAgent</code> (implemented in <code>pinnrl/rl/rl_agent.py</code>) replaces uniform random collocation sampling with a DQN-based point selection strategy.</p>
+<h3 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h3>
+<ol>
+<li>
+<p><strong>State:</strong> The current collocation point <code>(x, t)</code> is the RL state (dimension = <code>state_dim</code>, default 2).</p>
+</li>
+<li>
+<p><strong>Action:</strong> The agent outputs a scalar sampling probability for each candidate point (dimension = <code>action_dim</code>, default 1).</p>
+</li>
+<li>
+<p><strong>Reward:</strong> After the PINN evaluates the PDE residual at the selected points, the reward is:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>r = w_r * |F[u_θ](x,t)|² + w_b * |BC error|² + w_i * |IC error|²
+</code></pre></div>
+   Points with large residuals yield large rewards, encouraging the agent to focus sampling where the network is most inaccurate.</p>
+</li>
+<li>
+<p><strong>Exploration:</strong> Epsilon-greedy policy with exponential decay (<code>ε_start=1.0</code>, <code>ε_end=0.01</code>, <code>ε_decay=0.995</code>).</p>
+</li>
+<li>
+<p><strong>Replay buffer:</strong> Experience tuples <code>(s, a, r, s')</code> are stored in a ring buffer of size 10,000. The DQN network is updated every step using a mini-batch of 124 samples.</p>
+</li>
+<li>
+<p><strong>Target network:</strong> A separate target DQN is updated every 100 steps to stabilize training.</p>
+</li>
+</ol>
+<h3 id="dqn-architecture">DQN architecture<a class="headerlink" href="#dqn-architecture" title="Permanent link">&para;</a></h3>
+<p>The <code>DQNNetwork</code> is a 3-layer MLP with LayerNorm and ReLU activations (separate from the PINN architectures):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>Input(state_dim) → Linear(512) → LayerNorm → ReLU → Dropout(0.1)
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>                → Linear(512) → LayerNorm → ReLU → Dropout(0.1)
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>                → Linear(action_dim)
+</code></pre></div>
+<h3 id="when-to-enable-rl-sampling">When to enable RL sampling<a class="headerlink" href="#when-to-enable-rl-sampling" title="Permanent link">&para;</a></h3>
+<p>RL adaptive sampling is most beneficial for:
+- PDEs with sharp solution features (Burgers shocks, KdV solitons, Allen-Cahn interfaces)
+- Long training runs (&gt;5000 epochs) where uniform sampling wastes compute on smooth regions
+- Benchmarking comparisons against RAR (Residual-Adaptive Refinement) sampling</p>
+<p>For smooth PDEs (heat, wave, convection with simple ICs), uniform sampling with 5000 points is usually sufficient.</p>
+<hr />
+<h2 id="loss-weighting">Loss weighting<a class="headerlink" href="#loss-weighting" title="Permanent link">&para;</a></h2>
+<p>The default loss weights (<code>residual=15.0</code>, <code>boundary=20.0</code>, <code>initial=10.0</code>) were determined empirically across all nine supported PDEs.</p>
+<table>
+<thead>
+<tr>
+<th>Weight</th>
+<th>Value</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>residual</code></td>
+<td>15.0</td>
+<td>Interior PDE points are most numerous; weight balances their average contribution</td>
+</tr>
+<tr>
+<td><code>boundary</code></td>
+<td>20.0</td>
+<td>Boundary violations propagate inward and corrupt the interior solution; penalized most heavily</td>
+</tr>
+<tr>
+<td><code>initial</code></td>
+<td>10.0</td>
+<td>IC sets the "anchor" for the time evolution; slightly lower than BC because it only applies at <code>t=0</code></td>
+</tr>
+<tr>
+<td><code>smoothness</code></td>
+<td>0.1</td>
+<td>Mild regularization that discourages spurious high-frequency artifacts; negligible for well-posed PDEs</td>
+</tr>
+</tbody>
+</table>
+<h3 id="adaptive-weights-optional">Adaptive weights (optional)<a class="headerlink" href="#adaptive-weights-optional" title="Permanent link">&para;</a></h3>
+<p>Set <code>training.adaptive_weights.enabled: true</code> to use the <code>AdaptiveLossWeights</code> module (<code>pinnrl/components/adaptive_weights.py</code>). Two strategies are available:</p>
+<ul>
+<li><strong><code>lrw</code> (Learning Rate Weighting):</strong> Weights are updated proportionally to the gradient magnitude of each loss term.</li>
+<li><strong><code>rbw</code> (Relative Balance Weighting):</strong> Weights are adjusted to keep each loss term roughly equal in magnitude, using an exponential moving average with <code>alpha=0.7</code>.</li>
+</ul>
+<p>Adaptive weights can improve convergence on stiff PDEs (Cahn-Hilliard, Allen-Cahn) but add overhead and may destabilize training if <code>alpha</code> is too low.</p>
+<hr />
+<h2 id="config-injection-how-configyaml-maps-to-modelconfig">Config injection: how <code>config.yaml</code> maps to <code>ModelConfig</code><a class="headerlink" href="#config-injection-how-configyaml-maps-to-modelconfig" title="Permanent link">&para;</a></h2>
+<p><code>Config.__init__()</code> reads <code>pinnrl/config/config.yaml</code> and builds a <code>ModelConfig</code> dataclass that is passed to <code>PINNModel</code>. The mapping is:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># config.yaml</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="nt">architectures</span><span class="p">:</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="nt">fourier</span><span class="p">:</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="nt">mapping_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">512        → ModelConfig.mapping_size</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="nt">hidden_dims</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">512</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">...</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">→ ModelConfig.hidden_dims</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">    </span><span class="nt">scale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4.0               → ModelConfig.scale</span>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">    </span><span class="nt">activation</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;tanh&quot;</span><span class="w">       </span><span class="l l-Scalar l-Scalar-Plain">→ ModelConfig.activation</span>
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">    </span><span class="nt">dropout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.0             → ModelConfig.dropout</span>
+<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">    </span><span class="nt">layer_norm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true         → ModelConfig.layer_norm</span>
+<a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">    </span><span class="nt">periodic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true           → ModelConfig.periodic</span>
+</code></pre></div>
+<p><code>PINNModel.__init__</code> dispatches on <code>ModelConfig.architecture</code> to instantiate the correct class:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">ARCH_MAP</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>    <span class="s2">&quot;feedforward&quot;</span><span class="p">:</span> <span class="n">FeedForwardNetwork</span><span class="p">,</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>    <span class="s2">&quot;resnet&quot;</span><span class="p">:</span>      <span class="n">ResNet</span><span class="p">,</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="s2">&quot;siren&quot;</span><span class="p">:</span>       <span class="n">SIREN</span><span class="p">,</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>    <span class="s2">&quot;fourier&quot;</span><span class="p">:</span>     <span class="n">FourierNetwork</span><span class="p">,</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>    <span class="s2">&quot;fno&quot;</span><span class="p">:</span>         <span class="n">FourierNeuralOperator</span><span class="p">,</span>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    <span class="s2">&quot;attention&quot;</span><span class="p">:</span>   <span class="n">AttentionNetwork</span><span class="p">,</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>    <span class="s2">&quot;autoencoder&quot;</span><span class="p">:</span> <span class="n">AutoEncoder</span><span class="p">,</span>
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="p">}</span>
+</code></pre></div>
+<p>All architecture classes inherit from <code>BaseNetwork</code> (<code>pinnrl/neural_networks/base_network.py</code>), which standardizes the <code>forward(x: Tensor) -&gt; Tensor</code> interface and provides shared utilities for weight initialization and parameter counting.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
