@@ -22,6 +22,7 @@ from pinnrl.config import (
     AdaptiveWeightsConfig,
     Config,
     EarlyStoppingConfig,
+    LBFGSConfig,
     LearningRateSchedulerConfig,
     ModelConfig,
     TrainingConfig,
@@ -34,6 +35,7 @@ from pinnrl.training.trainer import PDETrainer
 # PDE name -> (module, class, config key)
 PDE_REGISTRY = {
     "Heat Equation": ("pinnrl.pdes.heat_equation", "HeatEquation", "heat"),
+    "Heat Equation 2D": ("pinnrl.pdes.heat_equation", "HeatEquation", "heat_2d"),
     "Burgers Equation": ("pinnrl.pdes.burgers_equation", "BurgersEquation", "burgers"),
     "Wave Equation": ("pinnrl.pdes.wave_equation", "WaveEquation", "wave"),
     "Convection Equation": ("pinnrl.pdes.convection_equation", "ConvectionEquation", "convection"),
@@ -51,6 +53,52 @@ PDE_REGISTRY = {
         "black_scholes",
     ),
 }
+
+
+def _build_training_config(training_cfg: dict) -> TrainingConfig:
+    """Construct a TrainingConfig from a config dict (shared by create_pde and run_training)."""
+    lbfgs_cfg_dict = training_cfg.get("lbfgs", {})
+    return TrainingConfig(
+        num_epochs=training_cfg["num_epochs"],
+        batch_size=training_cfg["batch_size"],
+        num_collocation_points=training_cfg["num_collocation_points"],
+        num_boundary_points=training_cfg["num_boundary_points"],
+        num_initial_points=training_cfg["num_initial_points"],
+        learning_rate=training_cfg["optimizer_config"]["learning_rate"],
+        weight_decay=training_cfg["optimizer_config"].get("weight_decay", 0.0001),
+        gradient_clipping=training_cfg.get("gradient_clipping", 1.0),
+        early_stopping=EarlyStoppingConfig(
+            enabled=training_cfg["early_stopping"]["enabled"],
+            patience=training_cfg["early_stopping"]["patience"],
+            min_delta=training_cfg["early_stopping"]["min_delta"],
+        ),
+        learning_rate_scheduler=LearningRateSchedulerConfig(
+            type=training_cfg["scheduler_type"],
+            warmup_epochs=training_cfg.get("warmup_epochs", 0),
+            min_lr=training_cfg["reduce_lr_params"]["min_lr"],
+            factor=training_cfg["reduce_lr_params"]["factor"],
+            patience=training_cfg["reduce_lr_params"]["patience"],
+        ),
+        adaptive_weights=AdaptiveWeightsConfig(
+            enabled=training_cfg["adaptive_weights"]["enabled"],
+            strategy=training_cfg["adaptive_weights"]["strategy"],
+            alpha=training_cfg["adaptive_weights"]["alpha"],
+            eps=training_cfg["adaptive_weights"]["eps"],
+        ),
+        loss_weights=training_cfg["loss_weights"],
+        optimizer=training_cfg.get("optimizer", "adam"),
+        adam_lbfgs_switch_ratio=training_cfg.get("adam_lbfgs_switch_ratio", 0.7),
+        lbfgs=LBFGSConfig(
+            history_size=lbfgs_cfg_dict.get("history_size", 50),
+            max_iter=lbfgs_cfg_dict.get("max_iter", 20),
+            line_search_fn=lbfgs_cfg_dict.get("line_search_fn", "strong_wolfe"),
+            tolerance_grad=lbfgs_cfg_dict.get("tolerance_grad", 1e-7),
+            tolerance_change=lbfgs_cfg_dict.get("tolerance_change", 1e-9),
+        ),
+        mode=training_cfg.get("mode", "forward"),
+        loss_function=training_cfg.get("loss_function", "mse"),
+        huber_delta=training_cfg.get("huber_delta", 1.0),
+    )
 
 
 def build_config_dict(yaml_config, pde_name, arch_type, use_rl=False, epochs=None):
@@ -115,40 +163,33 @@ def create_pde(config_dict, device):
         exact_solution=pde_cfg["exact_solution"],
         dimension=pde_cfg["dimension"],
         device=device,
-        training=TrainingConfig(
-            num_epochs=training_cfg["num_epochs"],
-            batch_size=training_cfg["batch_size"],
-            num_collocation_points=training_cfg["num_collocation_points"],
-            num_boundary_points=training_cfg["num_boundary_points"],
-            num_initial_points=training_cfg["num_initial_points"],
-            learning_rate=training_cfg["optimizer_config"]["learning_rate"],
-            weight_decay=training_cfg["optimizer_config"].get("weight_decay", 0.0001),
-            gradient_clipping=training_cfg.get("gradient_clipping", 1.0),
-            early_stopping=EarlyStoppingConfig(
-                enabled=training_cfg["early_stopping"]["enabled"],
-                patience=training_cfg["early_stopping"]["patience"],
-                min_delta=training_cfg["early_stopping"]["min_delta"],
-            ),
-            learning_rate_scheduler=LearningRateSchedulerConfig(
-                type=training_cfg["scheduler_type"],
-                warmup_epochs=training_cfg.get("warmup_epochs", 0),
-                min_lr=training_cfg["reduce_lr_params"]["min_lr"],
-                factor=training_cfg["reduce_lr_params"]["factor"],
-                patience=training_cfg["reduce_lr_params"]["patience"],
-            ),
-            adaptive_weights=AdaptiveWeightsConfig(
-                enabled=training_cfg["adaptive_weights"]["enabled"],
-                strategy=training_cfg["adaptive_weights"]["strategy"],
-                alpha=training_cfg["adaptive_weights"]["alpha"],
-                eps=training_cfg["adaptive_weights"]["eps"],
-            ),
-            loss_weights=training_cfg["loss_weights"],
-        ),
+        training=_build_training_config(training_cfg),
+        trainable_parameters=list(pde_cfg.get("trainable_parameters", []) or []),
+        parameter_initial_guesses=dict(pde_cfg.get("parameter_initial_guesses", {}) or {}),
+        observation_data=pde_cfg.get("observation_data"),
     )
 
     mod = __import__(module_path, fromlist=[cls_name])
     pde_cls = getattr(mod, cls_name)
-    return pde_cls(config=pde_config)
+    pde = pde_cls(config=pde_config)
+
+    # If the user requested inverse mode without supplying real observations,
+    # generate synthetic noisy observations from the analytical solution so the
+    # data-fitting loss has something to anchor the parameter recovery to.
+    mode = training_cfg.get("mode", "forward")
+    inverse_cfg = config_dict.get("inverse", {})
+    if (
+        mode == "inverse"
+        and pde.observation_data is None
+        and pde_config.trainable_parameters
+    ):
+        n_obs = int(inverse_cfg.get("obs_points", 200))
+        noise = float(inverse_cfg.get("obs_noise", 0.01))
+        seed = int(inverse_cfg.get("obs_seed", 0))
+        pde.generate_synthetic_observations(
+            n_points=n_obs, noise_std=noise, seed=seed
+        )
+    return pde
 
 
 def run_training(config_dict, device):
@@ -227,37 +268,9 @@ def run_training(config_dict, device):
             if key in arch_config:
                 setattr(config_obj.model, key, arch_config[key])
 
-        # Training config
+        # Training config (shared builder keeps create_pde and run_training in sync)
         training_cfg = config_dict["training"]
-        config_obj.training = TrainingConfig(
-            num_epochs=training_cfg["num_epochs"],
-            batch_size=training_cfg["batch_size"],
-            num_collocation_points=training_cfg["num_collocation_points"],
-            num_boundary_points=training_cfg["num_boundary_points"],
-            num_initial_points=training_cfg["num_initial_points"],
-            learning_rate=training_cfg["optimizer_config"]["learning_rate"],
-            weight_decay=training_cfg["optimizer_config"].get("weight_decay", 0.0001),
-            gradient_clipping=training_cfg.get("gradient_clipping", 1.0),
-            early_stopping=EarlyStoppingConfig(
-                enabled=training_cfg["early_stopping"]["enabled"],
-                patience=training_cfg["early_stopping"]["patience"],
-                min_delta=training_cfg["early_stopping"]["min_delta"],
-            ),
-            learning_rate_scheduler=LearningRateSchedulerConfig(
-                type=training_cfg["scheduler_type"],
-                warmup_epochs=training_cfg.get("warmup_epochs", 0),
-                min_lr=training_cfg["reduce_lr_params"]["min_lr"],
-                factor=training_cfg["reduce_lr_params"]["factor"],
-                patience=training_cfg["reduce_lr_params"]["patience"],
-            ),
-            adaptive_weights=AdaptiveWeightsConfig(
-                enabled=training_cfg["adaptive_weights"]["enabled"],
-                strategy=training_cfg["adaptive_weights"]["strategy"],
-                alpha=training_cfg["adaptive_weights"]["alpha"],
-                eps=training_cfg["adaptive_weights"]["eps"],
-            ),
-            loss_weights=training_cfg["loss_weights"],
-        )
+        config_obj.training = _build_training_config(training_cfg)
 
         # Create model
         model = PINNModel(config=config_obj, device=device).to(device)
@@ -346,6 +359,59 @@ def main():
     )
     parser.add_argument("--initial-points", type=int, default=None, help="Override initial points")
     parser.add_argument("--rl", action="store_true", help="Enable RL adaptive sampling")
+    parser.add_argument(
+        "--optimizer",
+        choices=["adam", "lbfgs", "adam_lbfgs"],
+        default=None,
+        help="Optimizer to use",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["forward", "inverse"],
+        default=None,
+        help="Training mode (forward or inverse / parameter identification)",
+    )
+    parser.add_argument(
+        "--identify",
+        action="append",
+        default=[],
+        help="Name of a PDE parameter to identify in inverse mode (repeatable)",
+    )
+    parser.add_argument(
+        "--initial-guess",
+        action="append",
+        default=[],
+        help="Initial guess for an identifiable parameter, e.g. 'alpha=0.5' (repeatable)",
+    )
+    parser.add_argument(
+        "--obs-path",
+        default=None,
+        help="Path to an .npz file with observation data (keys 'x','t','u')",
+    )
+    parser.add_argument(
+        "--obs-noise",
+        type=float,
+        default=None,
+        help="Stddev of Gaussian noise added to synthetic observations",
+    )
+    parser.add_argument(
+        "--obs-points",
+        type=int,
+        default=None,
+        help="Number of synthetic observation points to generate",
+    )
+    parser.add_argument(
+        "--loss-function",
+        choices=["mse", "mae", "huber"],
+        default=None,
+        help="Reduction for residual/BC/IC/data losses",
+    )
+    parser.add_argument(
+        "--huber-delta",
+        type=float,
+        default=None,
+        help="Delta for Huber loss (only used when --loss-function=huber)",
+    )
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     default_config = os.path.join(project_root, "src", "config", "config.yaml")
     if not os.path.exists(default_config):
@@ -378,10 +444,44 @@ def main():
         yaml_config.setdefault("training", {})["num_boundary_points"] = args.boundary_points
     if args.initial_points is not None:
         yaml_config.setdefault("training", {})["num_initial_points"] = args.initial_points
+    if args.optimizer is not None:
+        yaml_config.setdefault("training", {})["optimizer"] = args.optimizer
+    if args.mode is not None:
+        yaml_config.setdefault("training", {})["mode"] = args.mode
+    if args.loss_function is not None:
+        yaml_config.setdefault("training", {})["loss_function"] = args.loss_function
+    if args.huber_delta is not None:
+        yaml_config.setdefault("training", {})["huber_delta"] = args.huber_delta
 
     device = torch.device(yaml_config.get("device", "cpu"))
     config_dict = build_config_dict(yaml_config, args.pde, args.arch, args.rl, args.epochs)
     config_dict["device"] = str(device)
+
+    # Wire inverse-problem flags through to the PDE config + run-time options.
+    if args.identify:
+        config_dict["pde"]["trainable_parameters"] = list(args.identify)
+    if args.initial_guess:
+        guesses = {}
+        for spec in args.initial_guess:
+            if "=" not in spec:
+                print(f"Ignoring malformed --initial-guess '{spec}' (expected name=value)")
+                continue
+            name, value = spec.split("=", 1)
+            try:
+                guesses[name.strip()] = float(value)
+            except ValueError:
+                print(f"Ignoring non-numeric --initial-guess '{spec}'")
+        if guesses:
+            config_dict["pde"]["parameter_initial_guesses"] = guesses
+    if args.obs_path:
+        config_dict["pde"]["observation_data"] = {"path": args.obs_path}
+    inverse_runtime = {}
+    if args.obs_noise is not None:
+        inverse_runtime["obs_noise"] = args.obs_noise
+    if args.obs_points is not None:
+        inverse_runtime["obs_points"] = args.obs_points
+    if inverse_runtime:
+        config_dict["inverse"] = inverse_runtime
 
     run_training(config_dict, device)
 

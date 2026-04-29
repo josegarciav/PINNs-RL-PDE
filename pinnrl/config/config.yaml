@@ -340,6 +340,20 @@ training:
     boundary: 20.0  # Weight for boundary condition loss
     initial: 10.0   # Weight for initial condition loss
     smoothness: 0.1  # Weight for smoothness regularization
+    data: 10.0      # Weight for data-fitting loss (inverse problems)
+  # Forward training optimizes only network weights;
+  # inverse mode also identifies selected PDE parameters from observations.
+  mode: "forward"  # Options: "forward" or "inverse"
+  optimizer: "adam"  # Options: "adam" | "lbfgs" | "adam_lbfgs"
+  adam_lbfgs_switch_ratio: 0.7  # Fraction of epochs in the Adam phase before switching to L-BFGS
+  loss_function: "mse"  # Options: "mse" | "mae" | "huber"
+  huber_delta: 1.0      # Delta for Huber loss (only used when loss_function = huber)
+  lbfgs:
+    history_size: 50
+    max_iter: 20
+    line_search_fn: "strong_wolfe"
+    tolerance_grad: 1.0e-7
+    tolerance_change: 1.0e-9
 
 # Reinforcement Learning Configuration
 rl:

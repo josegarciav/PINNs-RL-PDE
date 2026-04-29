@@ -2,11 +2,12 @@
 # Provides common functionality for all PDEs
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import torch
+import torch.nn as nn
 
 # Conditional imports to avoid memory issues
 try:
@@ -37,6 +38,13 @@ class PDEConfig:
     architecture: Optional[str] = None  # Neural network architecture for this PDE
     device: Optional[torch.device] = None
     training: Optional[Dict[str, Any]] = None  # Training configuration
+    # Inverse-problem fields. Empty in the default forward setup.
+    # Names listed in ``trainable_parameters`` are wrapped as ``nn.Parameter``s
+    # initialized from ``parameter_initial_guesses`` (or ``parameters[name]``).
+    trainable_parameters: List[str] = field(default_factory=list)
+    parameter_initial_guesses: Dict[str, float] = field(default_factory=dict)
+    # Either an in-memory dict {"x", "t", "u"} or {"path": "<file.npz>"}.
+    observation_data: Optional[Dict[str, Any]] = None
 
 
 class PDEBase:
@@ -188,6 +196,28 @@ class PDEBase:
         elif config.parameters is None:
             config.parameters = {}
 
+        # Register trainable parameters as nn.Parameter (inverse-problem mode).
+        # In forward mode this dict stays empty and adds no behaviour.
+        self._trainable_params: nn.ParameterDict = nn.ParameterDict()
+        trainable_names = list(getattr(config, "trainable_parameters", []) or [])
+        initial_guesses = dict(getattr(config, "parameter_initial_guesses", {}) or {})
+        # Snapshot the original (true) values BEFORE the parameters become
+        # trainable, so we can plot a reference line in the dashboard.
+        self._true_parameters: Dict[str, float] = {}
+        for name in trainable_names:
+            true_val = config.parameters.get(name)
+            if true_val is not None:
+                self._true_parameters[name] = float(true_val)
+            init_val = initial_guesses.get(name, true_val if true_val is not None else 1.0)
+            self._trainable_params[name] = nn.Parameter(
+                torch.tensor(float(init_val), device=self.device)
+            )
+
+        # Load observation data (used by the data-fitting loss in inverse mode).
+        self.observation_data: Optional[Dict[str, torch.Tensor]] = self._load_observation_data(
+            getattr(config, "observation_data", None)
+        )
+
         # Setup boundary and initial conditions
         self._setup_boundary_conditions()
 
@@ -217,17 +247,27 @@ class PDEBase:
         """
         Safely get a parameter value with validation.
 
+        When ``name`` has been registered as a trainable parameter (inverse
+        problem mode), the live ``nn.Parameter`` tensor is returned so that
+        downstream residual computations build the autograd graph through it.
+        Otherwise the plain float from ``config.parameters`` is returned.
+
         Args:
             name: Parameter name
             default: Default value if parameter not found
             required: Whether parameter is required (raises error if missing)
 
         Returns:
-            Parameter value
+            Parameter value (``nn.Parameter`` if trainable, else float)
 
         Raises:
             ValueError: If required parameter is missing
         """
+        # Trainable param takes precedence over the static config value.
+        trainable = getattr(self, "_trainable_params", None)
+        if trainable is not None and name in trainable:
+            return trainable[name]
+
         if not hasattr(self.config, "parameters") or self.config.parameters is None:
             if required:
                 raise ValueError(f"Required parameter '{name}' not found in config")
@@ -237,6 +277,174 @@ class PDEBase:
         if value is None and required:
             raise ValueError(f"Required parameter '{name}' not found in config")
         return value
+
+    def _compute_data_loss(self, model: torch.nn.Module) -> torch.Tensor:
+        """Reduction loss between the model and the attached observations.
+
+        Returns a zero tensor (no autograd connection) when no observation_data
+        is configured, so PDEs that call this in forward mode see a no-op.
+        """
+        obs = getattr(self, "observation_data", None)
+        if not obs:
+            return torch.tensor(0.0, device=self.device)
+        u_pred_obs = model(torch.cat([obs["x"], obs["t"]], dim=1))
+        return self._apply_loss_fn(u_pred_obs - obs["u"])
+
+    def _loss_function_name(self) -> str:
+        training = getattr(self.config, "training", None)
+        if training is None:
+            return "mse"
+        if isinstance(training, dict):
+            return training.get("loss_function", "mse")
+        return getattr(training, "loss_function", "mse")
+
+    def _huber_delta(self) -> float:
+        training = getattr(self.config, "training", None)
+        if training is None:
+            return 1.0
+        if isinstance(training, dict):
+            return float(training.get("huber_delta", 1.0))
+        return float(getattr(training, "huber_delta", 1.0))
+
+    def _apply_loss_fn(self, error: torch.Tensor) -> torch.Tensor:
+        """Reduce a per-sample residual/error tensor into a scalar loss.
+
+        The reduction is selected by ``training.loss_function`` (default mse).
+        Unknown names fall back to mse so existing test trajectories are
+        preserved.
+        """
+        name = self._loss_function_name()
+        if name == "mae":
+            return torch.mean(torch.abs(error))
+        if name == "huber":
+            return torch.nn.functional.huber_loss(
+                error,
+                torch.zeros_like(error),
+                reduction="mean",
+                delta=self._huber_delta(),
+            )
+        return torch.mean(error ** 2)
+
+    def _data_loss_weight(self, default: float = 1.0) -> float:
+        """Pull the ``data`` loss weight from training config, falling back to ``default``."""
+        try:
+            lw = self.config.training.loss_weights
+            if isinstance(lw, dict):
+                return float(lw.get("data", default))
+            return float(getattr(lw, "data", default))
+        except AttributeError:
+            return default
+
+    def trainable_parameters_iter(self):
+        """Iterator over registered trainable PDE parameters (for the optimizer)."""
+        if hasattr(self, "_trainable_params"):
+            return self._trainable_params.parameters()
+        return iter(())
+
+    def get_trainable_parameter_values(self) -> Dict[str, float]:
+        """Snapshot of current trainable parameter values as plain floats."""
+        if not hasattr(self, "_trainable_params"):
+            return {}
+        return {name: float(p.detach().cpu().item()) for name, p in self._trainable_params.items()}
+
+    def _load_observation_data(
+        self, obs_cfg: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, torch.Tensor]]:
+        """Convert raw observation-data spec into device tensors.
+
+        Accepts either a path-based spec ``{"path": "/some/file.npz"}`` (the npz
+        must contain ``x``, ``t``, ``u``) or an inline spec carrying numpy/list
+        arrays under those same keys. Returns ``None`` when ``obs_cfg`` is empty.
+        """
+        if not obs_cfg:
+            return None
+        device = self.device
+
+        if "path" in obs_cfg and obs_cfg["path"]:
+            path = obs_cfg["path"]
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Observation data file not found: {path}")
+            data = np.load(path)
+            x = np.asarray(data["x"], dtype=np.float32)
+            t = np.asarray(data["t"], dtype=np.float32)
+            u = np.asarray(data["u"], dtype=np.float32)
+        elif all(k in obs_cfg for k in ("x", "t", "u")):
+            x_raw, t_raw, u_raw = obs_cfg["x"], obs_cfg["t"], obs_cfg["u"]
+            # Already-tensor case is short-circuited so we don't double-wrap.
+            if all(isinstance(v, torch.Tensor) for v in (x_raw, t_raw, u_raw)):
+                return {
+                    "x": x_raw.to(device),
+                    "t": t_raw.to(device),
+                    "u": u_raw.to(device),
+                }
+            x = np.asarray(x_raw, dtype=np.float32)
+            t = np.asarray(t_raw, dtype=np.float32)
+            u = np.asarray(u_raw, dtype=np.float32)
+        else:
+            return None
+
+        if x.ndim == 1:
+            x = x.reshape(-1, 1)
+        if t.ndim == 1:
+            t = t.reshape(-1, 1)
+        if u.ndim == 1:
+            u = u.reshape(-1, 1)
+
+        return {
+            "x": torch.tensor(x, device=device),
+            "t": torch.tensor(t, device=device),
+            "u": torch.tensor(u, device=device),
+        }
+
+    def generate_synthetic_observations(
+        self,
+        n_points: int = 200,
+        noise_std: float = 0.0,
+        seed: Optional[int] = 0,
+    ) -> Dict[str, torch.Tensor]:
+        """Sample noisy observations from the analytical solution.
+
+        Useful for inverse-problem demos and CI tests: pick uniform points in
+        the domain, evaluate ``self.exact_solution``, optionally add Gaussian
+        noise, and store the result on ``self.observation_data`` so the next
+        ``compute_loss`` call automatically picks it up.
+        """
+        gen = torch.Generator(device="cpu")
+        if seed is not None:
+            gen.manual_seed(int(seed))
+
+        spatial_dims = max(int(self.dimension), 1)
+        x_cols = []
+        for d in range(spatial_dims):
+            lo, hi = self.domain[d]
+            x_cols.append(
+                torch.rand(n_points, 1, generator=gen) * (hi - lo) + lo
+            )
+        x = torch.cat(x_cols, dim=1).to(self.device) if spatial_dims > 1 else x_cols[0].to(self.device)
+
+        t_lo, t_hi = self.time_domain[0], self.time_domain[1]
+        t = (torch.rand(n_points, 1, generator=gen) * (t_hi - t_lo) + t_lo).to(self.device)
+
+        # Temporarily detach trainable params so the analytical solution uses
+        # the TRUE parameter values (from ``_true_parameters``) rather than
+        # the current initial guess. Without this, synthetic obs generated in
+        # inverse mode would already encode the wrong α and the trainer would
+        # converge to the guess rather than recovering the true value.
+        saved_params = self._trainable_params if hasattr(self, "_trainable_params") else None
+        try:
+            if saved_params is not None and self._true_parameters:
+                self._trainable_params = nn.ParameterDict()
+            with torch.no_grad():
+                u = self.exact_solution(x, t)
+                if noise_std and noise_std > 0:
+                    noise = torch.randn(u.shape, generator=gen).to(self.device) * float(noise_std)
+                    u = u + noise
+        finally:
+            if saved_params is not None:
+                self._trainable_params = saved_params
+
+        self.observation_data = {"x": x, "t": t, "u": u}
+        return self.observation_data
 
     def _setup_boundary_conditions(self):
         """Set up boundary condition functions from configuration."""
@@ -680,15 +888,14 @@ class PDEBase:
         x_pool = x_pool.detach().requires_grad_(True)
         t_pool = t_pool.detach().requires_grad_(True)
 
-        with torch.no_grad():
-            try:
-                residuals = self.compute_pde_residual(model, x_pool, t_pool)
-                if isinstance(residuals, tuple):
-                    residuals = residuals[0]
-                residual_mag = torch.abs(residuals).squeeze()
-            except Exception:
-                # If residual computation fails, fall back to uniform
-                return self._sample_uniform(num_points)
+        try:
+            # compute_residual builds an autograd graph, so we cannot wrap in no_grad.
+            residuals = self.compute_residual(model, x_pool, t_pool)
+            if isinstance(residuals, tuple):
+                residuals = residuals[0]
+            residual_mag = torch.abs(residuals.detach()).squeeze()
+        except Exception:
+            return self._sample_uniform(num_points)
 
         # Convert residual magnitudes to sampling probabilities
         # Add small epsilon so zero-residual regions still have a chance
@@ -864,7 +1071,7 @@ class PDEBase:
         """
         # Compute PDE residual
         residual = self.compute_residual(model, x, t)
-        residual_loss = torch.mean(residual**2)
+        residual_loss = self._apply_loss_fn(residual)
 
         # Compute boundary condition loss
         if self.dimension == 1:
@@ -897,7 +1104,7 @@ class PDEBase:
         for bc_type, bc_func in self.boundary_conditions.items():
             u_boundary = model(torch.cat([x_boundary, t_boundary], dim=1))
             u_target = bc_func(x_boundary, t_boundary)
-            boundary_loss += torch.mean((u_boundary - u_target) ** 2)
+            boundary_loss += self._apply_loss_fn(u_boundary - u_target)
 
         # Compute initial condition loss
         x_initial = torch.linspace(
@@ -927,7 +1134,10 @@ class PDEBase:
                 temp_bc = self._create_boundary_condition("initial", self.config.initial_condition)
                 u_target = temp_bc(x_initial, t_initial)
 
-        initial_loss = torch.mean((u_initial - u_target) ** 2)
+        initial_loss = self._apply_loss_fn(u_initial - u_target)
+
+        # Data-fitting loss for inverse problems (zero when no observations).
+        data_loss = self._compute_data_loss(model)
 
         # Initialize smoothness loss
         smoothness_loss = torch.tensor(0.0, device=self.device)
@@ -944,7 +1154,12 @@ class PDEBase:
             "boundary": boundary_loss,
             "initial": initial_loss,
             "smoothness": smoothness_loss,
+            "data": data_loss,
         }
+
+        # Pull a data-loss weight even under adaptive weighting so the data
+        # term isn't accidentally dropped to zero in inverse mode.
+        data_weight = self._data_loss_weight(1.0)
 
         # Use adaptive weights if enabled
         if (
@@ -953,7 +1168,11 @@ class PDEBase:
             and self.config.training.adaptive_weights.enabled
         ):
             losses["total"] = (
-                residual_loss + boundary_loss + initial_loss + smoothness_weight * smoothness_loss
+                residual_loss
+                + boundary_loss
+                + initial_loss
+                + smoothness_weight * smoothness_loss
+                + data_weight * data_loss
             )
         else:
             # Use fixed weights from config (or defaults if training config is absent)
@@ -974,6 +1193,7 @@ class PDEBase:
                 + boundary_weight * boundary_loss
                 + initial_weight * initial_loss
                 + smoothness_weight * smoothness_loss
+                + data_weight * data_loss
             )
             losses["total"] = total_loss
 
@@ -1096,7 +1316,11 @@ class PDEBase:
 
         :param path: Path to load the state from
         """
-        state = torch.load(path)
+        # The pickled state holds dataclass instances (PDEConfig + nested configs)
+        # rather than tensors only, so opt out of torch>=2.6's weights_only mode.
+        # This file is produced by ``save_state`` on the same machine — same
+        # trust boundary as any other local artefact.
+        state = torch.load(path, weights_only=False)
         self.config = state["config"]
         self.collocation_history = state["collocation_history"]
         self.validation_points = state["validation_points"]

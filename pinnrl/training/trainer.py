@@ -65,6 +65,9 @@ class PDETrainer:
         self.config = config
         self.validation_frequency = validation_frequency
 
+        # Setup logging up-front so optimizer init can warn through self.logger.
+        self._setup_logging()
+
         # Setup optimizer
         self._initialize_optimizer_and_scheduler()
 
@@ -87,9 +90,6 @@ class PDETrainer:
         self.patience = early_stopping_config.get("patience", 10)
         self.best_val_loss = float("inf")
         self.patience_counter = 0
-
-        # Setup logging
-        self._setup_logging()
 
         self.rl_agent = rl_agent
         self.viz_frequency = viz_frequency
@@ -168,34 +168,214 @@ class PDETrainer:
         else:
             self.scheduler.step()
 
-    def _initialize_optimizer_and_scheduler(self):
-        """Initialize optimizer and learning rate scheduler."""
-        # Initialize optimizer
-        self.optimizer = optim.Adam(
-            self.model.parameters(),
+    def _save_live_snapshot(
+        self,
+        experiment_dir: str,
+        epoch: int,
+        grid_size: int = 60,
+    ) -> None:
+        """Persist a small grid of predictions + residuals for the live dashboard.
+
+        Writes ``live_snapshot.npz`` with predicted ``u`` and residual fields
+        sampled on a fixed grid. The dashboard's Monitor sub-tab polls this
+        file via the existing ``dcc.Interval`` and renders ``go.Surface``
+        plots, giving the user a live view of the solution as it converges.
+
+        Wrapped in a broad ``except`` because viz failures must never crash
+        the training loop.
+        """
+        if not experiment_dir:
+            return
+        try:
+            dim = int(getattr(self.pde, "dimension", 1))
+            time_lo, time_hi = float(self.pde.time_domain[0]), float(self.pde.time_domain[1])
+            self.model.eval()
+
+            if dim <= 1:
+                x_lo, x_hi = float(self.pde.domain[0][0]), float(self.pde.domain[0][1])
+                xs = np.linspace(x_lo, x_hi, grid_size, dtype=np.float32)
+                ts = np.linspace(time_lo, time_hi, grid_size, dtype=np.float32)
+                xx, tt = np.meshgrid(xs, ts, indexing="xy")
+                x_flat = torch.tensor(xx.reshape(-1, 1), device=self.device)
+                t_flat = torch.tensor(tt.reshape(-1, 1), device=self.device)
+                with torch.no_grad():
+                    u_pred = self.model(torch.cat([x_flat, t_flat], dim=1))
+                u_pred_np = u_pred.detach().cpu().numpy().reshape(grid_size, grid_size)
+
+                # Residual needs grad → enable then detach.
+                x_g = x_flat.detach().clone().requires_grad_(True)
+                t_g = t_flat.detach().clone().requires_grad_(True)
+                try:
+                    residual = self.pde.compute_residual(self.model, x_g, t_g)
+                    residual_np = residual.detach().cpu().numpy().reshape(grid_size, grid_size)
+                except Exception:
+                    residual_np = np.zeros_like(u_pred_np)
+
+                np.savez(
+                    os.path.join(experiment_dir, "live_snapshot.npz"),
+                    axis_x=xs,
+                    axis_y=ts,
+                    u_pred=u_pred_np,
+                    residual=residual_np,
+                    epoch=int(epoch),
+                    dimension=1,
+                    x_label="x",
+                    y_label="t",
+                    fixed_t=float("nan"),
+                )
+            else:
+                x1_lo, x1_hi = float(self.pde.domain[0][0]), float(self.pde.domain[0][1])
+                x2_lo, x2_hi = float(self.pde.domain[1][0]), float(self.pde.domain[1][1])
+                fixed_t = 0.5 * (time_lo + time_hi)
+                xs1 = np.linspace(x1_lo, x1_hi, grid_size, dtype=np.float32)
+                xs2 = np.linspace(x2_lo, x2_hi, grid_size, dtype=np.float32)
+                xx1, xx2 = np.meshgrid(xs1, xs2, indexing="xy")
+                x_flat = torch.tensor(
+                    np.stack([xx1.reshape(-1), xx2.reshape(-1)], axis=1),
+                    device=self.device,
+                    dtype=torch.float32,
+                )
+                t_flat = torch.full(
+                    (x_flat.shape[0], 1), fixed_t, dtype=torch.float32, device=self.device
+                )
+                with torch.no_grad():
+                    u_pred = self.model(torch.cat([x_flat, t_flat], dim=1))
+                u_pred_np = u_pred.detach().cpu().numpy().reshape(grid_size, grid_size)
+
+                x_g = x_flat.detach().clone().requires_grad_(True)
+                t_g = t_flat.detach().clone().requires_grad_(True)
+                try:
+                    residual = self.pde.compute_residual(self.model, x_g, t_g)
+                    residual_np = residual.detach().cpu().numpy().reshape(grid_size, grid_size)
+                except Exception:
+                    residual_np = np.zeros_like(u_pred_np)
+
+                np.savez(
+                    os.path.join(experiment_dir, "live_snapshot.npz"),
+                    axis_x=xs1,
+                    axis_y=xs2,
+                    u_pred=u_pred_np,
+                    residual=residual_np,
+                    epoch=int(epoch),
+                    dimension=2,
+                    x_label="x1",
+                    y_label="x2",
+                    fixed_t=float(fixed_t),
+                )
+        except Exception as exc:  # pragma: no cover - defensive
+            self.logger.debug(f"Live snapshot skipped: {exc}")
+        finally:
+            self.model.train()
+
+    def _collect_optimizable_params(self):
+        """Combine model weights with any trainable PDE parameters (inverse mode).
+
+        In forward mode the PDE contributes nothing and the result is identical
+        to ``self.model.parameters()``.
+        """
+        params = list(self.model.parameters())
+        if hasattr(self.pde, "trainable_parameters_iter"):
+            params += list(self.pde.trainable_parameters_iter())
+        return params
+
+    def _build_adam(self, params):
+        return optim.Adam(
+            params,
             lr=self.config.training.learning_rate,
             weight_decay=self.config.training.weight_decay,
         )
 
-        # Initialize scheduler based on type
-        scheduler_type = self.config.training.learning_rate_scheduler.type
+    def _build_lbfgs(self, params):
+        cfg = self.config.training.lbfgs
+        return optim.LBFGS(
+            params,
+            lr=self.config.training.learning_rate,
+            history_size=cfg.history_size,
+            max_iter=cfg.max_iter,
+            line_search_fn=cfg.line_search_fn,
+            tolerance_grad=cfg.tolerance_grad,
+            tolerance_change=cfg.tolerance_change,
+        )
 
-        if scheduler_type == "reduce_lr":
-            self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+    def _build_scheduler(self, force_reduce_lr: bool = False):
+        scheduler_type = self.config.training.learning_rate_scheduler.type
+        if force_reduce_lr or scheduler_type == "reduce_lr":
+            if force_reduce_lr and scheduler_type != "reduce_lr":
+                self.logger.warning(
+                    "L-BFGS uses an internal line search; overriding scheduler "
+                    f"'{scheduler_type}' with ReduceLROnPlateau."
+                )
+            return optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer,
                 mode="min",
                 factor=self.config.training.learning_rate_scheduler.factor,
                 patience=self.config.training.learning_rate_scheduler.patience,
                 min_lr=self.config.training.learning_rate_scheduler.min_lr,
             )
-        elif scheduler_type == "cosine":
-            self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        if scheduler_type == "cosine":
+            return optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer,
                 T_max=self.config.training.num_epochs,
                 eta_min=self.config.training.learning_rate_scheduler.min_lr,
             )
+        raise ValueError(f"Unknown scheduler type: {scheduler_type}")
+
+    def _initialize_optimizer_and_scheduler(self):
+        """Initialize optimizer and learning rate scheduler.
+
+        Branches on ``training.optimizer``:
+          - ``adam``       : standard first-order training.
+          - ``lbfgs``      : closure-based quasi-Newton training (full batch).
+          - ``adam_lbfgs`` : Adam first, switch to L-BFGS at
+            ``adam_lbfgs_switch_ratio * num_epochs``.
+
+        Trainable PDE parameters (inverse mode) are added to the optimizer
+        alongside the model weights.
+        """
+        optimizer_type = getattr(self.config.training, "optimizer", "adam")
+        params = self._collect_optimizable_params()
+
+        if optimizer_type == "lbfgs":
+            self.optimizer = self._build_lbfgs(params)
+            self._is_lbfgs = True
         else:
-            raise ValueError(f"Unknown scheduler type: {scheduler_type}")
+            # Both "adam" and "adam_lbfgs" start with Adam.
+            self.optimizer = self._build_adam(params)
+            self._is_lbfgs = False
+
+        if optimizer_type == "adam_lbfgs":
+            ratio = getattr(self.config.training, "adam_lbfgs_switch_ratio", 0.7)
+            self._switch_epoch = max(1, int(self.config.training.num_epochs * ratio))
+        else:
+            self._switch_epoch = None
+
+        self.scheduler = self._build_scheduler(force_reduce_lr=self._is_lbfgs)
+        self._optimizer_type = optimizer_type
+
+    def _switch_to_lbfgs(self):
+        """Hot-swap the optimizer to L-BFGS for the second phase of adam_lbfgs."""
+        params = self._collect_optimizable_params()
+        self.optimizer = self._build_lbfgs(params)
+        self._is_lbfgs = True
+        self.scheduler = self._build_scheduler(force_reduce_lr=True)
+
+    def _lbfgs_step(self, x_batch, t_batch):
+        """One L-BFGS optimizer step using a recompute-loss closure."""
+        captured: Dict[str, torch.Tensor] = {}
+
+        def closure():
+            self.optimizer.zero_grad()
+            losses = self.pde.compute_loss(self.model, x_batch, t_batch)
+            total = losses["total"]
+            total.backward()
+            captured["losses"] = losses
+            return total
+
+        self.optimizer.step(closure)
+        if "losses" not in captured:
+            # No closure call happened (rare; e.g. tolerance already met).
+            captured["losses"] = self.pde.compute_loss(self.model, x_batch, t_batch)
+        return captured["losses"]
 
     def train(
         self,
@@ -248,6 +428,36 @@ class PDETrainer:
                 eps=self.config.training.adaptive_weights.eps,
             )
 
+        # Inverse-problem warm-up: announce trainable parameters and seed history
+        # buckets so the dashboard can render trajectories from epoch 0.
+        trainable_pde_params = {}
+        if hasattr(self.pde, "_trainable_params"):
+            trainable_pde_params = dict(self.pde._trainable_params)
+        if trainable_pde_params:
+            self.logger.info(
+                "INVERSE MODE — identifying %d PDE parameter(s): %s",
+                len(trainable_pde_params),
+                list(trainable_pde_params.keys()),
+            )
+            for name in trainable_pde_params:
+                self.history.setdefault(f"param_{name}", [])
+
+        # L-BFGS requires deterministic full-batch loss; override batch_size.
+        if getattr(self, "_is_lbfgs", False) and batch_size != num_points:
+            self.logger.warning(
+                "L-BFGS optimizer requires full-batch updates; "
+                f"overriding batch_size {batch_size} -> {num_points}."
+            )
+            batch_size = num_points
+
+        # Adaptive weights are incompatible with the L-BFGS closure (per-component
+        # gradient passes are too expensive); silently disable for the LBFGS phase.
+        if getattr(self, "_is_lbfgs", False) and self.use_adaptive_weights:
+            self.logger.warning(
+                "Adaptive loss weighting is disabled while running L-BFGS."
+            )
+            self._lbfgs_adaptive_disabled = True
+
         # Record start time
         start_time = datetime.now()
 
@@ -298,6 +508,10 @@ class PDETrainer:
                     "validation_frequency": self.validation_frequency,
                 },
                 "rl_enabled": self.rl_agent is not None,
+                "optimizer": getattr(self, "_optimizer_type", "adam"),
+                "mode": getattr(self.config.training, "mode", "forward"),
+                "trainable_parameters": list(trainable_pde_params.keys()),
+                "true_parameters": dict(getattr(self.pde, "_true_parameters", {})),
             }
             metadata_path = os.path.join(experiment_dir, "metadata.json")
             with open(metadata_path, "w") as f:
@@ -307,6 +521,11 @@ class PDETrainer:
 
         # Initialize points history
         self.points_history = []
+
+        # Emit an initial live snapshot so the Monitor tab has something to show
+        # before the first validation_frequency epochs elapse.
+        if experiment_dir:
+            self._save_live_snapshot(experiment_dir, epoch=0)
 
         for epoch in range(num_epochs):
             self.model.train()
@@ -323,8 +542,11 @@ class PDETrainer:
                     if self.rl_agent is not None
                     else self.config.training.collocation_distribution
                 )
+                sampling_kwargs = {}
+                if sampling_strategy == "residual_based":
+                    sampling_kwargs["model"] = self.model
                 x_batch, t_batch = self.pde.generate_collocation_points(
-                    batch_size, strategy=sampling_strategy
+                    batch_size, strategy=sampling_strategy, **sampling_kwargs
                 )
                 # Ensure the tensors are on the right device
                 x_batch = x_batch.to(self.device)
@@ -333,6 +555,14 @@ class PDETrainer:
                 # Store points for visualization
                 points = torch.cat([x_batch, t_batch], dim=1)  # t_batch is already [N, 1]
                 epoch_points.append(points.cpu().detach().numpy())
+
+                # L-BFGS: closure-based step that recomputes loss internally.
+                if getattr(self, "_is_lbfgs", False):
+                    losses = self._lbfgs_step(x_batch, t_batch)
+                    loss = losses["total"]
+                    pbar.set_postfix({"loss": loss.item(), "res": losses["residual"].item()})
+                    epoch_losses.append(float(loss.item()))
+                    continue
 
                 # Forward pass
                 self.optimizer.zero_grad()
@@ -468,6 +698,15 @@ class PDETrainer:
                 "initial_loss": ensure_float(losses["initial"]),
                 "learning_rate": current_lr,
             }
+            if "data" in losses:
+                epoch_data["data_loss"] = ensure_float(losses["data"])
+                self.history.setdefault("data_loss", [])
+
+            # Capture each trainable PDE parameter's current value so the
+            # dashboard can plot its trajectory in real time.
+            if trainable_pde_params:
+                for name, p in trainable_pde_params.items():
+                    epoch_data[f"param_{name}"] = float(p.detach().cpu().item())
 
             # Add weights info if using adaptive weights
             if self.use_adaptive_weights and len(self.history["loss_weights"]) > 0:
@@ -573,8 +812,31 @@ class PDETrainer:
                         "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     }
                 )
+                if trainable_pde_params:
+                    partial_metadata["current_parameters"] = {
+                        name: float(p.detach().cpu().item())
+                        for name, p in trainable_pde_params.items()
+                    }
                 with open(metadata_path, "w") as f:
                     json.dump(partial_metadata, f, indent=2)
+                # Refresh the live 3D snapshot for the dashboard.
+                self._save_live_snapshot(experiment_dir, epoch=epoch + 1)
+
+            # adam_lbfgs: hot-swap the optimizer once we cross the switch boundary.
+            if (
+                getattr(self, "_optimizer_type", "adam") == "adam_lbfgs"
+                and not self._is_lbfgs
+                and self._switch_epoch is not None
+                and (epoch + 1) >= self._switch_epoch
+            ):
+                self.logger.info(
+                    f"Switching optimizer to L-BFGS at epoch {epoch + 1}"
+                )
+                self._switch_to_lbfgs()
+                if self.use_adaptive_weights:
+                    self.logger.warning(
+                        "Adaptive loss weighting is disabled while running L-BFGS."
+                    )
 
         # End of training
         train_time = (datetime.now() - start_time).total_seconds() / 60.0
@@ -619,6 +881,16 @@ class PDETrainer:
                 "boundary_conditions": getattr(self.pde.config, "boundary_conditions", {}),
                 "initial_condition": getattr(self.pde.config, "initial_condition", {}),
                 "pde_parameters": getattr(self.pde.config, "parameters", {}),
+                # Inverse-problem bookkeeping (empty in forward mode).
+                "optimizer": getattr(self, "_optimizer_type", "adam"),
+                "mode": getattr(self.config.training, "mode", "forward"),
+                "trainable_parameters": list(trainable_pde_params.keys()),
+                "true_parameters": dict(getattr(self.pde, "_true_parameters", {})),
+                "identified_parameters": (
+                    self.pde.get_trainable_parameter_values()
+                    if hasattr(self.pde, "get_trainable_parameter_values") and trainable_pde_params
+                    else {}
+                ),
                 # Architecture information
                 "architecture": getattr(
                     self.model,
@@ -638,6 +910,9 @@ class PDETrainer:
             # Save training history as metrics.json and history.json
             self.logger.info("Saving training metrics...")
             save_training_metrics(self.history, experiment_dir, metadata=metadata)
+
+            # Final live snapshot reflects the trained model.
+            self._save_live_snapshot(experiment_dir, epoch=len(self.history.get("train_loss", [])))
 
             # Remove .running marker
             running_file = os.path.join(experiment_dir, ".running")

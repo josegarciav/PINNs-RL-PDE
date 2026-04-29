@@ -259,6 +259,19 @@ class HeatEquation(PDEBase):
                         return A * torch.prod(torch.sin(wave_number * x), dim=1, keepdim=True)
 
                 return initial_condition
+            elif ic_type == "sine_2d":
+                A = params.get("amplitude", 1.0)
+                kx = params.get("frequency_x", 2.0)
+                ky = params.get("frequency_y", 2.0)
+
+                def initial_condition(x, t):
+                    return (
+                        A
+                        * torch.sin(kx * torch.pi * x[:, 0:1])
+                        * torch.sin(ky * torch.pi * x[:, 1:2])
+                    )
+
+                return initial_condition
             else:
                 return super()._create_boundary_condition(bc_type, params)
         elif (
@@ -372,7 +385,7 @@ class HeatEquation(PDEBase):
         """
         # Compute PDE residual
         residual = self.compute_residual(model, x, t)
-        residual_loss = torch.mean(residual**2)
+        residual_loss = self._apply_loss_fn(residual)
 
         # Initialize boundary loss
         boundary_loss = torch.tensor(0.0, device=self.device)
@@ -404,42 +417,60 @@ class HeatEquation(PDEBase):
             ]
         ).reshape(-1, 1)
 
-        # Left boundary (x=0) points
-        x_left = torch.zeros(num_boundary_points, 1, device=self.device)
-        points_left = torch.cat([x_left, t_boundary], dim=1)
-        points_left.requires_grad_(True)
+        if self.dimension == 1:
+            x_min_1d, x_max_1d = self.config.domain[0]
+            x_left = torch.full((num_boundary_points, 1), x_min_1d, device=self.device)
+            points_left = torch.cat([x_left, t_boundary], dim=1)
+            points_left.requires_grad_(True)
 
-        # Right boundary (x=1) points
-        x_right = torch.ones(num_boundary_points, 1, device=self.device)
-        points_right = torch.cat([x_right, t_boundary], dim=1)
-        points_right.requires_grad_(True)
+            x_right = torch.full((num_boundary_points, 1), x_max_1d, device=self.device)
+            points_right = torch.cat([x_right, t_boundary], dim=1)
+            points_right.requires_grad_(True)
 
-        # Compute values at boundaries
-        u_left = model(points_left)
-        u_right = model(points_right)
+            u_left = model(points_left)
+            u_right = model(points_right)
 
-        # Compute derivatives at boundaries
-        du_dx_left = torch.autograd.grad(
-            u_left, points_left, grad_outputs=torch.ones_like(u_left), create_graph=True
-        )[0][
-            :, 0:1
-        ]  # Extract only the x-derivative
+            du_dx_left = torch.autograd.grad(
+                u_left, points_left, grad_outputs=torch.ones_like(u_left), create_graph=True
+            )[0][:, 0:1]
+            du_dx_right = torch.autograd.grad(
+                u_right,
+                points_right,
+                grad_outputs=torch.ones_like(u_right),
+                create_graph=True,
+            )[0][:, 0:1]
 
-        du_dx_right = torch.autograd.grad(
-            u_right,
-            points_right,
-            grad_outputs=torch.ones_like(u_right),
-            create_graph=True,
-        )[0][
-            :, 0:1
-        ]  # Extract only the x-derivative
+            # Periodic BC: function and derivative match at endpoints.
+            boundary_loss += self._apply_loss_fn(u_left - u_right)
+            boundary_loss += self._apply_loss_fn(du_dx_left - du_dx_right)
+        else:
+            # N-D periodic BCs: enforce u(min, ...) = u(max, ...) along each spatial axis.
+            # Function-value periodicity only (no derivative term) — sufficient for sine-product
+            # solutions and keeps the cost flat in the number of axes.
+            per_axis = max(num_boundary_points // (2 * self.dimension), 1)
+            for axis in range(self.dimension):
+                # Sample the complementary spatial coords uniformly inside the domain.
+                free_coords = torch.empty(per_axis, self.dimension, device=self.device)
+                for d in range(self.dimension):
+                    lo, hi = self.config.domain[d]
+                    free_coords[:, d] = torch.rand(per_axis, device=self.device) * (hi - lo) + lo
+                t_axis = (
+                    torch.rand(per_axis, 1, device=self.device)
+                    * (self.config.time_domain[1] - self.config.time_domain[0])
+                    + self.config.time_domain[0]
+                )
 
-        # Periodic boundary conditions:
-        # 1. Values should match: u(0,t) = u(1,t)
-        boundary_loss += torch.mean((u_left - u_right) ** 2)
+                lo_axis, hi_axis = self.config.domain[axis]
+                coords_min = free_coords.clone()
+                coords_max = free_coords.clone()
+                coords_min[:, axis] = lo_axis
+                coords_max[:, axis] = hi_axis
 
-        # 2. Derivatives should match: du/dx(0,t) = du/dx(1,t)
-        boundary_loss += torch.mean((du_dx_left - du_dx_right) ** 2)
+                points_min = torch.cat([coords_min, t_axis], dim=1)
+                points_max = torch.cat([coords_max, t_axis], dim=1)
+                u_min = model(points_min)
+                u_max = model(points_max)
+                boundary_loss += self._apply_loss_fn(u_min - u_max)
 
         # Get number of initial points from config or use default
         if self.config.training is not None:
@@ -454,36 +485,60 @@ class HeatEquation(PDEBase):
         else:
             num_initial = max(len(x) // 5, 10)
 
-        # Calculate domain ranges
-        x_min, x_max = self.config.domain[0]
-        x_boundary = (x_max - x_min) * 0.1  # Use 10% of domain for boundary regions
+        if self.dimension == 1:
+            x_min, x_max = self.config.domain[0]
+            x_boundary = (x_max - x_min) * 0.1  # Use 10% of domain for boundary regions
 
-        x_initial = torch.cat(
-            [
-                torch.linspace(x_min, x_min + x_boundary, num_initial // 4, device=self.device),
-                torch.linspace(
-                    x_min + x_boundary,
-                    x_max - x_boundary,
-                    num_initial // 2,
-                    device=self.device,
-                ),
-                torch.linspace(x_max - x_boundary, x_max, num_initial // 4, device=self.device),
-            ]
-        ).reshape(-1, 1)
+            x_initial = torch.cat(
+                [
+                    torch.linspace(
+                        x_min, x_min + x_boundary, num_initial // 4, device=self.device
+                    ),
+                    torch.linspace(
+                        x_min + x_boundary,
+                        x_max - x_boundary,
+                        num_initial // 2,
+                        device=self.device,
+                    ),
+                    torch.linspace(
+                        x_max - x_boundary, x_max, num_initial // 4, device=self.device
+                    ),
+                ]
+            ).reshape(-1, 1)
 
-        t_initial = torch.zeros_like(x_initial)
-        points_initial = torch.cat([x_initial, t_initial], dim=1)
-        u_initial = model(points_initial)
+            t_initial = torch.zeros_like(x_initial)
+            points_initial = torch.cat([x_initial, t_initial], dim=1)
+            u_initial = model(points_initial)
 
-        # Get initial condition function
-        if "initial" in self.boundary_conditions:
-            u_target = self.boundary_conditions["initial"](x_initial, t_initial)
+            if "initial" in self.boundary_conditions:
+                u_target = self.boundary_conditions["initial"](x_initial, t_initial)
+            else:
+                k = self.config.initial_condition.get("frequency", 2.0)
+                u_target = torch.sin(k * torch.pi * x_initial)
+
+            initial_loss = self._apply_loss_fn(u_initial - u_target)
         else:
-            # Default to sine wave if no initial condition specified
-            k = self.config.initial_condition.get("frequency", 2.0)
-            u_target = torch.sin(k * torch.pi * x_initial)
+            # N-D IC: sample uniformly in the spatial domain at t=0.
+            x_initial = torch.empty(num_initial, self.dimension, device=self.device)
+            for d in range(self.dimension):
+                lo, hi = self.config.domain[d]
+                x_initial[:, d] = torch.rand(num_initial, device=self.device) * (hi - lo) + lo
+            t_initial = torch.zeros(num_initial, 1, device=self.device)
+            points_initial = torch.cat([x_initial, t_initial], dim=1)
+            u_initial = model(points_initial)
 
-        initial_loss = torch.mean((u_initial - u_target) ** 2)
+            if "initial" in self.boundary_conditions:
+                u_target = self.boundary_conditions["initial"](x_initial, t_initial)
+            else:
+                # Default product-of-sines if no IC function is wired.
+                k = self.config.initial_condition.get("frequency", 2.0)
+                u_target = torch.ones(num_initial, 1, device=self.device)
+                for d in range(self.dimension):
+                    u_target = u_target * torch.sin(
+                        k * torch.pi * x_initial[:, d : d + 1]
+                    )
+
+            initial_loss = self._apply_loss_fn(u_initial - u_target)
 
         # Compute smoothness loss if weight > 0
         smoothness_loss = torch.tensor(0.0, device=self.device)
@@ -502,12 +557,17 @@ class HeatEquation(PDEBase):
         if smoothness_weight > 0:
             smoothness_loss = self._compute_smoothness_loss(model, x, t)
 
+        # Data-fitting loss for inverse-problem mode (zero when no obs attached).
+        data_loss = self._compute_data_loss(model)
+        data_weight = self._data_loss_weight(1.0)
+
         # Store individual loss components
         losses = {
             "residual": residual_loss,  # PDE residual loss
             "boundary": boundary_loss,  # Boundary condition loss
             "initial": initial_loss,  # Initial condition loss
             "smoothness": smoothness_loss,  # Smoothness regularization
+            "data": data_loss,  # Observation data fit (inverse mode)
         }
 
         # Use adaptive weights if enabled
@@ -523,7 +583,11 @@ class HeatEquation(PDEBase):
             # The total loss will be computed by the trainer using adaptive weights
             # We just return the individual components
             losses["total"] = (
-                residual_loss + boundary_loss + initial_loss + smoothness_weight * smoothness_loss
+                residual_loss
+                + boundary_loss
+                + initial_loss
+                + smoothness_weight * smoothness_loss
+                + data_weight * data_loss
             )
         else:
             # Otherwise use fixed weights from config
@@ -548,47 +612,35 @@ class HeatEquation(PDEBase):
                 + w_bc * boundary_loss
                 + w_ic * initial_loss
                 + smoothness_weight * smoothness_loss
+                + data_weight * data_loss
             )
             losses["total"] = total_loss
 
         return losses
 
     def _compute_smoothness_loss(self, model, x, t):
-        """
-        Compute smoothness regularization loss.
-
-        Args:
-            model: Neural network model
-            x: Spatial coordinates
-            t: Time coordinates
-
-        Returns:
-            torch.Tensor: Smoothness loss
-        """
-        # Sample additional points for smoothness calculation
-        x.shape[0]
+        """Smoothness regularization via finite-difference gradient magnitudes."""
         epsilon = 1e-4
+        u_center = model(torch.cat([x, t], dim=1))
+        smoothness_loss = torch.tensor(0.0, device=self.device)
 
-        # Create slightly shifted points to compute gradients
-        x_right = x + epsilon
-        x_left = x - epsilon
-
-        # Make sure the points stay within the domain bounds
-        x_right = torch.clamp(x_right, self.domain[0][0], self.domain[0][1])
-        x_left = torch.clamp(x_left, self.domain[0][0], self.domain[0][1])
-
-        # Forward pass for original and shifted points
-        input_right = torch.cat([x_right, t], dim=1)
-        input_left = torch.cat([x_left, t], dim=1)
-
-        u_right = model(input_right)
-        u_left = model(input_left)
-
-        # Calculate approximate derivatives
-        du_dx_right = (u_right - model(torch.cat([x, t], dim=1))) / epsilon
-        du_dx_left = (model(torch.cat([x, t], dim=1)) - u_left) / epsilon
-
-        # Smoothness loss is the sum of the absolute gradients
-        smoothness_loss = torch.mean(torch.abs(du_dx_right)) + torch.mean(torch.abs(du_dx_left))
+        for d in range(self.dimension):
+            x_plus = x.clone()
+            x_minus = x.clone()
+            x_plus[:, d : d + 1] = torch.clamp(
+                x[:, d : d + 1] + epsilon, self.domain[d][0], self.domain[d][1]
+            )
+            x_minus[:, d : d + 1] = torch.clamp(
+                x[:, d : d + 1] - epsilon, self.domain[d][0], self.domain[d][1]
+            )
+            u_plus = model(torch.cat([x_plus, t], dim=1))
+            u_minus = model(torch.cat([x_minus, t], dim=1))
+            du_forward = (u_plus - u_center) / epsilon
+            du_backward = (u_center - u_minus) / epsilon
+            smoothness_loss = (
+                smoothness_loss
+                + torch.mean(torch.abs(du_forward))
+                + torch.mean(torch.abs(du_backward))
+            )
 
         return smoothness_loss

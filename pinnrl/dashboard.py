@@ -228,6 +228,30 @@ app.layout = html.Div(
                                                                     ],
                                                                     style=FIELD_STYLE,
                                                                 ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Mode:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Dropdown(
+                                                                            id="train-mode-selector",
+                                                                            options=[
+                                                                                {
+                                                                                    "label": "Forward (solve)",
+                                                                                    "value": "forward",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Inverse (identify)",
+                                                                                    "value": "inverse",
+                                                                                },
+                                                                            ],
+                                                                            value="forward",
+                                                                            clearable=False,
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
                                                             ],
                                                             style={
                                                                 "width": "48%",
@@ -378,6 +402,66 @@ app.layout = html.Div(
                                                                     ],
                                                                     style=FIELD_STYLE,
                                                                 ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Optimizer:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Dropdown(
+                                                                            id="train-optimizer-selector",
+                                                                            options=[
+                                                                                {
+                                                                                    "label": "Adam",
+                                                                                    "value": "adam",
+                                                                                },
+                                                                                {
+                                                                                    "label": "L-BFGS",
+                                                                                    "value": "lbfgs",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Adam → L-BFGS (two-phase)",
+                                                                                    "value": "adam_lbfgs",
+                                                                                },
+                                                                            ],
+                                                                            value=_TRAINING_DEFAULTS.get(
+                                                                                "optimizer", "adam"
+                                                                            ),
+                                                                            clearable=False,
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Loss Function:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Dropdown(
+                                                                            id="train-loss-fn-selector",
+                                                                            options=[
+                                                                                {
+                                                                                    "label": "MSE (mean squared error)",
+                                                                                    "value": "mse",
+                                                                                },
+                                                                                {
+                                                                                    "label": "MAE (mean absolute error)",
+                                                                                    "value": "mae",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Huber (robust)",
+                                                                                    "value": "huber",
+                                                                                },
+                                                                            ],
+                                                                            value=_TRAINING_DEFAULTS.get(
+                                                                                "loss_function", "mse"
+                                                                            ),
+                                                                            clearable=False,
+                                                                        ),
+                                                                    ],
+                                                                    style=FIELD_STYLE,
+                                                                ),
                                                             ],
                                                             style={
                                                                 "width": "48%",
@@ -398,6 +482,125 @@ app.layout = html.Div(
                                                         "borderRadius": "6px",
                                                         "border": "1px solid #c0d8f0",
                                                     },
+                                                ),
+                                                # Inverse-mode options (revealed when Mode = Inverse)
+                                                html.Div(
+                                                    id="inverse-options-panel",
+                                                    style={"display": "none"},
+                                                    children=[
+                                                        html.H4(
+                                                            "Inverse Problem — Parameter Identification",
+                                                            style={
+                                                                "marginTop": "20px",
+                                                                "borderBottom": "2px solid #FF9800",
+                                                                "paddingBottom": "8px",
+                                                            },
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label(
+                                                                    "Parameters to identify:",
+                                                                    style=LABEL_STYLE,
+                                                                ),
+                                                                dcc.Checklist(
+                                                                    id="train-identify-params",
+                                                                    options=[],
+                                                                    value=[],
+                                                                ),
+                                                            ],
+                                                            style=FIELD_STYLE,
+                                                        ),
+                                                        html.Div(
+                                                            id="train-initial-guess-inputs",
+                                                            style=FIELD_STYLE,
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label(
+                                                                    "Observation source:",
+                                                                    style=LABEL_STYLE,
+                                                                ),
+                                                                dcc.RadioItems(
+                                                                    id="train-obs-source",
+                                                                    options=[
+                                                                        {
+                                                                            "label": " Synthetic (from exact solution + noise)",
+                                                                            "value": "synth",
+                                                                        },
+                                                                        {
+                                                                            "label": " File (.npz with x,t,u)",
+                                                                            "value": "file",
+                                                                        },
+                                                                    ],
+                                                                    value="synth",
+                                                                ),
+                                                            ],
+                                                            style=FIELD_STYLE,
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Observation points:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Input(
+                                                                            id="train-obs-points",
+                                                                            type="number",
+                                                                            value=200,
+                                                                            min=20,
+                                                                            step=20,
+                                                                            style={"width": "100%"},
+                                                                        ),
+                                                                    ],
+                                                                    style={
+                                                                        "width": "48%",
+                                                                        "display": "inline-block",
+                                                                        "paddingRight": "2%",
+                                                                    },
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Noise std:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Input(
+                                                                            id="train-obs-noise",
+                                                                            type="number",
+                                                                            value=0.01,
+                                                                            min=0.0,
+                                                                            step=0.001,
+                                                                            style={"width": "100%"},
+                                                                        ),
+                                                                    ],
+                                                                    style={
+                                                                        "width": "48%",
+                                                                        "display": "inline-block",
+                                                                        "paddingLeft": "2%",
+                                                                    },
+                                                                ),
+                                                            ],
+                                                            style=FIELD_STYLE,
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label(
+                                                                    "Observation file path (.npz):",
+                                                                    style=LABEL_STYLE,
+                                                                ),
+                                                                dcc.Input(
+                                                                    id="train-obs-path",
+                                                                    type="text",
+                                                                    value="",
+                                                                    placeholder="/absolute/path/to/observations.npz",
+                                                                    style={"width": "100%"},
+                                                                ),
+                                                            ],
+                                                            style=FIELD_STYLE,
+                                                        ),
+                                                    ],
                                                 ),
                                                 # Launch button
                                                 html.Div(
@@ -539,6 +742,61 @@ app.layout = html.Div(
                                         html.Div(
                                             [dcc.Graph(id="loss-graph")],
                                             style={"width": "100%"},
+                                        ),
+                                        # Live 3D solution snapshot
+                                        html.Div(
+                                            [
+                                                html.H3(
+                                                    "Live Solution Snapshot",
+                                                    style={"textAlign": "center"},
+                                                ),
+                                                html.Div(
+                                                    id="live-snapshot-epoch",
+                                                    style={
+                                                        "textAlign": "center",
+                                                        "fontStyle": "italic",
+                                                        "marginBottom": "8px",
+                                                    },
+                                                ),
+                                                html.Div(
+                                                    [
+                                                        html.Div(
+                                                            [
+                                                                dcc.Graph(
+                                                                    id="live-prediction-3d",
+                                                                    style={"height": "55vh"},
+                                                                )
+                                                            ],
+                                                            style={
+                                                                "width": "50%",
+                                                                "display": "inline-block",
+                                                                "verticalAlign": "top",
+                                                            },
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                dcc.Graph(
+                                                                    id="live-residual-3d",
+                                                                    style={"height": "55vh"},
+                                                                )
+                                                            ],
+                                                            style={
+                                                                "width": "50%",
+                                                                "display": "inline-block",
+                                                                "verticalAlign": "top",
+                                                            },
+                                                        ),
+                                                    ]
+                                                ),
+                                            ],
+                                            style={"marginTop": "20px"},
+                                        ),
+                                        # Identified-parameter trajectories (inverse mode only)
+                                        html.Div(
+                                            [
+                                                dcc.Graph(id="param-trajectory-graph"),
+                                            ],
+                                            style={"width": "100%", "marginTop": "10px"},
                                         ),
                                         # Experiment details
                                         html.Div(
@@ -1135,7 +1393,7 @@ def update_pde_selection(pde_name):
 
 @app.callback(
     Output("trainer-status", "children"),
-    Input("launch-trainer-button", "n_clicks"),
+    Input("start-training-button", "n_clicks"),
     State("train-pde-selector", "value"),
     State("train-arch-selector", "value"),
     State("train-epochs-input", "value"),
@@ -1146,6 +1404,15 @@ def update_pde_selection(pde_name):
     State("train-initial-points", "value"),
     State("train-device-selector", "value"),
     State("train-rl-toggle", "value"),
+    State("train-optimizer-selector", "value"),
+    State("train-mode-selector", "value"),
+    State("train-identify-params", "value"),
+    State("train-initial-guess-inputs", "children"),
+    State("train-obs-source", "value"),
+    State("train-obs-points", "value"),
+    State("train-obs-noise", "value"),
+    State("train-obs-path", "value"),
+    State("train-loss-fn-selector", "value"),
     prevent_initial_call=True,
 )
 def launch_trainer(
@@ -1160,26 +1427,33 @@ def launch_trainer(
     initial_pts,
     device,
     rl_toggle,
+    optimizer,
+    mode,
+    identify_params,
+    initial_guess_children,
+    obs_source,
+    obs_points,
+    obs_noise,
+    obs_path,
+    loss_fn,
 ):
     """Launch a headless training subprocess with the selected parameters."""
     if not n_clicks:
         return ""
     try:
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        train_script = os.path.join(project_root, "src", "training", "train.py")
-        config_path = os.path.join(project_root, "src", "config", "config.yaml")
+        # Use the installed module path; the package was renamed src/ -> pinnrl/.
+        config_path = os.path.join(project_root, "pinnrl", "config", "config.yaml")
         if not os.path.exists(config_path):
             config_path = os.path.join(project_root, "config.yaml")
         log_file = os.path.join(project_root, "trainer_launch.log")
-
-        if not os.path.exists(train_script):
-            return "Error: src/training/train.py not found"
 
         use_rl = "rl" in (rl_toggle or [])
 
         cmd = [
             sys.executable,
-            train_script,
+            "-m",
+            "pinnrl.training.train",
             "--pde",
             pde_name,
             "--arch",
@@ -1203,6 +1477,29 @@ def launch_trainer(
         ]
         if use_rl:
             cmd.append("--rl")
+        if optimizer:
+            cmd += ["--optimizer", optimizer]
+        if loss_fn:
+            cmd += ["--loss-function", loss_fn]
+
+        # Inverse-mode flags: only add when inverse mode is selected and at least
+        # one parameter is checked, so the trainer falls back to the forward path
+        # otherwise.
+        mode = mode or "forward"
+        if mode == "inverse" and identify_params:
+            cmd += ["--mode", "inverse"]
+            for name in identify_params:
+                cmd += ["--identify", str(name)]
+            # Initial guesses come from the dynamically-rendered inputs.
+            for guess_spec in _extract_initial_guesses(initial_guess_children, identify_params):
+                cmd += ["--initial-guess", guess_spec]
+            if obs_source == "file" and obs_path:
+                cmd += ["--obs-path", str(obs_path)]
+            else:
+                if obs_points:
+                    cmd += ["--obs-points", str(int(obs_points))]
+                if obs_noise is not None:
+                    cmd += ["--obs-noise", str(float(obs_noise))]
 
         log_fh = open(log_file, "w")
         subprocess.Popen(
@@ -1213,10 +1510,13 @@ def launch_trainer(
         )
 
         rl_str = " + RL" if use_rl else ""
+        mode_str = " (inverse)" if mode == "inverse" else ""
         return html.Div(
             [
                 html.Span("Training started! ", style={"color": "#4CAF50", "fontWeight": "bold"}),
-                html.Span(f"{pde_name} / {arch}{rl_str} / {epochs} epochs / LR={lr}"),
+                html.Span(
+                    f"{pde_name} / {arch}{rl_str}{mode_str} / {epochs} epochs / LR={lr} / opt={optimizer or 'adam'} / loss={loss_fn or 'mse'}"
+                ),
                 html.Br(),
                 html.Span(
                     "Switch to the Monitor sub-tab to track progress.",
@@ -1226,6 +1526,274 @@ def launch_trainer(
         )
     except Exception as e:
         return f"Error launching training: {e}"
+
+
+def _extract_initial_guesses(children, selected_params):
+    """Pull ``name=value`` strings out of the dynamically-built guess inputs.
+
+    The Mode=Inverse panel renders one numeric ``dcc.Input`` per checked
+    parameter with id ``{"role": "initial-guess", "param": <name>}``. Dash
+    serialises that tree as nested dicts under ``children`` State; this helper
+    walks the tree to recover the ``name=value`` pairs the CLI expects.
+    """
+    if not children or not selected_params:
+        return []
+    selected = set(selected_params)
+    guesses = []
+
+    def visit(node):
+        if isinstance(node, list):
+            for item in node:
+                visit(item)
+            return
+        if not isinstance(node, dict):
+            return
+        props = node.get("props", {}) or {}
+        node_id = props.get("id")
+        if isinstance(node_id, dict) and node_id.get("role") == "initial-guess":
+            param = node_id.get("param")
+            value = props.get("value")
+            if param in selected and value is not None:
+                guesses.append(f"{param}={value}")
+        # Recurse into children.
+        sub = props.get("children")
+        if sub is not None:
+            visit(sub)
+
+    visit(children)
+    return guesses
+
+
+# ============================================================
+# Tab 1: Inverse-mode panel callbacks
+# ============================================================
+
+
+@app.callback(
+    Output("inverse-options-panel", "style"),
+    Input("train-mode-selector", "value"),
+)
+def toggle_inverse_panel(mode):
+    """Show the parameter-identification panel only when Inverse mode is active."""
+    if mode == "inverse":
+        return {"display": "block", "marginTop": "12px"}
+    return {"display": "none"}
+
+
+@app.callback(
+    [
+        Output("train-identify-params", "options"),
+        Output("train-identify-params", "value"),
+    ],
+    Input("train-pde-selector", "value"),
+)
+def populate_identify_options(pde_name):
+    """Refresh the identifiable-parameter checklist whenever the PDE changes."""
+    pde_key = _PDE_NAME_TO_KEY.get(pde_name, "heat")
+    params = _PDE_CONFIGS.get(pde_key, {}).get("parameters", {}) or {}
+    options = [{"label": f" {name} (true: {value})", "value": name} for name, value in params.items()]
+    return options, []
+
+
+@app.callback(
+    Output("train-initial-guess-inputs", "children"),
+    [
+        Input("train-identify-params", "value"),
+        Input("train-pde-selector", "value"),
+    ],
+)
+def render_initial_guess_inputs(selected_params, pde_name):
+    """Build one numeric input per checked parameter, prefilled with the true value.
+
+    Each input gets a pattern-matching id ``{"role": "initial-guess",
+    "param": <name>}`` so ``_extract_initial_guesses`` can recover the values
+    from the launch callback's ``State`` payload without a per-parameter
+    callback.
+    """
+    if not selected_params:
+        return []
+    pde_key = _PDE_NAME_TO_KEY.get(pde_name, "heat")
+    true_params = _PDE_CONFIGS.get(pde_key, {}).get("parameters", {}) or {}
+    children = [html.Label("Initial guesses:", style=LABEL_STYLE)]
+    for name in selected_params:
+        prefill = float(true_params.get(name, 1.0))
+        children.append(
+            html.Div(
+                [
+                    html.Span(f"{name}:", style={"display": "inline-block", "width": "120px"}),
+                    dcc.Input(
+                        id={"role": "initial-guess", "param": name},
+                        type="number",
+                        value=prefill,
+                        step=0.01,
+                        style={"width": "200px"},
+                    ),
+                    html.Span(
+                        f"  (true: {prefill})",
+                        style={"marginLeft": "8px", "color": "#888", "fontStyle": "italic"},
+                    ),
+                ],
+                style={"marginBottom": "6px"},
+            )
+        )
+    return children
+
+
+# ============================================================
+# Tab 1 Monitor: live snapshot + parameter trajectory callbacks
+# ============================================================
+
+
+def _empty_3d_figure(message: str) -> go.Figure:
+    """Placeholder 3D figure shown when no live snapshot exists yet."""
+    fig = go.Figure()
+    fig.update_layout(
+        annotations=[
+            dict(
+                text=message,
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False,
+                font=dict(size=14, color="#888"),
+            )
+        ],
+        margin=dict(l=0, r=0, t=30, b=0),
+    )
+    return fig
+
+
+@app.callback(
+    [
+        Output("live-prediction-3d", "figure"),
+        Output("live-residual-3d", "figure"),
+        Output("live-snapshot-epoch", "children"),
+    ],
+    [
+        Input("experiment-selector", "value"),
+        Input("interval-component", "n_intervals"),
+    ],
+)
+def update_live_snapshot(experiment, _n_intervals):
+    """Read ``live_snapshot.npz`` for the selected experiment and render two surfaces.
+
+    The trainer writes this file every ``validation_frequency`` epochs (and
+    once before the first epoch), so the Monitor tab updates roughly in step
+    with the loss curve while training is running.
+    """
+    if not experiment:
+        empty = _empty_3d_figure("Select an experiment to view live snapshot")
+        return empty, empty, ""
+    snapshot_path = os.path.join(experiment, "live_snapshot.npz")
+    if not os.path.exists(snapshot_path):
+        empty = _empty_3d_figure("Snapshot not available yet — waiting for first save")
+        return empty, empty, ""
+    try:
+        data = np.load(snapshot_path)
+        axis_x = data["axis_x"]
+        axis_y = data["axis_y"]
+        u_pred = data["u_pred"]
+        residual = data["residual"]
+        epoch = int(data["epoch"]) if "epoch" in data.files else 0
+        dimension = int(data["dimension"]) if "dimension" in data.files else 1
+        x_label = str(data["x_label"]) if "x_label" in data.files else "x"
+        y_label = str(data["y_label"]) if "y_label" in data.files else "t"
+        fixed_t = float(data["fixed_t"]) if "fixed_t" in data.files else float("nan")
+    except Exception as exc:
+        empty = _empty_3d_figure(f"Snapshot read error: {exc}")
+        return empty, empty, ""
+
+    pred_fig = go.Figure(data=[go.Surface(x=axis_x, y=axis_y, z=u_pred, colorscale="viridis")])
+    pred_fig.update_layout(
+        title="Predicted solution u",
+        scene=dict(xaxis_title=x_label, yaxis_title=y_label, zaxis_title="u"),
+        margin=dict(l=0, r=0, t=40, b=0),
+    )
+
+    res_fig = go.Figure(data=[go.Surface(x=axis_x, y=axis_y, z=residual, colorscale="RdBu", reversescale=True)])
+    res_fig.update_layout(
+        title="PDE residual",
+        scene=dict(xaxis_title=x_label, yaxis_title=y_label, zaxis_title="residual"),
+        margin=dict(l=0, r=0, t=40, b=0),
+    )
+
+    caption = f"Snapshot @ epoch {epoch}"
+    if dimension == 2 and not np.isnan(fixed_t):
+        caption += f"  (slice at t = {fixed_t:.3f})"
+    return pred_fig, res_fig, caption
+
+
+@app.callback(
+    Output("param-trajectory-graph", "figure"),
+    [
+        Input("experiment-selector", "value"),
+        Input("interval-component", "n_intervals"),
+    ],
+)
+def update_param_trajectories(experiment, _n_intervals):
+    """Plot the trajectory of each identified PDE parameter over training epochs.
+
+    Reads ``history.json`` for the ``param_<name>`` series produced by the
+    trainer and draws a dashed reference line at the true value (recovered
+    from ``metadata.json["true_parameters"]``). Hidden when no trainable
+    parameters are present.
+    """
+    fig = go.Figure()
+    if not experiment:
+        fig.update_layout(
+            title="Identified Parameters (inverse mode)",
+            annotations=[
+                dict(text="Select an experiment", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            ],
+            height=320,
+        )
+        return fig
+    history, metadata, _ = load_experiment_data(experiment)
+    history = history or {}
+    metadata = metadata or {}
+    true_params = metadata.get("true_parameters", {}) or {}
+
+    param_keys = [k for k in history.keys() if k.startswith("param_")]
+    if not param_keys:
+        fig.update_layout(
+            title="Identified Parameters (forward run — none)",
+            annotations=[
+                dict(
+                    text="No trainable PDE parameters in this run",
+                    xref="paper",
+                    yref="paper",
+                    x=0.5,
+                    y=0.5,
+                    showarrow=False,
+                    font=dict(color="#888"),
+                )
+            ],
+            height=320,
+        )
+        return fig
+
+    for key in param_keys:
+        name = key[len("param_"):]
+        series = history[key]
+        epochs = list(range(1, len(series) + 1))
+        fig.add_trace(go.Scatter(x=epochs, y=series, mode="lines", name=name))
+        if name in true_params:
+            fig.add_hline(
+                y=float(true_params[name]),
+                line_dash="dash",
+                line_color="#888",
+                annotation_text=f"true {name}={true_params[name]}",
+                annotation_position="top right",
+            )
+    fig.update_layout(
+        title="Identified Parameters",
+        xaxis_title="Epoch",
+        yaxis_title="Value",
+        height=360,
+        margin=dict(l=40, r=20, t=50, b=40),
+    )
+    return fig
 
 
 # ============================================================

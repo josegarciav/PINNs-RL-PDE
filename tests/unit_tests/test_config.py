@@ -466,11 +466,13 @@ class TestToDict:
         d = _minimal_config_dict()
         d["training"]["loss_weights"] = {"residual": 5.0, "boundary": 3.0, "initial": 2.0}
         cfg = _config_from_dict(d)
-        assert cfg.to_dict()["training"]["loss_weights"] == {
-            "residual": 5.0,
-            "boundary": 3.0,
-            "initial": 2.0,
-        }
+        # TrainingConfig backfills a default ``data`` weight for inverse mode;
+        # the user-supplied keys must round-trip unchanged.
+        out = cfg.to_dict()["training"]["loss_weights"]
+        assert out["residual"] == 5.0
+        assert out["boundary"] == 3.0
+        assert out["initial"] == 2.0
+        assert "data" in out
 
 
 # ===========================================================================
@@ -623,7 +625,13 @@ class TestTrainingConfig:
 
     def test_post_init_defaults_loss_weights(self):
         tc = self._make_training_config()
-        assert tc.loss_weights == {"residual": 1.0, "boundary": 1.0, "initial": 1.0}
+        # ``data`` is auto-added so inverse-mode runs always have a weight.
+        assert tc.loss_weights == {
+            "residual": 1.0,
+            "boundary": 1.0,
+            "initial": 1.0,
+            "data": 1.0,
+        }
 
     def test_post_init_defaults_adaptive_weights(self):
         tc = self._make_training_config()
@@ -808,8 +816,13 @@ class TestBugFixLossWeightsNormalization:
         d = _minimal_config_dict()
         d["training"].pop("loss_weights", None)
         cfg = _config_from_dict(d)
-        # __post_init__ default
-        assert cfg.training.loss_weights == {"residual": 1.0, "boundary": 1.0, "initial": 1.0}
+        # __post_init__ default (now also includes ``data`` for inverse mode).
+        assert cfg.training.loss_weights == {
+            "residual": 1.0,
+            "boundary": 1.0,
+            "initial": 1.0,
+            "data": 1.0,
+        }
 
 
 class TestBugFixOptimizerConfigLR:

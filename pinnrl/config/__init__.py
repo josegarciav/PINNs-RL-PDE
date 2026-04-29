@@ -44,6 +44,27 @@ class EarlyStoppingConfig:
 
 
 @dataclass
+class LBFGSConfig:
+    """L-BFGS optimizer settings.
+
+    Attributes:
+        history_size: Number of past gradients/updates retained for the
+            inverse-Hessian approximation.
+        max_iter: Max iterations of the inner line search per ``step()`` call.
+        line_search_fn: Line-search strategy passed to ``torch.optim.LBFGS``
+            (``"strong_wolfe"`` or ``None``).
+        tolerance_grad: First-order optimality tolerance.
+        tolerance_change: Loss-change tolerance for early termination.
+    """
+
+    history_size: int = 50
+    max_iter: int = 20
+    line_search_fn: Optional[str] = "strong_wolfe"
+    tolerance_grad: float = 1e-7
+    tolerance_change: float = 1e-9
+
+
+@dataclass
 class AdaptiveWeightsConfig:
     """Configuration for adaptive loss weighting.
 
@@ -99,12 +120,36 @@ class TrainingConfig:
     collocation_distribution: str = "uniform"
     adaptive_weights: AdaptiveWeightsConfig = None
     loss_weights: Dict[str, float] = None
+    optimizer: str = "adam"  # "adam" | "lbfgs" | "adam_lbfgs"
+    adam_lbfgs_switch_ratio: float = 0.7
+    lbfgs: Optional[LBFGSConfig] = None
+    mode: str = "forward"  # "forward" | "inverse"
+    loss_function: str = "mse"  # "mse" | "mae" | "huber"
+    huber_delta: float = 1.0
 
     def __post_init__(self):
         if self.loss_weights is None:
             self.loss_weights = {"residual": 1.0, "boundary": 1.0, "initial": 1.0}
+        if "data" not in self.loss_weights:
+            self.loss_weights["data"] = 1.0
         if self.adaptive_weights is None:
             self.adaptive_weights = AdaptiveWeightsConfig()
+        if self.lbfgs is None:
+            self.lbfgs = LBFGSConfig()
+        if self.optimizer not in ("adam", "lbfgs", "adam_lbfgs"):
+            raise ValueError(
+                f"Invalid optimizer '{self.optimizer}'. "
+                "Choose from 'adam', 'lbfgs', or 'adam_lbfgs'."
+            )
+        if self.mode not in ("forward", "inverse"):
+            raise ValueError(
+                f"Invalid mode '{self.mode}'. Choose 'forward' or 'inverse'."
+            )
+        if self.loss_function not in ("mse", "mae", "huber"):
+            raise ValueError(
+                f"Invalid loss_function '{self.loss_function}'. "
+                "Choose 'mse', 'mae', or 'huber'."
+            )
 
     @property
     def optimizer_config(self) -> Dict[str, Any]:
@@ -456,6 +501,16 @@ class Config:
         # Load adaptive weights configuration
         adaptive_weights_config = training_config.get("adaptive_weights", {})
 
+        # Load L-BFGS optimizer configuration
+        lbfgs_config_dict = training_config.get("lbfgs", {})
+        lbfgs_cfg = LBFGSConfig(
+            history_size=lbfgs_config_dict.get("history_size", 50),
+            max_iter=lbfgs_config_dict.get("max_iter", 20),
+            line_search_fn=lbfgs_config_dict.get("line_search_fn", "strong_wolfe"),
+            tolerance_grad=lbfgs_config_dict.get("tolerance_grad", 1e-7),
+            tolerance_change=lbfgs_config_dict.get("tolerance_change", 1e-9),
+        )
+
         # Bug #2 fix: read learning_rate/weight_decay from optimizer_config if nested
         optimizer_cfg = training_config.get("optimizer_config", {})
         learning_rate = optimizer_cfg.get(
@@ -500,6 +555,10 @@ class Config:
                 eps=adaptive_weights_config.get("eps", 1e-5),
             ),
             loss_weights=raw_loss_weights,
+            optimizer=training_config.get("optimizer", "adam"),
+            adam_lbfgs_switch_ratio=training_config.get("adam_lbfgs_switch_ratio", 0.7),
+            lbfgs=lbfgs_cfg,
+            mode=training_config.get("mode", "forward"),
         )
 
         # RL configuration
@@ -688,6 +747,16 @@ class Config:
                     "eps": self.training.adaptive_weights.eps,
                 },
                 "loss_weights": self.training.loss_weights,
+                "optimizer": self.training.optimizer,
+                "adam_lbfgs_switch_ratio": self.training.adam_lbfgs_switch_ratio,
+                "lbfgs": {
+                    "history_size": self.training.lbfgs.history_size,
+                    "max_iter": self.training.lbfgs.max_iter,
+                    "line_search_fn": self.training.lbfgs.line_search_fn,
+                    "tolerance_grad": self.training.lbfgs.tolerance_grad,
+                    "tolerance_change": self.training.lbfgs.tolerance_change,
+                },
+                "mode": self.training.mode,
             },
             "rl": {
                 "enabled": self.rl.enabled,
