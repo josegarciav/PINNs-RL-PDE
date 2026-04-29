@@ -568,8 +568,16 @@ class PDETrainer:
                 self.optimizer.zero_grad()
                 losses = self.pde.compute_loss(self.model, x_batch, t_batch)
 
-                # Apply adaptive weights if enabled
-                if self.use_adaptive_weights:
+                # Adaptive weighting reweights the physics components only
+                # (residual / boundary / initial). In ``data_only`` mode those
+                # are zero contributions to the objective, so adaptive
+                # weighting is a no-op and we trust the total assembled by
+                # ``PDEBase.compute_loss`` (already ``data`` only).
+                training_mode = self.config.training.mode
+                if self.use_adaptive_weights and training_mode == "data_only":
+                    # Skip the recomputation block below.
+                    pass
+                elif self.use_adaptive_weights:
                     # Prepare loss components tensor - include smoothness if present
                     loss_components = []
                     component_names = ["residual", "boundary", "initial"]
@@ -616,6 +624,16 @@ class PDETrainer:
                     for i, component in enumerate(component_names):
                         if i < len(weights):  # Ensure we have a weight for this component
                             total_loss += weights[i] * losses[component]
+
+                    # Outside ``forward`` mode the data term is part of the
+                    # objective. Adaptive weighting only sees physics
+                    # components, so re-attach the data term explicitly.
+                    if (
+                        training_mode in ("inverse", "data_augmented")
+                        and "data" in losses
+                    ):
+                        data_w = self.config.training.loss_weights.get("data", 1.0) or 1.0
+                        total_loss = total_loss + data_w * losses["data"]
 
                     losses["total"] = total_loss
 

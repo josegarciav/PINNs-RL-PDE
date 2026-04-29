@@ -123,7 +123,7 @@ class TrainingConfig:
     optimizer: str = "adam"  # "adam" | "lbfgs" | "adam_lbfgs"
     adam_lbfgs_switch_ratio: float = 0.7
     lbfgs: Optional[LBFGSConfig] = None
-    mode: str = "forward"  # "forward" | "inverse"
+    mode: str = "forward"  # "forward" | "inverse" | "data_only" | "data_augmented"
     loss_function: str = "mse"  # "mse" | "mae" | "huber"
     huber_delta: float = 1.0
 
@@ -141,9 +141,10 @@ class TrainingConfig:
                 f"Invalid optimizer '{self.optimizer}'. "
                 "Choose from 'adam', 'lbfgs', or 'adam_lbfgs'."
             )
-        if self.mode not in ("forward", "inverse"):
+        if self.mode not in ("forward", "inverse", "data_only", "data_augmented"):
             raise ValueError(
-                f"Invalid mode '{self.mode}'. Choose 'forward' or 'inverse'."
+                f"Invalid mode '{self.mode}'. Choose 'forward', 'inverse', "
+                "'data_only', or 'data_augmented'."
             )
         if self.loss_function not in ("mse", "mae", "huber"):
             raise ValueError(

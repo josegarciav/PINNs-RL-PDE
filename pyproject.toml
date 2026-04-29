@@ -74,8 +74,13 @@ docs = [
     "mkdocs-material>=9.4.0",
     "mkdocstrings[python]>=0.23.0",
 ]
+well = [
+    "the_well>=1.0.0",
+    "h5py>=3.10.0",
+    "huggingface-hub>=0.20.0",
+]
 all = [
-    "pinnrl[dev,viz,notebooks,docs]",
+    "pinnrl[dev,viz,notebooks,docs,well]",
 ]
 
 [project.urls]
