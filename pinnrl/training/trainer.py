@@ -200,7 +200,12 @@ class PDETrainer:
                 t_flat = torch.tensor(tt.reshape(-1, 1), device=self.device)
                 with torch.no_grad():
                     u_pred = self.model(torch.cat([x_flat, t_flat], dim=1))
-                u_pred_np = u_pred.detach().cpu().numpy().reshape(grid_size, grid_size)
+                # Multi-channel outputs (dataset modes) collapse to channel 0
+                # for the dashboard surface plot.
+                u_pred_np = u_pred.detach().cpu().numpy()
+                if u_pred_np.ndim == 2 and u_pred_np.shape[-1] > 1:
+                    u_pred_np = u_pred_np[..., 0]
+                u_pred_np = u_pred_np.reshape(grid_size, grid_size)
 
                 # Residual needs grad → enable then detach.
                 x_g = x_flat.detach().clone().requires_grad_(True)
@@ -240,13 +245,19 @@ class PDETrainer:
                 )
                 with torch.no_grad():
                     u_pred = self.model(torch.cat([x_flat, t_flat], dim=1))
-                u_pred_np = u_pred.detach().cpu().numpy().reshape(grid_size, grid_size)
+                u_pred_np = u_pred.detach().cpu().numpy()
+                if u_pred_np.ndim == 2 and u_pred_np.shape[-1] > 1:
+                    u_pred_np = u_pred_np[..., 0]
+                u_pred_np = u_pred_np.reshape(grid_size, grid_size)
 
                 x_g = x_flat.detach().clone().requires_grad_(True)
                 t_g = t_flat.detach().clone().requires_grad_(True)
                 try:
                     residual = self.pde.compute_residual(self.model, x_g, t_g)
-                    residual_np = residual.detach().cpu().numpy().reshape(grid_size, grid_size)
+                    residual_np = residual.detach().cpu().numpy()
+                    if residual_np.ndim == 2 and residual_np.shape[-1] > 1:
+                        residual_np = residual_np[..., 0]
+                    residual_np = residual_np.reshape(grid_size, grid_size)
                 except Exception:
                     residual_np = np.zeros_like(u_pred_np)
 

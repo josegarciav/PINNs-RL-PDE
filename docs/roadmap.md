@@ -37,7 +37,7 @@ Core solver with 9 PDEs, 7 architectures, RL adaptive sampling, and a Dash dashb
 
 ## v0.2 — Documentation and Onboarding
 
-**Status: Mostly complete**
+**Status: Complete**
 
 | Item | Status | Adoption difficulty | Scientific impact | Innovation level |
 |---|---|---|---|---|

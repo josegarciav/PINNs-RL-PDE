@@ -264,7 +264,12 @@ def run_training(config_dict, device):
     # Experiment directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     rl_status = "rl" if rl_enabled else "no_rl"
-    experiment_name = f"{timestamp}_{pde_name}_{arch_type}_{rl_status}"
+    obs = config_dict.get("pde", {}).get("observation_data") or {}
+    dataset_tag = obs.get("name") if isinstance(obs, dict) and obs.get("source") == "well" else None
+    if dataset_tag:
+        experiment_name = f"{timestamp}_{dataset_tag}_{arch_type}_{rl_status}"
+    else:
+        experiment_name = f"{timestamp}_{pde_name}_{arch_type}_{rl_status}"
     experiment_dir = Path(config_dict["paths"]["results_dir"]) / experiment_name
     experiment_dir.mkdir(parents=True, exist_ok=True)
     (experiment_dir / "visualizations").mkdir(exist_ok=True)

@@ -3313,6 +3313,7 @@ well = [
 [package.dev-dependencies]
 dev = [
     { name = "black" },
+    { name = "pinnrl" },
     { name = "pre-commit" },
     { name = "pydocstyle" },
     { name = "pytest" },
@@ -3338,7 +3339,7 @@ requires-dist = [
     { name = "nbformat", marker = "extra == 'notebooks'", specifier = ">=5.9.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pandas", specifier = ">=2.0.0" },
-    { name = "pinnrl", extras = ["dev", "viz", "notebooks", "docs", "well"], marker = "extra == 'all'" },
+    { name = "pinnrl", extras = ["dev", "viz", "notebooks", "docs", "well"], marker = "extra == 'all'", editable = "." },
     { name = "plotly", specifier = ">=5.15.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.4.0" },
     { name = "pydocstyle", marker = "extra == 'dev'", specifier = ">=6.3.0" },
@@ -3359,6 +3360,7 @@ provides-extras = ["dev", "viz", "notebooks", "docs", "well", "all"]
 [package.metadata.requires-dev]
 dev = [
     { name = "black", specifier = ">=23.0.0" },
+    { name = "pinnrl", editable = "." },
     { name = "pre-commit", specifier = ">=3.4.0" },
     { name = "pydocstyle", specifier = ">=6.3.0" },
     { name = "pytest", specifier = ">=7.4.0" },
