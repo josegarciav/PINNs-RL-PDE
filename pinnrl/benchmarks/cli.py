@@ -140,7 +140,9 @@ def build_parser() -> argparse.ArgumentParser:
     fdm = sub.add_parser("fdm", help="Run the bundled FDM solver and report error vs analytical.")
     fdm.add_argument("--pde", choices=("heat", "wave"), required=True)
     fdm.add_argument("--alpha", type=float, default=0.1, help="Heat diffusivity (heat only).")
-    fdm.add_argument("--frequency", type=float, default=1.0, help="Initial-condition frequency (heat only).")
+    fdm.add_argument(
+        "--frequency", type=float, default=1.0, help="Initial-condition frequency (heat only)."
+    )
     fdm.add_argument("--c", type=float, default=1.0, help="Wave speed (wave only).")
     fdm.add_argument("--t-max", type=float, default=1.0)
     fdm.add_argument("--nx", type=int, default=101)

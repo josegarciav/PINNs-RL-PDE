@@ -95,11 +95,7 @@ def test_data_augmented_total_includes_data_and_physics():
     assert losses["data"].item() > 0.0
     # The physics terms must contribute (residual + IC/BC > 0 once we have a
     # randomly initialised network on a non-trivial domain).
-    physics = (
-        losses["residual"].item()
-        + losses["boundary"].item()
-        + losses["initial"].item()
-    )
+    physics = losses["residual"].item() + losses["boundary"].item() + losses["initial"].item()
     assert physics > 0.0
     # Total should strictly exceed the data-only assembly.
     assert losses["total"].item() > losses["data"].item()
@@ -127,9 +123,5 @@ def test_forward_total_unchanged_when_no_observations():
     # No observations attached → data term is zero and total matches the
     # weighted physics sum.
     assert losses["data"].item() == 0.0
-    expected = (
-        1.0 * losses["residual"]
-        + 10.0 * losses["boundary"]
-        + 10.0 * losses["initial"]
-    )
+    expected = 1.0 * losses["residual"] + 10.0 * losses["boundary"] + 10.0 * losses["initial"]
     assert torch.allclose(losses["total"], expected, atol=1e-6)

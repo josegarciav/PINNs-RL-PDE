@@ -323,7 +323,7 @@ class PDEBase:
                 reduction="mean",
                 delta=self._huber_delta(),
             )
-        return torch.mean(error ** 2)
+        return torch.mean(error**2)
 
     def _data_loss_weight(self, default: float = 1.0) -> float:
         """Pull the ``data`` loss weight from training config, falling back to ``default``."""
@@ -440,10 +440,12 @@ class PDEBase:
         x_cols = []
         for d in range(spatial_dims):
             lo, hi = self.domain[d]
-            x_cols.append(
-                torch.rand(n_points, 1, generator=gen) * (hi - lo) + lo
-            )
-        x = torch.cat(x_cols, dim=1).to(self.device) if spatial_dims > 1 else x_cols[0].to(self.device)
+            x_cols.append(torch.rand(n_points, 1, generator=gen) * (hi - lo) + lo)
+        x = (
+            torch.cat(x_cols, dim=1).to(self.device)
+            if spatial_dims > 1
+            else x_cols[0].to(self.device)
+        )
 
         t_lo, t_hi = self.time_domain[0], self.time_domain[1]
         t = (torch.rand(n_points, 1, generator=gen) * (t_hi - t_lo) + t_lo).to(self.device)

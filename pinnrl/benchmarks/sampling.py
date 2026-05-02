@@ -138,9 +138,7 @@ def _build_rl_agent(device: torch.device) -> RLAgent:
     )
 
 
-def _validation_grid(
-    pde, n_points: int, device: torch.device
-) -> tuple[torch.Tensor, torch.Tensor]:
+def _validation_grid(pde, n_points: int, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
     """Fixed Cartesian grid for fair L2-error comparisons across runs."""
     nx = int(np.sqrt(n_points))
     nt = nx
@@ -174,9 +172,7 @@ def _train_one(
 ) -> SamplingResult:
     """Train a fresh model under one sampling strategy and return its metrics."""
     if strategy not in SUPPORTED_STRATEGIES:
-        raise ValueError(
-            f"Unknown strategy {strategy!r}. Supported: {SUPPORTED_STRATEGIES}"
-        )
+        raise ValueError(f"Unknown strategy {strategy!r}. Supported: {SUPPORTED_STRATEGIES}")
 
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -253,9 +249,7 @@ def run_sampling_benchmark(
         ValueError: If ``pde_name`` or any strategy is unknown.
     """
     if pde_name not in _PDE_BUILDERS:
-        raise ValueError(
-            f"Unknown pde_name {pde_name!r}. Supported: {tuple(_PDE_BUILDERS.keys())}"
-        )
+        raise ValueError(f"Unknown pde_name {pde_name!r}. Supported: {tuple(_PDE_BUILDERS.keys())}")
 
     device = device or torch.device("cpu")
     results: List[SamplingResult] = []

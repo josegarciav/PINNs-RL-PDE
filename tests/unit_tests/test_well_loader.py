@@ -28,9 +28,9 @@ def _install_fake_well_module(monkeypatch, n_traj=2, n_steps=3, hw=4, n_fields=2
             self.name = well_dataset_name
             self.split = well_split_name
             rng = np.random.default_rng(0)
-            self._fields = rng.standard_normal(
-                (n_traj, n_steps, hw, hw, n_fields)
-            ).astype(np.float32)
+            self._fields = rng.standard_normal((n_traj, n_steps, hw, hw, n_fields)).astype(
+                np.float32
+            )
 
         def __len__(self):
             return n_traj
@@ -95,15 +95,11 @@ def test_load_well_slice_round_trips_through_cache(monkeypatch, tmp_path):
     _install_fake_well_module(monkeypatch)
     monkeypatch.setenv("PINNRL_WELL_CACHE", str(tmp_path))
 
-    first = load_well_slice(
-        "active_matter", n_traj=1, n_points=4, seed=42, device="cpu"
-    )
+    first = load_well_slice("active_matter", n_traj=1, n_points=4, seed=42, device="cpu")
 
     # Now break the loader: any further call would crash if it bypassed the cache.
     monkeypatch.setitem(sys.modules, "the_well", None)
-    second = load_well_slice(
-        "active_matter", n_traj=1, n_points=4, seed=42, device="cpu"
-    )
+    second = load_well_slice("active_matter", n_traj=1, n_points=4, seed=42, device="cpu")
     assert torch.allclose(first["x"], second["x"])
     assert torch.allclose(first["t"], second["t"])
     assert torch.allclose(first["u"], second["u"])

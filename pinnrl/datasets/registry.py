@@ -69,8 +69,7 @@ class WellEntry:
             )
         if self.recommended_mode == "data_augmented" and self.default_pde_key is None:
             raise ValueError(
-                f"WellEntry {self.name!r}: data_augmented mode requires a "
-                f"default_pde_key"
+                f"WellEntry {self.name!r}: data_augmented mode requires a " f"default_pde_key"
             )
 
 
@@ -274,7 +273,6 @@ def get_entry(name: str) -> WellEntry:
     """Look up a dataset by name. Raises ``KeyError`` with a helpful list."""
     if name not in WELL_REGISTRY:
         raise KeyError(
-            f"Unknown Well dataset {name!r}. Known datasets: "
-            f"{', '.join(list_dataset_names())}"
+            f"Unknown Well dataset {name!r}. Known datasets: " f"{', '.join(list_dataset_names())}"
         )
     return WELL_REGISTRY[name]

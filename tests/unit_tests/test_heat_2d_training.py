@@ -119,6 +119,6 @@ def test_2d_training_runs_without_blowup():
     assert len(losses) == 3
     for loss_val in losses:
         assert math.isfinite(loss_val), f"non-finite loss: {loss_val}"
-    assert losses[-1] <= 50.0 * losses[0], (
-        f"2D training blew up: initial {losses[0]:.4f}, final {losses[-1]:.4f}"
-    )
+    assert (
+        losses[-1] <= 50.0 * losses[0]
+    ), f"2D training blew up: initial {losses[0]:.4f}, final {losses[-1]:.4f}"

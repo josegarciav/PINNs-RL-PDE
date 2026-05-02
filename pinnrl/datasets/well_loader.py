@@ -107,18 +107,14 @@ def _extract_arrays(sample: Any, n_spatial_dims: int) -> Dict[str, np.ndarray]:
     what we needed.
     """
     if not isinstance(sample, dict):
-        raise TypeError(
-            f"Expected WellDataset sample to be a dict, got {type(sample).__name__}"
-        )
+        raise TypeError(f"Expected WellDataset sample to be a dict, got {type(sample).__name__}")
 
     def _as_np(x: Any) -> np.ndarray:
         if isinstance(x, torch.Tensor):
             return x.detach().cpu().numpy()
         return np.asarray(x)
 
-    fields_key = next(
-        (k for k in ("input_fields", "fields", "u", "data") if k in sample), None
-    )
+    fields_key = next((k for k in ("input_fields", "fields", "u", "data") if k in sample), None)
     if fields_key is None:
         raise KeyError(
             "WellDataset sample missing a fields tensor. Looked for "
@@ -146,7 +142,11 @@ def _extract_arrays(sample: Any, n_spatial_dims: int) -> Dict[str, np.ndarray]:
             coord = np.linspace(0.0, 1.0, size, dtype=np.float32)
         spatial_axes[axis] = coord.astype(np.float32)
 
-    return {"fields": fields, "times": times.astype(np.float32), **{f"axis_{k}": v for k, v in spatial_axes.items()}}
+    return {
+        "fields": fields,
+        "times": times.astype(np.float32),
+        **{f"axis_{k}": v for k, v in spatial_axes.items()},
+    }
 
 
 def load_well_slice(

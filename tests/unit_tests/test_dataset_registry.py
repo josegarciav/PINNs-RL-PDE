@@ -43,8 +43,8 @@ def test_matched_pde_keys_resolve_in_pde_registry(name):
         assert entry.recommended_mode == "data_only"
         return
     valid_keys = {meta[2] for meta in PDE_REGISTRY.values()}
-    assert entry.default_pde_key in valid_keys, (
-        f"{name}.default_pde_key={entry.default_pde_key!r} not in PDE_REGISTRY"
-    )
+    assert (
+        entry.default_pde_key in valid_keys
+    ), f"{name}.default_pde_key={entry.default_pde_key!r} not in PDE_REGISTRY"
     # Matched entries should default to data_augmented.
     assert entry.recommended_mode == "data_augmented"

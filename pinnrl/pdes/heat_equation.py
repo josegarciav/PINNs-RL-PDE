@@ -491,18 +491,14 @@ class HeatEquation(PDEBase):
 
             x_initial = torch.cat(
                 [
-                    torch.linspace(
-                        x_min, x_min + x_boundary, num_initial // 4, device=self.device
-                    ),
+                    torch.linspace(x_min, x_min + x_boundary, num_initial // 4, device=self.device),
                     torch.linspace(
                         x_min + x_boundary,
                         x_max - x_boundary,
                         num_initial // 2,
                         device=self.device,
                     ),
-                    torch.linspace(
-                        x_max - x_boundary, x_max, num_initial // 4, device=self.device
-                    ),
+                    torch.linspace(x_max - x_boundary, x_max, num_initial // 4, device=self.device),
                 ]
             ).reshape(-1, 1)
 
@@ -534,9 +530,7 @@ class HeatEquation(PDEBase):
                 k = self.config.initial_condition.get("frequency", 2.0)
                 u_target = torch.ones(num_initial, 1, device=self.device)
                 for d in range(self.dimension):
-                    u_target = u_target * torch.sin(
-                        k * torch.pi * x_initial[:, d : d + 1]
-                    )
+                    u_target = u_target * torch.sin(k * torch.pi * x_initial[:, d : d + 1])
 
             initial_loss = self._apply_loss_fn(u_initial - u_target)
 

@@ -63,7 +63,7 @@ def _make_heat_pde(training_cfg):
 def test_default_loss_is_mse():
     pde = _make_heat_pde(_make_training_config())
     error = torch.tensor([0.5, -1.0, 0.25, -0.75])
-    expected = torch.mean(error ** 2)
+    expected = torch.mean(error**2)
     assert torch.allclose(pde._apply_loss_fn(error), expected)
 
 

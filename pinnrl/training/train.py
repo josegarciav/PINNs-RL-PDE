@@ -240,17 +240,11 @@ def create_pde(config_dict, device):
     # data-fitting loss has something to anchor the parameter recovery to.
     mode = training_cfg.get("mode", "forward")
     inverse_cfg = config_dict.get("inverse", {})
-    if (
-        mode == "inverse"
-        and pde.observation_data is None
-        and pde_config.trainable_parameters
-    ):
+    if mode == "inverse" and pde.observation_data is None and pde_config.trainable_parameters:
         n_obs = int(inverse_cfg.get("obs_points", 200))
         noise = float(inverse_cfg.get("obs_noise", 0.01))
         seed = int(inverse_cfg.get("obs_seed", 0))
-        pde.generate_synthetic_observations(
-            n_points=n_obs, noise_std=noise, seed=seed
-        )
+        pde.generate_synthetic_observations(n_points=n_obs, noise_std=noise, seed=seed)
     return pde
 
 
@@ -459,9 +453,7 @@ def main():
         default=4096,
         help="Number of (x, t, u) points to sub-sample from the loaded slice",
     )
-    parser.add_argument(
-        "--dataset-seed", type=int, default=0, help="RNG seed for sub-sampling"
-    )
+    parser.add_argument("--dataset-seed", type=int, default=0, help="RNG seed for sub-sampling")
     parser.add_argument(
         "--dataset-base",
         default=None,

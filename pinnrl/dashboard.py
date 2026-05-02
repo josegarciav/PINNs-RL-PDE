@@ -77,9 +77,7 @@ for _key, _cfg in _PDE_CONFIGS.items():
 # Map Well dataset key (config_key, e.g. "burgers") -> display PDE name from
 # _PDE_OPTIONS, so picking a dataset can drive the PDE dropdown.
 _PDE_KEY_TO_DISPLAY = {
-    _cfg.get("name", _k).lower().replace(" equation", "").replace("-", "_"): _cfg.get(
-        "name", _k
-    )
+    _cfg.get("name", _k).lower().replace(" equation", "").replace("-", "_"): _cfg.get("name", _k)
     for _k, _cfg in _PDE_CONFIGS.items()
 }
 _DATASET_OPTIONS = [
@@ -307,7 +305,9 @@ app.layout = html.Div(
                                                                         ),
                                                                         html.Div(
                                                                             id="train-dataset-controls",
-                                                                            style={"display": "none"},
+                                                                            style={
+                                                                                "display": "none"
+                                                                            },
                                                                             children=[
                                                                                 html.Div(
                                                                                     [
@@ -319,7 +319,11 @@ app.layout = html.Div(
                                                                                             id="train-dataset-selector",
                                                                                             options=_DATASET_OPTIONS,
                                                                                             value=(
-                                                                                                _DATASET_OPTIONS[0]["value"]
+                                                                                                _DATASET_OPTIONS[
+                                                                                                    0
+                                                                                                ][
+                                                                                                    "value"
+                                                                                                ]
                                                                                                 if _DATASET_OPTIONS
                                                                                                 else None
                                                                                             ),
@@ -373,11 +377,15 @@ app.layout = html.Div(
                                                                                             type="text",
                                                                                             placeholder="/path/to/the_well_data",
                                                                                             value="",
-                                                                                            style={"width": "100%"},
+                                                                                            style={
+                                                                                                "width": "100%"
+                                                                                            },
                                                                                         ),
                                                                                     ],
                                                                                     id="train-dataset-base-row",
-                                                                                    style={"display": "none"},
+                                                                                    style={
+                                                                                        "display": "none"
+                                                                                    },
                                                                                 ),
                                                                                 html.Div(
                                                                                     [
@@ -391,7 +399,9 @@ app.layout = html.Div(
                                                                                             value=1,
                                                                                             min=1,
                                                                                             step=1,
-                                                                                            style={"width": "100%"},
+                                                                                            style={
+                                                                                                "width": "100%"
+                                                                                            },
                                                                                         ),
                                                                                     ],
                                                                                     style=FIELD_STYLE,
@@ -408,7 +418,9 @@ app.layout = html.Div(
                                                                                             value=4096,
                                                                                             min=64,
                                                                                             step=64,
-                                                                                            style={"width": "100%"},
+                                                                                            style={
+                                                                                                "width": "100%"
+                                                                                            },
                                                                                         ),
                                                                                     ],
                                                                                     style=FIELD_STYLE,
@@ -620,7 +632,8 @@ app.layout = html.Div(
                                                                                 },
                                                                             ],
                                                                             value=_TRAINING_DEFAULTS.get(
-                                                                                "loss_function", "mse"
+                                                                                "loss_function",
+                                                                                "mse",
                                                                             ),
                                                                             clearable=False,
                                                                         ),
@@ -1617,11 +1630,7 @@ def populate_from_well_dataset(dataset_name, toggle_value):
     pde_value = dash.no_update
     if entry.default_pde_key:
         display = next(
-            (
-                cfg.get("name", k)
-                for k, cfg in _PDE_CONFIGS.items()
-                if k == entry.default_pde_key
-            ),
+            (cfg.get("name", k) for k, cfg in _PDE_CONFIGS.items() if k == entry.default_pde_key),
             None,
         )
         if display:
@@ -1858,7 +1867,9 @@ def populate_identify_options(pde_name):
     """Refresh the identifiable-parameter checklist whenever the PDE changes."""
     pde_key = _PDE_NAME_TO_KEY.get(pde_name, "heat")
     params = _PDE_CONFIGS.get(pde_key, {}).get("parameters", {}) or {}
-    options = [{"label": f" {name} (true: {value})", "value": name} for name, value in params.items()]
+    options = [
+        {"label": f" {name} (true: {value})", "value": name} for name, value in params.items()
+    ]
     return options, []
 
 
@@ -1978,7 +1989,9 @@ def update_live_snapshot(experiment, _n_intervals):
         margin=dict(l=0, r=0, t=40, b=0),
     )
 
-    res_fig = go.Figure(data=[go.Surface(x=axis_x, y=axis_y, z=residual, colorscale="RdBu", reversescale=True)])
+    res_fig = go.Figure(
+        data=[go.Surface(x=axis_x, y=axis_y, z=residual, colorscale="RdBu", reversescale=True)]
+    )
     res_fig.update_layout(
         title="PDE residual",
         scene=dict(xaxis_title=x_label, yaxis_title=y_label, zaxis_title="residual"),
@@ -2011,7 +2024,14 @@ def update_param_trajectories(experiment, _n_intervals):
         fig.update_layout(
             title="Identified Parameters (inverse mode)",
             annotations=[
-                dict(text="Select an experiment", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+                dict(
+                    text="Select an experiment",
+                    xref="paper",
+                    yref="paper",
+                    x=0.5,
+                    y=0.5,
+                    showarrow=False,
+                )
             ],
             height=320,
         )
@@ -2041,7 +2061,7 @@ def update_param_trajectories(experiment, _n_intervals):
         return fig
 
     for key in param_keys:
-        name = key[len("param_"):]
+        name = key[len("param_") :]
         series = history[key]
         epochs = list(range(1, len(series) + 1))
         fig.add_trace(go.Scatter(x=epochs, y=series, mode="lines", name=name))

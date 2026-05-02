@@ -111,9 +111,7 @@ def test_lbfgs_runs_and_decreases_loss():
 
 def test_adam_lbfgs_two_phase_switch():
     """In adam_lbfgs mode the optimizer should hot-swap to LBFGS at the switch epoch."""
-    trainer, training_cfg = _build_trainer(
-        "adam_lbfgs", num_epochs=4, switch_ratio=0.5
-    )
+    trainer, training_cfg = _build_trainer("adam_lbfgs", num_epochs=4, switch_ratio=0.5)
     assert isinstance(trainer.optimizer, optim.Adam)
     assert trainer._is_lbfgs is False
     assert trainer._switch_epoch == max(1, int(4 * 0.5))

@@ -464,9 +464,7 @@ class PDETrainer:
         # Adaptive weights are incompatible with the L-BFGS closure (per-component
         # gradient passes are too expensive); silently disable for the LBFGS phase.
         if getattr(self, "_is_lbfgs", False) and self.use_adaptive_weights:
-            self.logger.warning(
-                "Adaptive loss weighting is disabled while running L-BFGS."
-            )
+            self.logger.warning("Adaptive loss weighting is disabled while running L-BFGS.")
             self._lbfgs_adaptive_disabled = True
 
         # Record start time
@@ -639,10 +637,7 @@ class PDETrainer:
                     # Outside ``forward`` mode the data term is part of the
                     # objective. Adaptive weighting only sees physics
                     # components, so re-attach the data term explicitly.
-                    if (
-                        training_mode in ("inverse", "data_augmented")
-                        and "data" in losses
-                    ):
+                    if training_mode in ("inverse", "data_augmented") and "data" in losses:
                         data_w = self.config.training.loss_weights.get("data", 1.0) or 1.0
                         total_loss = total_loss + data_w * losses["data"]
 
@@ -858,14 +853,10 @@ class PDETrainer:
                 and self._switch_epoch is not None
                 and (epoch + 1) >= self._switch_epoch
             ):
-                self.logger.info(
-                    f"Switching optimizer to L-BFGS at epoch {epoch + 1}"
-                )
+                self.logger.info(f"Switching optimizer to L-BFGS at epoch {epoch + 1}")
                 self._switch_to_lbfgs()
                 if self.use_adaptive_weights:
-                    self.logger.warning(
-                        "Adaptive loss weighting is disabled while running L-BFGS."
-                    )
+                    self.logger.warning("Adaptive loss weighting is disabled while running L-BFGS.")
 
         # End of training
         train_time = (datetime.now() - start_time).total_seconds() / 60.0

@@ -148,8 +148,7 @@ class TrainingConfig:
             )
         if self.loss_function not in ("mse", "mae", "huber"):
             raise ValueError(
-                f"Invalid loss_function '{self.loss_function}'. "
-                "Choose 'mse', 'mae', or 'huber'."
+                f"Invalid loss_function '{self.loss_function}'. " "Choose 'mse', 'mae', or 'huber'."
             )
 
     @property
