@@ -19,6 +19,7 @@ from pinnrl.benchmarks.fdm import (
     solve_wave_1d,
 )
 from pinnrl.benchmarks.sampling import (
+    SUPPORTED_STRATEGIES,
     SamplingResult,
     run_sampling_benchmark,
 )
@@ -26,6 +27,7 @@ from pinnrl.benchmarks.sampling import (
 __all__ = [
     "FDMResult",
     "SamplingResult",
+    "SUPPORTED_STRATEGIES",
     "solve_heat_1d",
     "solve_wave_1d",
     "run_sampling_benchmark",

@@ -73,11 +73,11 @@ Extends scientific capability with methods actively used in the PINN research co
 | L-BFGS second-order optimizer | Done | 2 | 3 | 2 |
 | 2D PDEs: full heat_2d training | Done | 3 | 4 | 2 |
 | RAR (Residual-Adaptive Refinement) sampling | Done | 2 | 3 | 2 |
-| Formal FDM comparison on heat/wave | To do | 2 | 3 | 2 |
-| Stratified + RAR sampling benchmarks vs RL | To do | 2 | 3 | 3 |
-| `pinnrl-benchmark` CLI subcommand | To do | 2 | 2 | 2 |
+| Formal FDM comparison on heat/wave | Done | 2 | 3 | 2 |
+| Stratified + RAR sampling benchmarks vs RL | Done | 2 | 3 | 3 |
+| `pinnrl-benchmark` CLI subcommand | Done | 2 | 2 | 2 |
 | Configurable loss functions (MSE, MAE, Huber) | Done | 1 | 2 | 1 |
-| Linkedin post | To do | 1 | 2 | 1 |
+| Linkedin post | Done | 1 | 2 | 1 |
 
 **On inverse problems:** Recovering unknown PDE parameters (e.g., identifying `alpha` in the heat equation from noisy sensor data) is one of the highest-value capabilities PINNs offer over classical solvers. Implementation path: add a `trainable_parameters` field to `PDEConfig`, modify `PDEBase.compute_residual` to use `nn.Parameter` tensors, add a data-fitting loss term, and expose via `--mode inverse` CLI flag.
 
