@@ -1,0 +1,2133 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Physics-Informed Neural Networks with RL-based adaptive sampling for solving PDEs">
+      
+      
+      
+        <link rel="canonical" href="https://josegarciav.github.io/PINNs-RL-PDE/datasets/">
+      
+      
+        <link rel="prev" href="../inverse_problems/">
+      
+      
+        <link rel="next" href="../sampling_strategies/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Benchmark Datasets (The Well) - pinnrl</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#benchmark-datasets-the-well" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="pinnrl" class="md-header__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            pinnrl
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Benchmark Datasets (The Well)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../start_here/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../visualization/" class="md-tabs__link">
+          
+  
+  
+  Features
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../ARCHITECTURE/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Architecture
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="pinnrl" class="md-nav__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    pinnrl
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../start_here/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start Here
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation & Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../visualization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D Visualization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inverse_problems/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverse Problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark Datasets (The Well)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark Datasets (The Well)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-pinnrl-uses-well-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How pinnrl uses Well data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-16-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The 16 datasets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The 16 datasets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-active_matter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. active_matter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-rayleigh_benard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. rayleigh_benard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-shear_flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. shear_flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-rayleigh_taylor_instability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. rayleigh_taylor_instability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-turbulent_radiative_layer_2d-turbulent_radiative_layer_3d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. turbulent_radiative_layer_2D / turbulent_radiative_layer_3D
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-mhd-resolutions-mhd_64-mhd_256" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. MHD (resolutions: MHD_64, MHD_256)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-gray_scott_reaction_diffusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. gray_scott_reaction_diffusion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-euler_multi_quadrants-bcs-openbc-periodicbc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. euler_multi_quadrants (BCs: openBC, periodicBC)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-acoustic_scattering-geometries-maze-inclusions-discontinuous" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. acoustic_scattering (geometries: maze, inclusions, discontinuous)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-helmholtz_staircase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. helmholtz_staircase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11-viscoelastic_instability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. viscoelastic_instability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-planetswe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. planetswe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-convective_envelope_rsg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. convective_envelope_rsg
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-post_neutron_star_merger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. post_neutron_star_merger
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-supernova_explosion-resolutions-64-128" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. supernova_explosion (resolutions: 64, 128)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-turbulence_gravity_cooling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. turbulence_gravity_cooling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-reference-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick-reference table
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#loading-a-dataset-programmatically" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loading a dataset programmatically
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#launching-a-training-run-on-a-well-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Launching a training run on a Well dataset
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Launching a training run on a Well dataset">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#from-the-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#from-the-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the CLI
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-pick-which-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to pick which dataset
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#licensing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Licensing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sampling_strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/neural_networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neural Networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/pdes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDEs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/rl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL Agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Utilities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-pinnrl-uses-well-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How pinnrl uses Well data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-16-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The 16 datasets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The 16 datasets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-active_matter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. active_matter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-rayleigh_benard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. rayleigh_benard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-shear_flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. shear_flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-rayleigh_taylor_instability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. rayleigh_taylor_instability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-turbulent_radiative_layer_2d-turbulent_radiative_layer_3d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. turbulent_radiative_layer_2D / turbulent_radiative_layer_3D
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-mhd-resolutions-mhd_64-mhd_256" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. MHD (resolutions: MHD_64, MHD_256)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-gray_scott_reaction_diffusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. gray_scott_reaction_diffusion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-euler_multi_quadrants-bcs-openbc-periodicbc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. euler_multi_quadrants (BCs: openBC, periodicBC)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-acoustic_scattering-geometries-maze-inclusions-discontinuous" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. acoustic_scattering (geometries: maze, inclusions, discontinuous)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-helmholtz_staircase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. helmholtz_staircase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11-viscoelastic_instability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. viscoelastic_instability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-planetswe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. planetswe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-convective_envelope_rsg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. convective_envelope_rsg
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-post_neutron_star_merger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. post_neutron_star_merger
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-supernova_explosion-resolutions-64-128" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. supernova_explosion (resolutions: 64, 128)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-turbulence_gravity_cooling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. turbulence_gravity_cooling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-reference-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick-reference table
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#loading-a-dataset-programmatically" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loading a dataset programmatically
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#launching-a-training-run-on-a-well-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Launching a training run on a Well dataset
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Launching a training run on a Well dataset">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#from-the-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#from-the-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the CLI
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-pick-which-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to pick which dataset
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#licensing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Licensing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="benchmark-datasets-the-well">Benchmark Datasets — The Well<a class="headerlink" href="#benchmark-datasets-the-well" title="Permanent link">&para;</a></h1>
+<p><code>pinnrl</code> integrates with <a href="https://github.com/PolymathicAI/the_well">The Well</a> (Polymathic AI, BSD-3 license), a curated collection of 16 large-scale physics simulation datasets totaling ~15 TB of HDF5 trajectories. Once installed via <code>pip install 'pinnrl[well]'</code>, every dataset is selectable from the dashboard "New Training" form and from the <code>pinnrl-train --dataset</code> CLI flag.</p>
+<p>This page lists every dataset with its physical system, governing equations, scientific application domains, and the loss recipe pinnrl uses to train against it.</p>
+<hr />
+<h2 id="how-pinnrl-uses-well-data">How pinnrl uses Well data<a class="headerlink" href="#how-pinnrl-uses-well-data" title="Permanent link">&para;</a></h2>
+<p>The Well stores trajectories as HDF5 arrays of shape <code>(n_traj, n_steps, *spatial, n_fields)</code> in float32. <code>pinnrl.datasets.load_well_slice</code> flattens a slice into the same <code>(x, t, u)</code> tensor triple pinnrl uses everywhere, then trains under one of two recipes:</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Loss recipe</th>
+<th>When to use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data_only</code></td>
+<td>Pure regression on the snapshot field (no PDE residual)</td>
+<td>Datasets whose physics is not analytically modelled in pinnrl (most Well datasets). The network learns to reproduce the simulation as a neural surrogate.</td>
+</tr>
+<tr>
+<td><code>data_augmented</code></td>
+<td>PDE residual + IC/BC + data fit</td>
+<td>Datasets whose underlying PDE matches an analytical pinnrl solver (e.g. wave-equation variants for acoustic scattering). Combines the dataset as ground truth with the physics constraint.</td>
+</tr>
+</tbody>
+</table>
+<p>Mode is auto-suggested per dataset; you can override it from the Mode dropdown.</p>
+<hr />
+<h2 id="the-16-datasets">The 16 datasets<a class="headerlink" href="#the-16-datasets" title="Permanent link">&para;</a></h2>
+<p>Each card lists the canonical name string (passed to <code>well_dataset_name</code>), spatial dimensionality, governing equations, scientific application areas, and the recipe pinnrl picks by default. Where a dataset ships in multiple variants (different resolutions, boundary conditions, or geometries), all variant names are noted.</p>
+<h3 id="1-active_matter">1. <code>active_matter</code><a class="headerlink" href="#1-active_matter" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>active_matter</code></li>
+<li><strong>Dimensionality:</strong> 2D + time</li>
+<li><strong>Physics:</strong> Self-propelled rod-like particles in a Stokes fluid, governed by a coupled set of advection-diffusion equations for concentration, polarisation, and an active stress tensor.</li>
+<li><strong>Why it matters:</strong> Active matter is the physics of bacterial colonies, swimming microorganisms, motile cell monolayers, and synthetic colloidal microswimmers. Datasets like this support biophysics research on collective motion, tissue mechanics, and the design of micro-robotic swarms.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with FNO. Five output channels (concentration, two velocity components, two orientation tensor components).</li>
+</ul>
+<h3 id="2-rayleigh_benard">2. <code>rayleigh_benard</code><a class="headerlink" href="#2-rayleigh_benard" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>rayleigh_benard</code>, <code>rayleigh_benard_uniform</code></li>
+<li><strong>Dimensionality:</strong> 2D + time</li>
+<li><strong>Physics:</strong> Boussinesq Navier–Stokes equations coupled to a buoyancy field — a fluid heated from below and cooled from above develops convection rolls and turbulent plumes.</li>
+<li><strong>Why it matters:</strong> A canonical testbed for thermal convection, used in atmospheric science (cloud formation, mantle convection), engineering (cooling systems, heat exchangers), and stellar physics. The <code>_uniform</code> variant fixes Rayleigh and Prandtl numbers for clean benchmark comparisons.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with FNO. Four channels (buoyancy, pressure, two velocity components).</li>
+</ul>
+<h3 id="3-shear_flow">3. <code>shear_flow</code><a class="headerlink" href="#3-shear_flow" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>shear_flow</code></li>
+<li><strong>Dimensionality:</strong> 2D + time</li>
+<li><strong>Physics:</strong> Incompressible Navier–Stokes with a passive tracer — opposing shear bands roll up via Kelvin–Helmholtz instability into vortex sheets and ultimately turbulence.</li>
+<li><strong>Why it matters:</strong> Shear-driven mixing is the prototype for atmospheric jets, oceanic boundary layers, mixing in chemical reactors, and aircraft wake vortices. The dataset gives ML models a clean entry point into 2D incompressible turbulence.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with FNO. Four channels (tracer, pressure, two velocity components).</li>
+</ul>
+<h3 id="4-rayleigh_taylor_instability">4. <code>rayleigh_taylor_instability</code><a class="headerlink" href="#4-rayleigh_taylor_instability" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>rayleigh_taylor_instability</code></li>
+<li><strong>Dimensionality:</strong> 3D + time</li>
+<li><strong>Physics:</strong> Compressible hydrodynamics of two fluid layers with the heavier fluid above the lighter one — gravity drives mushroom-cap mixing fronts that cascade to fully developed turbulence.</li>
+<li><strong>Why it matters:</strong> The Rayleigh–Taylor instability is the dominant mixing mechanism in inertial confinement fusion targets, supernova remnants, and stellar interiors. Realistic 3D snapshots are expensive to generate from first principles, so a learned surrogate accelerates downstream design loops in fusion ignition and astrophysical modelling.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with MLP. Five channels (density, pressure, three velocity components).</li>
+</ul>
+<h3 id="5-turbulent_radiative_layer_2d-turbulent_radiative_layer_3d">5. <code>turbulent_radiative_layer_2D</code> / <code>turbulent_radiative_layer_3D</code><a class="headerlink" href="#5-turbulent_radiative_layer_2d-turbulent_radiative_layer_3d" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>turbulent_radiative_layer_2D</code>, <code>turbulent_radiative_layer_3D</code></li>
+<li><strong>Dimensionality:</strong> 2D and 3D + time</li>
+<li><strong>Physics:</strong> Compressible Euler equations with optically thin radiative cooling — a hot, low-density gas mixes with a cold, dense gas across a shear layer that fragments under cooling instabilities.</li>
+<li><strong>Why it matters:</strong> Radiative mixing layers control how galaxies feed their halos with cool gas and how supernova ejecta condense into clouds. The 2D/3D pair lets researchers study how dimensional restriction biases the predicted cooling efficiency, a known systematic in galaxy-evolution simulations.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with FNO (2D) / MLP (3D). Four channels: density, pressure, velocity components.</li>
+</ul>
+<h3 id="6-mhd-resolutions-mhd_64-mhd_256">6. <code>MHD</code> (resolutions: <code>MHD_64</code>, <code>MHD_256</code>)<a class="headerlink" href="#6-mhd-resolutions-mhd_64-mhd_256" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>MHD_64</code>, <code>MHD_256</code></li>
+<li><strong>Dimensionality:</strong> 3D + time</li>
+<li><strong>Physics:</strong> Ideal magneto-hydrodynamics — incompressible flow coupled to an evolving magnetic field via the induction equation.</li>
+<li><strong>Why it matters:</strong> MHD is the backbone of plasma astrophysics (solar wind, accretion disks, galaxy clusters) and laboratory plasma engineering (tokamak confinement, reconnection studies). The 64³ and 256³ resolutions let researchers study spectral cascades and the convergence of trained surrogates with grid refinement.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with MLP. Seven channels (density, three velocity components, three magnetic-field components).</li>
+</ul>
+<h3 id="7-gray_scott_reaction_diffusion">7. <code>gray_scott_reaction_diffusion</code><a class="headerlink" href="#7-gray_scott_reaction_diffusion" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>gray_scott_reaction_diffusion</code></li>
+<li><strong>Dimensionality:</strong> 2D + time</li>
+<li><strong>Physics:</strong> Two coupled reaction–diffusion PDEs (<code>A</code> and <code>B</code> species) under different feed/kill rates — the system spontaneously forms spots, stripes, spirals, and self-replicating patterns.</li>
+<li><strong>Why it matters:</strong> A canonical pattern-formation benchmark with applications across morphogenesis (Turing patterns in animal coats and fish skins), heterogeneous catalysis, and porous-medium chemistry. The dataset spans a range of feed/kill parameters so models can study generalisation across pattern regimes.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with FNO. Two channels (species <code>A</code> and <code>B</code>).</li>
+</ul>
+<h3 id="8-euler_multi_quadrants-bcs-openbc-periodicbc">8. <code>euler_multi_quadrants</code> (BCs: <code>openBC</code>, <code>periodicBC</code>)<a class="headerlink" href="#8-euler_multi_quadrants-bcs-openbc-periodicbc" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>euler_multi_quadrants_openBC</code>, <code>euler_multi_quadrants_periodicBC</code></li>
+<li><strong>Dimensionality:</strong> 2D + time</li>
+<li><strong>Physics:</strong> Compressible Euler equations initialised with classic 2D Riemann problems — four piecewise-constant quadrants of density / pressure / velocity that develop shocks, contact discontinuities, and rarefaction waves.</li>
+<li><strong>Why it matters:</strong> The gold standard for benchmarking shock-capturing schemes. Mastering these flows underpins aerodynamics (transonic and supersonic flight), high-speed propulsion (scramjets), and computational gas dynamics in general. The <code>openBC</code> variant probes shock interaction with non-reflecting boundaries; <code>periodicBC</code> is for fundamental turbulence work.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with FNO. Four channels (density, pressure, two velocity components).</li>
+</ul>
+<h3 id="9-acoustic_scattering-geometries-maze-inclusions-discontinuous">9. <code>acoustic_scattering</code> (geometries: <code>maze</code>, <code>inclusions</code>, <code>discontinuous</code>)<a class="headerlink" href="#9-acoustic_scattering-geometries-maze-inclusions-discontinuous" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>acoustic_scattering_maze</code>, <code>acoustic_scattering_inclusions</code>, <code>acoustic_scattering_discontinuous</code></li>
+<li><strong>Dimensionality:</strong> 2D + time</li>
+<li><strong>Physics:</strong> Linear scalar wave equation with a spatially varying wave speed — pressure waves scatter off corridor walls (maze), embedded inclusions, or material discontinuities.</li>
+<li><strong>Why it matters:</strong> Acoustic / wave scattering is the forward problem behind ultrasonic non-destructive testing, sub-surface seismic imaging, room acoustics design, sonar, and biomedical ultrasound. The three geometric variants stress test how surrogates generalise across qualitatively different scatterer topologies.</li>
+<li><strong>Default recipe:</strong> <code>data_augmented</code> with FNO — pinnrl's wave-equation solver supplies a residual constraint while the dataset anchors the prediction to the reference field. Three channels (pressure, two velocity components).</li>
+</ul>
+<h3 id="10-helmholtz_staircase">10. <code>helmholtz_staircase</code><a class="headerlink" href="#10-helmholtz_staircase" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>helmholtz_staircase</code></li>
+<li><strong>Dimensionality:</strong> 2D (frequency-domain)</li>
+<li><strong>Physics:</strong> Helmholtz equation <code>(∆ + k²)u = f</code> on a staircase domain — frequency-domain wave scattering through structured corners.</li>
+<li><strong>Why it matters:</strong> The Helmholtz equation governs steady-state monochromatic wave propagation: photonic-crystal design, acoustic metamaterials, optical waveguides, and electromagnetic compatibility analysis. The staircase geometry creates singular behaviour at corners that catches naive networks off guard, making it an exacting benchmark.</li>
+<li><strong>Default recipe:</strong> <code>data_augmented</code> with FNO — pinnrl's wave/Helmholtz residual plus the dataset's reference field. Two channels (real and imaginary parts of the complex pressure).</li>
+</ul>
+<h3 id="11-viscoelastic_instability">11. <code>viscoelastic_instability</code><a class="headerlink" href="#11-viscoelastic_instability" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>viscoelastic_instability</code></li>
+<li><strong>Dimensionality:</strong> 2D + time</li>
+<li><strong>Physics:</strong> Oldroyd-B viscoelastic flow — Navier–Stokes coupled to a polymer-stress tensor <code>c</code> that evolves with the fluid and resists stretching.</li>
+<li><strong>Why it matters:</strong> Viscoelastic instabilities (elastic turbulence, drag reduction in pipelines) drive non-Newtonian flow in polymer melts, bio-fluids (blood, mucus), enhanced oil recovery, and microfluidic mixers. ML surrogates here aim to bridge the gap between cheap Newtonian models and expensive constitutive-law-resolved simulations.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with FNO. Six channels (three components of the conformation tensor, pressure, two velocity components).</li>
+</ul>
+<h3 id="12-planetswe">12. <code>planetswe</code><a class="headerlink" href="#12-planetswe" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>planetswe</code></li>
+<li><strong>Dimensionality:</strong> 2D on a sphere (longitude × latitude) + time</li>
+<li><strong>Physics:</strong> Shallow-water equations on a rotating sphere with topographic forcing — height field plus zonal and meridional velocities.</li>
+<li><strong>Why it matters:</strong> Shallow-water-on-sphere is the workhorse dynamical core for global atmosphere and ocean models. Datasets like this provide a clean, large-scale benchmark for ML weather emulators, climate downscaling, and tide simulation, where matching the spherical geometry and Coriolis dynamics is essential.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with FNO. Three channels (height, zonal velocity, meridional velocity).</li>
+</ul>
+<h3 id="13-convective_envelope_rsg">13. <code>convective_envelope_rsg</code><a class="headerlink" href="#13-convective_envelope_rsg" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>convective_envelope_rsg</code></li>
+<li><strong>Dimensionality:</strong> 3D + time</li>
+<li><strong>Physics:</strong> Radiation-hydrodynamic simulations of the convective envelope of a Red Super-Giant star — buoyancy-driven flow on stellar scales with realistic equation of state and opacity tables.</li>
+<li><strong>Why it matters:</strong> Red super-giants (Betelgeuse, Antares) are the immediate progenitors of core-collapse supernovae, and their surface variability and mass-loss rate set the stage for those explosions. Direct simulation is enormously expensive; a trained surrogate makes parameter sweeps over stellar mass and metallicity tractable.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with MLP. Mass density, pressure, internal energy, three velocity components.</li>
+</ul>
+<h3 id="14-post_neutron_star_merger">14. <code>post_neutron_star_merger</code><a class="headerlink" href="#14-post_neutron_star_merger" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>post_neutron_star_merger</code></li>
+<li><strong>Dimensionality:</strong> 3D + time</li>
+<li><strong>Physics:</strong> Relativistic magnetohydrodynamics with neutrino transport, capturing the disk and ejecta in the seconds after two neutron stars coalesce.</li>
+<li><strong>Why it matters:</strong> Neutron-star mergers are the dominant production sites for r-process heavy elements (gold, platinum, rare earths) in the Universe and are also gravitational-wave sources detectable by LIGO. Surrogate models here let astrophysicists rapidly forecast electromagnetic counterparts (kilonovae) for upcoming GW events.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with MLP. Density, pressure, velocity, magnetic field, electron fraction.</li>
+</ul>
+<h3 id="15-supernova_explosion-resolutions-64-128">15. <code>supernova_explosion</code> (resolutions: <code>64</code>, <code>128</code>)<a class="headerlink" href="#15-supernova_explosion-resolutions-64-128" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>supernova_explosion_64</code>, <code>supernova_explosion_128</code></li>
+<li><strong>Dimensionality:</strong> 3D + time</li>
+<li><strong>Physics:</strong> Compressible hydrodynamics with self-gravity and a stiffened-gas equation of state — the shock launched by a stellar core collapse propagates through the surrounding stellar envelope.</li>
+<li><strong>Why it matters:</strong> Modelling supernova explosions is central to nucleosynthesis, cosmic-ray acceleration, feedback in galaxy evolution, and the formation of compact objects. The dual resolutions probe how well surrogates extrapolate from coarse training data to higher-fidelity targets — directly relevant to multi-resolution astrophysical pipelines.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with MLP. Density, pressure, three velocity components.</li>
+</ul>
+<h3 id="16-turbulence_gravity_cooling">16. <code>turbulence_gravity_cooling</code><a class="headerlink" href="#16-turbulence_gravity_cooling" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variants:</strong> <code>turbulence_gravity_cooling</code></li>
+<li><strong>Dimensionality:</strong> 3D + time</li>
+<li><strong>Physics:</strong> Driven compressible turbulence with self-gravity and radiative cooling — supersonic flows fragment, gravity collapses dense filaments, and cooling controls the final density distribution.</li>
+<li><strong>Why it matters:</strong> This is the regime of star formation in molecular clouds: the interplay between supersonic turbulence, gravitational collapse, and cooling sets the stellar initial mass function — one of the most fundamental predictions of theoretical astrophysics. Surrogates accelerate parameter studies of star-formation efficiency in differing galactic environments.</li>
+<li><strong>Default recipe:</strong> <code>data_only</code> with MLP. Density, pressure, three velocity components, gravitational potential.</li>
+</ul>
+<hr />
+<h2 id="quick-reference-table">Quick-reference table<a class="headerlink" href="#quick-reference-table" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Dataset</th>
+<th>Dim</th>
+<th>Domain</th>
+<th>Recipe</th>
+<th>Variants</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>active_matter</td>
+<td>2D</td>
+<td>Biophysics / soft matter</td>
+<td><code>data_only</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>2</td>
+<td>rayleigh_benard</td>
+<td>2D</td>
+<td>Thermal convection / climate</td>
+<td><code>data_only</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td>3</td>
+<td>shear_flow</td>
+<td>2D</td>
+<td>Mixing / turbulence</td>
+<td><code>data_only</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>4</td>
+<td>rayleigh_taylor_instability</td>
+<td>3D</td>
+<td>Fusion / astrophysics</td>
+<td><code>data_only</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>5</td>
+<td>turbulent_radiative_layer</td>
+<td>2D + 3D</td>
+<td>Galaxy gas dynamics</td>
+<td><code>data_only</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td>6</td>
+<td>MHD</td>
+<td>3D</td>
+<td>Plasma physics / astrophysics</td>
+<td><code>data_only</code></td>
+<td>2 (resolutions)</td>
+</tr>
+<tr>
+<td>7</td>
+<td>gray_scott_reaction_diffusion</td>
+<td>2D</td>
+<td>Pattern formation / chemistry</td>
+<td><code>data_only</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>8</td>
+<td>euler_multi_quadrants</td>
+<td>2D</td>
+<td>Aerodynamics / shock physics</td>
+<td><code>data_only</code></td>
+<td>2 (BCs)</td>
+</tr>
+<tr>
+<td>9</td>
+<td>acoustic_scattering</td>
+<td>2D</td>
+<td>Imaging / NDT / acoustics</td>
+<td><code>data_augmented</code></td>
+<td>3 (geometries)</td>
+</tr>
+<tr>
+<td>10</td>
+<td>helmholtz_staircase</td>
+<td>2D (freq)</td>
+<td>Photonics / metamaterials</td>
+<td><code>data_augmented</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>11</td>
+<td>viscoelastic_instability</td>
+<td>2D</td>
+<td>Polymer / non-Newtonian flow</td>
+<td><code>data_only</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>12</td>
+<td>planetswe</td>
+<td>2D sphere</td>
+<td>Climate / weather</td>
+<td><code>data_only</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>13</td>
+<td>convective_envelope_rsg</td>
+<td>3D</td>
+<td>Stellar physics</td>
+<td><code>data_only</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>14</td>
+<td>post_neutron_star_merger</td>
+<td>3D</td>
+<td>GW astrophysics / nucleosynthesis</td>
+<td><code>data_only</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>15</td>
+<td>supernova_explosion</td>
+<td>3D</td>
+<td>Astrophysics</td>
+<td><code>data_only</code></td>
+<td>2 (resolutions)</td>
+</tr>
+<tr>
+<td>16</td>
+<td>turbulence_gravity_cooling</td>
+<td>3D</td>
+<td>Star formation</td>
+<td><code>data_only</code></td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+<p>The currently shipped registry (<code>pinnrl.datasets.WELL_REGISTRY</code>) covers a curated subset; extending it to the full 23 named variants is a matter of adding entries to <code>pinnrl/datasets/registry.py</code>.</p>
+<hr />
+<h2 id="loading-a-dataset-programmatically">Loading a dataset programmatically<a class="headerlink" href="#loading-a-dataset-programmatically" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.datasets</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_well_slice</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">slice_</span> <span class="o">=</span> <span class="n">load_well_slice</span><span class="p">(</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;active_matter&quot;</span><span class="p">,</span>     <span class="c1"># any key in WELL_REGISTRY</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">split</span><span class="o">=</span><span class="s2">&quot;train&quot;</span><span class="p">,</span>             <span class="c1"># train | valid | test</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">n_traj</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>                  <span class="c1"># how many trajectories to draw from</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">n_points</span><span class="o">=</span><span class="mi">5_000</span><span class="p">,</span>            <span class="c1"># how many (x, t, u) points to keep</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>                    <span class="c1"># RNG seed for reproducibility</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">,</span>              <span class="c1"># torch device</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">base</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>                 <span class="c1"># None = HuggingFace streaming; or local download dir</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># slice_[&quot;x&quot;]: (5000, 2) — spatial coords</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># slice_[&quot;t&quot;]: (5000, 1) — time coords</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="c1"># slice_[&quot;u&quot;]: (5000, n_fields) — reference field values</span>
+</code></pre></div>
+<p>Subsequent calls with the same <code>(name, split, n_traj, n_points, seed)</code> reuse a cached <code>.npz</code> from <code>~/.cache/pinnrl/well/</code> (override with <code>PINNRL_WELL_CACHE</code>).</p>
+<hr />
+<h2 id="launching-a-training-run-on-a-well-dataset">Launching a training run on a Well dataset<a class="headerlink" href="#launching-a-training-run-on-a-well-dataset" title="Permanent link">&para;</a></h2>
+<h3 id="from-the-dashboard">From the dashboard<a class="headerlink" href="#from-the-dashboard" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Open the <strong>New Training</strong> sub-tab.</li>
+<li>Tick <strong>Train on a Well benchmark dataset</strong> under the Dataset section.</li>
+<li>Pick a dataset — the PDE selector, recommended architecture, and Mode dropdown auto-fill from the registry.</li>
+<li>Choose <strong>Hugging Face streaming</strong> (default) or <strong>Local download dir</strong>.</li>
+<li>Set trajectories and sampled-point counts, then <strong>Start Training</strong>.</li>
+</ol>
+<h3 id="from-the-cli">From the CLI<a class="headerlink" href="#from-the-cli" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pinnrl-train<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--pde<span class="w"> </span><span class="s2">&quot;Heat Equation&quot;</span><span class="w"> </span>--arch<span class="w"> </span>fno<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--epochs<span class="w"> </span><span class="m">200</span><span class="w"> </span>--device<span class="w"> </span>cpu<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--dataset<span class="w"> </span>active_matter<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--dataset-traj<span class="w"> </span><span class="m">2</span><span class="w"> </span>--dataset-points<span class="w"> </span><span class="m">5000</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>--mode<span class="w"> </span>data_only
+</code></pre></div>
+<p>When <code>--dataset</code> is supplied, registry defaults overlay the PDE block (domain, dimension, output channels) so the placeholder <code>--pde</code> value is mostly cosmetic — the data drives the shape of the problem.</p>
+<hr />
+<h2 id="when-to-pick-which-dataset">When to pick which dataset<a class="headerlink" href="#when-to-pick-which-dataset" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Quickstart / smoke tests:</strong> <code>active_matter</code> (small, 2D, fast convergence on a single trajectory).</li>
+<li><strong>Convection / thermal physics:</strong> <code>rayleigh_benard</code> or <code>rayleigh_benard_uniform</code>.</li>
+<li><strong>Compressible aero / shock benchmarks:</strong> <code>euler_multi_quadrants_periodicBC</code>.</li>
+<li><strong>Wave equation cross-checks (matched mode):</strong> <code>acoustic_scattering_maze</code> with <code>data_augmented</code>.</li>
+<li><strong>Climate / atmosphere:</strong> <code>planetswe</code>.</li>
+<li><strong>Plasma / astrophysics:</strong> <code>MHD_64</code> (start small, then <code>MHD_256</code>).</li>
+<li><strong>Pattern-formation studies:</strong> <code>gray_scott_reaction_diffusion</code>.</li>
+<li><strong>Stress test for high-dim 3D:</strong> <code>turbulence_gravity_cooling</code>, <code>post_neutron_star_merger</code>.</li>
+</ul>
+<p>The full registry (with metadata) is at <code>pinnrl/datasets/registry.py</code>. Add new entries there to make new datasets selectable from the dashboard.</p>
+<hr />
+<h2 id="licensing">Licensing<a class="headerlink" href="#licensing" title="Permanent link">&para;</a></h2>
+<p>The Well datasets are distributed under <a href="https://github.com/PolymathicAI/the_well/blob/master/LICENSE">BSD-3-Clause</a>. When publishing results trained on Well data, cite <a href="https://arxiv.org/abs/2412.00568">the original Polymathic AI paper</a> alongside <code>pinnrl</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
