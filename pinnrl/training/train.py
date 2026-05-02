@@ -101,8 +101,66 @@ def _build_training_config(training_cfg: dict) -> TrainingConfig:
     )
 
 
-def build_config_dict(yaml_config, pde_name, arch_type, use_rl=False, epochs=None):
-    """Build a full config dict from yaml base + overrides."""
+def _apply_well_dataset_defaults(config: dict, dataset_cfg: dict) -> dict:
+    """Overlay a Well-dataset block onto the config in place.
+
+    Adds an ``observation_data`` Well spec under the active PDE and, when
+    the dataset has a matched analytical PDE in the registry, fills in the
+    domain / time / dimension / output_dim defaults that a fresh user
+    would otherwise have to enter by hand. The function is a no-op for
+    config keys the user has already populated.
+    """
+    from pinnrl.datasets import get_entry
+
+    name = dataset_cfg.get("name")
+    if not name:
+        return config
+    entry = get_entry(name)
+
+    pde_block = config.setdefault("pde", {})
+    pde_block["observation_data"] = {
+        "source": "well",
+        "name": name,
+        "split": dataset_cfg.get("split", "train"),
+        "n_traj": int(dataset_cfg.get("n_traj", 1)),
+        "n_points": int(dataset_cfg.get("n_points", 4096)),
+        "seed": int(dataset_cfg.get("seed", 0)),
+        "base": dataset_cfg.get("base"),
+    }
+
+    if dataset_cfg.get("use_defaults", True):
+        # Picking a Well dataset is an explicit "I want THIS dataset's
+        # defaults" — overwrite the PDE shape fields the analytical config
+        # populated, since they no longer match the data we'll fit.
+        pde_block["domain"] = [list(b) for b in entry.domain]
+        pde_block["time_domain"] = list(entry.time_domain)
+        pde_block["dimension"] = entry.n_spatial_dims
+        pde_block["input_dim"] = entry.default_input_dim
+        pde_block["output_dim"] = entry.default_output_dim
+        model_block = config.setdefault("model", {})
+        model_block["input_dim"] = entry.default_input_dim
+        model_block["output_dim"] = entry.default_output_dim
+        config.setdefault("training", {})["mode"] = entry.recommended_mode
+    return config
+
+
+def build_config_dict(
+    yaml_config,
+    pde_name,
+    arch_type,
+    use_rl=False,
+    epochs=None,
+    dataset=None,
+):
+    """Build a full config dict from yaml base + overrides.
+
+    Args:
+        dataset: Optional Well dataset block, e.g.
+            ``{"name": "active_matter", "split": "train", "n_traj": 1,
+            "n_points": 4096, "seed": 0, "base": None,
+            "use_defaults": True}``. When supplied, registry defaults are
+            overlaid on the PDE/model blocks before training starts.
+    """
     config = yaml_config.copy()
 
     pde_key = PDE_REGISTRY[pde_name][2]
@@ -142,6 +200,10 @@ def build_config_dict(yaml_config, pde_name, arch_type, use_rl=False, epochs=Non
     }
 
     config["pde_type"] = pde_key
+
+    if dataset:
+        _apply_well_dataset_defaults(config, dataset)
+
     return config
 
 
@@ -178,17 +240,11 @@ def create_pde(config_dict, device):
     # data-fitting loss has something to anchor the parameter recovery to.
     mode = training_cfg.get("mode", "forward")
     inverse_cfg = config_dict.get("inverse", {})
-    if (
-        mode == "inverse"
-        and pde.observation_data is None
-        and pde_config.trainable_parameters
-    ):
+    if mode == "inverse" and pde.observation_data is None and pde_config.trainable_parameters:
         n_obs = int(inverse_cfg.get("obs_points", 200))
         noise = float(inverse_cfg.get("obs_noise", 0.01))
         seed = int(inverse_cfg.get("obs_seed", 0))
-        pde.generate_synthetic_observations(
-            n_points=n_obs, noise_std=noise, seed=seed
-        )
+        pde.generate_synthetic_observations(n_points=n_obs, noise_std=noise, seed=seed)
     return pde
 
 
@@ -202,7 +258,12 @@ def run_training(config_dict, device):
     # Experiment directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     rl_status = "rl" if rl_enabled else "no_rl"
-    experiment_name = f"{timestamp}_{pde_name}_{arch_type}_{rl_status}"
+    obs = config_dict.get("pde", {}).get("observation_data") or {}
+    dataset_tag = obs.get("name") if isinstance(obs, dict) and obs.get("source") == "well" else None
+    if dataset_tag:
+        experiment_name = f"{timestamp}_{dataset_tag}_{arch_type}_{rl_status}"
+    else:
+        experiment_name = f"{timestamp}_{pde_name}_{arch_type}_{rl_status}"
     experiment_dir = Path(config_dict["paths"]["results_dir"]) / experiment_name
     experiment_dir.mkdir(parents=True, exist_ok=True)
     (experiment_dir / "visualizations").mkdir(exist_ok=True)
@@ -367,9 +428,36 @@ def main():
     )
     parser.add_argument(
         "--mode",
-        choices=["forward", "inverse"],
+        choices=["forward", "inverse", "data_only", "data_augmented"],
         default=None,
-        help="Training mode (forward or inverse / parameter identification)",
+        help=(
+            "Training mode: forward (residual + IC/BC), inverse (residual + "
+            "IC/BC + data + trainable parameters), data_only (regression on "
+            "observed snapshots only), data_augmented (residual + IC/BC + data)."
+        ),
+    )
+    parser.add_argument(
+        "--dataset",
+        default=None,
+        help="Well dataset name (registered in pinnrl.datasets.WELL_REGISTRY)",
+    )
+    parser.add_argument(
+        "--dataset-split", default="train", help="Well dataset split (train/valid/test)"
+    )
+    parser.add_argument(
+        "--dataset-traj", type=int, default=1, help="Number of trajectories to load"
+    )
+    parser.add_argument(
+        "--dataset-points",
+        type=int,
+        default=4096,
+        help="Number of (x, t, u) points to sub-sample from the loaded slice",
+    )
+    parser.add_argument("--dataset-seed", type=int, default=0, help="RNG seed for sub-sampling")
+    parser.add_argument(
+        "--dataset-base",
+        default=None,
+        help="Local Well download dir; omit to stream from Hugging Face",
     )
     parser.add_argument(
         "--identify",
@@ -454,7 +542,20 @@ def main():
         yaml_config.setdefault("training", {})["huber_delta"] = args.huber_delta
 
     device = torch.device(yaml_config.get("device", "cpu"))
-    config_dict = build_config_dict(yaml_config, args.pde, args.arch, args.rl, args.epochs)
+    dataset_block = None
+    if args.dataset:
+        dataset_block = {
+            "name": args.dataset,
+            "split": args.dataset_split,
+            "n_traj": args.dataset_traj,
+            "n_points": args.dataset_points,
+            "seed": args.dataset_seed,
+            "base": args.dataset_base,
+            "use_defaults": True,
+        }
+    config_dict = build_config_dict(
+        yaml_config, args.pde, args.arch, args.rl, args.epochs, dataset=dataset_block
+    )
     config_dict["device"] = str(device)
 
     # Wire inverse-problem flags through to the PDE config + run-time options.

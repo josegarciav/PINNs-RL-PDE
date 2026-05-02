@@ -37,7 +37,7 @@ Core solver with 9 PDEs, 7 architectures, RL adaptive sampling, and a Dash dashb
 
 ## v0.2 — Documentation and Onboarding
 
-**Status: Mostly complete**
+**Status: Complete**
 
 | Item | Status | Adoption difficulty | Scientific impact | Innovation level |
 |---|---|---|---|---|
@@ -73,11 +73,11 @@ Extends scientific capability with methods actively used in the PINN research co
 | L-BFGS second-order optimizer | Done | 2 | 3 | 2 |
 | 2D PDEs: full heat_2d training | Done | 3 | 4 | 2 |
 | RAR (Residual-Adaptive Refinement) sampling | Done | 2 | 3 | 2 |
-| Formal FDM comparison on heat/wave | To do | 2 | 3 | 2 |
-| Stratified + RAR sampling benchmarks vs RL | To do | 2 | 3 | 3 |
-| `pinnrl-benchmark` CLI subcommand | To do | 2 | 2 | 2 |
+| Formal FDM comparison on heat/wave | Done | 2 | 3 | 2 |
+| Stratified + RAR sampling benchmarks vs RL | Done | 2 | 3 | 3 |
+| `pinnrl-benchmark` CLI subcommand | Done | 2 | 2 | 2 |
 | Configurable loss functions (MSE, MAE, Huber) | Done | 1 | 2 | 1 |
-| Linkedin post | To do | 1 | 2 | 1 |
+| Linkedin post | Done | 1 | 2 | 1 |
 
 **On inverse problems:** Recovering unknown PDE parameters (e.g., identifying `alpha` in the heat equation from noisy sensor data) is one of the highest-value capabilities PINNs offer over classical solvers. Implementation path: add a `trainable_parameters` field to `PDEConfig`, modify `PDEBase.compute_residual` to use `nn.Parameter` tensors, add a data-fitting loss term, and expose via `--mode inverse` CLI flag.
 
@@ -103,6 +103,30 @@ Makes the RL adaptive sampler a first-class, benchmarked feature rather than an 
 | Linkedin post | To do | 1 | 2 | 1 |
 
 **On the benchmark paper:** A rigorous comparison of RL-based adaptive sampling against RAR and uniform strategies across all nine PDEs, with fixed compute budgets, would be a publishable contribution. Key metrics: L2 error at convergence, wall-clock time to target loss, and collocation efficiency (accuracy per point). This is `pinnrl`'s strongest scientific differentiator.
+
+---
+
+## v0.5 — Benchmark Datasets
+
+**Target:** Q1 2027
+
+Brings external benchmark datasets into `pinnrl` so users can train and evaluate against community-standard reference solutions instead of only synthetic analytical data. First integration target: [The Well](https://github.com/PolymathicAI/the_well) (Polymathic AI, BSD-3) — 16 HDF5 simulation datasets covering fluid dynamics, MHD, biological systems, and acoustic scattering, served via `WellDataset` and the `hf://datasets/polymathic-ai/` Hugging Face mirror.
+
+| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
+|---|---|---|---|---|
+| `pinnrl/datasets/` subpackage with `WellEntry` registry (16 datasets) | To do | 2 | 3 | 2 |
+| Well loader: HF streaming default + local-cache fallback | To do | 3 | 3 | 2 |
+| `data_only` training mode (neural surrogate, no PDE residual) | To do | 2 | 4 | 3 |
+| `data_augmented` training mode (residual + reference data) | To do | 2 | 4 | 3 |
+| Dashboard Dataset section: pick Well dataset → auto-fill PDE/arch/mode | To do | 3 | 3 | 3 |
+| `pinnrl[well]` optional extra (`the_well`, `h5py`, `huggingface-hub`) | To do | 1 | 1 | 1 |
+| FNO-on-`active_matter` quickstart notebook | To do | 2 | 3 | 2 |
+| Integration tests (skipped without `the_well` installed) | To do | 2 | 2 | 1 |
+| Linkedin post | To do | 1 | 2 | 1 |
+
+**Why now:** v0.4's RL benchmark needs ground truth that goes beyond analytical 1D toys, and the FNO foundation listed under "Exploratory directions" only becomes true operator learning once it can ingest snapshot fields. Both unblock cleanly once Well datasets are first-class.
+
+**Design constraints:** Reuse `PDEConfig.observation_data` as the single in-memory shape for external data — Well snapshots flatten into the same `(x, t, u)` tensor triple already consumed by inverse-mode parameter ID. The new modes are loss-recipe toggles, not new PDE classes; matched datasets (Burgers and diffusion variants) use `data_augmented`, unmatched ones (Rayleigh-Bénard, MHD, active matter, …) use `data_only`. New analytical PDE classes for the unmatched physics are explicitly out of scope here and tracked separately under "Turbulence modeling with PINNs" in Exploratory directions.
 
 ---
 
@@ -191,6 +215,14 @@ Ranked by expected return — combining scientific demand, differentiation from 
 
 **Scientific demand:** Growing. PINNs avoid the curse of dimensionality that limits FEM. PDEs in 10–100 dimensions arise in multi-asset options pricing, quantum many-body problems, and stochastic control. All 7 architectures already support arbitrary `input_dim`. The work is in defining sampling strategies, boundary conditions, and reference solutions for high-dimensional test cases.
 
+### 8. Benchmark dataset integration (The Well)
+
+**Scientific demand:** High. Without external benchmark data, every result in `pinnrl` is measured against its own analytical solutions — fine for validation, weak for publication. The Well provides 16 community-standard simulation datasets (fluid dynamics, MHD, biology, acoustics) under BSD-3 with a clean PyTorch loader. Wiring it in turns the v0.4 RL benchmark into something comparable with the broader ML4PDE literature, and lets users train neural surrogates on physics that `pinnrl` does not analytically model.
+
+**Differentiation:** PINN libraries today treat external datasets as ad-hoc inverse-problem inputs. A first-class dataset selector in the dashboard, with auto-filled defaults per dataset and side-by-side `data_only` / `data_augmented` / `forward` modes, is a concrete usability win.
+
+**Implementation path:** See v0.5 milestone above.
+
 ---
 
 ## Exploratory directions
@@ -199,7 +231,7 @@ Long-horizon, high-risk, high-reward ideas. Not on the near-term roadmap, but th
 
 ### FNO operator learning
 
-**Status: Foundation built.** The `fno` architecture implements spectral convolution layers adapted for point-wise PINN inputs. The next step is extending to true operator learning — mapping initial/boundary conditions to full solution fields, enabling zero-shot generalization to new IC/BC pairs without retraining.
+**Status: Foundation built.** The `fno` architecture implements spectral convolution layers adapted for point-wise PINN inputs. The next step is extending to true operator learning — mapping initial/boundary conditions to full solution fields, enabling zero-shot generalization to new IC/BC pairs without retraining. The v0.5 Well integration unblocks this by supplying the snapshot-field training data required to learn an operator rather than a single-instance solution.
 
 ### Multi-agent RL for domain decomposition
 

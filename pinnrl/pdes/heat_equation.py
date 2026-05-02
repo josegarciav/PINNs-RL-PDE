@@ -491,18 +491,14 @@ class HeatEquation(PDEBase):
 
             x_initial = torch.cat(
                 [
-                    torch.linspace(
-                        x_min, x_min + x_boundary, num_initial // 4, device=self.device
-                    ),
+                    torch.linspace(x_min, x_min + x_boundary, num_initial // 4, device=self.device),
                     torch.linspace(
                         x_min + x_boundary,
                         x_max - x_boundary,
                         num_initial // 2,
                         device=self.device,
                     ),
-                    torch.linspace(
-                        x_max - x_boundary, x_max, num_initial // 4, device=self.device
-                    ),
+                    torch.linspace(x_max - x_boundary, x_max, num_initial // 4, device=self.device),
                 ]
             ).reshape(-1, 1)
 
@@ -534,9 +530,7 @@ class HeatEquation(PDEBase):
                 k = self.config.initial_condition.get("frequency", 2.0)
                 u_target = torch.ones(num_initial, 1, device=self.device)
                 for d in range(self.dimension):
-                    u_target = u_target * torch.sin(
-                        k * torch.pi * x_initial[:, d : d + 1]
-                    )
+                    u_target = u_target * torch.sin(k * torch.pi * x_initial[:, d : d + 1])
 
             initial_loss = self._apply_loss_fn(u_initial - u_target)
 
@@ -579,13 +573,23 @@ class HeatEquation(PDEBase):
                 _aw_enabled = aw.get("enabled", False) if isinstance(aw, dict) else False
             elif hasattr(training, "adaptive_weights") and training.adaptive_weights is not None:
                 _aw_enabled = getattr(training.adaptive_weights, "enabled", False)
+
+        # Mode gates the physics terms: data_only zeroes them out so the
+        # network fits the dataset purely as regression; data_augmented and
+        # inverse keep them and force a non-zero data weight.
+        mode = self._training_mode()
+        residual_active = 0.0 if mode == "data_only" else 1.0
+        ic_bc_active = residual_active
+        if mode in ("inverse", "data_only", "data_augmented") and data_weight <= 0.0:
+            data_weight = 1.0
+
         if _aw_enabled:
             # The total loss will be computed by the trainer using adaptive weights
             # We just return the individual components
             losses["total"] = (
-                residual_loss
-                + boundary_loss
-                + initial_loss
+                residual_active * residual_loss
+                + ic_bc_active * boundary_loss
+                + ic_bc_active * initial_loss
                 + smoothness_weight * smoothness_loss
                 + data_weight * data_loss
             )
@@ -608,9 +612,9 @@ class HeatEquation(PDEBase):
             else:
                 w_pde, w_bc, w_ic = 1.0, 10.0, 10.0
             total_loss = (
-                w_pde * residual_loss
-                + w_bc * boundary_loss
-                + w_ic * initial_loss
+                residual_active * w_pde * residual_loss
+                + ic_bc_active * w_bc * boundary_loss
+                + ic_bc_active * w_ic * initial_loss
                 + smoothness_weight * smoothness_loss
                 + data_weight * data_loss
             )

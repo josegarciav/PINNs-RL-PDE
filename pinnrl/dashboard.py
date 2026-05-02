@@ -16,6 +16,8 @@ import yaml
 from dash import dcc, html
 from dash.dependencies import Input, Output, State
 
+from pinnrl.datasets import WELL_REGISTRY
+
 
 # Parse command line arguments for port
 def parse_args():
@@ -71,6 +73,20 @@ for _key, _cfg in _PDE_CONFIGS.items():
     if _key == "heat_2d":
         continue  # skip 2D variant for now
     _PDE_OPTIONS.append({"label": _cfg.get("name", _key), "value": _cfg.get("name", _key)})
+
+# Map Well dataset key (config_key, e.g. "burgers") -> display PDE name from
+# _PDE_OPTIONS, so picking a dataset can drive the PDE dropdown.
+_PDE_KEY_TO_DISPLAY = {
+    _cfg.get("name", _k).lower().replace(" equation", "").replace("-", "_"): _cfg.get("name", _k)
+    for _k, _cfg in _PDE_CONFIGS.items()
+}
+_DATASET_OPTIONS = [
+    {
+        "label": f"{_name} ({_entry.n_spatial_dims}D, {_entry.recommended_mode})",
+        "value": _name,
+    }
+    for _name, _entry in sorted(WELL_REGISTRY.items())
+]
 
 # ============================================================
 # Layout
@@ -245,12 +261,173 @@ app.layout = html.Div(
                                                                                     "label": "Inverse (identify)",
                                                                                     "value": "inverse",
                                                                                 },
+                                                                                {
+                                                                                    "label": "Data-augmented (residual + data)",
+                                                                                    "value": "data_augmented",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Data-only (regression)",
+                                                                                    "value": "data_only",
+                                                                                },
                                                                             ],
                                                                             value="forward",
                                                                             clearable=False,
                                                                         ),
                                                                     ],
                                                                     style=FIELD_STYLE,
+                                                                ),
+                                                                # Dataset section: pick a Well dataset and the
+                                                                # callbacks below auto-fill the PDE / arch / mode.
+                                                                html.Div(
+                                                                    [
+                                                                        html.H4(
+                                                                            "Dataset (optional)",
+                                                                            style={
+                                                                                "borderBottom": "2px solid #FF9800",
+                                                                                "paddingBottom": "8px",
+                                                                                "marginTop": "16px",
+                                                                            },
+                                                                        ),
+                                                                        html.Div(
+                                                                            [
+                                                                                dcc.Checklist(
+                                                                                    id="train-dataset-toggle",
+                                                                                    options=[
+                                                                                        {
+                                                                                            "label": " Train on a Well benchmark dataset",
+                                                                                            "value": "well",
+                                                                                        }
+                                                                                    ],
+                                                                                    value=[],
+                                                                                ),
+                                                                            ],
+                                                                            style=FIELD_STYLE,
+                                                                        ),
+                                                                        html.Div(
+                                                                            id="train-dataset-controls",
+                                                                            style={
+                                                                                "display": "none"
+                                                                            },
+                                                                            children=[
+                                                                                html.Div(
+                                                                                    [
+                                                                                        html.Label(
+                                                                                            "Dataset:",
+                                                                                            style=LABEL_STYLE,
+                                                                                        ),
+                                                                                        dcc.Dropdown(
+                                                                                            id="train-dataset-selector",
+                                                                                            options=_DATASET_OPTIONS,
+                                                                                            value=(
+                                                                                                _DATASET_OPTIONS[
+                                                                                                    0
+                                                                                                ][
+                                                                                                    "value"
+                                                                                                ]
+                                                                                                if _DATASET_OPTIONS
+                                                                                                else None
+                                                                                            ),
+                                                                                            clearable=False,
+                                                                                        ),
+                                                                                    ],
+                                                                                    style=FIELD_STYLE,
+                                                                                ),
+                                                                                html.Div(
+                                                                                    id="train-dataset-info",
+                                                                                    style={
+                                                                                        "fontSize": "12px",
+                                                                                        "padding": "8px",
+                                                                                        "backgroundColor": "#FFF3E0",
+                                                                                        "borderRadius": "4px",
+                                                                                        "marginBottom": "12px",
+                                                                                    },
+                                                                                ),
+                                                                                html.Div(
+                                                                                    [
+                                                                                        html.Label(
+                                                                                            "Source:",
+                                                                                            style=LABEL_STYLE,
+                                                                                        ),
+                                                                                        dcc.RadioItems(
+                                                                                            id="train-dataset-source",
+                                                                                            options=[
+                                                                                                {
+                                                                                                    "label": " Hugging Face streaming",
+                                                                                                    "value": "hf",
+                                                                                                },
+                                                                                                {
+                                                                                                    "label": " Local download dir",
+                                                                                                    "value": "local",
+                                                                                                },
+                                                                                            ],
+                                                                                            value="hf",
+                                                                                            inline=True,
+                                                                                        ),
+                                                                                    ],
+                                                                                    style=FIELD_STYLE,
+                                                                                ),
+                                                                                html.Div(
+                                                                                    [
+                                                                                        html.Label(
+                                                                                            "Local base path:",
+                                                                                            style=LABEL_STYLE,
+                                                                                        ),
+                                                                                        dcc.Input(
+                                                                                            id="train-dataset-base",
+                                                                                            type="text",
+                                                                                            placeholder="/path/to/the_well_data",
+                                                                                            value="",
+                                                                                            style={
+                                                                                                "width": "100%"
+                                                                                            },
+                                                                                        ),
+                                                                                    ],
+                                                                                    id="train-dataset-base-row",
+                                                                                    style={
+                                                                                        "display": "none"
+                                                                                    },
+                                                                                ),
+                                                                                html.Div(
+                                                                                    [
+                                                                                        html.Label(
+                                                                                            "Trajectories:",
+                                                                                            style=LABEL_STYLE,
+                                                                                        ),
+                                                                                        dcc.Input(
+                                                                                            id="train-dataset-traj",
+                                                                                            type="number",
+                                                                                            value=1,
+                                                                                            min=1,
+                                                                                            step=1,
+                                                                                            style={
+                                                                                                "width": "100%"
+                                                                                            },
+                                                                                        ),
+                                                                                    ],
+                                                                                    style=FIELD_STYLE,
+                                                                                ),
+                                                                                html.Div(
+                                                                                    [
+                                                                                        html.Label(
+                                                                                            "Sampled points:",
+                                                                                            style=LABEL_STYLE,
+                                                                                        ),
+                                                                                        dcc.Input(
+                                                                                            id="train-dataset-points",
+                                                                                            type="number",
+                                                                                            value=4096,
+                                                                                            min=64,
+                                                                                            step=64,
+                                                                                            style={
+                                                                                                "width": "100%"
+                                                                                            },
+                                                                                        ),
+                                                                                    ],
+                                                                                    style=FIELD_STYLE,
+                                                                                ),
+                                                                            ],
+                                                                        ),
+                                                                    ],
                                                                 ),
                                                             ],
                                                             style={
@@ -455,7 +632,8 @@ app.layout = html.Div(
                                                                                 },
                                                                             ],
                                                                             value=_TRAINING_DEFAULTS.get(
-                                                                                "loss_function", "mse"
+                                                                                "loss_function",
+                                                                                "mse",
                                                                             ),
                                                                             clearable=False,
                                                                         ),
@@ -1392,6 +1570,76 @@ def update_pde_selection(pde_name):
 
 
 @app.callback(
+    Output("train-dataset-controls", "style"),
+    Input("train-dataset-toggle", "value"),
+)
+def toggle_dataset_controls(toggle_value):
+    """Show or hide the Well-dataset controls based on the master toggle."""
+    if toggle_value and "well" in toggle_value:
+        return {"display": "block"}
+    return {"display": "none"}
+
+
+@app.callback(
+    Output("train-dataset-base-row", "style"),
+    Input("train-dataset-source", "value"),
+)
+def toggle_dataset_base_row(source):
+    """Reveal the local-path text input only when the source is 'local'."""
+    if source == "local":
+        return {**FIELD_STYLE, "display": "block"}
+    return {"display": "none"}
+
+
+@app.callback(
+    Output("train-dataset-info", "children"),
+    Output("train-pde-selector", "value"),
+    Output("train-mode-selector", "value"),
+    Input("train-dataset-selector", "value"),
+    State("train-dataset-toggle", "value"),
+    prevent_initial_call=True,
+)
+def populate_from_well_dataset(dataset_name, toggle_value):
+    """Auto-fill PDE / mode from the registry when a dataset is picked."""
+    if not dataset_name or "well" not in (toggle_value or []):
+        # Toggle off — leave info blank and don't touch the other dropdowns.
+        return "", dash.no_update, dash.no_update
+    entry = WELL_REGISTRY.get(dataset_name)
+    if entry is None:
+        return f"Unknown dataset: {dataset_name}", dash.no_update, dash.no_update
+
+    info_children = [
+        html.Strong(entry.name),
+        html.Span(f"  ·  {entry.n_spatial_dims}D  ·  fields: {len(entry.fields)}"),
+        html.Br(),
+        html.Span(entry.description),
+        html.Br(),
+        html.Em(
+            f"Recommended: mode={entry.recommended_mode}, arch={entry.default_architecture}"
+            + (
+                f", PDE={entry.default_pde_key}"
+                if entry.default_pde_key
+                else " (no matched analytical PDE)"
+            )
+        ),
+    ]
+
+    # Drive the PDE dropdown only when the dataset matches an existing PDE
+    # in the framework. Unmatched datasets keep whatever PDE the user had
+    # picked — the data_only loss recipe makes the choice irrelevant.
+    pde_value = dash.no_update
+    if entry.default_pde_key:
+        display = next(
+            (cfg.get("name", k) for k, cfg in _PDE_CONFIGS.items() if k == entry.default_pde_key),
+            None,
+        )
+        if display:
+            pde_value = display
+
+    return info_children, pde_value, entry.recommended_mode
+
+
+@app.callback(
     Output("trainer-status", "children"),
     Input("start-training-button", "n_clicks"),
     State("train-pde-selector", "value"),
@@ -1413,6 +1661,12 @@ def update_pde_selection(pde_name):
     State("train-obs-noise", "value"),
     State("train-obs-path", "value"),
     State("train-loss-fn-selector", "value"),
+    State("train-dataset-toggle", "value"),
+    State("train-dataset-selector", "value"),
+    State("train-dataset-source", "value"),
+    State("train-dataset-base", "value"),
+    State("train-dataset-traj", "value"),
+    State("train-dataset-points", "value"),
     prevent_initial_call=True,
 )
 def launch_trainer(
@@ -1436,6 +1690,12 @@ def launch_trainer(
     obs_noise,
     obs_path,
     loss_fn,
+    dataset_toggle,
+    dataset_name,
+    dataset_source,
+    dataset_base,
+    dataset_traj,
+    dataset_points,
 ):
     """Launch a headless training subprocess with the selected parameters."""
     if not n_clicks:
@@ -1500,6 +1760,21 @@ def launch_trainer(
                     cmd += ["--obs-points", str(int(obs_points))]
                 if obs_noise is not None:
                     cmd += ["--obs-noise", str(float(obs_noise))]
+        elif mode in ("data_only", "data_augmented"):
+            # The dataset block carries the data source; apply the chosen
+            # mode here so train.py overrides the yaml default.
+            cmd += ["--mode", mode]
+
+        # Well dataset flags.
+        use_dataset = bool(dataset_toggle and "well" in dataset_toggle and dataset_name)
+        if use_dataset:
+            cmd += ["--dataset", str(dataset_name)]
+            if dataset_traj:
+                cmd += ["--dataset-traj", str(int(dataset_traj))]
+            if dataset_points:
+                cmd += ["--dataset-points", str(int(dataset_points))]
+            if dataset_source == "local" and dataset_base:
+                cmd += ["--dataset-base", str(dataset_base)]
 
         log_fh = open(log_file, "w")
         subprocess.Popen(
@@ -1510,12 +1785,13 @@ def launch_trainer(
         )
 
         rl_str = " + RL" if use_rl else ""
-        mode_str = " (inverse)" if mode == "inverse" else ""
+        mode_str = f" ({mode})" if mode != "forward" else ""
+        dataset_str = f" / dataset={dataset_name}" if use_dataset else ""
         return html.Div(
             [
                 html.Span("Training started! ", style={"color": "#4CAF50", "fontWeight": "bold"}),
                 html.Span(
-                    f"{pde_name} / {arch}{rl_str}{mode_str} / {epochs} epochs / LR={lr} / opt={optimizer or 'adam'} / loss={loss_fn or 'mse'}"
+                    f"{pde_name} / {arch}{rl_str}{mode_str}{dataset_str} / {epochs} epochs / LR={lr} / opt={optimizer or 'adam'} / loss={loss_fn or 'mse'}"
                 ),
                 html.Br(),
                 html.Span(
@@ -1591,7 +1867,9 @@ def populate_identify_options(pde_name):
     """Refresh the identifiable-parameter checklist whenever the PDE changes."""
     pde_key = _PDE_NAME_TO_KEY.get(pde_name, "heat")
     params = _PDE_CONFIGS.get(pde_key, {}).get("parameters", {}) or {}
-    options = [{"label": f" {name} (true: {value})", "value": name} for name, value in params.items()]
+    options = [
+        {"label": f" {name} (true: {value})", "value": name} for name, value in params.items()
+    ]
     return options, []
 
 
@@ -1711,7 +1989,9 @@ def update_live_snapshot(experiment, _n_intervals):
         margin=dict(l=0, r=0, t=40, b=0),
     )
 
-    res_fig = go.Figure(data=[go.Surface(x=axis_x, y=axis_y, z=residual, colorscale="RdBu", reversescale=True)])
+    res_fig = go.Figure(
+        data=[go.Surface(x=axis_x, y=axis_y, z=residual, colorscale="RdBu", reversescale=True)]
+    )
     res_fig.update_layout(
         title="PDE residual",
         scene=dict(xaxis_title=x_label, yaxis_title=y_label, zaxis_title="residual"),
@@ -1744,7 +2024,14 @@ def update_param_trajectories(experiment, _n_intervals):
         fig.update_layout(
             title="Identified Parameters (inverse mode)",
             annotations=[
-                dict(text="Select an experiment", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+                dict(
+                    text="Select an experiment",
+                    xref="paper",
+                    yref="paper",
+                    x=0.5,
+                    y=0.5,
+                    showarrow=False,
+                )
             ],
             height=320,
         )
@@ -1774,7 +2061,7 @@ def update_param_trajectories(experiment, _n_intervals):
         return fig
 
     for key in param_keys:
-        name = key[len("param_"):]
+        name = key[len("param_") :]
         series = history[key]
         epochs = list(range(1, len(series) + 1))
         fig.add_trace(go.Scatter(x=epochs, y=series, mode="lines", name=name))

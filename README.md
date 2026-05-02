@@ -11,7 +11,7 @@
 
 **Solve PDEs with neural networks that learn where to look.**
 
-`pinnrl` combines Physics-Informed Neural Networks (PINNs) with Deep Q-Network reinforcement learning to place collocation points adaptively — concentrating compute where the residual is highest, not where a grid happens to land. Integrate your chosen architecture, your custom equations, a Dashboard trainer, and add exact/quasi-exact analytical solutions for validation.
+`pinnrl` combines Physics-Informed Neural Networks (PINNs) with Deep Q-Network reinforcement learning to place collocation points adaptively — concentrating compute where the residual is highest, not where a grid happens to land. Integrate your chosen architecture, your custom equations, a Dashboard trainer with live 3D solution and residual surfaces, parameter identification for inverse problems, and one-click training on community benchmark datasets ([The Well](https://github.com/PolymathicAI/the_well), 16 simulation datasets).
 
 ---
 
@@ -125,12 +125,15 @@ print(f"L2 error: {metrics['l2_error']:.2e}  |  Max error: {metrics['max_error']
 
 ## Features
 
-- **RL-adaptive collocation** — a DQN agent (`src/rl/rl_agent.py`) observes the current residual field and steers point sampling toward high-error regions, reducing wasted forward passes on low-residual areas.
+- **RL-adaptive collocation** — a DQN agent (`pinnrl/rl/rl_agent.py`) observes the current residual field and steers point sampling toward high-error regions, reducing wasted forward passes on low-residual areas.
 - **Seven neural architectures** — FeedForward, ResNet, SIREN (periodic activations), Fourier Features (random Fourier mapping), Fourier Neural Operator (spectral convolutions), Self-Attention Transformer, and Autoencoder, all exposed through a single `PINNModel` factory class.
 - **Nine PDEs** — linear to nonlinear, parabolic to hyperbolic, 1D to 2D, spanning thermal diffusion, soliton dynamics, phase-field models, and financial derivatives.
 - **Exact analytical solutions** — every PDE ships with an `exact_solution` method for L2 and max-error validation during and after training; no external reference solver is required.
+- **Inverse problems** — recover unknown PDE parameters from noisy or sparse observations. Mark any PDE parameter as trainable, supply observations (synthetic, `.npz` file, or a Well dataset), and pinnrl jointly fits the network and the parameters end-to-end. See [docs/inverse_problems.md](docs/inverse_problems.md).
+- **Benchmark datasets (The Well)** — 16 community simulation datasets (active matter, Rayleigh–Bénard, MHD, acoustic scattering, planetary shallow water, …) accessible via `pip install 'pinnrl[well]'`. Pick from the dashboard, defaults are auto-filled from the registry. Data-only and data-augmented loss recipes ship out of the box. See [docs/datasets.md](docs/datasets.md).
 - **Adaptive loss weighting** — residual-balancing weights (RBW) and learning-rate-based weights (LRW) automatically re-balance physics, boundary, and initial condition loss terms.
-- **Dash dashboard** — configure and launch experiments, monitor convergence metrics, and compare runs without writing plotting code.
+- **Live 3D visualization** — the dashboard's Monitor sub-tab streams interactive Plotly surfaces of the predicted field and PDE residual on every epoch, so you can watch the network converge on shocks, interfaces, and boundary layers in real time. The Collocation & Solution tab adds exact-vs-predicted 3D surface plots with a time slider. See [docs/visualization.md](docs/visualization.md).
+- **Dash dashboard** — configure and launch experiments, monitor convergence metrics, identify PDE parameters, train on Well datasets, and compare runs without writing plotting code.
 - **Hardware-aware** — automatically selects CUDA, Apple MPS, or CPU; configurable via the `--device` flag or `config.yaml`.
 
 ---
@@ -152,10 +155,14 @@ print(f"L2 error: {metrics['l2_error']:.2e}  |  Max error: {metrics['max_error']
 
 | Version | Status | Milestones |
 |---|---|---|
-| v0.1 | Now | 9 PDEs, 7 architectures, DQN adaptive sampling, Dash dashboard, exact-solution validation |
-| v0.2 | Planned | PyPI release, 2D/3D geometry, PPO agent option, YAML config schema validation |
-| v0.3 | Planned | Operator learning (DeepONet-style), uncertainty quantification, JAX backend |
-| v1.0 | Future | Stable public API, community PDE registry, full documentation site |
+| v0.1 | Done | 9 PDEs, 7 architectures, DQN adaptive sampling, Dash dashboard, exact-solution validation |
+| v0.2 | Done | PyPI release, MkDocs site, tutorials, Linkedin launch post |
+| v0.3 | Mostly done | FNO architecture, inverse problems, L-BFGS, RAR sampling, configurable loss functions |
+| v0.4 | Planned | Formal RL benchmark, PPO agent option, curriculum learning, RL pre-training |
+| v0.5 | Planned | The Well dataset integration (16 datasets), `data_only` / `data_augmented` modes, dashboard dataset section |
+| v1.0 | Future | Stable public API, FEniCS/DeepXDE benchmarks, custom PDE builder, plugin system |
+
+See [docs/roadmap.md](docs/roadmap.md) for the full breakdown with item-level scoring.
 
 ---
 

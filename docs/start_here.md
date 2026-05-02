@@ -4,6 +4,8 @@
 
 `pinnrl` is an open-source Python library for solving partial differential equations (PDEs) using Physics-Informed Neural Networks (PINNs), with an optional reinforcement learning layer that adaptively selects collocation points to improve training efficiency. It supports nine PDEs out of the box, seven neural network architectures, and runs on CPU, CUDA, and Apple Silicon (MPS) with a single configuration change.
 
+Beyond the forward solve, pinnrl also handles **inverse problems** (recover unknown PDE parameters from noisy observations — see [Inverse Problems](inverse_problems.md)) and trains directly on **community benchmark datasets** (16 simulation datasets from [The Well](https://github.com/PolymathicAI/the_well) — see [Benchmark Datasets](datasets.md)). The dashboard's Monitor tab streams **interactive 3D solution and residual surfaces** as the network converges, so you can see when shocks, interfaces, and boundary layers settle into place.
+
 ---
 
 ## What you can do in 5 minutes
@@ -176,6 +178,9 @@ The loss curve descends monotonically (with minor fluctuations from cosine LR an
 |---|---|
 | Full installation, GPU setup, troubleshooting | [docs/setup.md](setup.md) |
 | Dashboard features and workflow | [docs/dashboard.md](dashboard.md) |
+| Live 3D visualization of training | [docs/visualization.md](visualization.md) |
+| Recover unknown PDE parameters from data | [docs/inverse_problems.md](inverse_problems.md) |
+| Train on The Well benchmark datasets | [docs/datasets.md](datasets.md) |
 | Architecture selection and training loop internals | [docs/ARCHITECTURE.md](ARCHITECTURE.md) |
 | Interactive examples and comparisons | `notebooks/PINN_intro_workshop.ipynb` |
 | Sampling strategies (uniform, stratified, RAR, RL) | [Sampling Strategies](sampling_strategies.md) |

@@ -323,7 +323,7 @@ class PDEBase:
                 reduction="mean",
                 delta=self._huber_delta(),
             )
-        return torch.mean(error ** 2)
+        return torch.mean(error**2)
 
     def _data_loss_weight(self, default: float = 1.0) -> float:
         """Pull the ``data`` loss weight from training config, falling back to ``default``."""
@@ -334,6 +334,15 @@ class PDEBase:
             return float(getattr(lw, "data", default))
         except AttributeError:
             return default
+
+    def _training_mode(self) -> str:
+        """Return the training mode from config, defaulting to ``forward``."""
+        training = getattr(self.config, "training", None)
+        if training is None:
+            return "forward"
+        if isinstance(training, dict):
+            return str(training.get("mode", "forward"))
+        return str(getattr(training, "mode", "forward"))
 
     def trainable_parameters_iter(self):
         """Iterator over registered trainable PDE parameters (for the optimizer)."""
@@ -352,13 +361,27 @@ class PDEBase:
     ) -> Optional[Dict[str, torch.Tensor]]:
         """Convert raw observation-data spec into device tensors.
 
-        Accepts either a path-based spec ``{"path": "/some/file.npz"}`` (the npz
-        must contain ``x``, ``t``, ``u``) or an inline spec carrying numpy/list
-        arrays under those same keys. Returns ``None`` when ``obs_cfg`` is empty.
+        Accepts:
+
+        * A path-based spec ``{"path": "/some/file.npz"}`` (the npz must
+          contain ``x``, ``t``, ``u``).
+        * An inline spec carrying numpy/list arrays under those same keys.
+        * A Well-dataset spec ``{"source": "well", "name": ..., "split": ...,
+          "n_traj": ..., "n_points": ..., "seed": ..., "base": ...}``,
+          which is delegated to :func:`pinnrl.datasets.load_well_slice`.
+
+        Returns ``None`` when ``obs_cfg`` is empty.
         """
         if not obs_cfg:
             return None
         device = self.device
+
+        if obs_cfg.get("source") == "well":
+            from pinnrl.datasets import load_well_slice
+
+            kwargs = {k: v for k, v in obs_cfg.items() if k != "source"}
+            kwargs.setdefault("device", device)
+            return load_well_slice(**kwargs)
 
         if "path" in obs_cfg and obs_cfg["path"]:
             path = obs_cfg["path"]
@@ -417,10 +440,12 @@ class PDEBase:
         x_cols = []
         for d in range(spatial_dims):
             lo, hi = self.domain[d]
-            x_cols.append(
-                torch.rand(n_points, 1, generator=gen) * (hi - lo) + lo
-            )
-        x = torch.cat(x_cols, dim=1).to(self.device) if spatial_dims > 1 else x_cols[0].to(self.device)
+            x_cols.append(torch.rand(n_points, 1, generator=gen) * (hi - lo) + lo)
+        x = (
+            torch.cat(x_cols, dim=1).to(self.device)
+            if spatial_dims > 1
+            else x_cols[0].to(self.device)
+        )
 
         t_lo, t_hi = self.time_domain[0], self.time_domain[1]
         t = (torch.rand(n_points, 1, generator=gen) * (t_hi - t_lo) + t_lo).to(self.device)
@@ -1161,6 +1186,16 @@ class PDEBase:
         # term isn't accidentally dropped to zero in inverse mode.
         data_weight = self._data_loss_weight(1.0)
 
+        # Mode controls which loss components contribute to the total.
+        # ``data_only`` zeros out the physics terms (pure regression on
+        # observed snapshots); ``data_augmented`` and ``inverse`` keep the
+        # physics AND ensure the data term is non-zero.
+        mode = self._training_mode()
+        residual_active = 0.0 if mode == "data_only" else 1.0
+        ic_bc_active = residual_active
+        if mode in ("inverse", "data_only", "data_augmented") and data_weight <= 0.0:
+            data_weight = 1.0
+
         # Use adaptive weights if enabled
         if (
             self.config.training is not None
@@ -1168,9 +1203,9 @@ class PDEBase:
             and self.config.training.adaptive_weights.enabled
         ):
             losses["total"] = (
-                residual_loss
-                + boundary_loss
-                + initial_loss
+                residual_active * residual_loss
+                + ic_bc_active * boundary_loss
+                + ic_bc_active * initial_loss
                 + smoothness_weight * smoothness_loss
                 + data_weight * data_loss
             )
@@ -1189,9 +1224,9 @@ class PDEBase:
                 residual_weight, boundary_weight, initial_weight = 1.0, 10.0, 10.0
 
             total_loss = (
-                residual_weight * residual_loss
-                + boundary_weight * boundary_loss
-                + initial_weight * initial_loss
+                residual_active * residual_weight * residual_loss
+                + ic_bc_active * boundary_weight * boundary_loss
+                + ic_bc_active * initial_weight * initial_loss
                 + smoothness_weight * smoothness_loss
                 + data_weight * data_loss
             )

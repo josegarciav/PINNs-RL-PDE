@@ -68,8 +68,12 @@ nav:
     - Start Here: start_here.md
     - Installation & Setup: setup.md
     - Dashboard Guide: dashboard.md
+  - Features:
+    - 3D Visualization: visualization.md
+    - Inverse Problems: inverse_problems.md
+    - Benchmark Datasets (The Well): datasets.md
+    - Sampling Strategies: sampling_strategies.md
   - Architecture: ARCHITECTURE.md
-  - Sampling Strategies: sampling_strategies.md
   - API Reference:
     - Overview: api/index.md
     - Configuration: api/config.md

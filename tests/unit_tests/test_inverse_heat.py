@@ -138,6 +138,5 @@ def test_alpha_moves_toward_truth():
     trainer.train(num_epochs=20, batch_size=64, num_points=64)
     final_err = abs(pde._trainable_params["alpha"].item() - TRUE_ALPHA)
     assert final_err < initial_err, (
-        f"α did not move toward truth (initial err {initial_err:.4f}, "
-        f"final {final_err:.4f})"
+        f"α did not move toward truth (initial err {initial_err:.4f}, " f"final {final_err:.4f})"
     )
