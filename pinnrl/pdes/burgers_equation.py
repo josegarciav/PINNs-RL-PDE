@@ -43,6 +43,8 @@ class BurgersEquation(PDEBase):
         """
         Compute the Burgers' equation residual.
 
+        Burgers' equation: ∂u/∂t + u·∇u = ν·Δu.
+
         :param model: Neural network model
         :param x: Spatial coordinates
         :param t: Time coordinates
@@ -52,24 +54,24 @@ class BurgersEquation(PDEBase):
             model,
             x,
             t,
-            spatial_derivatives=[1, 2],  # Need first and second spatial derivatives
-            temporal_derivatives=[1],  # Need first time derivative
+            spatial_derivatives=[1, 2],
+            temporal_derivatives=[1],
         )
 
-        # Get the derivatives we need
+        # ``compute_derivatives`` stores 1D first/second derivatives under
+        # ``"dx"`` and ``"dx2"``; multi-dim derivatives are ``"dx1"``,
+        # ``"dx1x1"``, etc. The Laplacian is always exposed as ``"laplacian"``.
         u = model(torch.cat([x, t], dim=1))
-        u_t = derivatives.get("dt", torch.zeros_like(x))
+        u_t = derivatives["dt"]
+        diffusion = self.nu * derivatives["laplacian"]
 
-        # For higher dimensions, compute convection and diffusion terms
-        convection = torch.zeros_like(x)
-        diffusion = torch.zeros_like(x)
-        for dim in range(self.dimension):
-            u_x = derivatives.get(f"dx{dim+1}", torch.zeros_like(x))
-            u_xx = derivatives.get(f"d2x{dim+1}", torch.zeros_like(x))
-            convection += u * u_x
-            diffusion += self.nu * u_xx
+        if self.dimension == 1:
+            convection = u * derivatives["dx"]
+        else:
+            convection = torch.zeros_like(u)
+            for dim in range(self.dimension):
+                convection = convection + u * derivatives[f"dx{dim + 1}"]
 
-        # Burgers' equation: ∂u/∂t + u∂u/∂x = ν∂²u/∂x²
         return u_t + convection - diffusion
 
     def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:

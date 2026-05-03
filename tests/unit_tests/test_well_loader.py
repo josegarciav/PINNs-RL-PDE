@@ -110,3 +110,32 @@ def test_load_well_slice_unknown_dataset_raises_before_dependency(monkeypatch):
     # at the registry layer rather than at import time.
     with pytest.raises(KeyError):
         load_well_slice("totally_made_up", n_traj=1, n_points=4, seed=0, device="cpu")
+
+
+def test_cache_key_partitions_by_base(monkeypatch, tmp_path):
+    """Two different ``base`` paths must not share a cached ``.npz``.
+
+    A bug here lets a run pointed at a stale local mirror reuse the slice
+    that was flattened from the canonical HF dataset (or vice versa) and
+    silently train on wrong data.
+    """
+    _install_fake_well_module(monkeypatch)
+    monkeypatch.setenv("PINNRL_WELL_CACHE", str(tmp_path))
+
+    hf_run = load_well_slice("active_matter", n_traj=1, n_points=4, seed=0, device="cpu", base=None)
+    local_run = load_well_slice(
+        "active_matter",
+        n_traj=1,
+        n_points=4,
+        seed=0,
+        device="cpu",
+        base="/some/local/mirror",
+    )
+
+    # Two distinct cache files should have been written — one per base.
+    cache_files = sorted(tmp_path.glob("active_matter__train__t1_p4_s0__*.npz"))
+    assert len(cache_files) == 2, cache_files
+
+    # Sanity: both runs returned populated tensors.
+    assert hf_run["u"].shape == (4, 2)
+    assert local_run["u"].shape == (4, 2)

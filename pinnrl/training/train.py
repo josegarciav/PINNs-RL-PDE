@@ -140,7 +140,12 @@ def _apply_well_dataset_defaults(config: dict, dataset_cfg: dict) -> dict:
         model_block = config.setdefault("model", {})
         model_block["input_dim"] = entry.default_input_dim
         model_block["output_dim"] = entry.default_output_dim
-        config.setdefault("training", {})["mode"] = entry.recommended_mode
+        # Mode is the one default we don't force: a user who passed
+        # --mode inverse alongside --dataset wants the inverse-problem
+        # objective, not the dataset's recommended_mode. Only fill it in
+        # when the caller hasn't already set one.
+        training_block = config.setdefault("training", {})
+        training_block.setdefault("mode", entry.recommended_mode)
     return config
 
 

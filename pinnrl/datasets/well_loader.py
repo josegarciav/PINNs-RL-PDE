@@ -64,8 +64,29 @@ def _cache_dir() -> Path:
     return Path.home() / ".cache" / "pinnrl" / "well"
 
 
-def _cache_file(name: str, split: str, n_traj: int, n_points: int, seed: int) -> Path:
-    return _cache_dir() / f"{name}__{split}__t{n_traj}_p{n_points}_s{seed}.npz"
+def _base_tag(base: Optional[str]) -> str:
+    """Stable short tag for the resolved base path.
+
+    Distinguishes HF streaming from local mirrors and from each other so two
+    on-disk copies of the same dataset (different versions, different
+    download dirs) cannot collide on the same flattened ``.npz``.
+    """
+    import hashlib
+
+    resolved = resolve_path(base)
+    return hashlib.sha1(resolved.encode("utf-8")).hexdigest()[:10]
+
+
+def _cache_file(
+    name: str,
+    split: str,
+    n_traj: int,
+    n_points: int,
+    seed: int,
+    base: Optional[str] = None,
+) -> Path:
+    tag = _base_tag(base)
+    return _cache_dir() / f"{name}__{split}__t{n_traj}_p{n_points}_s{seed}__{tag}.npz"
 
 
 def _load_well_dataset(name: str, split: str, base: Optional[str]):
@@ -179,7 +200,7 @@ def load_well_slice(
     entry = get_entry(name)
     rng = np.random.default_rng(seed)
 
-    cache_path = _cache_file(name, split, n_traj, n_points, seed)
+    cache_path = _cache_file(name, split, n_traj, n_points, seed, base=base)
     if use_cache and cache_path.exists():
         _LOGGER.info("Loading cached Well slice from %s", cache_path)
         with np.load(cache_path) as data:
