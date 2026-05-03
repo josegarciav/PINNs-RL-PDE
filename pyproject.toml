@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pinnrl"
-version = "0.1.0"
+version = "0.3.0"
 description = "Physics-Informed Neural Networks with RL-based adaptive sampling for solving PDEs"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -93,6 +93,7 @@ Changelog = "https://github.com/josegarciav/PINNs-RL-PDE/blob/main/CHANGELOG.md"
 [project.scripts]
 pinnrl-train = "pinnrl.training.train:main"
 pinnrl-benchmark = "pinnrl.benchmarks.cli:main"
+pinnrl-dashboard = "pinnrl.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pinnrl"]

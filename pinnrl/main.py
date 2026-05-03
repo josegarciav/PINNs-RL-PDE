@@ -52,7 +52,7 @@ def parse_args():
         epilog="""
 Examples:
   Run the dashboard (training is launched from within):
-    python src/main.py
+    pinnrl-dashboard
 
   Specify dashboard port:
     pinnrl-dashboard --port 8051

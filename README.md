@@ -6,8 +6,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
-[![PyPI](https://img.shields.io/badge/PyPI-coming%20soon-lightgrey)](https://github.com/josegarciav/PINNs-RL-PDE)
-[![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/josegarciav/PINNs-RL-PDE)
+[![PyPI](https://img.shields.io/pypi/v/pinnrl.svg)](https://pypi.org/project/pinnrl/)
+[![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/josegarciav/PINNs-RL-PDE/actions)
 
 **Solve PDEs with neural networks that learn where to look.**
 
@@ -73,6 +73,27 @@ pip install pinnrl
 ```
 
 Available PDE keys: `heat`, `wave`, `burgers`, `kdv`, `convection`, `allen_cahn`, `cahn_hilliard`, `black_scholes`, `pendulum`.
+
+### Launch the Dashboard
+
+Once installed via `pip` or `uv`, run:
+
+```bash
+pinnrl-dashboard
+```
+
+Then open <http://127.0.0.1:8050/> in your browser. Use `--port 8051` if 8050 is already taken.
+
+**From a local clone of the repo** (no install required):
+
+```bash
+git clone https://github.com/josegarciav/PINNs-RL-PDE.git
+cd PINNs-RL-PDE
+uv sync                    # or:  pip install -e .
+uv run pinnrl-dashboard    # or:  python -m pinnrl.main
+```
+
+The dashboard lets you configure a PDE + architecture, launch training, watch the residual and solution surfaces converge in real time, and compare experiments side by side without writing any plotting code.
 
 ### Python API — solving the heat equation
 

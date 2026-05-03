@@ -39,3 +39,4 @@ docs/linkedin/
 
 # Sensitive
 .env
+.claude/scheduled_tasks.lock
