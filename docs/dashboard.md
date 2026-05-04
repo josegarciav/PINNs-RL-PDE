@@ -55,7 +55,7 @@ Configure and launch a new training run directly from the browser.
 - **PDE** — select from 9 supported PDEs. Changing the PDE auto-selects the recommended architecture.
 - **Architecture** — choose from 7 neural architectures (feedforward, resnet, siren, fourier, fno, attention, autoencoder).
 - **Device** — CPU, MPS (Apple Silicon), or CUDA.
-- **RL Adaptive Sampling** — toggle to enable the DQN-based collocation agent.
+- **Sampling Strategy** — how interior collocation points are drawn each batch. Options: `Uniform (grid + jitter)`, `Stratified (Latin Hypercube)`, `Residual-based (resample where residual is high)`, and `RL Adaptive (DQN agent)`. Picking RL Adaptive sets `rl_enabled=true` in the experiment metadata. CLI: `--collocation-distribution {uniform,stratified,residual_based}` or `--rl` for the RL agent.
 - **Mode** — `Forward (solve)` is the default. `Inverse (identify)` reveals the parameter-identification panel. `Data-augmented (residual + data)` and `Data-only (regression)` are for training against benchmark datasets — see the Dataset section below.
 
 **Dataset** (optional, left column):
@@ -84,6 +84,20 @@ Configure and launch a new training run directly from the browser.
 - **Initial Points** — initial condition points (default: 500)
 - **Optimizer** — Adam, L-BFGS, or two-phase Adam → L-BFGS.
 - **Loss Function** — MSE, MAE, or Huber (configurable `huber_delta`).
+
+**Training Extras** (Model column, below the PDE info box):
+
+These five dropdowns surface defaults that used to live only in `pinnrl/config/config.yaml`. Each has a matching CLI flag on `pinnrl-train`, so dashboard launches and headless launches stay in sync.
+
+| Dropdown | What it does | When to change it | CLI flag |
+|---|---|---|---|
+| **Adaptive Loss Weights** | `Off` uses static `loss_weights`. `LRW` rebalances residual/BC/IC by gradient norms each step. `RBW` rebalances by loss magnitudes. | Turn on **LRW** when boundary or IC gradients dominate the residual signal (sharp features, stiff PDEs). Use **RBW** as a cheaper fallback when one loss term is just numerically larger than the others. | `--adaptive-weights {off,lrw,rbw}` |
+| **LR Scheduler** | `Cosine annealing` decays the learning rate smoothly from the initial value to `eta_min` over `T_max` epochs. `Reduce on plateau` drops the LR by a factor when the validation loss stalls. | Use **cosine** for fixed-budget runs and benchmarking — every run sees the same LR schedule. Use **reduce_lr** when convergence speed varies between configs and you want the schedule to react. | `--lr-scheduler {cosine,reduce_lr}` |
+| **Early Stopping** | `On` halts training when validation loss has not improved for `patience` epochs (default 100). `Off` always runs the full `--epochs` budget. | Turn **off** for benchmarking sweeps where every config must see identical epoch counts; otherwise leave **on** to save compute on converged runs. | `--early-stopping {on,off}` |
+| **Gradient Clipping** | Caps the gradient norm at the chosen value before the optimiser step. `Off` (0.0) disables clipping entirely. | **Tighter** clipping (0.5) stabilises stiff or shock-forming PDEs (Burgers, Allen-Cahn) but slows learning. **Looser** (5.0) is fine for smooth problems. | `--gradient-clipping <float>` |
+| **Weight Decay** | L2 penalty on network weights, applied via the Adam optimiser. `Off` disables it. | Increase to **1e-3** when the network overfits scarce data (small `--obs-points` in inverse mode, low-trajectory Well datasets). Drop to **0** when sharp PDE features are getting smoothed out. | `--weight-decay <float>` |
+
+Defaults read from `pinnrl/config/config.yaml`: `adaptive_weights.enabled=false`, `scheduler_type=cosine`, `early_stopping.enabled=true`, `gradient_clipping=1.0`, `optimizer_config.weight_decay=5e-4`.
 
 Click **Start Training** to launch. Training runs as a background process — you can close the browser and results are saved automatically to a timestamped directory under `experiments/`.
 
@@ -142,5 +156,5 @@ While training is in progress, a `.running` marker file is present. It is remove
 
 - **Start simple**: Use the Heat Equation with Fourier Features and 3000 epochs for your first run. It converges reliably and lets you verify the setup works.
 - **Architecture recommendations**: The PDE dropdown auto-selects a recommended architecture. These defaults come from extensive benchmarking and are a good starting point.
-- **RL sampling**: Enable RL adaptive sampling for nonlinear PDEs with sharp gradients (Burgers, Allen-Cahn). For smooth problems (Heat, Wave), uniform sampling is sufficient.
+- **RL sampling**: Pick `RL Adaptive (DQN agent)` from the **Sampling Strategy** dropdown for nonlinear PDEs with sharp gradients (Burgers, Allen-Cahn). For smooth problems (Heat, Wave), uniform sampling is sufficient.
 - **Monitor convergence**: If the loss plateaus early, try increasing collocation points or switching architectures before increasing epochs.

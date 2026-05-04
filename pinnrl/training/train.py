@@ -426,6 +426,12 @@ def main():
     parser.add_argument("--initial-points", type=int, default=None, help="Override initial points")
     parser.add_argument("--rl", action="store_true", help="Enable RL adaptive sampling")
     parser.add_argument(
+        "--collocation-distribution",
+        choices=["uniform", "stratified", "residual_based"],
+        default=None,
+        help=("Collocation point sampling strategy. Overridden to 'adaptive' " "when --rl is set."),
+    )
+    parser.add_argument(
         "--optimizer",
         choices=["adam", "lbfgs", "adam_lbfgs"],
         default=None,
@@ -505,6 +511,39 @@ def main():
         default=None,
         help="Delta for Huber loss (only used when --loss-function=huber)",
     )
+    parser.add_argument(
+        "--adaptive-weights",
+        choices=["off", "lrw", "rbw"],
+        default=None,
+        help=(
+            "Adaptive loss-term weighting: 'off' for static weights, "
+            "'lrw' (gradient-balanced), or 'rbw' (loss-balanced)."
+        ),
+    )
+    parser.add_argument(
+        "--lr-scheduler",
+        choices=["cosine", "reduce_lr"],
+        default=None,
+        help="Learning-rate scheduler: 'cosine' annealing or 'reduce_lr' on plateau.",
+    )
+    parser.add_argument(
+        "--early-stopping",
+        choices=["on", "off"],
+        default=None,
+        help="Toggle early stopping on validation loss.",
+    )
+    parser.add_argument(
+        "--gradient-clipping",
+        type=float,
+        default=None,
+        help="Max gradient norm; pass 0 to disable clipping.",
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=None,
+        help="L2 regularisation coefficient on optimiser weights.",
+    )
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     default_config = os.path.join(project_root, "src", "config", "config.yaml")
     if not os.path.exists(default_config):
@@ -537,6 +576,10 @@ def main():
         yaml_config.setdefault("training", {})["num_boundary_points"] = args.boundary_points
     if args.initial_points is not None:
         yaml_config.setdefault("training", {})["num_initial_points"] = args.initial_points
+    if args.collocation_distribution is not None:
+        yaml_config.setdefault("training", {})[
+            "collocation_distribution"
+        ] = args.collocation_distribution
     if args.optimizer is not None:
         yaml_config.setdefault("training", {})["optimizer"] = args.optimizer
     if args.mode is not None:
@@ -545,6 +588,24 @@ def main():
         yaml_config.setdefault("training", {})["loss_function"] = args.loss_function
     if args.huber_delta is not None:
         yaml_config.setdefault("training", {})["huber_delta"] = args.huber_delta
+    if args.adaptive_weights is not None:
+        aw_block = yaml_config.setdefault("training", {}).setdefault("adaptive_weights", {})
+        if args.adaptive_weights == "off":
+            aw_block["enabled"] = False
+        else:
+            aw_block["enabled"] = True
+            aw_block["strategy"] = args.adaptive_weights
+    if args.lr_scheduler is not None:
+        yaml_config.setdefault("training", {})["scheduler_type"] = args.lr_scheduler
+    if args.early_stopping is not None:
+        es_block = yaml_config.setdefault("training", {}).setdefault("early_stopping", {})
+        es_block["enabled"] = args.early_stopping == "on"
+    if args.gradient_clipping is not None:
+        yaml_config.setdefault("training", {})["gradient_clipping"] = args.gradient_clipping
+    if args.weight_decay is not None:
+        yaml_config.setdefault("training", {}).setdefault("optimizer_config", {})[
+            "weight_decay"
+        ] = args.weight_decay
 
     device = torch.device(yaml_config.get("device", "cpu"))
     dataset_block = None

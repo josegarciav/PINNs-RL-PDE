@@ -4,6 +4,7 @@ import argparse
 import glob
 import json
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -228,18 +229,34 @@ app.layout = html.Div(
                                                                 html.Div(
                                                                     [
                                                                         html.Label(
-                                                                            "RL Adaptive Sampling:",
+                                                                            "Sampling Strategy:",
                                                                             style=LABEL_STYLE,
                                                                         ),
-                                                                        dcc.Checklist(
-                                                                            id="train-rl-toggle",
+                                                                        dcc.Dropdown(
+                                                                            id="train-sampling-strategy",
                                                                             options=[
                                                                                 {
-                                                                                    "label": " Enable RL",
-                                                                                    "value": "rl",
-                                                                                }
+                                                                                    "label": "Uniform (grid + jitter)",
+                                                                                    "value": "uniform",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Stratified (Latin Hypercube)",
+                                                                                    "value": "stratified",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Residual-based (resample where residual is high)",
+                                                                                    "value": "residual_based",
+                                                                                },
+                                                                                {
+                                                                                    "label": "RL Adaptive (DQN agent)",
+                                                                                    "value": "rl_adaptive",
+                                                                                },
                                                                             ],
-                                                                            value=[],
+                                                                            value=_TRAINING_DEFAULTS.get(
+                                                                                "collocation_distribution",
+                                                                                "uniform",
+                                                                            ),
+                                                                            clearable=False,
                                                                         ),
                                                                     ],
                                                                     style=FIELD_STYLE,
@@ -661,6 +678,278 @@ app.layout = html.Div(
                                                         "border": "1px solid #c0d8f0",
                                                     },
                                                 ),
+                                                # Training extras: silent defaults exposed as dropdowns.
+                                                html.Div(
+                                                    [
+                                                        html.H4(
+                                                            "Training Extras",
+                                                            style={
+                                                                "marginTop": "20px",
+                                                                "borderBottom": "2px solid #9C27B0",
+                                                                "paddingBottom": "8px",
+                                                            },
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Adaptive Loss Weights:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Dropdown(
+                                                                            id="train-adaptive-weights",
+                                                                            options=[
+                                                                                {
+                                                                                    "label": "Off (static loss weights)",
+                                                                                    "value": "off",
+                                                                                },
+                                                                                {
+                                                                                    "label": "LRW (gradient-balanced)",
+                                                                                    "value": "lrw",
+                                                                                },
+                                                                                {
+                                                                                    "label": "RBW (loss-balanced)",
+                                                                                    "value": "rbw",
+                                                                                },
+                                                                            ],
+                                                                            value=(
+                                                                                _TRAINING_DEFAULTS.get(
+                                                                                    "adaptive_weights",
+                                                                                    {},
+                                                                                ).get(
+                                                                                    "strategy",
+                                                                                    "rbw",
+                                                                                )
+                                                                                if _TRAINING_DEFAULTS.get(
+                                                                                    "adaptive_weights",
+                                                                                    {},
+                                                                                ).get(
+                                                                                    "enabled"
+                                                                                )
+                                                                                else "off"
+                                                                            ),
+                                                                            clearable=False,
+                                                                        ),
+                                                                        html.Div(
+                                                                            "LRW balances residual/BC/IC by gradient norms; RBW balances by loss magnitudes.",
+                                                                            style={
+                                                                                "fontSize": "11px",
+                                                                                "color": "#888",
+                                                                                "marginTop": "4px",
+                                                                            },
+                                                                        ),
+                                                                    ],
+                                                                    style={
+                                                                        "width": "48%",
+                                                                        "display": "inline-block",
+                                                                        "verticalAlign": "top",
+                                                                        "paddingRight": "2%",
+                                                                        "marginBottom": "12px",
+                                                                    },
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "LR Scheduler:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Dropdown(
+                                                                            id="train-lr-scheduler",
+                                                                            options=[
+                                                                                {
+                                                                                    "label": "Cosine annealing",
+                                                                                    "value": "cosine",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Reduce on plateau",
+                                                                                    "value": "reduce_lr",
+                                                                                },
+                                                                            ],
+                                                                            value=_TRAINING_DEFAULTS.get(
+                                                                                "scheduler_type",
+                                                                                "cosine",
+                                                                            ),
+                                                                            clearable=False,
+                                                                        ),
+                                                                        html.Div(
+                                                                            "Cosine: deterministic decay over a fixed epoch budget. Reduce-on-plateau: drops LR when val loss stalls.",
+                                                                            style={
+                                                                                "fontSize": "11px",
+                                                                                "color": "#888",
+                                                                                "marginTop": "4px",
+                                                                            },
+                                                                        ),
+                                                                    ],
+                                                                    style={
+                                                                        "width": "48%",
+                                                                        "display": "inline-block",
+                                                                        "verticalAlign": "top",
+                                                                        "paddingLeft": "2%",
+                                                                        "marginBottom": "12px",
+                                                                    },
+                                                                ),
+                                                            ],
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Early Stopping:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Dropdown(
+                                                                            id="train-early-stopping",
+                                                                            options=[
+                                                                                {
+                                                                                    "label": "On (stop when val loss plateaus)",
+                                                                                    "value": "on",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Off (always run all epochs)",
+                                                                                    "value": "off",
+                                                                                },
+                                                                            ],
+                                                                            value=(
+                                                                                "on"
+                                                                                if _TRAINING_DEFAULTS.get(
+                                                                                    "early_stopping",
+                                                                                    {},
+                                                                                ).get(
+                                                                                    "enabled",
+                                                                                    True,
+                                                                                )
+                                                                                else "off"
+                                                                            ),
+                                                                            clearable=False,
+                                                                        ),
+                                                                        html.Div(
+                                                                            "Off is useful for benchmarking — every config sees the same epoch count.",
+                                                                            style={
+                                                                                "fontSize": "11px",
+                                                                                "color": "#888",
+                                                                                "marginTop": "4px",
+                                                                            },
+                                                                        ),
+                                                                    ],
+                                                                    style={
+                                                                        "width": "48%",
+                                                                        "display": "inline-block",
+                                                                        "verticalAlign": "top",
+                                                                        "paddingRight": "2%",
+                                                                        "marginBottom": "12px",
+                                                                    },
+                                                                ),
+                                                                html.Div(
+                                                                    [
+                                                                        html.Label(
+                                                                            "Gradient Clipping:",
+                                                                            style=LABEL_STYLE,
+                                                                        ),
+                                                                        dcc.Dropdown(
+                                                                            id="train-gradient-clipping",
+                                                                            options=[
+                                                                                {
+                                                                                    "label": "Off",
+                                                                                    "value": 0.0,
+                                                                                },
+                                                                                {
+                                                                                    "label": "0.5 (aggressive)",
+                                                                                    "value": 0.5,
+                                                                                },
+                                                                                {
+                                                                                    "label": "1.0 (default)",
+                                                                                    "value": 1.0,
+                                                                                },
+                                                                                {
+                                                                                    "label": "5.0 (loose)",
+                                                                                    "value": 5.0,
+                                                                                },
+                                                                            ],
+                                                                            value=float(
+                                                                                _TRAINING_DEFAULTS.get(
+                                                                                    "gradient_clipping",
+                                                                                    1.0,
+                                                                                )
+                                                                            ),
+                                                                            clearable=False,
+                                                                        ),
+                                                                        html.Div(
+                                                                            "Caps the gradient norm. Tighter clipping stabilises stiff PDEs but slows learning.",
+                                                                            style={
+                                                                                "fontSize": "11px",
+                                                                                "color": "#888",
+                                                                                "marginTop": "4px",
+                                                                            },
+                                                                        ),
+                                                                    ],
+                                                                    style={
+                                                                        "width": "48%",
+                                                                        "display": "inline-block",
+                                                                        "verticalAlign": "top",
+                                                                        "paddingLeft": "2%",
+                                                                        "marginBottom": "12px",
+                                                                    },
+                                                                ),
+                                                            ],
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Label(
+                                                                    "Weight Decay:",
+                                                                    style=LABEL_STYLE,
+                                                                ),
+                                                                dcc.Dropdown(
+                                                                    id="train-weight-decay",
+                                                                    options=[
+                                                                        {
+                                                                            "label": "Off (no L2 regularisation)",
+                                                                            "value": 0.0,
+                                                                        },
+                                                                        {
+                                                                            "label": "1e-4 (light)",
+                                                                            "value": 1e-4,
+                                                                        },
+                                                                        {
+                                                                            "label": "5e-4 (default)",
+                                                                            "value": 5e-4,
+                                                                        },
+                                                                        {
+                                                                            "label": "1e-3 (strong)",
+                                                                            "value": 1e-3,
+                                                                        },
+                                                                    ],
+                                                                    value=float(
+                                                                        _TRAINING_DEFAULTS.get(
+                                                                            "optimizer_config",
+                                                                            {},
+                                                                        ).get(
+                                                                            "weight_decay",
+                                                                            5e-4,
+                                                                        )
+                                                                    ),
+                                                                    clearable=False,
+                                                                ),
+                                                                html.Div(
+                                                                    "L2 penalty on weights. Helps generalisation but can blur sharp PDE features if too strong.",
+                                                                    style={
+                                                                        "fontSize": "11px",
+                                                                        "color": "#888",
+                                                                        "marginTop": "4px",
+                                                                    },
+                                                                ),
+                                                            ],
+                                                            style={
+                                                                "width": "48%",
+                                                                "display": "inline-block",
+                                                                "verticalAlign": "top",
+                                                                "paddingRight": "2%",
+                                                                "marginBottom": "12px",
+                                                            },
+                                                        ),
+                                                    ],
+                                                ),
                                                 # Inverse-mode options (revealed when Mode = Inverse)
                                                 html.Div(
                                                     id="inverse-options-panel",
@@ -828,9 +1117,37 @@ app.layout = html.Div(
                                                 html.Div(
                                                     [
                                                         html.Label("Select Experiment:"),
-                                                        dcc.Dropdown(
-                                                            id="experiment-selector",
-                                                            placeholder="Select running or recent experiment...",
+                                                        html.Div(
+                                                            [
+                                                                html.Div(
+                                                                    dcc.Dropdown(
+                                                                        id="experiment-selector",
+                                                                        placeholder="Select running or recent experiment...",
+                                                                    ),
+                                                                    style={"flex": "1"},
+                                                                ),
+                                                                html.Button(
+                                                                    "✕",
+                                                                    id="delete-experiment-button",
+                                                                    title="Delete this experiment folder permanently",
+                                                                    n_clicks=0,
+                                                                    style={
+                                                                        "marginLeft": "8px",
+                                                                        "padding": "0 12px",
+                                                                        "height": "36px",
+                                                                        "border": "1px solid #d32f2f",
+                                                                        "backgroundColor": "#fff",
+                                                                        "color": "#d32f2f",
+                                                                        "borderRadius": "4px",
+                                                                        "cursor": "pointer",
+                                                                        "fontWeight": "bold",
+                                                                    },
+                                                                ),
+                                                            ],
+                                                            style={
+                                                                "display": "flex",
+                                                                "alignItems": "center",
+                                                            },
                                                         ),
                                                     ],
                                                     style={
@@ -856,6 +1173,18 @@ app.layout = html.Div(
                                                         "width": "30%",
                                                         "display": "inline-block",
                                                         "textAlign": "right",
+                                                    },
+                                                ),
+                                                dcc.ConfirmDialog(
+                                                    id="confirm-delete-experiment",
+                                                    message="",
+                                                ),
+                                                html.Div(
+                                                    id="delete-experiment-status",
+                                                    style={
+                                                        "marginTop": "8px",
+                                                        "fontSize": "13px",
+                                                        "textAlign": "center",
                                                     },
                                                 ),
                                             ],
@@ -1327,11 +1656,88 @@ def load_experiment_data(experiment):
 
 @app.callback(
     Output("experiment-selector", "options"),
-    Input("interval-component", "n_intervals"),
+    [
+        Input("interval-component", "n_intervals"),
+        Input("delete-experiment-status", "children"),
+    ],
 )
-def update_live_experiments(_):
+def update_live_experiments(_n, _status):
     """Refresh the list of live training experiments."""
     return get_live_experiments()
+
+
+@app.callback(
+    [
+        Output("confirm-delete-experiment", "displayed"),
+        Output("confirm-delete-experiment", "message"),
+    ],
+    Input("delete-experiment-button", "n_clicks"),
+    State("experiment-selector", "value"),
+    prevent_initial_call=True,
+)
+def show_delete_experiment_confirm(n_clicks, experiment_path):
+    """Open the confirmation dialog when the delete button is clicked."""
+    if not n_clicks or not experiment_path:
+        return False, ""
+    folder = os.path.basename(os.path.normpath(experiment_path))
+    message = (
+        f"Permanently delete experiment folder '{folder}'?\n\n"
+        "This removes the entire directory and all files inside it. "
+        "This action cannot be undone."
+    )
+    return True, message
+
+
+@app.callback(
+    [
+        Output("delete-experiment-status", "children"),
+        Output("experiment-selector", "value"),
+    ],
+    Input("confirm-delete-experiment", "submit_n_clicks"),
+    State("experiment-selector", "value"),
+    prevent_initial_call=True,
+)
+def delete_experiment_folder(submit_n_clicks, experiment_path):
+    """Delete the experiment folder when the user confirms."""
+    if not submit_n_clicks or not experiment_path:
+        return dash.no_update, dash.no_update
+
+    experiments_root = os.path.abspath("experiments")
+    target = os.path.abspath(experiment_path)
+    # Refuse to delete anything outside the experiments/ directory.
+    if (
+        os.path.commonpath([experiments_root, target]) != experiments_root
+        or target == experiments_root
+    ):
+        return (
+            html.Span(
+                "Refused to delete: path is outside the experiments/ folder.",
+                style={"color": "#d32f2f"},
+            ),
+            dash.no_update,
+        )
+
+    if not os.path.isdir(target):
+        return (
+            html.Span("Folder no longer exists.", style={"color": "#888"}),
+            None,
+        )
+
+    try:
+        shutil.rmtree(target)
+    except OSError as exc:
+        return (
+            html.Span(f"Failed to delete: {exc}", style={"color": "#d32f2f"}),
+            dash.no_update,
+        )
+
+    return (
+        html.Span(
+            f"Deleted '{os.path.basename(target)}'.",
+            style={"color": "#4CAF50"},
+        ),
+        None,
+    )
 
 
 @app.callback(
@@ -1651,7 +2057,7 @@ def populate_from_well_dataset(dataset_name, toggle_value):
     State("train-boundary-points", "value"),
     State("train-initial-points", "value"),
     State("train-device-selector", "value"),
-    State("train-rl-toggle", "value"),
+    State("train-sampling-strategy", "value"),
     State("train-optimizer-selector", "value"),
     State("train-mode-selector", "value"),
     State("train-identify-params", "value"),
@@ -1661,6 +2067,11 @@ def populate_from_well_dataset(dataset_name, toggle_value):
     State("train-obs-noise", "value"),
     State("train-obs-path", "value"),
     State("train-loss-fn-selector", "value"),
+    State("train-adaptive-weights", "value"),
+    State("train-lr-scheduler", "value"),
+    State("train-early-stopping", "value"),
+    State("train-gradient-clipping", "value"),
+    State("train-weight-decay", "value"),
     State("train-dataset-toggle", "value"),
     State("train-dataset-selector", "value"),
     State("train-dataset-source", "value"),
@@ -1680,7 +2091,7 @@ def launch_trainer(
     boundary_pts,
     initial_pts,
     device,
-    rl_toggle,
+    sampling_strategy,
     optimizer,
     mode,
     identify_params,
@@ -1690,6 +2101,11 @@ def launch_trainer(
     obs_noise,
     obs_path,
     loss_fn,
+    adaptive_weights,
+    lr_scheduler,
+    early_stopping,
+    gradient_clipping,
+    weight_decay,
     dataset_toggle,
     dataset_name,
     dataset_source,
@@ -1708,7 +2124,7 @@ def launch_trainer(
             config_path = os.path.join(project_root, "config.yaml")
         log_file = os.path.join(project_root, "trainer_launch.log")
 
-        use_rl = "rl" in (rl_toggle or [])
+        use_rl = sampling_strategy == "rl_adaptive"
 
         cmd = [
             sys.executable,
@@ -1737,10 +2153,22 @@ def launch_trainer(
         ]
         if use_rl:
             cmd.append("--rl")
+        elif sampling_strategy:
+            cmd += ["--collocation-distribution", sampling_strategy]
         if optimizer:
             cmd += ["--optimizer", optimizer]
         if loss_fn:
             cmd += ["--loss-function", loss_fn]
+        if adaptive_weights is not None:
+            cmd += ["--adaptive-weights", str(adaptive_weights)]
+        if lr_scheduler:
+            cmd += ["--lr-scheduler", lr_scheduler]
+        if early_stopping is not None:
+            cmd += ["--early-stopping", early_stopping]
+        if gradient_clipping is not None:
+            cmd += ["--gradient-clipping", str(float(gradient_clipping))]
+        if weight_decay is not None:
+            cmd += ["--weight-decay", str(float(weight_decay))]
 
         # Inverse-mode flags: only add when inverse mode is selected and at least
         # one parameter is checked, so the trainer falls back to the forward path
