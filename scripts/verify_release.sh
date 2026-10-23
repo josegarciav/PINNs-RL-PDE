@@ -62,12 +62,12 @@ check no-runs-in-venv bash -c "! find '$WORK/venv' -type d -name runs | grep -q 
 step "pinnrl-benchmark"
 check bench-fdm "$BIN/pinnrl-benchmark" fdm --pde heat
 check bench-sampling "$BIN/pinnrl-benchmark" sampling --pdes burgers --seeds 1 \
-  --time-budget 1 --n-collocation 64 --out "$WORK/run/study"
+  --steps 20 --checkpoints 2 --resample-every 5 --n-collocation 64 --out "$WORK/run/study"
 
 step "pinnrl-dashboard serves HTTP 200"
 PORT=$("$BIN/python" -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1])")
 # BROWSER=true turns webbrowser.open() into a no-op so no tab opens on the host
-BROWSER=true "$BIN/pinnrl-dashboard" --port "$PORT" >"$WORK/dashboard.log" 2>&1 &
+BROWSER=true "$BIN/pinnrl-dashboard" --no-browser --port "$PORT" >"$WORK/dashboard.log" 2>&1 &
 DASH_PID=$!
 check dashboard bash -c "for _ in \$(seq 60); do curl -sf http://127.0.0.1:$PORT/ >/dev/null && exit 0; sleep 1; done; cat '$WORK/dashboard.log'; exit 1"
 

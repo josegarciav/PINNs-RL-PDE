@@ -5,10 +5,11 @@ Two subcommands:
 * ``pinnrl-benchmark fdm --pde {heat,wave}`` — solve with the bundled NumPy
   FDM solver and print L2 / max error against the analytical solution
   (``--csv PATH`` writes the row to a file).
-* ``pinnrl-benchmark sampling`` — the multi-seed, equal-wall-clock sampling
-  study of :mod:`pinnrl.benchmarks.sampling_study` on Burgers and
-  Allen-Cahn; prints the per-strategy summary and writes ``runs.csv``,
-  ``summary.csv``, ``curves.json`` and ``settings.json`` to ``--out``.
+* ``pinnrl-benchmark sampling`` — the multi-seed sampling study of
+  :mod:`pinnrl.benchmarks.sampling_study` on Burgers and Allen-Cahn at equal
+  training steps; prints the summary at equal steps and at equal residual
+  evaluations, and writes ``runs.csv``, ``summary.csv``, ``curves.json`` and
+  ``settings.json`` to ``--out``.
 """
 
 from __future__ import annotations
@@ -90,7 +91,8 @@ def _fdm_command(args: argparse.Namespace) -> int:
 
 def _sampling_command(args: argparse.Namespace) -> int:
     settings = StudySettings(
-        time_budget_s=args.time_budget,
+        num_steps=args.steps,
+        n_checkpoints=args.checkpoints,
         n_collocation=args.n_collocation,
         resample_every=args.resample_every,
     )
@@ -98,7 +100,7 @@ def _sampling_command(args: argparse.Namespace) -> int:
     def report(run) -> None:
         print(
             f"{run.pde:<10} {run.strategy:<9} seed={run.seed:<3} "
-            f"rel_l2={run.rel_l2:.4e} steps={run.steps}",
+            f"rel_l2={run.rel_l2:.4e} time={run.train_time_s:.0f}s evals={run.residual_evals}",
             file=sys.stderr,
         )
 
@@ -111,15 +113,16 @@ def _sampling_command(args: argparse.Namespace) -> int:
         on_result=report,
     )
     summaries = write_study_outputs(Path(args.out), runs, settings)
-    headers = ["pde", "strategy", "n", "median_rel_l2", "iqr", "median_steps", "wins", "p"]
+    headers = ["budget", "pde", "strategy", "n", "median_rel_l2", "iqr", "time_s", "wins", "p"]
     rows = [
         [
+            s.budget,
             s.pde,
             s.strategy,
             str(s.n),
             f"{s.median_rel_l2:.3e}",
             f"[{s.q25_rel_l2:.2e}, {s.q75_rel_l2:.2e}]",
-            f"{s.median_steps:.0f}",
+            f"{s.median_time_s:.0f}",
             "-" if s.strategy == "uniform" else f"{s.wins_vs_uniform}/{s.n}",
             "-" if s.strategy == "uniform" else f"{s.p_vs_uniform:.3f}",
         ]
@@ -136,7 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="pinnrl-benchmark",
         description=(
             "Run pinnrl reference benchmarks: FDM baselines for heat / wave, "
-            "and the equal-compute sampling study (uniform vs RAD vs RL bandit)."
+            "and the collocation-sampling study (uniform, stratified, RAD, RL bandit)."
         ),
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -156,14 +159,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     smp = sub.add_parser(
         "sampling",
-        help="Equal-wall-clock, multi-seed comparison of collocation samplers.",
+        help="Multi-seed comparison of collocation samplers at equal training budget.",
     )
     smp.add_argument("--pdes", nargs="+", choices=STUDY_PDES, default=list(STUDY_PDES))
     smp.add_argument(
         "--strategies", nargs="+", choices=STUDY_STRATEGIES, default=list(STUDY_STRATEGIES)
     )
     smp.add_argument("--seeds", type=int, default=10, help="Number of seeds (0..N-1).")
-    smp.add_argument("--time-budget", type=float, default=120.0, help="Training seconds per run.")
+    smp.add_argument("--steps", type=int, default=15_000, help="Optimizer steps per run.")
+    smp.add_argument("--checkpoints", type=int, default=50, help="Evaluations along each run.")
     smp.add_argument("--n-collocation", type=int, default=1000)
     smp.add_argument("--resample-every", type=int, default=100)
     smp.add_argument("--workers", type=int, default=1, help="Parallel worker processes.")

@@ -1,19 +1,25 @@
-"""Equal-wall-clock, multi-seed sampling study against numerical references.
+"""Multi-seed sampling study at equal training budget, scored against numerical references.
 
-Where :mod:`pinnrl.benchmarks.sampling` runs one seed for a fixed number of
-epochs on PDEs with closed-form solutions, this study answers the question a
-sampling method actually has to win: *given the same compute time, which
-sampler gives the lowest error?*
+Answers the question an adaptive sampler has to win: *for the same training
+budget, does it give a lower error, and does it still win once its own
+overhead is charged?*
 
 * **PDEs** — the standard Burgers (``nu = 0.01/pi``, ``u0 = -sin(pi x)``) and
   Allen-Cahn (``u_t = 0.001 u_xx + 5(u - u³)``, ``u0 = x² cos(pi x)``)
   benchmarks, scored against :mod:`pinnrl.benchmarks.reference`.
-* **Strategies** — ``uniform`` (fresh uniform random points every step),
-  ``rad`` (residual-based adaptive distribution, Wu et al. 2023) and
-  ``rl_bandit`` (:class:`pinnrl.rl.bandit_sampler.ResidualBanditSampler`).
-* **Budget** — each run trains until its *training* wall-clock reaches
-  ``time_budget_s``; evaluation time is excluded. Sampling overhead counts
-  against the budget, so an expensive sampler has to earn its cost.
+* **Strategies** — ``uniform`` and ``stratified`` (fresh points every step),
+  ``uniform_periodic`` (uniform, refreshed every ``resample_every`` steps; the
+  control that separates resampling frequency from adaptivity), ``rad``
+  (residual-based adaptive distribution, Wu et al. 2023) and ``rl_bandit``
+  (:class:`pinnrl.rl.bandit_sampler.ResidualBanditSampler`).
+* **Budget** — every run takes ``num_steps`` optimizer steps on
+  ``n_collocation`` points (equal training points). Each checkpoint records the
+  training wall-clock and the residual evaluations spent so far, *including* the
+  sampler's own (RAD candidate pools, bandit probes), so the same run can be
+  compared at equal steps (:func:`summarize` with ``budget="steps"``) or at
+  equal total evaluations (``budget="evals"``).
+* **Training** — :meth:`pinnrl.training.trainer.PDETrainer.train_steps`, the
+  same per-step update as ``PDETrainer.train``.
 * **Seeds** — a seed fixes the initial network weights, so strategies are
   compared pairwise on identical initializations.
 """
@@ -22,9 +28,9 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import math
 import multiprocessing as mp
-import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -51,9 +57,11 @@ from pinnrl.pdes.allen_cahn import AllenCahnEquation
 from pinnrl.pdes.burgers_equation import BurgersEquation
 from pinnrl.pdes.pde_base import PDEBase, PDEConfig
 from pinnrl.rl.bandit_sampler import ResidualBanditSampler
+from pinnrl.training.trainer import PDETrainer
 
 STUDY_PDES = ("burgers", "allen_cahn")
-STUDY_STRATEGIES = ("uniform", "rad", "rl_bandit")
+STUDY_STRATEGIES = ("uniform", "stratified", "uniform_periodic", "rad", "rl_bandit")
+_EVERY_STEP = ("uniform", "stratified")  # fresh points on every optimizer step
 
 
 @dataclass
@@ -61,27 +69,33 @@ class StudySettings:
     """Shared knobs for every run in a study.
 
     Attributes:
-        time_budget_s: Training wall-clock per run.
-        n_collocation: Collocation points per training batch.
-        resample_every: Steps between resampling for ``rad`` and
-            ``rl_bandit`` (``uniform`` draws fresh points every step).
-        learning_rate: Adam learning rate.
+        num_steps: Optimizer steps per run (the equal training budget).
+        n_collocation: Collocation points per step.
+        resample_every: Steps between resampling for ``uniform_periodic``,
+            ``rad`` and ``rl_bandit``.
+        learning_rate: Adam learning rate (constant).
         hidden_dims: Widths of the tanh MLP.
-        n_checkpoints: Evaluations along the budget for error-vs-time curves.
+        n_checkpoints: Evaluations along the run; ``num_steps / n_checkpoints``
+            must be a multiple of ``resample_every``.
         rad_k: RAD exponent ``k``.
         rad_c: RAD uniform floor ``c``.
         rad_pool_factor: RAD candidate pool size as a multiple of ``n_collocation``.
     """
 
-    time_budget_s: float = 60.0
+    num_steps: int = 15_000
     n_collocation: int = 1000
     resample_every: int = 100
     learning_rate: float = 1e-3
     hidden_dims: Tuple[int, ...] = (64, 64, 64, 64)
-    n_checkpoints: int = 10
+    n_checkpoints: int = 50
     rad_k: float = 1.0
     rad_c: float = 1.0
     rad_pool_factor: int = 20
+
+    @property
+    def chunk(self) -> int:
+        """Steps between checkpoints."""
+        return self.num_steps // self.n_checkpoints
 
 
 @dataclass
@@ -93,9 +107,12 @@ class StudyRun:
         strategy: Sampling strategy.
         seed: Seed for weights and sampling.
         rel_l2: Final relative L2 error against the reference.
-        steps: Optimizer steps completed within the budget.
-        train_time_s: Training wall-clock actually used.
+        steps: Optimizer steps taken.
+        train_time_s: Training wall-clock (sampling + steps, evaluation excluded).
+        residual_evals: Residual evaluations, training points plus sampler overhead.
+        curve_step: Steps at each checkpoint.
         curve_time_s: Training time at each checkpoint.
+        curve_evals: Residual evaluations at each checkpoint.
         curve_rel_l2: Relative L2 error at each checkpoint.
     """
 
@@ -105,7 +122,10 @@ class StudyRun:
     rel_l2: float
     steps: int
     train_time_s: float
+    residual_evals: int
+    curve_step: List[int] = field(default_factory=list)
     curve_time_s: List[float] = field(default_factory=list)
+    curve_evals: List[int] = field(default_factory=list)
     curve_rel_l2: List[float] = field(default_factory=list)
 
 
@@ -121,7 +141,7 @@ def _training_config(settings: StudySettings) -> TrainingConfig:
         gradient_clipping=1.0,
         early_stopping=EarlyStoppingConfig(enabled=False, patience=100, min_delta=1e-4),
         learning_rate_scheduler=LearningRateSchedulerConfig(
-            type="cosine", warmup_epochs=0, min_lr=1e-6, factor=0.5, patience=50
+            type="constant", warmup_epochs=0, min_lr=1e-6, factor=0.5, patience=50
         ),
         adaptive_weights=AdaptiveWeightsConfig(enabled=False),
         loss_weights={"residual": 1.0, "boundary": 10.0, "initial": 10.0, "data": 1.0},
@@ -178,8 +198,8 @@ def build_reference(pde_name: str) -> ReferenceSolution:
     return _REFERENCES[pde_name]()
 
 
-def _build_model(settings: StudySettings, device: torch.device) -> PINNModel:
-    """Plain tanh MLP without layer norm — the standard PINN baseline network."""
+def _build_trainer(pde: PDEBase, settings: StudySettings, device: torch.device) -> PDETrainer:
+    """Plain tanh MLP without layer norm (the standard PINN baseline) and its trainer."""
     config = Config()
     config.device = device
     config.model = ModelConfig(
@@ -193,7 +213,10 @@ def _build_model(settings: StudySettings, device: torch.device) -> PINNModel:
         dropout=0.0,
     )
     config.model.hidden_dims = list(settings.hidden_dims)
-    return PINNModel(config=config, device=device).to(device)
+    config.training = _training_config(settings)
+    pde.config.training = config.training
+    model = PINNModel(config=config, device=device).to(device)
+    return PDETrainer(model=model, pde=pde, config=config, device=device)
 
 
 def _relative_l2(model: torch.nn.Module, reference: ReferenceSolution, device) -> float:
@@ -207,13 +230,17 @@ def _relative_l2(model: torch.nn.Module, reference: ReferenceSolution, device) -
 
 
 def _make_sampler(
-    strategy: str, pde: PDEBase, settings: StudySettings, device: torch.device
+    strategy: str,
+    pde: PDEBase,
+    settings: StudySettings,
+    device: torch.device,
+    overhead: Dict[str, int],
 ) -> Callable[[torch.nn.Module, float], Tuple[torch.Tensor, torch.Tensor]]:
-    """Return ``sample(model, progress) -> (x, t)`` for a strategy."""
+    """Return ``sample(model, progress) -> (x, t)``; extra residual evaluations go to ``overhead``."""
     n = settings.n_collocation
     (x_lo, x_hi), (t_lo, t_hi) = pde.domain[0], pde.time_domain
 
-    if strategy == "uniform":
+    if strategy in ("uniform", "uniform_periodic"):
 
         def sample_uniform(_model, _progress):
             x = x_lo + torch.rand(n, 1, device=device) * (x_hi - x_lo)
@@ -222,9 +249,17 @@ def _make_sampler(
 
         return sample_uniform
 
+    if strategy == "stratified":
+
+        def sample_stratified(_model, _progress):
+            return pde.generate_collocation_points(n, strategy="stratified")
+
+        return sample_stratified
+
     if strategy == "rad":
 
         def sample_rad(model, _progress):
+            overhead["evals"] += n * settings.rad_pool_factor
             return pde.generate_collocation_points(
                 n,
                 strategy="residual_based",
@@ -241,6 +276,7 @@ def _make_sampler(
         bandit = ResidualBanditSampler((x_lo, x_hi), (t_lo, t_hi), device=device)
 
         def sample_bandit(model, progress):
+            overhead["evals"] += bandit.probe_cells * bandit.probe_points
             return bandit.sample(pde, model, n, progress=progress)
 
         return sample_bandit
@@ -256,61 +292,55 @@ def run_study_case(
     reference: ReferenceSolution,
     device: Optional[torch.device] = None,
 ) -> StudyRun:
-    """Train one PINN under one sampler until the time budget runs out."""
+    """Train one PINN for ``settings.num_steps`` steps under one sampler."""
     if pde_name not in _PDE_BUILDERS:
         raise ValueError(f"Unknown pde {pde_name!r}. Supported: {STUDY_PDES}")
     if strategy not in STUDY_STRATEGIES:
         raise ValueError(f"Unknown strategy {strategy!r}. Supported: {STUDY_STRATEGIES}")
+    chunk = settings.chunk
+    if chunk * settings.n_checkpoints != settings.num_steps or chunk % settings.resample_every:
+        raise ValueError(
+            "num_steps must split into n_checkpoints chunks that are each a multiple "
+            f"of resample_every (got {settings.num_steps}, {settings.n_checkpoints}, "
+            f"{settings.resample_every})."
+        )
     device = device or torch.device("cpu")
 
     torch.manual_seed(seed)
     np.random.seed(seed)
-    model = _build_model(settings, device)
+    pde = _PDE_BUILDERS[pde_name](device)
+    trainer = _build_trainer(pde, settings, device)
     torch.manual_seed(seed + 10_000)  # sampling stream, independent of the init
 
-    pde = _PDE_BUILDERS[pde_name](device)
-    pde.config.training = _training_config(settings)
-    sample = _make_sampler(strategy, pde, settings, device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=settings.learning_rate)
+    overhead = {"evals": 0}
+    progress = {"value": 0.0}
+    sampler = _make_sampler(strategy, pde, settings, device, overhead)
+    resample_every = 1 if strategy in _EVERY_STEP else settings.resample_every
 
-    budget = settings.time_budget_s
-    checkpoints = [budget * (i + 1) / settings.n_checkpoints for i in range(settings.n_checkpoints)]
-    curve_t: List[float] = []
-    curve_e: List[float] = []
-    clock = 0.0
-    step = 0
-    x = t = None
-    while clock < budget:
-        start = time.perf_counter()
-        if strategy == "uniform" or step % settings.resample_every == 0:
-            x, t = sample(model, clock / budget)
-        optimizer.zero_grad()
-        loss = pde.compute_loss(model, x, t)["total"]
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
-        clock += time.perf_counter() - start
-        step += 1
-        while checkpoints and clock >= checkpoints[0]:
-            checkpoints.pop(0)
-            curve_t.append(clock)
-            curve_e.append(_relative_l2(model, reference, device))
+    def sample_fn(model, _chunk_progress):
+        return sampler(model, progress["value"])
 
-    return StudyRun(
-        pde=pde_name,
-        strategy=strategy,
-        seed=seed,
-        rel_l2=curve_e[-1],
-        steps=step,
-        train_time_s=clock,
-        curve_time_s=curve_t,
-        curve_rel_l2=curve_e,
-    )
+    run = StudyRun(pde_name, strategy, seed, float("nan"), 0, 0.0, 0)
+    for _ in range(settings.n_checkpoints):
+        out = trainer.train_steps(
+            num_steps=chunk, sample_fn=sample_fn, resample_every=resample_every
+        )
+        run.steps += out["steps"]
+        run.train_time_s += out["train_time_s"]
+        progress["value"] = run.steps / settings.num_steps
+        run.residual_evals = run.steps * settings.n_collocation + overhead["evals"]
+        run.curve_step.append(run.steps)
+        run.curve_time_s.append(run.train_time_s)
+        run.curve_evals.append(run.residual_evals)
+        run.curve_rel_l2.append(_relative_l2(trainer.model, reference, device))
+    run.rel_l2 = run.curve_rel_l2[-1]
+    return run
 
 
 def _worker(task: tuple) -> StudyRun:
     """Process-pool entry point; one thread per worker keeps runs comparable."""
     torch.set_num_threads(1)
+    logging.getLogger("pinnrl").setLevel(logging.WARNING)
     return run_study_case(*task)
 
 
@@ -337,7 +367,7 @@ def run_sampling_study(
         on_result: Optional callback invoked as each run finishes.
 
     Returns:
-        One :class:`StudyRun` per combination, in completion order.
+        One :class:`StudyRun` per combination, in task order.
     """
     settings = settings or StudySettings()
     for name in pdes:
@@ -374,60 +404,87 @@ def run_sampling_study(
 
 @dataclass
 class StudySummary:
-    """Aggregate over seeds for one ``(pde, strategy)`` pair.
+    """Aggregate over seeds for one ``(pde, strategy)`` pair at one budget.
 
     Attributes:
+        budget: ``"steps"`` (equal training points) or ``"evals"`` (equal
+            residual evaluations including sampler overhead).
         pde: PDE key.
         strategy: Sampling strategy.
         n: Number of seeds.
-        median_rel_l2: Median final relative L2 error.
-        q25_rel_l2: 25th percentile of the final error.
-        q75_rel_l2: 75th percentile of the final error.
-        median_steps: Median optimizer steps within the budget.
+        median_rel_l2: Median relative L2 error at the budget.
+        q25_rel_l2: 25th percentile.
+        q75_rel_l2: 75th percentile.
+        median_time_s: Median training wall-clock at the budget.
         wins_vs_uniform: Seeds on which this strategy beat ``uniform``.
         p_vs_uniform: Two-sided Wilcoxon signed-rank p-value against
             ``uniform`` on paired seeds (``nan`` if not computable).
     """
 
+    budget: str
     pde: str
     strategy: str
     n: int
     median_rel_l2: float
     q25_rel_l2: float
     q75_rel_l2: float
-    median_steps: float
+    median_time_s: float
     wins_vs_uniform: int
     p_vs_uniform: float
 
 
-def summarize(runs: Sequence[StudyRun]) -> List[StudySummary]:
-    """Median/IQR per ``(pde, strategy)`` plus paired comparison against ``uniform``."""
+def _at_budget(run: StudyRun, max_evals: Optional[int]) -> Tuple[float, float]:
+    """``(rel_l2, time_s)`` at the last checkpoint within ``max_evals`` (or at the end)."""
+    if max_evals is None:
+        return run.rel_l2, run.train_time_s
+    idx = [i for i, e in enumerate(run.curve_evals) if e <= max_evals]
+    i = idx[-1] if idx else 0
+    return run.curve_rel_l2[i], run.curve_time_s[i]
+
+
+def summarize(runs: Sequence[StudyRun], budget: str = "steps") -> List[StudySummary]:
+    """Median/IQR per ``(pde, strategy)`` plus a paired comparison against ``uniform``.
+
+    ``budget="steps"`` compares final errors (equal training points).
+    ``budget="evals"`` compares each run at the last checkpoint whose residual
+    evaluations (training plus sampler overhead) do not exceed the smallest
+    total spent by any run on that PDE.
+    """
     from scipy.stats import wilcoxon
 
-    by_key: Dict[Tuple[str, str], Dict[int, StudyRun]] = {}
+    if budget not in ("steps", "evals"):
+        raise ValueError(f"budget must be 'steps' or 'evals', got {budget!r}")
+    cap: Dict[str, int] = {}
+    if budget == "evals":
+        for run in runs:
+            cap[run.pde] = min(cap.get(run.pde, run.residual_evals), run.residual_evals)
+
+    by_key: Dict[Tuple[str, str], Dict[int, Tuple[float, float]]] = {}
     for run in runs:
-        by_key.setdefault((run.pde, run.strategy), {})[run.seed] = run
+        point = _at_budget(run, cap.get(run.pde))
+        by_key.setdefault((run.pde, run.strategy), {})[run.seed] = point
 
     summaries: List[StudySummary] = []
-    for (pde, strategy), seed_runs in sorted(by_key.items()):
-        errors = np.array([r.rel_l2 for r in seed_runs.values()])
+    for (pde, strategy), seed_vals in sorted(by_key.items()):
+        errors = np.array([v[0] for v in seed_vals.values()])
         baseline = by_key.get((pde, "uniform"), {})
-        paired = sorted(set(seed_runs) & set(baseline))
-        wins = sum(seed_runs[s].rel_l2 < baseline[s].rel_l2 for s in paired)
+        paired = sorted(set(seed_vals) & set(baseline))
+        wins = sum(seed_vals[s][0] < baseline[s][0] for s in paired)
         p_value = float("nan")
         if strategy != "uniform" and len(paired) >= 5:
-            diffs = [seed_runs[s].rel_l2 - baseline[s].rel_l2 for s in paired]
+            diffs = [seed_vals[s][0] - baseline[s][0] for s in paired]
             if any(d != 0 for d in diffs):
                 p_value = float(wilcoxon(diffs).pvalue)
         summaries.append(
             StudySummary(
+                budget=budget,
                 pde=pde,
                 strategy=strategy,
                 n=len(errors),
                 median_rel_l2=float(np.median(errors)),
                 q25_rel_l2=float(np.percentile(errors, 25)),
                 q75_rel_l2=float(np.percentile(errors, 75)),
-                median_steps=float(np.median([r.steps for r in seed_runs.values()])),
+                median_time_s=float(np.median([v[1] for v in seed_vals.values()])),
                 wins_vs_uniform=wins if strategy != "uniform" else 0,
                 p_vs_uniform=p_value,
             )
@@ -435,13 +492,17 @@ def summarize(runs: Sequence[StudyRun]) -> List[StudySummary]:
     return summaries
 
 
-RUN_FIELDS = ("pde", "strategy", "seed", "rel_l2", "steps", "train_time_s")
+RUN_FIELDS = ("pde", "strategy", "seed", "rel_l2", "steps", "train_time_s", "residual_evals")
 
 
 def write_study_outputs(
     out_dir: Path, runs: Sequence[StudyRun], settings: StudySettings
 ) -> List[StudySummary]:
-    """Write ``runs.csv``, ``curves.json``, ``summary.csv`` and ``settings.json``."""
+    """Write ``runs.csv``, ``curves.json``, ``summary.csv`` and ``settings.json``.
+
+    ``summary.csv`` holds both budgets (column ``budget``); the returned list
+    is the same rows.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     with (out_dir / "runs.csv").open("w", newline="") as fh:
         writer = csv.writer(fh)
@@ -451,7 +512,7 @@ def write_study_outputs(
     (out_dir / "curves.json").write_text(json.dumps([asdict(r) for r in runs]))
     (out_dir / "settings.json").write_text(json.dumps(asdict(settings), indent=2))
 
-    summaries = summarize(runs)
+    summaries = summarize(runs, "steps") + summarize(runs, "evals")
     fields = list(asdict(summaries[0]).keys()) if summaries else []
     with (out_dir / "summary.csv").open("w", newline="") as fh:
         writer = csv.writer(fh)
