@@ -1,184 +1,84 @@
-# Inverse Problems — Parameter Identification
+# Inverse problems
 
-Forward PINN training answers "given a PDE and its parameters, what is `u(x, t)`?" An **inverse problem** flips that around: given noisy or sparse measurements of `u`, recover the *unknown parameters* of the PDE that generated them. `pinnrl` supports inverse problems as a first-class training mode.
+A forward problem asks for `u(x, t)` given the PDE and its parameters. An **inverse problem** asks for the parameters given measurements of `u`. Examples include a material's thermal diffusivity from temperature traces, a wave speed from surface seismograms, a fouling resistance from evaporator temperatures, or a volatility from option prices.
 
-Real-world examples include:
+Classical approaches need a forward solver run many times, plus its adjoint for gradient-based methods (ensemble Kalman filters avoid the adjoint at the cost of an ensemble of solves). A PINN learns the solution and the parameters in one optimization. The parameters become trainable tensors, and a data term joins the physics loss:
 
-- **Materials science** — recover thermal diffusivity `α` of a sample from infrared sensor traces.
-- **Geophysics** — identify subsurface wave speed from seismic surface measurements.
-- **Biomechanics** — infer tissue elasticity from displacement scans.
-- **Climate / fluid dynamics** — estimate effective viscosity from particle-imaging velocimetry data.
-- **Quantitative finance** — calibrate Black-Scholes volatility from observed option prices.
+$$
+\mathcal{L} = w_r\,\mathcal{L}_\text{residual} + w_b\,\mathcal{L}_\text{boundary} + w_i\,\mathcal{L}_\text{initial}
++ w_d \operatorname{mean} \lvert u_\theta(x_\text{obs}, t_\text{obs}) - u_\text{obs} \rvert^2
+$$
 
----
+The residual ties the parameters to physically consistent solutions; the data term pulls the solution toward the measurements.
 
-## How it works
-
-In inverse mode, pinnrl jointly trains the network weights `θ` *and* a small set of PDE parameters that you mark trainable. The total loss combines the standard PINN terms with a data-fitting term:
-
-```
-L = w_pde · L_residual + w_bc · L_boundary + w_ic · L_initial + w_data · L_data
-```
-
-with
-
-```
-L_data = mean( | u_θ(x_obs, t_obs) − u_obs |² )
-```
-
-The trainable parameters live as `nn.Parameter` tensors registered on the PDE object, so PyTorch's autograd flows gradients through both the network and the parameters in a single backward pass. After training, `pde.get_trainable_parameter_values()` returns a `{name: float}` snapshot of the recovered values.
-
-The PDE's analytical residual still uses these parameters, so the residual loss *anchors* them to physical solutions while the data loss *pulls* them toward the observations. The two terms together regularise an otherwise ill-posed inversion.
-
----
-
-## Quickstart — recover thermal diffusivity from synthetic observations
-
-The fastest way to see inverse mode work is to ask pinnrl to recover `α` of the heat equation from synthetic noisy observations of its own analytical solution.
-
-### From the dashboard
-
-1. Open **New Training**.
-2. Pick **Heat Equation** as the PDE.
-3. Set **Mode** to **Inverse (identify)** — the inverse panel reveals.
-4. Tick **alpha** under "Parameters to identify" and set its initial guess (e.g. `0.5` while the truth is `0.05`).
-5. Choose **Synthetic** as the observation source, leave Observation points = `200` and Noise std = `0.01`.
-6. Click **Start Training**. The Monitor sub-tab will plot `alpha`'s trajectory toward the truth in real time.
-
-### From the CLI
+## Command line
 
 ```bash
-pinnrl-train \
-  --pde "Heat Equation" --arch fourier \
-  --epochs 3000 --device cpu \
-  --mode inverse \
-  --identify alpha \
-  --initial-guess alpha=0.5 \
+pinnrl-train --pde heat --arch fourier --epochs 3000 --device cpu \
+  --mode inverse --identify alpha --initial-guess alpha=0.5 \
   --obs-points 200 --obs-noise 0.01
 ```
 
-### From the Python API
+Without `--obs-path`, observations are sampled from the PDE's exact solution at the configured (true) parameters, with Gaussian noise. That makes it a recovery test whose answer is known. The run's `metadata.json` records the true and recovered values. Any scalar parameter of the PDE can be identified, and `--identify` can be repeated.
+
+## Python
 
 ```python
 import torch
-from pinnrl.config import (
-    AdaptiveWeightsConfig, EarlyStoppingConfig,
-    LearningRateSchedulerConfig, ModelConfig, TrainingConfig, Config,
-)
+
+from pinnrl.config import Config, ModelConfig, TrainingConfig
 from pinnrl.neural_networks import PINNModel
-from pinnrl.pdes.heat_equation import HeatEquation
-from pinnrl.pdes.pde_base import PDEConfig
-from pinnrl.training.trainer import PDETrainer
+from pinnrl.pdes import HeatEquation, PDEConfig
+from pinnrl.training import PDETrainer
 
 device = torch.device("cpu")
-TRUE_ALPHA, INITIAL_GUESS = 0.05, 0.5
+training = TrainingConfig.from_dict({
+    "mode": "inverse",
+    "num_epochs": 1500,
+    "batch_size": 256,
+    "num_collocation_points": 256,
+    "optimizer_config": {"learning_rate": 5e-3, "weight_decay": 0.0},
+    "scheduler_type": "constant",
+    "early_stopping": {"enabled": False},
+    "gradient_clipping": 0.0,
+    "loss_weights": {"residual": 1.0, "boundary": 10.0, "initial": 10.0, "data": 50.0},
+})
 
-training = TrainingConfig(
-    num_epochs=3000, batch_size=2048,
-    num_collocation_points=5000, num_boundary_points=500, num_initial_points=500,
-    learning_rate=5e-3, weight_decay=0.0, gradient_clipping=1.0,
-    early_stopping=EarlyStoppingConfig(enabled=False, patience=999, min_delta=1e-7),
-    learning_rate_scheduler=LearningRateSchedulerConfig(
-        type="cosine", warmup_epochs=0, min_lr=1e-6, factor=0.5, patience=3,
-    ),
-    adaptive_weights=AdaptiveWeightsConfig(enabled=False),
-    loss_weights={"residual": 1.0, "boundary": 1.0, "initial": 1.0, "data": 50.0},
-    mode="inverse",
-)
-
-pde_config = PDEConfig(
+pde = HeatEquation(PDEConfig(
     name="Heat Equation",
-    domain=[[0.0, 1.0]], time_domain=[0.0, 1.0],
-    parameters={"alpha": TRUE_ALPHA},
-    boundary_conditions={"type": {"value": 0.0}},
+    domain=[[0.0, 1.0]],
+    time_domain=[0.0, 1.0],
+    parameters={"alpha": 0.05},                      # the truth, used for synthetic data
+    boundary_conditions={"periodic": {}},
     initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 1.0},
     exact_solution={"type": "sin_exp_decay", "amplitude": 1.0, "frequency": 1.0},
-    dimension=1, device=device, training=training,
+    dimension=1,
+    device=device,
+    training=training,
     trainable_parameters=["alpha"],
-    parameter_initial_guesses={"alpha": INITIAL_GUESS},
-)
-pde = HeatEquation(config=pde_config)
-pde.generate_synthetic_observations(n_points=200, noise_std=0.01, seed=0)
+    parameter_initial_guesses={"alpha": 0.5},        # start 10x off
+))
+pde.generate_synthetic_observations(n_points=200, noise_std=0.005, seed=0)
 
-config = Config.__new__(Config)
-config.device = device
-config.model = ModelConfig(
-    input_dim=2, hidden_dim=128, output_dim=1, num_layers=4,
-    activation="tanh", architecture="fourier",
+config = Config()
+config.device, config.training = device, training
+config.model = ModelConfig.from_architecture(
+    "fourier",
+    {"hidden_dims": [64, 64, 64], "mapping_size": 32, "scale": 4.0, "activation": "tanh"},
+    input_dim=2,
+    output_dim=1,
 )
-config.training = training
-
-model = PINNModel(config=config, device=device)
-trainer = PDETrainer(
-    model=model, pde=pde,
-    optimizer_config={"learning_rate": 5e-3, "weight_decay": 0.0},
-    config=config, device=device,
-)
-trainer.train(num_epochs=3000)
-
-print("Recovered alpha:", pde.get_trainable_parameter_values()["alpha"])
-print("True alpha:     ", TRUE_ALPHA)
+model = PINNModel(config, device=device)
+PDETrainer(model, pde, config=config, device=device).train(progress=False)
+print(pde.get_trainable_parameter_values())          # notebook 05 recovers about 0.0499
 ```
 
-A successful run pulls `alpha` from `0.5` toward something close to `0.05` (typically within 5–10% under mild noise).
+## Your own measurements
 
----
+Provide an `.npz` file with arrays `x` of shape `(N, d)`, `t` of shape `(N, 1)` and `u` of shape `(N, 1)`. Pass it with `--obs-path`, in the dashboard (Observation source → File), or as `PDEConfig(observation_data={"path": ...})`. A [Well dataset](datasets.md) can also serve as the observation source.
 
-## Bringing your own observations
+## When the inversion is well posed
 
-When you have real measurements, replace the synthetic source with an `.npz` file containing three arrays:
-
-| Key | Shape | Description |
-|-----|-------|-------------|
-| `x` | `(N, d_space)` | Spatial coordinates of each observation |
-| `t` | `(N, 1)` | Time of each observation |
-| `u` | `(N, d_fields)` | Measured field values |
-
-Load via the dashboard ("Observation source" → **File**, paste the absolute path) or the CLI flag `--obs-path /absolute/path/to/observations.npz`.
-
-You can also feed a Well dataset as the observation source — see the [datasets guide](datasets.md). When mode is `data_augmented` and the PDE matches a Well dataset, the residual + IC/BC + data terms train together against real simulation snapshots.
-
----
-
-## Dashboard panel reference
-
-When **Mode = Inverse (identify)** is selected, the dashboard reveals an inverse panel with:
-
-- **Parameters to identify** — checklist of the PDE's parameters that can be made trainable. The list is auto-populated from the selected PDE config.
-- **Initial guesses** — one numeric input per checked parameter; a far-from-truth guess shows that the inversion actually moves the value.
-- **Observation source** — radio:
-  - `Synthetic` generates points from the analytical solution + Gaussian noise (controlled by Observation points + Noise std).
-  - `File` loads a user-provided `.npz` from the path field.
-- **Live parameter trajectory** — once training starts, the Monitor sub-tab plots each identified parameter's value at every logged epoch, so you can watch the convergence in real time.
-
----
-
-## When inverse mode is well-posed
-
-- **At least one observation per identified parameter.** Heuristically, plan for 50–200 noisy observations per scalar parameter.
-- **Observations should span the dynamic regime where the parameter matters.** Trying to recover thermal diffusivity from a snapshot of stationary equilibrium fails because the diffusivity has no signature there.
-- **Initial guesses within an order of magnitude of the truth converge faster.** Far guesses still recover under enough observations + epochs but may need a higher data weight (`loss_weights.data = 50–500`).
-- **The data weight matters.** If the data term is too small, the residual will dominate and freeze parameters near the initial guess; if too large, observations override physics and the network overfits noise. The default `data = 1.0` works for matched PDE/observation scales; increase it 10× for synthetic experiments where the residual is computed on many more points than the observations.
-
----
-
-## Combining inverse mode with the dataset modes
-
-When you select a Well dataset for which pinnrl has an analytical solver (e.g. acoustic-scattering variants ↔ wave equation), three loss recipes are sensible:
-
-| Goal | Mode | Behaviour |
-|---|---|---|
-| Train a surrogate that reproduces the Well snapshots | `data_only` | Skip residual / IC / BC; pure regression on the dataset. |
-| Train a physics-constrained model on Well data | `data_augmented` | Residual + IC + BC + data fit; PDE parameters fixed. |
-| Recover the dataset's underlying parameters | `inverse` | Residual + IC + BC + data fit; selected parameters trainable. |
-
-Inverse mode + Well datasets is the natural setting for *parameter calibration* — fitting an analytical model to a real or high-fidelity reference simulation.
-
----
-
-## See also
-
-- [Dashboard guide](dashboard.md) — full New Training form reference.
-- [Benchmark datasets](datasets.md) — Well dataset registry and usage.
-- [`tests/unit_tests/test_inverse_heat.py`](https://github.com/josegarciav/PINNs-RL-PDE/blob/main/tests/unit_tests/test_inverse_heat.py) — end-to-end inverse-heat test that recovers `alpha` from synthetic observations.
-- API: [`PDEConfig.trainable_parameters`](api/pdes.md), [`PDEBase.get_trainable_parameter_values`](api/pdes.md), [`PDEBase.generate_synthetic_observations`](api/pdes.md).
+- **The data must excite the parameter.** Diffusivity can't be recovered from a steady state, because it leaves no signature there. Observations must cover the regime where the parameter acts.
+- **Balance the data weight.** If it's too small, the parameter barely moves from its initial guess. If it's too large, the network fits the noise and the physics stops constraining it. The example above (256 collocation points, 200 observations, noise 0.005) uses 50; 10–100 is a reasonable range to search.
+- **Check identifiability before trusting a number.** Several parameters, or a parameter field, may not be uniquely determined by the sensors you have. Studying this systematically is part of the [research program](research.md).

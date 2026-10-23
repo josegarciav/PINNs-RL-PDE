@@ -1,5 +1,5 @@
 site_name: pinnrl
-site_description: Physics-Informed Neural Networks with RL-based adaptive sampling for solving PDEs
+site_description: Physics-informed neural networks for forward and inverse PDE problems, evaluated against numerical references
 site_url: https://josegarciav.github.io/PINNs-RL-PDE
 repo_url: https://github.com/josegarciav/PINNs-RL-PDE
 repo_name: josegarciav/PINNs-RL-PDE
@@ -57,6 +57,8 @@ plugins:
             show_if_no_docstring: false
             separate_signature: true
             heading_level: 2
+            docstring_options:
+              warn_missing_types: false
 
 extra_javascript:
   - javascripts/mathjax.js
@@ -64,23 +66,24 @@ extra_javascript:
 
 nav:
   - Home: index.md
-  - Getting Started:
-    - Start Here: start_here.md
-    - Installation & Setup: setup.md
-    - Dashboard Guide: dashboard.md
-  - Features:
-    - 3D Visualization: visualization.md
-    - Inverse Problems: inverse_problems.md
-    - Benchmark Datasets (The Well): datasets.md
-    - Sampling Strategies: sampling_strategies.md
-  - Architecture: ARCHITECTURE.md
-  - API Reference:
+  - Getting started: getting_started.md
+  - Concepts: concepts.md
+  - Equations: equations.md
+  - Guides:
+    - Training: training.md
+    - Inverse problems: inverse_problems.md
+    - Datasets (The Well): datasets.md
+    - Dashboard: dashboard.md
+    - Benchmarks: benchmarks.md
+  - Applications: applications.md
+  - Research program: research.md
+  - Roadmap: roadmap.md
+  - API reference:
     - Overview: api/index.md
     - Configuration: api/config.md
-    - Neural Networks: api/neural_networks.md
+    - Neural networks: api/neural_networks.md
     - PDEs: api/pdes.md
     - Training: api/training.md
     - RL sampler: api/rl.md
     - Plots: api/plots.md
     - Benchmarks: api/benchmarks.md
-  - Roadmap: roadmap.md

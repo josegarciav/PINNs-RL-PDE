@@ -1,254 +1,47 @@
 # Roadmap
 
-This document tracks what has been built, what is in progress, and what is planned for `pinnrl`. Items within each milestone are scored on three dimensions (1–5 scale):
-
-- **Adoption difficulty** — how hard it is to implement and ship
-- **Scientific impact** — value to the PINN research community
-- **Innovation level** — novelty relative to existing tools
-
----
-
-## v0.1 — Current (Stabilization)
-
-**Status: Complete**
-
-Core solver with 9 PDEs, 7 architectures, RL adaptive sampling, and a Dash dashboard for experiment management.
-
-| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
-|---|---|---|---|---|
-| 9 PDEs × 7 architectures trainable end-to-end | Done | 2 | 3 | 2 |
-| DQN-based RL collocation agent (epsilon-greedy) | Done | 3 | 4 | 3 |
-| Adaptive loss weighting (LRW and RBW strategies) | Done | 2 | 3 | 2 |
-| Cosine LR annealing + early stopping | Done | 1 | 2 | 1 |
-| Plotly/Matplotlib solution visualization | Done | 1 | 1 | 1 |
-| Dash real-time training dashboard | Done | 2 | 2 | 2 |
-| Experiment directory with config snapshots | Done | 1 | 1 | 1 |
-| Apple Silicon (MPS) + CUDA + CPU support | Done | 2 | 1 | 1 |
-| Exact analytical solutions for all 9 PDEs | Done | 1 | 2 | 1 |
-| Headless CLI training script | Done | 1 | 1 | 1 |
-
-**Known limitations:**
-
-- RL agent requires per-PDE tuning; not plug-and-play
-- 2D PDEs partially configured but not fully validated
-- No formal benchmark against FEM/FDM solvers
-
----
-
-## v0.2 — Documentation and Onboarding
-
-**Status: Complete**
-
-| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
-|---|---|---|---|---|
-| MkDocs site with Material theme | Done | 1 | 1 | 1 |
-| Start Here guide (5-minute onboarding) | Done | 1 | 1 | 1 |
-| Installation & Setup guide | Done | 1 | 1 | 1 |
-| Architecture overview | Done | 1 | 2 | 1 |
-| Sampling strategies guide | Done | 1 | 2 | 1 |
-| Dashboard guide | Done | 1 | 1 | 1 |
-| CONTRIBUTING.md and issue templates | Done | 1 | 1 | 1 |
-| Versioned changelog (CHANGELOG.md) | Done | 1 | 1 | 1 |
-| GitHub Actions CI: lint + test on push | Done | 1 | 1 | 1 |
-| GitHub Actions: docs deployment | Done | 1 | 1 | 1 |
-| Jupyter tutorial: heat equation | Done | 1 | 2 | 1 |
-| Jupyter tutorial: architecture comparison | Done | 1 | 2 | 1 |
-| `mkdocstrings` API reference from docstrings | Done | 2 | 1 | 1 |
-| Jupyter tutorial: RL vs uniform sampling | Done | 2 | 3 | 2 |
-| PyPI release (`pip install pinnrl`) | Done | 2 | 2 | 1 |
-| Linkedin post | Done | 1 | 2 | 1 |
-
----
-
-## v0.3 — Science Features
-
-**Target:** Q3 2026
-
-Extends scientific capability with methods actively used in the PINN research community.
-
-| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
-|---|---|---|---|---|
-| FNO architecture (spectral convolutions) | Done | 3 | 4 | 3 |
-| Inverse problems: parameter identification | Done | 3 | 5 | 4 |
-| L-BFGS second-order optimizer | Done | 2 | 3 | 2 |
-| 2D PDEs: full heat_2d training | Done | 3 | 4 | 2 |
-| RAR (Residual-Adaptive Refinement) sampling | Done | 2 | 3 | 2 |
-| Formal FDM comparison on heat/wave | Done | 2 | 3 | 2 |
-| Stratified + RAR sampling benchmarks vs RL | Done | 2 | 3 | 3 |
-| `pinnrl-benchmark` CLI subcommand | Done | 2 | 2 | 2 |
-| Configurable loss functions (MSE, MAE, Huber) | Done | 1 | 2 | 1 |
-| Linkedin post | Done | 1 | 2 | 1 |
-
-**On inverse problems:** Recovering unknown PDE parameters (e.g., identifying `alpha` in the heat equation from noisy sensor data) is one of the highest-value capabilities PINNs offer over classical solvers. Implementation path: add a `trainable_parameters` field to `PDEConfig`, modify `PDEBase.compute_residual` to use `nn.Parameter` tensors, add a data-fitting loss term, and expose via `--mode inverse` CLI flag.
-
-**On L-BFGS:** A quasi-Newton method that often outperforms Adam in the final convergence phase for smooth PDEs. PyTorch provides `torch.optim.LBFGS` with a closure-based API that requires modest changes to the training loop.
-
----
-
-## v0.4 — Full RL Integration
-
-**Target:** Q4 2026
-
-Makes the RL adaptive sampler a first-class, benchmarked feature rather than an experimental add-on.
-
-| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
-|---|---|---|---|---|
-| Formal RL benchmark: RL vs uniform vs RAR vs stratified | To do | 3 | 5 | 4 |
-| Policy gradient (PPO) alternative to DQN | To do | 3 | 3 | 3 |
-| Curriculum learning: coarse-to-fine collocation | To do | 3 | 4 | 4 |
-| RL agent pre-training on synthetic PDE families | To do | 4 | 4 | 5 |
-| Per-PDE RL configuration presets (tuned defaults) | To do | 2 | 2 | 2 |
-| Dashboard: live RL reward + sampling density | To do | 2 | 2 | 3 |
-| Reproducible benchmark artifacts (seeds, configs, logs) | To do | 1 | 3 | 1 |
-| Linkedin post | To do | 1 | 2 | 1 |
-
-**On the benchmark paper:** A rigorous comparison of RL-based adaptive sampling against RAR and uniform strategies across all nine PDEs, with fixed compute budgets, would be a publishable contribution. Key metrics: L2 error at convergence, wall-clock time to target loss, and collocation efficiency (accuracy per point). This is `pinnrl`'s strongest scientific differentiator.
-
----
-
-## v0.5 — Benchmark Datasets
-
-**Target:** Q1 2027
-
-Brings external benchmark datasets into `pinnrl` so users can train and evaluate against community-standard reference solutions instead of only synthetic analytical data. First integration target: [The Well](https://github.com/PolymathicAI/the_well) (Polymathic AI, BSD-3) — 16 HDF5 simulation datasets covering fluid dynamics, MHD, biological systems, and acoustic scattering, served via `WellDataset` and the `hf://datasets/polymathic-ai/` Hugging Face mirror.
-
-| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
-|---|---|---|---|---|
-| `pinnrl/datasets/` subpackage with `WellEntry` registry (16 datasets) | To do | 2 | 3 | 2 |
-| Well loader: HF streaming default + local-cache fallback | To do | 3 | 3 | 2 |
-| `data_only` training mode (neural surrogate, no PDE residual) | To do | 2 | 4 | 3 |
-| `data_augmented` training mode (residual + reference data) | To do | 2 | 4 | 3 |
-| Dashboard Dataset section: pick Well dataset → auto-fill PDE/arch/mode | To do | 3 | 3 | 3 |
-| `pinnrl[well]` optional extra (`the_well`, `h5py`, `huggingface-hub`) | To do | 1 | 1 | 1 |
-| FNO-on-`active_matter` quickstart notebook | To do | 2 | 3 | 2 |
-| Integration tests (skipped without `the_well` installed) | To do | 2 | 2 | 1 |
-| Linkedin post | To do | 1 | 2 | 1 |
-
-**Why now:** v0.4's RL benchmark needs ground truth that goes beyond analytical 1D toys, and the FNO foundation listed under "Exploratory directions" only becomes true operator learning once it can ingest snapshot fields. Both unblock cleanly once Well datasets are first-class.
-
-**Design constraints:** Reuse `PDEConfig.observation_data` as the single in-memory shape for external data — Well snapshots flatten into the same `(x, t, u)` tensor triple already consumed by inverse-mode parameter ID. The new modes are loss-recipe toggles, not new PDE classes; matched datasets (Burgers and diffusion variants) use `data_augmented`, unmatched ones (Rayleigh-Bénard, MHD, active matter, …) use `data_only`. New analytical PDE classes for the unmatched physics are explicitly out of scope here and tracked separately under "Turbulence modeling with PINNs" in Exploratory directions.
-
----
-
-## v1.0 — Production
-
-**Target:** H1 2027
-
-Stable API, production packaging, community infrastructure, and validation against established solvers.
-
-| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
-|---|---|---|---|---|
-| Benchmark vs FEniCS (FEM) on heat, wave, Burgers | To do | 3 | 4 | 3 |
-| Benchmark vs DeepXDE on matching problem set | To do | 3 | 4 | 2 |
-| Plugin system for custom PDEs and architectures | To do | 4 | 3 | 3 |
-| Dashboard: custom PDE builder with guided input | To do | 4 | 4 | 4 |
-| Stable public API with semantic versioning | To do | 2 | 2 | 1 |
-| Conda-forge package | To do | 2 | 1 | 1 |
-| Docker image with GPU support | To do | 2 | 1 | 1 |
-| Citation metadata (CITATION.cff, Zenodo DOI) | To do | 1 | 2 | 1 |
-| Community forum or GitHub Discussions | To do | 1 | 1 | 1 |
-| Linkedin post | To do | 1 | 2 | 1 |
-
-**On the custom PDE builder:** Users should be able to define and solve arbitrary PDEs directly from the dashboard without writing code. The builder would provide a guided form for specifying the PDE expression, spatial and temporal domain bounds, dimensionality, initial conditions, and boundary conditions. Input validation must enforce logical constraints: dimensional consistency between the PDE and its IC/BCs, well-posedness checks (e.g., ensuring boundary conditions cover the full domain boundary), and compatibility with `pinnrl`'s supported differential operators. The builder does not require an analytical solution — it runs the PINN in forward mode and reports residual convergence. This lowers the barrier for experimentalists and educators who want to test PINNs on their own equations without touching Python.
-
----
-
-## v1.1 — Platform and Monetization
-
-**Target:** H2 2027
-
-Explores hosting `pinnrl` as a service and sustainable monetization paths.
-
-| Item | Status | Adoption difficulty | Scientific impact | Innovation level |
-|---|---|---|---|---|
-| Cloud-hosted solver API (REST/gRPC) | To do | 4 | 3 | 3 |
-| Hosted dashboard with user accounts and job queues | To do | 5 | 3 | 3 |
-| Freemium tier: free CPU training, paid GPU acceleration | To do | 3 | 2 | 2 |
-| Paid features: priority queues, extended training budgets, private experiment storage | To do | 3 | 2 | 2 |
-| API key management and usage metering | To do | 3 | 1 | 1 |
-| Platform or marketplace distribution (API-as-a-service) | To do | 4 | 2 | 3 |
-| Linkedin post | To do | 1 | 2 | 1 |
-
-**On monetization:** `pinnrl` could be offered as a hosted platform where users submit PDE configurations and receive trained solutions via API or web dashboard. A freemium model — free CPU-bound training with paid tiers for GPU acceleration, longer training budgets, batch jobs, and private experiment storage — aligns with how research tools monetize. Distribution through API marketplaces or integration platforms broadens reach beyond the Python-native audience. The custom PDE builder (v1.0) becomes the natural frontend for this service.
-
----
-
-## Priority paths
-
-Ranked by expected return — combining scientific demand, differentiation from existing tools, and implementation feasibility.
-
-### 1. Inverse problems (parameter identification)
-
-**Scientific demand:** Extremely high. Recovering physical parameters from noisy observations is a central challenge in materials science, geophysics, biomechanics, and climate modeling. Classical methods (adjoint optimization, ensemble Kalman filter) are computationally expensive and mesh-dependent. PINNs handle irregular domains and sparse data naturally.
-
-**Differentiation:** Most PINN libraries support forward problems only. A clean inverse-problem API (observable data in, unknown parameters out) would immediately attract experimental scientists.
-
-**Implementation path:** Add `trainable_parameters` to `PDEConfig`. Modify `PDEBase.compute_residual` to use `nn.Parameter` tensors. Add data-fitting loss `L_data = mean(|u_θ(x_obs) - u_obs|²)`. Expose via `--mode inverse` CLI flag.
-
-### 2. 2D and 3D PDEs with domain decomposition
-
-**Scientific demand:** High. Real engineering problems are rarely 1D. Domain decomposition (XPINNs / CPINNs) partitions the domain into subdomains handled by separate networks, enabling parallelism.
-
-**Implementation path:** The `input_dim=3` case (x, y, t) is already supported by all 7 architectures. Primary work: (a) fix 2D residual computation in `PDEBase`, (b) implement 2D visualization, (c) domain decomposition via interface continuity conditions.
-
-### 3. RL benchmark paper
-
-**Scientific demand:** Moderate but strategic. `pinnrl` is the only open-source PINN library with an integrated RL agent. Formalizing this with reproducible benchmarks converts an experimental feature into a validated contribution.
-
-**Implementation path:** Primarily experimental design, not software. Standardize seeds, training budgets, metrics. Run all 9 PDEs under 4 sampling strategies. Aggregate and write up.
-
-### 4. Dashboard and visualization improvements
-
-**Status: Partially addressed.** The dashboard now supports experiment launching, monitoring, comparison, and solution visualization. Remaining opportunities: live residual heatmaps, RL reward visualization, and static HTML export for sharing.
-
-### 5. Custom PDE builder (dashboard)
-
-**Scientific demand:** High among experimentalists and educators. Users who have their own PDEs but lack Python fluency currently cannot use `pinnrl` without writing glue code. A guided dashboard form that validates dimensional consistency, boundary coverage, and operator support would make `pinnrl` accessible to a much wider audience — particularly in teaching settings where students explore PDE behavior interactively.
-
-**Implementation path:** Build a form-based PDE specification UI in the dashboard. Parse user-supplied PDE expressions (e.g., via `sympy` or a lightweight DSL) into the residual computation graph. Validate IC/BC coverage against the declared domain. No analytical solution required — training runs in forward mode with residual-only convergence metrics.
-
-### 6. Platform monetization
-
-**Scientific demand:** Low directly, but high strategic value. Hosting `pinnrl` as a cloud service removes installation friction and enables users without local GPU hardware to train models. A freemium API model (free CPU, paid GPU) creates a sustainable funding path for continued development. Marketplace or platform distribution expands reach to users outside the Python/ML ecosystem.
-
-### 7. High-dimensional PDEs
-
-**Scientific demand:** Growing. PINNs avoid the curse of dimensionality that limits FEM. PDEs in 10–100 dimensions arise in multi-asset options pricing, quantum many-body problems, and stochastic control. All 7 architectures already support arbitrary `input_dim`. The work is in defining sampling strategies, boundary conditions, and reference solutions for high-dimensional test cases.
-
-### 8. Benchmark dataset integration (The Well)
-
-**Scientific demand:** High. Without external benchmark data, every result in `pinnrl` is measured against its own analytical solutions — fine for validation, weak for publication. The Well provides 16 community-standard simulation datasets (fluid dynamics, MHD, biology, acoustics) under BSD-3 with a clean PyTorch loader. Wiring it in turns the v0.4 RL benchmark into something comparable with the broader ML4PDE literature, and lets users train neural surrogates on physics that `pinnrl` does not analytically model.
-
-**Differentiation:** PINN libraries today treat external datasets as ad-hoc inverse-problem inputs. A first-class dataset selector in the dashboard, with auto-filled defaults per dataset and side-by-side `data_only` / `data_augmented` / `forward` modes, is a concrete usability win.
-
-**Implementation path:** See v0.5 milestone above.
-
----
-
-## Exploratory directions
-
-Long-horizon, high-risk, high-reward ideas. Not on the near-term roadmap, but they represent genuine open problems where `pinnrl`'s architecture could provide a foundation.
-
-### FNO operator learning
-
-**Status: Foundation built.** The `fno` architecture implements spectral convolution layers adapted for point-wise PINN inputs. The next step is extending to true operator learning — mapping initial/boundary conditions to full solution fields, enabling zero-shot generalization to new IC/BC pairs without retraining. The v0.5 Well integration unblocks this by supplying the snapshot-field training data required to learn an operator rather than a single-instance solution.
-
-### Multi-agent RL for domain decomposition
-
-Deploy a population of RL agents — one per subdomain — that communicate through shared boundary information. Each agent optimizes local residual reduction while a coordinator manages interface conditions. Maps naturally to the XPINNs framework and could yield massive parallelism on distributed hardware.
-
-### PDE discovery from data (SINDy + PINNs)
-
-Learn the governing PDE from data rather than specifying it. Combine SINDy's sparse candidate library with PINN automatic differentiation to jointly identify the equation structure and its solution. Targets fields where the governing PDE is unknown or partially known (fluid mechanics, systems biology).
-
-### Differentiable physics for robotics and control
-
-Export trained PINN solutions as differentiable physics modules embeddable in RL loops for robotics. A PINN trained on the pendulum equation is a differentiable, zero-shot simulator that generalizes across initial conditions.
-
-### Turbulence modeling with PINNs
-
-Extend to Navier-Stokes (not yet in `pinnrl`) for turbulent flows, using a PINN as a closure model for Reynolds stresses trained on high-fidelity DNS data.
-
-### Option pricing with Greeks via autograd
-
-Extend the Black-Scholes implementation to multi-asset pricing (d >= 10) with real-time Greeks (Delta, Gamma, Vega, Theta) computed via the same autograd graph used for the PDE residual. Monte Carlo cannot provide these analytically; a PINN-based pricer returns them for free.
+Package features, in the order the [research program](research.md) needs them. Each item has a done-criterion and names the experiments (`experiments/BACKLOG.md`) or papers (`experiments/PAPERS.md`) it serves. Within a release, items are worked top to bottom.
+
+## v0.4: clean, verified, documented (releasing)
+
+- [x] Physics audit: every exact solution satisfies its PDE, IC and BC; real Dirichlet, Neumann and periodic BCs; correct 2-D derivatives. *Done: `test_physics_consistency.py` is green.*
+- [x] One training loop (`PDETrainer.train` / `train_steps`), one PDE registry, one entry point per action.
+- [x] A working, experimental RL bandit sampler; RAD with `k`/`c`.
+- [x] Numerical reference solutions. *Done: Burgers reproduces Basdevant et al. (1986), $u_x(0, 1.6037/\pi) = -152.00516$ for $\nu = 0.01/\pi$; the Allen–Cahn solution is grid-converged.*
+- [x] B01/B06 sampling benchmark, 10 seeds at equal steps and equal evaluations. *Done: [Benchmarks](benchmarks.md), `experiments/B01_sampling_equal_compute/`.*
+- [x] Docs rewritten and audited against the code; ruff with docstring linting; strict docs build.
+- [ ] Bug batch from the documentation audit (Well loader coordinates, LRW zero-gradient weighting, network defaults, dashboard plots). *Done when: each fix has a failing-without-it test.*
+- [ ] Release. *Done when: CI and `scripts/verify_release.sh` are green, and v0.4.0 is on PyPI via trusted publishing.*
+
+## v0.5: the inverse-modelling core (next)
+
+The goal is to estimate unknown physics with known validity conditions and calibrated uncertainty. Diagnostics come before UQ methods, because an unidentifiable or ill-conditioned problem has no meaningful error bar.
+
+1. **Theory pages.** Well-posedness and conditional stability; structural vs practical identifiability; the Bayesian view (loss = negative log-posterior, data weight = 1/σ²); sources of uncertainty; calibration; the numerical-analysis bridge (Lax equivalence, stability constants, PINN error estimates). They're built around the maintainer's reference papers, cited by DOI. *Done when: `docs/theory/` pages are published and every later module cites the condition it relies on.*
+2. **Identification baseline.** Scalar parameters vs noise, sensors, initial guess and data weight. *Done when: F01–F05 are written up (paper P07).*
+3. **`pinnrl.analysis`: conditioning diagnostics.** The sensitivity Jacobian $J = \partial y / \partial \theta$ by autograd; Fisher information $F = J^\top \Sigma^{-1} J$; singular values, condition number and sloppy directions; profile likelihood; the loss-Hessian / NTK spectrum. *Done when: K01, K03 and F07 run on heat, KdV and Burgers (P08, P09).*
+4. **Disturbance and stability analysis.** Perturbation suites for data (noise, bias, dropout, delay) and for the problem (IC, BC, parameters); a comparison with the linear prediction $\delta\theta \approx F^{-1} J^\top \Sigma^{-1} \delta y$; empirical stability constants. *Done when: K05–K07 are written up (P10, P11).*
+5. **`pinnrl.uq`: calibrated uncertainty.** A likelihood-based data term (σ sets the weight); deep ensembles; a Laplace approximation that reuses the Fisher matrix; coverage, width and CRPS metrics. *Done when: F06/K10 report calibrated intervals (P13).*
+6. **Sampling follow-ups for P02.** B02 (more PDEs), B03 (the RAD k, c grid), B04 (resampling frequency), B08 (point-count scaling). *Done when: P02 can be drafted.*
+
+## v0.6: richer unknowns and inputs
+
+- **Field-valued unknowns:** a learnable coefficient field $\alpha(x, t)$ or closure $f(u)$, with positivity and monotonicity constraints. *Done when: $\alpha(x)$ is recovered on heat (F09, P14).*
+- **Coupled multi-field systems** (`output_dim > 1`) with per-field BCs and loss weights. *Done when: a two-field reaction–diffusion test passes.*
+- **Measured inputs:** BCs and forcing from interpolated time series. *Done when: the heat BCs can be driven by a CSV.*
+- **Sensor operators:** point, boundary and integral observations with per-sensor noise and delay. *Done when: F05 and K02 use them.*
+- **Non-dimensionalization helpers** (a reference scale per variable). *Done when: J01 trains without hand-scaling.*
+- **High-dimensional stability:** dimension sweeps of stability constants and quadrature error. *Done when: K08 is written up (P12).*
+
+## v0.7+: process twins
+
+- `pinnrl.process`: evaporator and spray-dryer models with method-of-lines reference simulators and linearized-stability checks (J01, J07, K09; P17).
+- Classical estimators on the same models: EKF/UKF and moving-horizon estimation (J05; P15, P19).
+- Historian adapter: CSV or Parquet plus a tag map to sensor definitions.
+- A dashboard "Process" view: soft-sensor trends with uncertainty bands, and time to the next cleaning.
+- Bayesian measurement design for sensors and lab sampling (J09; P24).
+- Type checking (mypy) across the package.
+
+## Not planned
+
+A hosted service and monetization (until the research results justify it); a custom PDE-builder UI; operator learning beyond the existing FNO-style layers.

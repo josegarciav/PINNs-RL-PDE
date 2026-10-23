@@ -1,227 +1,65 @@
 <p align="center">
-  <img src="docs/assets/pinnrl-logo.png" alt="pinnrl" width="420"/>
+  <img src="https://raw.githubusercontent.com/josegarciav/PINNs-RL-PDE/main/docs/assets/pinnrl-logo.png" alt="pinnrl" width="420"/>
 </p>
 
-# pinnrl &mdash; PINNs + RL for PDEs
+# pinnrl
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![PyPI](https://img.shields.io/pypi/v/pinnrl.svg)](https://pypi.org/project/pinnrl/)
-[![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/josegarciav/PINNs-RL-PDE/actions)
+[![Checks](https://github.com/josegarciav/PINNs-RL-PDE/actions/workflows/checks.yml/badge.svg)](https://github.com/josegarciav/PINNs-RL-PDE/actions/workflows/checks.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Solve PDEs with neural networks that learn where to look.**
+**Physics-informed neural networks for forward and inverse PDE problems, evaluated against numerical references.**
 
-`pinnrl` combines Physics-Informed Neural Networks (PINNs) with Deep Q-Network reinforcement learning to place collocation points adaptively — concentrating compute where the residual is highest, not where a grid happens to land. Integrate your chosen architecture, your custom equations, a Dashboard trainer with live 3D solution and residual surfaces, parameter identification for inverse problems, and one-click training on community benchmark datasets ([The Well](https://github.com/PolymathicAI/the_well), 16 simulation datasets).
+A PINN represents the solution of a PDE as a neural network, trained to satisfy the equation, its boundary and initial conditions, and any measured data. `pinnrl` provides:
 
----
+- **10 PDE configurations:** heat (1-D, 2-D), wave, Burgers, convection, KdV, Allen–Cahn, Cahn–Hilliard, Black–Scholes and a damped pendulum. Each exact solution is checked by the test suite against its PDE, initial condition and boundary conditions.
+- **7 architectures:** MLP, ResNet, Fourier features, SIREN, FNO-style, attention and autoencoder.
+- **Collocation sampling:** uniform, stratified, residual-based adaptive (RAD), and an experimental reinforcement-learning bandit.
+- **Inverse problems:** identify PDE parameters from noisy observations.
+- **The Well:** train on 12 high-fidelity simulation datasets.
+- **A dashboard** to launch, monitor and compare runs, and **benchmarks** with reference solutions and a multi-seed sampling study.
 
-## Why pinnrl?
-
-Traditional PDE solvers (FEM, FDM) require meshes that become expensive in high dimensions or on irregular geometries. PINNs offer a mesh-free alternative, but their accuracy depends critically on *where* training points are sampled. Random or uniform sampling wastes capacity on easy regions while undersampling shocks, steep gradients, and phase boundaries.
-
-`pinnrl` treats collocation point placement as a sequential decision problem. A DQN agent observes the current residual field and selects sampling regions to maximize physics compliance. The result is faster convergence and better accuracy on problems that defeat uniform sampling — Burgers shocks, KdV solitons, Cahn-Hilliard interfaces.
-
-**Real use cases this targets:**
-
-- **Fluid dynamics** — advection-dominated flows, shock formation (Burgers, Convection)
-- **Materials science** — phase-field modeling, spinodal decomposition (Allen-Cahn, Cahn-Hilliard)
-- **Quantitative finance** — option pricing on non-standard payoffs (Black-Scholes)
-- **Nonlinear wave propagation** — soliton dynamics (KdV), resonance (Wave, Pendulum)
-
----
-
-## Supported PDEs
-
-| PDE | Domain | Key Parameters | Recommended Architecture |
-|-----|--------|----------------|--------------------------|
-| Heat | `[0,1] x [0,T]` | thermal diffusivity `alpha` | Fourier Features |
-| Wave | `[0,1] x [0,T]` | wave speed `c` | SIREN |
-| Burgers | `[-1,1] x [0,T]` | viscosity `nu` | Fourier Features |
-| KdV | `[-pi,pi] x [0,T]` | dispersion `delta` | ResNet |
-| Convection | `[0,1] x [0,T]` | advection velocity `beta` | Fourier Features |
-| Allen-Cahn | `[-1,1] x [0,T]` | interface width `epsilon` | ResNet |
-| Cahn-Hilliard | `[0,1]^2 x [0,T]` | mobility `M`, interface `epsilon` | Self-Attention |
-| Black-Scholes | `[S_min,S_max] x [0,T]` | volatility `sigma`, rate `r` | FeedForward |
-| Pendulum | `[0,2pi] x [0,T]` | damping `gamma`, forcing `F` | SIREN |
-
----
-
-## Supported Architectures
-
-| Architecture | Best For | Key Hyperparameters |
-|---|---|---|
-| `feedforward` | Smooth, low-frequency solutions | `hidden_dim`, `num_layers`, `activation` |
-| `resnet` | Deep networks, stiff equations | `num_blocks`, `hidden_dim` |
-| `siren` | Oscillatory, wave-type problems | `omega_0` (frequency scale) |
-| `fourier` | High-frequency, spectral accuracy | `mapping_size`, `scale` |
-| `fno` | Operator learning, multi-scale PDEs | `modes` (frequency cutoff), `num_blocks` |
-| `attention` | Multi-scale, complex geometry | `num_heads`, `num_blocks` |
-| `autoencoder` | Latent-space compression tasks | `latent_dim`, `hidden_dim` |
-
----
-
-## Quick Start
-
-### Installation
+## Install
 
 ```bash
-# Recommended (uv)
-uv add pinnrl
-
-# pip
-pip install pinnrl
+pip install pinnrl              # Python 3.10–3.13; CPU, Apple GPU (mps) or CUDA
+pip install 'pinnrl[well]'      # + The Well dataset loaders
 ```
 
-Available PDE keys: `heat`, `wave`, `burgers`, `kdv`, `convection`, `allen_cahn`, `cahn_hilliard`, `black_scholes`, `pendulum`.
-
-### Launch the Dashboard
-
-Once installed via `pip` or `uv`, run:
+## Use
 
 ```bash
-pinnrl-dashboard
+pinnrl-train --pde burgers --arch fourier --epochs 2000                          # results in ./runs/
+pinnrl-train --pde heat --arch fourier --mode inverse --identify alpha --initial-guess alpha=0.5
+pinnrl-dashboard                                                                 # http://127.0.0.1:8050/
+pinnrl-benchmark sampling --seeds 10                                             # uniform, stratified, RAD, RL bandit
 ```
 
-Then open <http://127.0.0.1:8050/> in your browser. Use `--port 8051` if 8050 is already taken.
+The Python API is the same pieces: a `PDEConfig` and PDE class, a `PINNModel`, and `PDETrainer`. See [Getting started](https://josegarciav.github.io/PINNs-RL-PDE/getting_started/).
 
-**From a local clone of the repo** (no install required):
+## When a PINN is the right tool
 
-```bash
-git clone https://github.com/josegarciav/PINNs-RL-PDE.git
-cd PINNs-RL-PDE
-uv sync                    # or:  pip install -e .
-uv run pinnrl-dashboard    # or:  python -m pinnrl.main
-```
+For a well-posed forward problem in low dimension, classical solvers are faster and far more accurate; the docs show the numbers. PINNs pay off for **inverse problems**, for **combining physics with sparse data**, and for **mesh-free or high-dimensional** settings. The project's direction is the first of these applied to industry: **digital twins** that estimate unmeasured states of process equipment (first target: evaporators and spray dryers in food-powder plants). See [Applications](https://josegarciav.github.io/PINNs-RL-PDE/applications/) and the [Research program](https://josegarciav.github.io/PINNs-RL-PDE/research/).
 
-The dashboard lets you configure a PDE + architecture, launch training, watch the residual and solution surfaces converge in real time, and compare experiments side by side without writing any plotting code.
+## Documentation
 
-### Python API — solving the heat equation
-
-```python
-import torch
-from pinnrl.config import Config, ModelConfig, TrainingConfig, EarlyStoppingConfig
-from pinnrl.neural_networks import PINNModel
-from pinnrl.pdes.heat_equation import HeatEquation
-from pinnrl.pdes.pde_base import PDEConfig
-from pinnrl.training.trainer import PDETrainer
-
-device = torch.device("cpu")
-
-training = TrainingConfig(
-    num_epochs=3000, batch_size=2048,
-    num_collocation_points=5000, num_boundary_points=500, num_initial_points=500,
-    learning_rate=1e-3, weight_decay=1e-4, gradient_clipping=1.0,
-    early_stopping=EarlyStoppingConfig(enabled=True, patience=100, min_delta=1e-7),
-    learning_rate_scheduler=None,
-)
-pde_config = PDEConfig(
-    name="heat", domain=[[0.0, 1.0]], time_domain=[0.0, 1.0],
-    parameters={"alpha": 0.01},
-    boundary_conditions={"type": "dirichlet"},
-    initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 2.0},
-    exact_solution={"type": "sin_exp_decay", "amplitude": 1.0, "frequency": 2.0},
-    dimension=1, device=device, training=training,
-)
-config = Config.__new__(Config)
-config.device = device
-config.model = ModelConfig(input_dim=2, hidden_dim=128, output_dim=1,
-                           num_layers=4, activation="tanh", architecture="fourier")
-config.training = training
-config.pde_config = pde_config
-
-pde     = HeatEquation(config=pde_config)
-model   = PINNModel(config=config, device=device)
-trainer = PDETrainer(model=model, pde=pde,
-                     optimizer_config={"learning_rate": 1e-3, "weight_decay": 1e-4},
-                     config=config, device=device)
-trainer.train(num_epochs=3000)
-
-# Validate against exact solution u(x,t) = A * exp(-alpha*(2pi*f/L)^2 * t) * sin(2pi*f*x/L)
-metrics = pde.validate(model, num_points=5000)
-print(f"L2 error: {metrics['l2_error']:.2e}  |  Max error: {metrics['max_error']:.2e}")
-```
-
-
----
-
-## Features
-
-- **RL-adaptive collocation** — a DQN agent (`pinnrl/rl/rl_agent.py`) observes the current residual field and steers point sampling toward high-error regions, reducing wasted forward passes on low-residual areas.
-- **Seven neural architectures** — FeedForward, ResNet, SIREN (periodic activations), Fourier Features (random Fourier mapping), Fourier Neural Operator (spectral convolutions), Self-Attention Transformer, and Autoencoder, all exposed through a single `PINNModel` factory class.
-- **Nine PDEs** — linear to nonlinear, parabolic to hyperbolic, 1D to 2D, spanning thermal diffusion, soliton dynamics, phase-field models, and financial derivatives.
-- **Exact analytical solutions** — every PDE ships with an `exact_solution` method for L2 and max-error validation during and after training; no external reference solver is required.
-- **Inverse problems** — recover unknown PDE parameters from noisy or sparse observations. Mark any PDE parameter as trainable, supply observations (synthetic, `.npz` file, or a Well dataset), and pinnrl jointly fits the network and the parameters end-to-end. See [docs/inverse_problems.md](docs/inverse_problems.md).
-- **Benchmark datasets (The Well)** — 16 community simulation datasets (active matter, Rayleigh–Bénard, MHD, acoustic scattering, planetary shallow water, …) accessible via `pip install 'pinnrl[well]'`. Pick from the dashboard, defaults are auto-filled from the registry. Data-only and data-augmented loss recipes ship out of the box. See [docs/datasets.md](docs/datasets.md).
-- **Adaptive loss weighting** — residual-balancing weights (RBW) and learning-rate-based weights (LRW) automatically re-balance physics, boundary, and initial condition loss terms.
-- **Live 3D visualization** — the dashboard's Monitor sub-tab streams interactive Plotly surfaces of the predicted field and PDE residual on every epoch, so you can watch the network converge on shocks, interfaces, and boundary layers in real time. The Collocation & Solution tab adds exact-vs-predicted 3D surface plots with a time slider. See [docs/visualization.md](docs/visualization.md).
-- **Dash dashboard** — configure and launch experiments, monitor convergence metrics, identify PDE parameters, train on Well datasets, and compare runs without writing plotting code.
-- **Hardware-aware** — automatically selects CUDA, Apple MPS, or CPU; configurable via the `--device` flag or `config.yaml`.
-
----
-
-## Comparison with Related Libraries
-
-| Feature | pinnrl | DeepXDE | NeuralPDE.jl |
-|---|---|---|---|
-| RL-based adaptive sampling | Yes | No | No |
-| Architectures bundled | 7 | 3 | 2 |
-| Dashboard trainer | Yes | No | No |
-| Exact solutions built in | Yes | Partial | Partial |
-| Language | Python | Python | Julia |
-| Install | `pip install pinnrl` | `pip install deepxde` | Julia pkg manager |
-
----
-
-## Roadmap
-
-| Version | Status | Milestones |
-|---|---|---|
-| v0.1 | Done | 9 PDEs, 7 architectures, DQN adaptive sampling, Dash dashboard, exact-solution validation |
-| v0.2 | Done | PyPI release, MkDocs site, tutorials, Linkedin launch post |
-| v0.3 | Mostly done | FNO architecture, inverse problems, L-BFGS, RAR sampling, configurable loss functions |
-| v0.4 | Planned | Formal RL benchmark, PPO agent option, curriculum learning, RL pre-training |
-| v0.5 | Planned | The Well dataset integration (16 datasets), `data_only` / `data_augmented` modes, dashboard dataset section |
-| v1.0 | Future | Stable public API, FEniCS/DeepXDE benchmarks, custom PDE builder, plugin system |
-
-See [docs/roadmap.md](docs/roadmap.md) for the full breakdown with item-level scoring.
-
----
-
-## Who Is It For?
-
-- **PhD students and researchers** prototyping mesh-free PDE solvers without implementing adaptive sampling from scratch.
-- **Computational scientists** in fluid dynamics, materials science, or plasma physics benchmarking PINNs against FDM/FEM on standard problems.
-- **Quantitative analysts** exploring neural PDE solvers for high-dimensional option pricing beyond Black-Scholes closed forms.
-- **ML engineers** studying how RL exploration strategies transfer to scientific computing.
-
----
+**[josegarciav.github.io/PINNs-RL-PDE](https://josegarciav.github.io/PINNs-RL-PDE/)**: concepts, the equations, guides, benchmarks, the API reference and the roadmap. The tutorials are in [`notebooks/`](notebooks/), and research studies in [`experiments/`](experiments/).
 
 ## Contributing
 
-Contributions are welcome. Please open an issue before submitting a large pull request.
-
-**Core development:** Jose Garcia Ventura ([@josegarciav](https://github.com/josegarciav))
-
-**Community contributions** in scope: new PDEs, new architectures, bug fixes, documentation improvements, and example notebooks. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
-
----
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: `uv sync --all-extras`, `uv run pytest`, conventional commits, and physics changes must keep `tests/unit_tests/test_physics_consistency.py` green.
 
 ## Citation
 
-If you use `pinnrl` in published work, please cite:
+`pinnrl` started as the MSc thesis *On Solving Partial Differential Equations (PDEs) Using Physics-Informed Neural Networks (PINNs)* (University of the Basque Country UPV/EHU, 2025); the thesis is at [docs/assets/thesis.pdf](docs/assets/thesis.pdf).
 
 ```bibtex
-@software{garcia2024pinnrl,
-  author    = {Garcia Ventura, Jose},
-  title     = {pinnrl: Physics-Informed Neural Networks with Reinforcement Learning Adaptive Sampling},
-  year      = {2024},
-  url       = {https://github.com/josegarciav/PINNs-RL-PDE},
-  note      = {Open-source Python library for mesh-free PDE solving}
+@software{garcia_pinnrl,
+  author = {Garcia Ventura, Jose},
+  title  = {pinnrl: physics-informed neural networks with adaptive collocation sampling},
+  url    = {https://github.com/josegarciav/PINNs-RL-PDE}
 }
 ```
 
----
-
-## License
-
-[MIT License](LICENSE) &copy; 2024 Jose Garcia Ventura
+MIT License © Jose Garcia Ventura

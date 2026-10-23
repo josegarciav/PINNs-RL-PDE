@@ -9,9 +9,58 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] — unreleased
+
+A correctness release. A physics audit, a code review and a clean-install release gate found bugs that changed results in earlier versions. **Results from 0.3.x on 2-D PDEs, the RL sampler, wave, KdV, Allen–Cahn, Cahn–Hilliard, Black–Scholes and pendulum should be recomputed.**
+
+### Fixed: results change
+- **2-D PDEs trained without their spatial operator.** n-D gradients and Laplacians were taken with respect to a column slice, so autograd returned zeros, and `heat_2d` and every 2-D PDE trained with `∇²u ≡ 0`. There is now one `PDEBase.compute_derivatives` with `_grad`/`laplacian` helpers.
+- **The RL sampler (`--rl`, `strategy="adaptive"`) never learned.** Its DQN was never trained. In the trainer path the agent was never attached, so `--rl` ran uniform sampling. In the benchmark path every point collapsed to one corner of the domain. It is replaced by `ResidualBanditSampler`, an experimental contextual bandit that is verified to learn.
+- **Exact solutions corrected and verified** against their PDE, IC and BCs: wave (standing, not travelling), convection (`u0(x − vt)`), KdV (soliton speed; `alpha`/`beta` now used), Allen–Cahn (√2 interface width; `reaction_rate` used), Cahn–Hilliard (`mobility`/`kappa` used; stationary kink), Black–Scholes (time to maturity, the real normal CDF, `strike` read), pendulum (nonlinear damped ODE; `damping` used; `θ'(0)` enforced), Burgers (Cole–Hopf for `A·sin(kπx)`; `viscosity` alias).
+- **Boundary and initial conditions.**
+  - Neumann now constrains `u_x`; it was a Dirichlet condition in disguise.
+  - Periodic now matches `u` and `u_x` across faces; it used to fit `sin(2πx)`.
+  - Unknown BC types raise instead of silently becoming zero.
+  - The IC is no longer imposed on spatial boundaries.
+  - `num_boundary_points`/`num_initial_points` are honoured.
+  - Second-order-in-time PDEs enforce the initial velocity.
+- **Adaptive weighting `lrw`** stepped with a stale extra gradient (`∇total + ∇L_initial`).
+- **Early-stopping patience** counted validations instead of epochs, so `patience: 100` meant about 1000 epochs.
+- **Cosine schedule with warmup** never reached `min_lr`.
+- **`generate_collocation_points`** returns exactly `n` points; 1-D used to round down to a perfect square. Tuple domains such as `(-1, 1)` are honoured.
+
+### Fixed: crashes and installs
+- `pip install pinnrl && pinnrl-dashboard` failed (`dash` was only in `[viz]`). `dash` is now a core dependency; `[viz]` is kept as an empty extra.
+- `pinnrl-train` failed without `--config` (it looked for `src/config/config.yaml`), and crashed on non-Apple machines because the config hard-coded `device: mps`. Unavailable devices now fall back to CPU.
+- `pinnrl-train --pde heat` was rejected: the short keys documented in the README now work alongside display names.
+- `--collocation-distribution` was silently ignored.
+- YAML numbers like `1e-7` were read as strings, which broke L-BFGS.
+- Inverse mode crashed on list-valued parameters (`velocity: [1.0]`).
+- RAD crashed on all-zero residuals; the bandit crashed when its policy share was 0 points.
+- Exact solutions now hold for time domains not starting at 0.
+
+### Changed
+- **`validate()`**: `l2_error` is now the relative L2 error `‖u − u*‖/‖u*‖` (it was an MSE), with new `mse`, `max_error` and `mean_error` keys.
+- **One training loop:** `PDETrainer(model, pde, config, device=None, bandit_sampler=None)`, with `train(num_epochs=None, batch_size=None, num_points=None, experiment_dir=None, progress=True)` taking its defaults from the config. The `optimizer_config`, `viz_frequency`, `early_stopping_config` and `validation_frequency` constructor arguments are removed (use the config). The always-zero smoothness loss is removed.
+- **One PDE registry:** `pinnrl.pdes.registry` (`PDE_SPECS`, `get_pde_spec`, `create_pde(name, config)`).
+- **Modules:** plotting moves to `pinnrl.plots`; `pinnrl.utils` and `pinnrl.components` are removed (adaptive weights live in `pinnrl.training.adaptive_weights`). Legacy config classes (`EvaluationConfig`, `LoggingConfig`, `PathsConfig`, the duplicate `PDEConfig`) are removed. `rl_agent.py` is trimmed to the DQN used by the bandit.
+- **`pinnrl-benchmark sampling`** is now a multi-seed study (uniform, stratified, uniform every 100 steps, RAD, RL bandit) at equal training steps. It records residual evaluations including sampler overhead and reports paired Wilcoxon tests; `--steps`/`--checkpoints` replace the single-seed `--pde/--epochs` harness.
+- **Outputs** go to `./runs/` (was `experiments/`, which is now the tracked research folder). The dashboard gains `--no-browser`.
+- **Dependencies:** `gymnasium`, `pandas`, `seaborn`, `scikit-image` and `dash-bootstrap-components` are removed (nothing imported them).
+
+### Added
+- `PDETrainer.train_steps(num_steps, time_budget_s, sample_fn, resample_every, checkpoints, on_checkpoint)`, the same update as `train` for studies.
+- RAD parameters `k`, `c`, `pool_factor` and `replacement` (Wu et al., 2023).
+- `pinnrl.benchmarks.reference`: Burgers via Cole–Hopf, which reproduces Basdevant et al.'s (1986) `u_x(0, 1.6037/π) = −152.00516` for `ν = 0.01/π`, and Allen–Cahn via method of lines; Allen–Cahn gains the `x2_cos` initial condition.
+- `pinnrl.training.train.build_model` and `load_run`; linear LR warmup.
+- `tests/unit_tests/test_physics_consistency.py` (about 110 checks) and `scripts/verify_release.sh` (clean-wheel release gate).
+- Documentation rewritten: concepts, equations, guides, applications (digital twins), research program, roadmap.
+
 ---
 
 ## [0.3.0] — 2026-05-03
+
+> Note: the `v0.3.1` tag and GitHub release built this same 0.3.0 package; there is no 0.3.1 on PyPI. The RL-sampling and RAR accuracy claims below were not supported by the code (see 0.4.0).
 
 First post-launch release. Bundles the v0.2 (docs + onboarding) and v0.3 (science features) milestones into a single PyPI cut, since v0.1.0 was the only previous public release.
 
@@ -51,6 +100,8 @@ First post-launch release. Bundles the v0.2 (docs + onboarding) and v0.3 (scienc
 Skipped — milestone work (docs, MkDocs site, tutorials, PyPI launch post) shipped together with v0.3 in the 0.3.0 release.
 
 ---
+
+## Pre-0.3 fixes (0.1.x)
 
 ### Fixed
 - **Bug #1** — Architecture-specific config (`mapping_size`, `scale`, `omega_0`, `num_heads`, `latent_dim`) now correctly injected into `ModelConfig` from `config.yaml`
