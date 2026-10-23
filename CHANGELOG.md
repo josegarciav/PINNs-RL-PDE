@@ -16,6 +16,7 @@ A correctness release. A physics audit, a code review and a clean-install releas
 ### Fixed: results change
 - **2-D PDEs trained without their spatial operator.** n-D gradients and Laplacians were taken with respect to a column slice, so autograd returned zeros, and `heat_2d` and every 2-D PDE trained with `∇²u ≡ 0`. There is now one `PDEBase.compute_derivatives` with `_grad`/`laplacian` helpers.
 - **The RL sampler (`--rl`, `strategy="adaptive"`) never learned.** Its DQN was never trained. In the trainer path the agent was never attached, so `--rl` ran uniform sampling. In the benchmark path every point collapsed to one corner of the domain. It is replaced by `ResidualBanditSampler`, an experimental contextual bandit that is verified to learn.
+- **The bandit's replay batches ignored the seed.** They came from Python's unseeded `random`, so a bandit run with a fixed seed differed between processes. They now follow `torch.manual_seed`.
 - **Exact solutions corrected and verified** against their PDE, IC and BCs: wave (standing, not travelling), convection (`u0(x − vt)`), KdV (soliton speed; `alpha`/`beta` now used), Allen–Cahn (√2 interface width; `reaction_rate` used), Cahn–Hilliard (`mobility`/`kappa` used; stationary kink), Black–Scholes (time to maturity, the real normal CDF, `strike` read), pendulum (nonlinear damped ODE; `damping` used; `θ'(0)` enforced), Burgers (Cole–Hopf for `A·sin(kπx)`; `viscosity` alias).
 - **Boundary and initial conditions.**
   - Neumann now constrains `u_x`; it was a Dirichlet condition in disguise.

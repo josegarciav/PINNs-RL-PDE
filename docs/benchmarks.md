@@ -41,11 +41,11 @@ pinnrl-benchmark sampling --seeds 10 --steps 15000 --checkpoints 50 --workers 4
 |---|---|---|---|---|---|
 | Burgers | uniform | 0.055 | – | 0.055 | – |
 | | stratified | 0.038 | 6/10, p = 0.63 | 0.038 | 6/10, p = 0.63 |
-| | RAD | 0.137 | 3/10, p = 0.11 | 0.090 | 2/10, p = 0.06 |
-| | RL bandit | 0.103 | 3/10, p = 0.16 | 0.089 | 3/10, **p = 0.03 (worse)** |
+| | RAD | 0.136 | 3/10, p = 0.11 | 0.090 | 2/10, p = 0.06 |
+| | RL bandit | 0.117 | 1/10, p = 0.06 | 0.105 | 2/10, **p = 0.01 (worse)** |
 | Allen–Cahn | uniform | 0.568 | – | 0.568 | – |
 | | RAD | 0.533 | **10/10, p = 0.002** | 0.547 | **10/10, p = 0.002** |
-| | RL bandit | 0.522 | **10/10, p = 0.002** | 0.523 | **10/10, p = 0.002** |
+| | RL bandit | 0.520 | **10/10, p = 0.002** | 0.518 | **10/10, p = 0.002** |
 
 Errors are medians over 10 seeds; "6/10" counts the seeds on which the sampler beat uniform; p is from a Wilcoxon signed-rank test.
 
