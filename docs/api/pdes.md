@@ -1,45 +1,31 @@
 # PDEs
 
-## Factory
+Every PDE is registered once in `pdes.registry`, and both the CLI and the dashboard read it from there.
 
-::: pdes.create_pde
+::: pdes.registry.create_pde
 
-## Base Class
+::: pdes.registry.get_pde_spec
+
+::: pdes.registry.PDESpec
+
+::: pdes.pde_base.PDEConfig
 
 ::: pdes.pde_base.PDEBase
 
-## Heat Equation
-
 ::: pdes.heat_equation.HeatEquation
-
-## Wave Equation
 
 ::: pdes.wave_equation.WaveEquation
 
-## Burgers Equation
-
 ::: pdes.burgers_equation.BurgersEquation
-
-## KdV Equation
 
 ::: pdes.kdv_equation.KdVEquation
 
-## Convection Equation
-
 ::: pdes.convection_equation.ConvectionEquation
-
-## Allen-Cahn Equation
 
 ::: pdes.allen_cahn.AllenCahnEquation
 
-## Cahn-Hilliard Equation
-
 ::: pdes.cahn_hilliard.CahnHilliardEquation
 
-## Black-Scholes Equation
-
 ::: pdes.black_scholes.BlackScholesEquation
-
-## Pendulum Equation
 
 ::: pdes.pendulum_equation.PendulumEquation

@@ -1,14 +1,14 @@
 # API Reference
 
-Auto-generated reference documentation for the `pinnrl` Python package.
-Every public class and function is documented from its source docstrings using
+Reference documentation for the `pinnrl` package, generated from the source docstrings with
 [mkdocstrings](https://mkdocstrings.github.io/).
 
 | Module | Description |
 |--------|-------------|
-| [Configuration](config.md) | Dataclasses that hold experiment settings (`Config`, `ModelConfig`, `TrainingConfig`, …) |
-| [Neural Networks](neural_networks.md) | `PINNModel` factory and all 7 architecture backends |
-| [PDEs](pdes.md) | `PDEBase`, the 9 PDE implementations, and the `create_pde()` factory |
-| [Training](training.md) | `PDETrainer` — the main training loop |
-| [RL Agent](rl.md) | `DQNNetwork`, `RLAgent`, and `CollocationRLAgent` for adaptive sampling |
-| [Utilities](utils.md) | `AdaptiveLossWeights`, plotting helpers, and I/O functions |
+| [Configuration](config.md) | Dataclasses built from `config.yaml` (`Config`, `TrainingConfig`, `ModelConfig`, …) |
+| [Neural Networks](neural_networks.md) | The `PINNModel` factory and the 7 architecture backends |
+| [PDEs](pdes.md) | The PDE registry, `PDEBase` and the 9 PDE implementations |
+| [Training](training.md) | `PDETrainer` (`train`, `train_steps`), adaptive loss weights, `build_model`, `load_run` |
+| [RL sampler](rl.md) | The experimental residual-bandit collocation sampler and its DQN |
+| [Plots](plots.md) | Solution, training-history and collocation plots |
+| [Benchmarks](benchmarks.md) | Numerical reference solutions and the equal-compute sampling study |

@@ -80,6 +80,7 @@ nav:
     - Neural Networks: api/neural_networks.md
     - PDEs: api/pdes.md
     - Training: api/training.md
-    - RL Agent: api/rl.md
-    - Utilities: api/utils.md
+    - RL sampler: api/rl.md
+    - Plots: api/plots.md
+    - Benchmarks: api/benchmarks.md
   - Roadmap: roadmap.md

@@ -1,23 +1,22 @@
 # Configuration
 
+`config.yaml` is turned into these dataclasses by `TrainingConfig.from_dict` and
+`ModelConfig.from_architecture`. The same path is used by `Config()` and `pinnrl-train`.
+
 ::: config.Config
 
-::: config.ModelConfig
-
 ::: config.TrainingConfig
+
+::: config.ModelConfig
 
 ::: config.LearningRateSchedulerConfig
 
 ::: config.EarlyStoppingConfig
 
-::: config.AdaptiveWeightsConfig
+::: config.LBFGSConfig
 
-::: config.PDEConfig
+::: config.AdaptiveWeightsConfig
 
 ::: config.RLConfig
 
-::: config.EvaluationConfig
-
-::: config.LoggingConfig
-
-::: config.PathsConfig
+::: config.resolve_device
