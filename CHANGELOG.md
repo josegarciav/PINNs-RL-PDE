@@ -9,7 +9,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.4.0] — unreleased
+## [0.4.0] — 2026-10-23
 
 A correctness release. A physics audit, a code review and a clean-install release gate found bugs that changed results in earlier versions. **Results from 0.3.x on 2-D PDEs, the RL sampler, wave, KdV, Allen–Cahn, Cahn–Hilliard, Black–Scholes and pendulum should be recomputed.**
 
@@ -24,7 +24,9 @@ A correctness release. A physics audit, a code review and a clean-install releas
   - The IC is no longer imposed on spatial boundaries.
   - `num_boundary_points`/`num_initial_points` are honoured.
   - Second-order-in-time PDEs enforce the initial velocity.
-- **Adaptive weighting `lrw`** stepped with a stale extra gradient (`∇total + ∇L_initial`).
+- **Adaptive weighting `lrw`** stepped with a stale extra gradient (`∇total + ∇L_initial`). It also gave a term with zero gradient (a constant loss, e.g. a PDE without boundary conditions) almost all the weight, which switched the residual off. Such terms now get weight 0.
+- **The Well data was mapped wrongly.** The loader read keys the installed `the_well` doesn't produce, so every observation had `t = 0` and unit-square coordinates. It now uses the real time and space grids. The registry is rebuilt from each dataset's files, which corrects domains, `dt`, step counts and channel counts (`rayleigh_taylor_instability` has 4 channels, `viscoelastic_instability` 8). `euler_multi_quadrants_periodicBC` (not on the mirror) is removed, which leaves 11 datasets. A Well run's PDE now spans the time range of the data it loads, since trajectory length differs by file in five datasets. The run's `config.yaml` records that window, so `load_run` rebuilds it without reloading the data.
+- **Breaking: the `fourier` network builds one hidden layer per `hidden_dims` entry**, like `feedforward`. It used to build one fewer. Fourier checkpoints from 0.3.x won't load.
 - **Early-stopping patience** counted validations instead of epochs, so `patience: 100` meant about 1000 epochs.
 - **Cosine schedule with warmup** never reached `min_lr`.
 - **`generate_collocation_points`** returns exactly `n` points; 1-D used to round down to a perfect square. Tuple domains such as `(-1, 1)` are honoured.
@@ -38,6 +40,12 @@ A correctness release. A physics audit, a code review and a clean-install releas
 - Inverse mode crashed on list-valued parameters (`velocity: [1.0]`).
 - RAD crashed on all-zero residuals; the bandit crashed when its policy share was 0 points.
 - Exact solutions now hold for time domains not starting at 0.
+- Networks crashed when an optional key (`omega_0`, `num_heads`, `latent_dim`, `modes`) was missing; the network's own default now applies.
+- Dashboard:
+  - the port retry never ran;
+  - run titles were garbled (one run-name builder and parser now replaces four parsers);
+  - the loss breakdown was truncated and shifted, and the learning rate was drawn as a loss curve;
+  - 1-D solution surfaces were empty.
 
 ### Changed
 - **`validate()`**: `l2_error` is now the relative L2 error `‖u − u*‖/‖u*‖` (it was an MSE), with new `mse`, `max_error` and `mean_error` keys.
@@ -45,7 +53,18 @@ A correctness release. A physics audit, a code review and a clean-install releas
 - **One PDE registry:** `pinnrl.pdes.registry` (`PDE_SPECS`, `get_pde_spec`, `create_pde(name, config)`).
 - **Modules:** plotting moves to `pinnrl.plots`; `pinnrl.utils` and `pinnrl.components` are removed (adaptive weights live in `pinnrl.training.adaptive_weights`). Legacy config classes (`EvaluationConfig`, `LoggingConfig`, `PathsConfig`, the duplicate `PDEConfig`) are removed. `rl_agent.py` is trimmed to the DQN used by the bandit.
 - **`pinnrl-benchmark sampling`** is now a multi-seed study (uniform, stratified, uniform every 100 steps, RAD, RL bandit) at equal training steps. It records residual evaluations including sampler overhead and reports paired Wilcoxon tests; `--steps`/`--checkpoints` replace the single-seed `--pde/--epochs` harness.
-- **Outputs** go to `./runs/` (was `experiments/`, which is now the tracked research folder). The dashboard gains `--no-browser`.
+- **Outputs** go to `./runs/` (was `experiments/`, which is now the tracked research folder). The dashboard gains `--no-browser`, and picks the next free port when the requested one is taken.
+- **The Well:**
+  - `--dataset` sets the mode to the dataset's recommendation unless `--mode` is given;
+  - every registered dataset is `data_only` (none is governed by a shipped PDE);
+  - the new `--dataset-steps` / `n_steps` argument (and the dashboard's "Time steps" field) sets how many time steps are read per trajectory: 101 by default, 11 for 3-D datasets;
+  - the loader gathers only the sampled points, so a 3-D dataset no longer needs gigabytes of RAM.
+- **Training:**
+  - every `train()` call re-plans: the learning rate restarts from `training.learning_rate`, and the cosine schedule and `adam_lbfgs` switch epoch follow its `num_epochs`;
+  - `history["loss_weights"]` holds one entry per epoch (it was per step, which truncated the loss-weight plot);
+  - the L-BFGS phase uses the full batch;
+  - adaptive-weight logs are DEBUG;
+  - `pinnrl` no longer configures logging or the matplotlib backend at import.
 - **Dependencies:** `gymnasium`, `pandas`, `seaborn`, `scikit-image` and `dash-bootstrap-components` are removed (nothing imported them).
 
 ### Added

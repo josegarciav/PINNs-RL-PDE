@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pinnrl"
-version = "0.3.1"
+version = "0.4.0"
 description = "Physics-informed neural networks for forward and inverse PDE problems, with adaptive collocation sampling"
 readme = "README.md"
 requires-python = ">=3.10"

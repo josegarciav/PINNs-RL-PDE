@@ -50,6 +50,8 @@ out = trainer.train_steps(num_steps=5000, resample_every=100)
 print(out["steps"], out["train_time_s"], out["loss"][-1])
 ```
 
+Each `train()` call plans its own schedule: the learning rate restarts from `training.learning_rate`, and the cosine period and `adam_lbfgs` switch epoch follow that call's `num_epochs`. `trainer.history` holds per-epoch entries, including `loss_weights` when adaptive weighting is on.
+
 `train_steps` performs exactly the same update as `train`. It accepts `sample_fn(model, progress) -> (x, t)` to plug in any sampler, and `checkpoints`/`on_checkpoint` to evaluate along the way.
 
 To reload a finished CLI or dashboard run:

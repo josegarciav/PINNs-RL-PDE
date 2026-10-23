@@ -17,7 +17,7 @@ A PINN represents the solution of a PDE as a neural network, trained to satisfy 
 - **7 architectures:** MLP, ResNet, Fourier features, SIREN, FNO-style, attention and autoencoder.
 - **Collocation sampling:** uniform, stratified, residual-based adaptive (RAD), and an experimental reinforcement-learning bandit.
 - **Inverse problems:** identify PDE parameters from noisy observations.
-- **The Well:** train on 12 high-fidelity simulation datasets.
+- **The Well:** train on 11 high-fidelity simulation datasets.
 - **A dashboard** to launch, monitor and compare runs, and **benchmarks** with reference solutions and a multi-seed sampling study.
 
 ## Install

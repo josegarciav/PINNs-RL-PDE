@@ -46,7 +46,7 @@ Plain MLPs suffer from *spectral bias*: they learn low-frequency components firs
 |---|---|---|
 | `feedforward` | Tanh MLP, the standard PINN baseline | smooth solutions; the first thing to try |
 | `resnet` | MLP blocks with skip connections | deeper networks that still train stably |
-| `fourier` | Random Fourier features $[\sin(Bz), \cos(Bz)]$ of $z = (x, t)$ before the MLP, with a fixed $B_{ij} \sim \mathcal{N}(0, \sigma^2)$ and $\sigma$ = `scale`, which sets the frequency band (Tancik et al., 2020) | oscillatory or high-frequency solutions |
+| `fourier` | Random Fourier features $[\sin(Bz), \cos(Bz)]$ of $z = (x, t)$ before the MLP, with a fixed $B_{ij} \sim \mathcal{N}(0, \sigma^2)$ and $\sigma$ = `scale`, which sets the frequency band (Tancik et al., 2020); one hidden layer per `hidden_dims` entry | oscillatory or high-frequency solutions |
 | `siren` | Layers $\sin\big(\omega_0 (W z + b)\big)$ with frequency `omega_0` (Sitzmann et al., 2020) | wave-like solutions; sensitive to `omega_0` |
 | `fno` | Fourier-neural-operator-style spectral layers applied to point-wise inputs (Li et al., 2021): the FFT runs over each point's hidden features. This is not operator learning: it maps $(x, t)$ to $u$, not functions to functions. | experimentation |
 | `attention` | Self-attention blocks over a learned embedding | experimentation |
