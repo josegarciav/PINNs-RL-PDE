@@ -1977,7 +1977,7 @@ def populate_from_well_dataset(dataset_name, toggle_value):
     info_children = [
         html.Strong(entry.name),
         html.Span(f"  ·  {entry.n_spatial_dims}D  ·  fields: {len(entry.fields)}"),
-        html.Span(f"  ·  reads {entry.loaded_steps()} of {entry.n_steps} steps by default"),
+        html.Span(f"  ·  reads up to {entry.steps_to_read()} steps per trajectory by default"),
         html.Br(),
         html.Span(entry.description),
         html.Br(),

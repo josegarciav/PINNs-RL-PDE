@@ -19,7 +19,7 @@ class PDEConfig:
     domain: (
         tuple[float, float] | list[tuple[float, float]]
     )  # For 1D, list of tuples for higher dimensions
-    time_domain: tuple[float, float]
+    time_domain: tuple[float, float] | None  # None: the observations' time range
     parameters: dict[str, float]
     boundary_conditions: dict[str, dict[str, Any]]
     initial_condition: dict[str, Any]
@@ -168,6 +168,15 @@ class PDEBase:
         self.observation_data: dict[str, torch.Tensor] | None = self._load_observation_data(
             getattr(config, "observation_data", None)
         )
+        # No time window of its own (a Well dataset, whose trajectory length can
+        # differ by file): span the time range of the observations, else [0, 1].
+        if self.time_domain is None:
+            if self.observation_data is not None:
+                t = self.observation_data["t"]
+                self.time_domain = (float(t.min()), float(t.max()))
+            else:
+                self.time_domain = (0.0, 1.0)
+            self.config.time_domain = self.time_domain
 
         self.initial_condition = self._create_initial_condition(
             dict(config.initial_condition or {})

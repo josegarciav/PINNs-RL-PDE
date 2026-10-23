@@ -248,9 +248,10 @@ def load_well_slice(
         use_cache: When True, reuse / write a flattened ``.npz`` under
             the cache dir (``~/.cache/pinnrl/well/`` or ``$PINNRL_WELL_CACHE``).
             Set False to force a fresh load.
-        n_steps: Time steps read per trajectory, from its start; ``None``
-            uses the entry's ``default_loaded_steps`` (101, ``the_well``'s
-            rollout cap; 11 for 3-D datasets). Memory grows with it: the
+        n_steps: Time steps read per trajectory, from its start (fewer when
+            the trajectory is shorter); ``None`` uses the entry's
+            ``default_loaded_steps`` (101, ``the_well``'s rollout cap; 11 for
+            3-D datasets). Memory grows with it: the
             ``n_traj`` trajectories are held as ``the_well`` returns them,
             but only the ``n_points`` selected nodes are copied out.
 
@@ -264,7 +265,7 @@ def load_well_slice(
         ValueError: If ``n_steps`` is below 1.
     """
     entry = get_entry(name)
-    n_steps = entry.loaded_steps(n_steps)
+    n_steps = entry.steps_to_read(n_steps)
     rng = np.random.default_rng(seed)
 
     cache_path = _cache_file(name, split, n_traj, n_points, seed, base, n_steps)

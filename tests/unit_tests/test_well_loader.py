@@ -240,6 +240,14 @@ def test_3d_datasets_read_a_short_window_by_default(monkeypatch):
     assert np.unique(out["t"].numpy()).size == DEFAULT_LOADED_STEPS_3D
 
 
+def test_trajectories_longer_than_the_registry_says_are_read_in_full(monkeypatch):
+    """Regression: n_steps was capped at the first file's length (20 for viscoelastic_instability)."""
+    calls = _install_fake_well_module(monkeypatch, n_traj=1, n_steps=60, shape=(2, 2))
+    out = load_well_slice("viscoelastic_instability", n_points=10_000, n_steps=60, use_cache=False)
+    assert calls[-1]["max_rollout_steps"] == 59
+    assert np.unique(out["t"].numpy()).size == 60
+
+
 def test_n_steps_below_one_raises(monkeypatch):
     _install_fake_well_module(monkeypatch)
     with pytest.raises(ValueError, match="at least 1"):

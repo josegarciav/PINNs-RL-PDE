@@ -62,9 +62,7 @@ def test_entry_grid_and_time_invariants(name):
     assert entry.time_domain == (0.0, entry.dt * (entry.n_steps - 1))
     assert 1 <= entry.default_loaded_steps <= DEFAULT_LOADED_STEPS
     for n in (1, 2, 7, entry.n_steps, entry.n_steps + 5, None):
-        steps = min(entry.default_loaded_steps if n is None else n, entry.n_steps)
-        assert entry.loaded_steps(n) == steps
-        assert entry.loaded_time_domain(n) == pytest.approx((0.0, entry.dt * (steps - 1)))
+        assert entry.steps_to_read(n) == (entry.default_loaded_steps if n is None else n)
 
 
 def test_3d_entries_read_a_short_window_by_default():
@@ -73,9 +71,9 @@ def test_3d_entries_read_a_short_window_by_default():
         assert entry.default_loaded_steps == expected, entry.name
 
 
-def test_loaded_steps_rejects_nonpositive_counts():
+def test_steps_to_read_rejects_nonpositive_counts():
     with pytest.raises(ValueError, match="at least 1"):
-        WELL_REGISTRY["active_matter"].loaded_steps(0)
+        WELL_REGISTRY["active_matter"].steps_to_read(0)
 
 
 @pytest.mark.skipif(
@@ -84,33 +82,40 @@ def test_loaded_steps_rejects_nonpositive_counts():
 )
 @pytest.mark.parametrize("name", list(WELL_REGISTRY))
 def test_registry_matches_the_hugging_face_files(name):
-    """Network: the entry agrees with the dataset's metadata and its first two steps."""
+    """Network: the entry matches its first training file, and ``the_well`` can open it."""
+    import h5py
     import numpy as np
+    from huggingface_hub import HfFileSystem
 
     from pinnrl.datasets.well_loader import _load_well_dataset
 
     entry = WELL_REGISTRY[name]
+    fs = HfFileSystem()
+    first = sorted(fs.glob(f"datasets/polymathic-ai/{name}/data/train/*.hdf5"))[0]
+    with fs.open(first, "rb") as f, h5py.File(f, "r") as h5:
+        dims = h5["dimensions"]
+        axes = [a.decode() if isinstance(a, bytes) else str(a) for a in dims.attrs["spatial_dims"]]
+        extents = [(np.min(dims[a][...]), np.max(dims[a][...])) for a in axes]
+        times = np.asarray(dims["time"][...], dtype=np.float64)
+    times = times if times.ndim == 1 else times[0]  # some files store one grid per trajectory
+    assert np.allclose(extents, entry.domain, rtol=1e-4, atol=1e-6)
+    assert times.size == entry.n_steps
+    assert (times[-1] - times[0]) / (times.size - 1) == pytest.approx(entry.dt, rel=1e-4)
+
     dataset = _load_well_dataset(name, "train", None, n_steps=2)
-    meta = dataset.metadata
-    assert meta.n_spatial_dims == entry.n_spatial_dims
-    assert meta.n_fields == len(entry.fields)
-    assert meta.n_steps_per_trajectory[0] == entry.n_steps
-    sample = dataset[0]
-    grid = sample["space_grid"].numpy().reshape(-1, entry.n_spatial_dims)
-    assert np.allclose(grid.min(axis=0), [lo for lo, _ in entry.domain], rtol=1e-4, atol=1e-6)
-    assert np.allclose(grid.max(axis=0), [hi for _, hi in entry.domain], rtol=1e-4, atol=1e-6)
-    times = np.concatenate([sample["input_time_grid"], sample["output_time_grid"]])
-    assert np.diff(times)[0] == pytest.approx(entry.dt, rel=1e-4)
+    assert dataset.metadata.n_spatial_dims == entry.n_spatial_dims
+    assert dataset.metadata.n_fields == len(entry.fields)
+    assert len(dataset) > 0
 
 
-def test_loaded_window_follows_the_step_cap():
-    entry = WELL_REGISTRY["gray_scott_reaction_diffusion"]  # dt = 10, 1001 steps
-    assert entry.loaded_time_domain() == (0.0, 1000.0)  # the_well default: 101 steps
-    assert entry.loaded_time_domain(3) == (0.0, 20.0)
-    assert entry.loaded_time_domain(10_000) == entry.time_domain
+def test_steps_to_read_are_not_capped_by_the_first_file():
+    entry = WELL_REGISTRY["viscoelastic_instability"]  # 20 steps in the first file, 60 in others
+    assert entry.steps_to_read() == 101  # the_well's default rollout cap
+    assert entry.steps_to_read(3) == 3
+    assert entry.steps_to_read(60) == 60
 
 
-def test_dataset_defaults_set_the_pde_window():
+def test_dataset_defaults_set_the_pde_shape_and_leave_the_window_to_the_data():
     import yaml
 
     from pinnrl.config import DEFAULT_CONFIG_PATH
@@ -121,19 +126,5 @@ def test_dataset_defaults_set_the_pde_window():
     dataset = {"name": "rayleigh_benard", "n_steps": 5}
     config = build_config_dict(raw, "heat", "fno", dataset=dataset)
     assert config["pde"]["domain"] == [[0.0, 4.0], [0.0, 1.0]]
-    assert config["pde"]["time_domain"] == [0.0, 1.0]  # 4 steps of dt = 0.25
+    assert config["pde"]["time_domain"] is None  # the PDE spans the loaded observations
     assert config["pde"]["observation_data"]["n_steps"] == 5
-
-
-def test_3d_dataset_window_matches_what_the_loader_reads():
-    import yaml
-
-    from pinnrl.config import DEFAULT_CONFIG_PATH
-    from pinnrl.training.train import build_config_dict
-
-    with open(DEFAULT_CONFIG_PATH) as f:
-        raw = yaml.safe_load(f)
-    config = build_config_dict(raw, "heat", "feedforward", dataset={"name": "MHD_64"})
-    assert config["pde"]["time_domain"] == pytest.approx(
-        [0.0, 0.01 * (DEFAULT_LOADED_STEPS_3D - 1)]
-    )

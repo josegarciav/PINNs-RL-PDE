@@ -12,6 +12,20 @@ Times are relative to the start of a trajectory (``the_well`` normalises them
 that way by default). Vector fields expand to one channel per spatial axis and
 rank-2 tensors to ``d * d`` channels (``xx, xy, yx, yy`` in 2-D).
 
+``domain`` is the same in every file, but ``dt``, ``n_steps`` and
+``time_domain`` describe the first training file only, and five datasets'
+other files differ: rayleigh_taylor_instability (one file per Atwood number)
+runs for 29.5 to 118 time units, helmholtz_staircase (one file per frequency)
+for 2.5 to 100, viscoelastic_instability stores 20 or 60 steps spanning 19 to
+76, and the steps of rayleigh_benard and planetswe vary by up to 1.6%. So a
+PDE fed by a Well dataset spans the time range of the observations it loads,
+and the loader asks for a number of steps, which ``the_well`` caps at each
+trajectory's own length.
+
+``euler_multi_quadrants_openBC`` is not registered: its files record negative
+trajectory counts, so ``the_well`` 1.2 cannot open it, and the periodic-boundary
+variant is not on the mirror.
+
 None of these datasets is governed by one of pinnrl's built-in PDEs (the
 acoustic maze has a spatially varying sound speed, the Helmholtz staircase is
 a frequency-domain problem), so every entry defaults to ``data_only``; use
@@ -39,8 +53,8 @@ class WellEntry:
         description: One-line human-readable summary for the dashboard's dataset info box.
         fields: Channel names in the order returned by the loader.
         domain: Per-axis ``(low, high)`` coordinate extents of the spatial grid.
-        dt: Time between stored steps.
-        n_steps: Stored steps per trajectory.
+        dt: Mean time between stored steps in the first training file.
+        n_steps: Stored steps per trajectory in the first training file.
         default_architecture: Architecture preset most appropriate for the
             field shape (FNO for 2-D grids, feedforward for 3-D).
         default_pde_key: PDE key accepted by
@@ -48,7 +62,7 @@ class WellEntry:
             governed by that PDE, else ``None``.
         recommended_mode: ``data_augmented`` if ``default_pde_key`` is set,
             else ``data_only``.
-        default_loaded_steps: Steps :func:`load_well_slice` reads per
+        default_loaded_steps: Steps :func:`load_well_slice` asks for per
             trajectory when the caller passes no ``n_steps``.
     """
 
@@ -95,11 +109,14 @@ class WellEntry:
 
     @property
     def time_domain(self) -> tuple[float, float]:
-        """``(0, t_end)`` of a whole trajectory."""
+        """``(0, dt * (n_steps - 1))``: a whole trajectory of the first training file."""
         return (0.0, self.dt * (self.n_steps - 1))
 
-    def loaded_steps(self, n_steps: int | None = None) -> int:
-        """Steps :func:`load_well_slice` reads per trajectory for ``n_steps``.
+    def steps_to_read(self, n_steps: int | None = None) -> int:
+        """Steps :func:`load_well_slice` asks for per trajectory: ``n_steps``, else the default.
+
+        Not capped at ``n_steps`` of the entry: files can hold longer
+        trajectories, and ``the_well`` caps each read at its trajectory's length.
 
         Raises:
             ValueError: If ``n_steps`` is below 1.
@@ -108,11 +125,7 @@ class WellEntry:
             n_steps = self.default_loaded_steps
         if int(n_steps) < 1:
             raise ValueError(f"n_steps must be at least 1, got {n_steps}")
-        return min(self.n_steps, int(n_steps))
-
-    def loaded_time_domain(self, n_steps: int | None = None) -> tuple[float, float]:
-        """``(0, t_end)`` of the window :func:`load_well_slice` reads with ``n_steps``."""
-        return (0.0, self.dt * (self.loaded_steps(n_steps) - 1))
+        return int(n_steps)
 
 
 def _components(name: str, axes: str, rank: int) -> tuple[str, ...]:
@@ -197,15 +210,6 @@ WELL_REGISTRY: dict[str, WellEntry] = {
             domain=((-1.0, 1.0), (-1.0, 1.0)),
             dt=10.0,
             n_steps=1001,
-            default_architecture="fno",
-        ),
-        WellEntry(
-            name="euler_multi_quadrants_openBC",
-            description="2D compressible Euler — Riemann-style multi-quadrant ICs (open boundaries).",
-            fields=("energy", "density", "pressure", *_components("momentum", "xy", 1)),
-            domain=((0.0, 1.0), (0.0, 1.0)),
-            dt=1.0,
-            n_steps=101,
             default_architecture="fno",
         ),
         WellEntry(

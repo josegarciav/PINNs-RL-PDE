@@ -37,8 +37,9 @@ def _apply_well_dataset_defaults(config: dict, dataset_cfg: dict) -> dict:
 
     Always sets ``pde.observation_data`` to the Well spec. With
     ``use_defaults`` (the default) it also overwrites the PDE domain,
-    time domain, dimension and input/output dims (and the model's
-    input/output dims) with the registry entry's values, and sets
+    dimension and input/output dims (and the model's input/output dims)
+    with the registry entry's values, clears the time domain so the PDE
+    spans the time range of the observations it loads, and sets
     ``training.mode`` to ``dataset_cfg["mode"]`` when given (an explicit
     ``--mode``), else to the entry's ``recommended_mode``. No-op when
     ``dataset_cfg`` has no ``name``.
@@ -67,8 +68,9 @@ def _apply_well_dataset_defaults(config: dict, dataset_cfg: dict) -> dict:
         # defaults" — overwrite the PDE shape fields the analytical config
         # populated, since they no longer match the data we'll fit.
         pde_block["domain"] = [list(b) for b in entry.domain]
-        # The PDE covers the time window the loader actually reads.
-        pde_block["time_domain"] = list(entry.loaded_time_domain(dataset_cfg.get("n_steps")))
+        # The PDE takes the time range of the observations it loads: the
+        # registry cannot know it, since trajectory length can differ by file.
+        pde_block["time_domain"] = None
         pde_block["dimension"] = entry.n_spatial_dims
         pde_block["input_dim"] = entry.default_input_dim
         pde_block["output_dim"] = entry.default_output_dim
