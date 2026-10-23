@@ -1,5 +1,8 @@
 """Tests for the DQN building blocks in :mod:`pinnrl.rl.rl_agent`."""
 
+import random
+
+import pytest
 import torch
 
 from pinnrl.rl.rl_agent import DQNNetwork, ReplayBuffer, RLAgent
@@ -23,6 +26,27 @@ def test_replay_buffer_capacity_and_sample():
     assert len(buf) == 3
     actions = sorted(a for _, a, _, _, _ in buf.sample(3))
     assert actions == [2, 3, 4]
+
+
+def test_replay_buffer_sample_follows_the_torch_seed():
+    """Regression: batches came from Python's unseeded ``random``, so bandit runs did not repeat."""
+    buf = ReplayBuffer(capacity=50)
+    for i in range(50):
+        buf.push(torch.zeros(2), i, 0.0, torch.zeros(2), False)
+    draws = []
+    for other_seed in (1, 2):
+        random.seed(other_seed)
+        torch.manual_seed(0)
+        draws.append([a for _, a, _, _, _ in buf.sample(8)])
+    assert draws[0] == draws[1]
+    assert len(set(draws[0])) == 8
+
+
+def test_replay_buffer_rejects_batches_larger_than_its_contents():
+    buf = ReplayBuffer(capacity=4)
+    buf.push(torch.zeros(2), 0, 0.0, torch.zeros(2), False)
+    with pytest.raises(ValueError, match="exceeds"):
+        buf.sample(2)
 
 
 def test_update_decays_epsilon_and_syncs_target():

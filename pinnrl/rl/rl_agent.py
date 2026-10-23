@@ -5,7 +5,6 @@
 uses it with ``gamma = 0``, i.e. as a contextual bandit over domain cells.
 """
 
-import random
 from collections import deque
 
 import torch
@@ -119,15 +118,25 @@ class ReplayBuffer:
         self.buffer.append((state, action, reward, next_state, done))
 
     def sample(self, batch_size: int) -> list[tuple]:
-        """Sample batch of experiences.
+        """Sample a batch of experiences without replacement.
+
+        Indices come from torch's generator, so ``torch.manual_seed`` makes
+        the draw (and a bandit run) reproducible.
 
         Args:
             batch_size: Size of batch to sample.
 
         Returns:
             List of experiences.
+
+        Raises:
+            ValueError: If ``batch_size`` exceeds the stored experiences.
         """
-        return random.sample(self.buffer, batch_size)
+        if batch_size > len(self.buffer):
+            raise ValueError(
+                f"batch_size {batch_size} exceeds the {len(self.buffer)} stored experiences"
+            )
+        return [self.buffer[i] for i in torch.randperm(len(self.buffer))[:batch_size].tolist()]
 
     def __len__(self) -> int:
         """Get current size of buffer."""

@@ -1,6 +1,7 @@
 """Tests for the multi-seed sampling study (equal steps, eval accounting, summaries)."""
 
 import csv
+import random
 
 import numpy as np
 import pytest
@@ -34,6 +35,17 @@ def test_run_study_case_takes_equal_steps(strategy):
     assert len(run.curve_rel_l2) == TINY.n_checkpoints == len(run.curve_evals)
     assert run.rel_l2 == run.curve_rel_l2[-1] and np.isfinite(run.rel_l2)
     assert run.train_time_s > 0
+
+
+def test_bandit_runs_repeat_for_a_seed():
+    """Regression: the bandit's replay batches ignored the seed, so B01's bandit arm did not repeat."""
+    curves = []
+    for other_seed in (1, 2):
+        random.seed(other_seed)
+        curves.append(
+            run_study_case("burgers", "rl_bandit", 0, TINY, _toy_reference()).curve_rel_l2
+        )
+    assert curves[0] == curves[1]
 
 
 def test_overhead_evaluations_are_counted():
