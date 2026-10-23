@@ -4,7 +4,8 @@ Research studies built on the `pinnrl` package. The package (`pinnrl/`) holds
 reusable code that ships to PyPI. This folder holds the questions we are
 asking with it, and how each one was answered.
 
-- [BACKLOG.md](BACKLOG.md) lists 100 prioritized experiments with IDs `A01`–`J10`.
+- [PAPERS.md](PAPERS.md) is the paper backlog: 27 papers in four tiers, each mapped to experiments.
+- [BACKLOG.md](BACKLOG.md) lists 150 prioritized experiments with IDs `A01`–`K50`.
 - Generated outputs from ad-hoc training (`pinnrl-train`, the dashboard) go to
   `runs/`. That folder is gitignored and is not part of this tree.
 
@@ -37,4 +38,5 @@ When an experiment shows that a feature works, move the reusable code into
 | Folder | Backlog | Contents |
 |---|---|---|
 | `A03_pinn_vs_numerical/` | A03 | Early standalone notebooks (pure PyTorch, no `pinnrl` imports) comparing PINNs with numerical solvers for heat (1-D/2-D), Allen–Cahn and KdV. Formerly `pinnrl/numerical_solvers/`. |
+| `B01_sampling_equal_compute/` | B01, B06 | Uniform vs stratified vs RAD vs RL bandit at equal steps and equal residual evaluations, 10 seeds, Burgers and Allen–Cahn. README with results and conclusions, `plot.py` for the figure. |
 | `B07_quasi_random_sampling/` | B07 | Visual comparison of uniform, LHS and Halton point sets. Formerly `notebooks/sampling_techniques.ipynb`. |
