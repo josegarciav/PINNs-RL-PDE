@@ -81,6 +81,12 @@ def _base_tag(base: str | None) -> str:
     return hashlib.sha1(resolved.encode("utf-8")).hexdigest()[:10]
 
 
+# Bump when the flattened (x, t, u) layout or its coordinates change, so slices
+# cached by an older loader are not reused. v2: real time/space grids from
+# ``input_time_grid``/``output_time_grid``/``space_grid`` (v1 used placeholders).
+_CACHE_FORMAT = "v2"
+
+
 def _cache_file(
     name: str,
     split: str,
@@ -88,22 +94,41 @@ def _cache_file(
     n_points: int,
     seed: int,
     base: str | None = None,
+    n_steps: int | None = None,
 ) -> Path:
     tag = _base_tag(base)
-    return _cache_dir() / f"{name}__{split}__t{n_traj}_p{n_points}_s{seed}__{tag}.npz"
+    steps = "all" if n_steps is None else str(n_steps)
+    return (
+        _cache_dir()
+        / f"{name}__{split}__t{n_traj}_p{n_points}_s{seed}_n{steps}__{tag}__{_CACHE_FORMAT}.npz"
+    )
 
 
-def _load_well_dataset(name: str, split: str, base: str | None):
-    """Import ``the_well`` lazily and instantiate a ``WellDataset``."""
+def _load_well_dataset(name: str, split: str, base: str | None, n_steps: int | None = None):
+    """Import ``the_well`` lazily and open ``name`` in full-trajectory mode.
+
+    Each sample is then one whole trajectory from ``t0``: ``input_fields`` holds
+    the first step and ``output_fields`` the rest, with ``input_time_grid`` /
+    ``output_time_grid`` and ``space_grid`` giving the coordinates. ``n_steps``
+    caps the number of steps read: ``the_well`` loads the first step plus up to
+    ``max_rollout_steps`` more (default 100), so ``n_steps`` maps to
+    ``max_rollout_steps = n_steps - 1``.
+    """
     try:
         from the_well.data import WellDataset  # type: ignore
     except ImportError as exc:  # pragma: no cover - exercised only without extra
         raise TheWellNotInstalledError() from exc
 
+    kwargs = {"full_trajectory_mode": True}
+    if n_steps is not None:
+        if int(n_steps) < 1:
+            raise ValueError(f"n_steps must be at least 1, got {n_steps}")
+        kwargs["max_rollout_steps"] = int(n_steps) - 1
     return WellDataset(
         well_base_path=resolve_path(base),
         well_dataset_name=name,
         well_split_name=split,
+        **kwargs,
     )
 
 
@@ -125,14 +150,16 @@ def _flatten_trajectory(
 
 
 def _extract_arrays(sample: Any, n_spatial_dims: int) -> dict[str, np.ndarray]:
-    """Coerce a ``WellDataset`` sample into raw numpy arrays.
+    """Turn one full-trajectory ``WellDataset`` sample into numpy arrays.
 
-    The Well's sample dict format has shifted between releases; we accept
-    the common shapes and surface a clear error otherwise so users know
-    what we needed. Fields come from the first of ``input_fields``,
-    ``fields``, ``u`` or ``data``; times from ``time`` and coordinates from
-    ``space/<axis>``, each falling back to ``linspace(0, 1, n)`` when the key
-    is missing or its length does not match.
+    Fields are ``input_fields`` followed by ``output_fields`` along time
+    (``(n_steps, *spatial, n_fields)``), times are ``input_time_grid`` followed
+    by ``output_time_grid``, and the coordinate of spatial axis ``d`` is read
+    from ``space_grid[..., d]`` along that axis.
+
+    Raises:
+        KeyError: If the sample lacks fields or grids (``return_grid`` must be on).
+        ValueError: If shapes disagree with ``n_spatial_dims`` or each other.
     """
     if not isinstance(sample, dict):
         raise TypeError(f"Expected WellDataset sample to be a dict, got {type(sample).__name__}")
@@ -142,37 +169,42 @@ def _extract_arrays(sample: Any, n_spatial_dims: int) -> dict[str, np.ndarray]:
             return x.detach().cpu().numpy()
         return np.asarray(x)
 
-    fields_key = next((k for k in ("input_fields", "fields", "u", "data") if k in sample), None)
-    if fields_key is None:
+    required = ("input_fields", "input_time_grid", "space_grid")
+    missing = [k for k in required if k not in sample]
+    if missing:
         raise KeyError(
-            "WellDataset sample missing a fields tensor. Looked for "
-            "'input_fields', 'fields', 'u', or 'data'; got keys: "
-            f"{list(sample.keys())}"
+            f"WellDataset sample is missing {missing} (got keys {sorted(sample)}); "
+            "open the dataset with full_trajectory_mode=True and return_grid=True"
         )
-    fields = _as_np(sample[fields_key]).astype(np.float32)
+
+    steps = [_as_np(sample["input_fields"])]
+    times = [_as_np(sample["input_time_grid"]).reshape(-1)]
+    if "output_fields" in sample:
+        steps.append(_as_np(sample["output_fields"]))
+        times.append(_as_np(sample["output_time_grid"]).reshape(-1))
+    fields = np.concatenate(steps, axis=0).astype(np.float32)
+    times = np.concatenate(times).astype(np.float32)
     if fields.ndim != n_spatial_dims + 2:
         raise ValueError(
-            f"Expected fields tensor with {n_spatial_dims + 2} dims "
+            f"Expected fields with {n_spatial_dims + 2} dims "
             f"(n_steps, {'x ' * n_spatial_dims}n_fields), got shape {fields.shape}"
         )
+    if times.size != fields.shape[0]:
+        raise ValueError(f"{times.size} time stamps for {fields.shape[0]} field steps")
 
-    n_steps = fields.shape[0]
-    times = _as_np(sample.get("time", np.linspace(0.0, 1.0, n_steps))).reshape(-1)
-    if times.size != n_steps:
-        times = np.linspace(0.0, 1.0, n_steps, dtype=np.float32)
-
+    space_grid = _as_np(sample["space_grid"])
+    if space_grid.shape != (*fields.shape[1:-1], n_spatial_dims):
+        raise ValueError(
+            f"space_grid shape {space_grid.shape} does not match fields {fields.shape}"
+        )
     spatial_axes: dict[str, np.ndarray] = {}
-    axis_names = ("x", "y", "z")[:n_spatial_dims]
-    for i, axis in enumerate(axis_names):
-        size = fields.shape[1 + i]
-        coord = _as_np(sample.get(f"space/{axis}", np.linspace(0.0, 1.0, size))).reshape(-1)
-        if coord.size != size:
-            coord = np.linspace(0.0, 1.0, size, dtype=np.float32)
-        spatial_axes[axis] = coord.astype(np.float32)
+    for d, axis in enumerate(("x", "y", "z")[:n_spatial_dims]):
+        index = tuple(slice(None) if i == d else 0 for i in range(n_spatial_dims))
+        spatial_axes[axis] = space_grid[index + (d,)].astype(np.float32)
 
     return {
         "fields": fields,
-        "times": times.astype(np.float32),
+        "times": times,
         **{f"axis_{k}": v for k, v in spatial_axes.items()},
     }
 
@@ -186,6 +218,7 @@ def load_well_slice(
     device: str = "cpu",
     base: str | None = None,
     use_cache: bool = True,
+    n_steps: int | None = None,
 ) -> dict[str, torch.Tensor]:
     """Sample ``n_points`` flat ``(x, t, u)`` tuples from a Well dataset.
 
@@ -203,6 +236,9 @@ def load_well_slice(
         use_cache: When True, reuse / write a flattened ``.npz`` under
             the cache dir (``~/.cache/pinnrl/well/`` or ``$PINNRL_WELL_CACHE``).
             Set False to force a fresh load.
+        n_steps: Cap on the number of time steps read per trajectory (memory
+            grows with it); ``None`` keeps ``the_well``'s default of at most 101
+            (the first step plus a 100-step rollout).
 
     Returns:
         ``{"x": (N, d_space), "t": (N, 1), "u": (N, d_fields)}`` on ``device``.
@@ -215,7 +251,7 @@ def load_well_slice(
     entry = get_entry(name)
     rng = np.random.default_rng(seed)
 
-    cache_path = _cache_file(name, split, n_traj, n_points, seed, base=base)
+    cache_path = _cache_file(name, split, n_traj, n_points, seed, base=base, n_steps=n_steps)
     if use_cache and cache_path.exists():
         _LOGGER.info("Loading cached Well slice from %s", cache_path)
         with np.load(cache_path) as data:
@@ -225,7 +261,7 @@ def load_well_slice(
                 "u": torch.tensor(data["u"], device=device),
             }
 
-    dataset = _load_well_dataset(name, split, base)
+    dataset = _load_well_dataset(name, split, base, n_steps=n_steps)
     n_available = len(dataset)
     if n_available == 0:
         raise RuntimeError(f"Well dataset {name!r} split {split!r} is empty")

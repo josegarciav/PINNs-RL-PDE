@@ -1,22 +1,30 @@
 """Static metadata registry for `The Well` benchmark datasets.
 
-Each entry hand-curates the defaults the dashboard uses to populate the New
-Training form when a user picks a dataset: spatial dimensionality, channel
-fields, recommended PDE/architecture, and the loss recipe that makes sense
-for that dataset (``data_augmented`` when pinnrl already has an analytical
-solver, ``data_only`` otherwise).
+Each entry records what pinnrl needs to train on a dataset without opening
+it: the spatial grid extents, the time step and trajectory length, the
+channel names in the order :func:`pinnrl.datasets.well_loader.load_well_slice`
+returns them, and the recommended architecture and loss recipe.
 
-Names match the strings accepted by ``the_well.data.WellDataset`` as
-``well_dataset_name``. Domain and time extents come from the Well dataset
-specification page; values that vary per-trajectory are left as the
-canonical normalised range. These extents become the PDE domain; the
-observation coordinates themselves are built by
-:func:`pinnrl.datasets.well_loader.load_well_slice`.
+The grids, time steps, trajectory lengths and channel layouts were read from
+the ``dimensions`` and ``t{0,1,2}_fields`` groups of each dataset's first
+training file on the Hugging Face mirror (``hf://datasets/polymathic-ai/``).
+Times are relative to the start of a trajectory (``the_well`` normalises them
+that way by default). Vector fields expand to one channel per spatial axis and
+rank-2 tensors to ``d * d`` channels (``xx, xy, yx, yy`` in 2-D).
+
+None of these datasets is governed by one of pinnrl's built-in PDEs (the
+acoustic maze has a spatially varying sound speed, the Helmholtz staircase is
+a frequency-domain problem), so every entry defaults to ``data_only``; use
+``data_augmented`` with your own observations of a pinnrl PDE instead.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+# ``the_well`` reads the first step plus a ``max_rollout_steps``-step rollout
+# (default 100), so a full-trajectory sample holds at most this many steps.
+DEFAULT_LOADED_STEPS = 101
 
 
 @dataclass(frozen=True)
@@ -26,242 +34,203 @@ class WellEntry:
     Attributes:
         name: WellDataset identifier — passed straight to ``well_dataset_name``.
         description: One-line human-readable summary for the dashboard's dataset info box.
-        n_spatial_dims: 2 or 3 (only 2-D and 3-D datasets are registered).
         fields: Channel names in the order returned by the loader.
-        domain: Per-axis ``(low, high)`` bounds for spatial coordinates.
-        time_domain: ``(t_min, t_max)`` over a single trajectory.
-        default_pde_key: PDE key accepted by
-            :func:`pinnrl.pdes.registry.get_pde_spec` when a matched analytical
-            solver exists, else ``None`` (use ``data_only`` mode).
+        domain: Per-axis ``(low, high)`` coordinate extents of the spatial grid.
+        dt: Time between stored steps.
+        n_steps: Stored steps per trajectory.
         default_architecture: Architecture preset most appropriate for the
-            field shape (FNO for periodic 2D fluids, MLP for the rest).
-        default_input_dim: Network input dim — ``len(domain) + 1`` for time.
-        default_output_dim: Network output dim — ``len(fields)``.
-        recommended_mode: ``data_augmented`` if matched, else ``data_only``.
+            field shape (FNO for 2-D grids, feedforward for 3-D).
+        default_pde_key: PDE key accepted by
+            :func:`pinnrl.pdes.registry.get_pde_spec` when the dataset is
+            governed by that PDE, else ``None``.
+        recommended_mode: ``data_augmented`` if ``default_pde_key`` is set,
+            else ``data_only``.
     """
 
     name: str
     description: str
-    n_spatial_dims: int
     fields: tuple[str, ...]
     domain: tuple[tuple[float, float], ...]
-    time_domain: tuple[float, float]
-    default_pde_key: str | None
+    dt: float
+    n_steps: int
     default_architecture: str
-    default_input_dim: int
-    default_output_dim: int
-    recommended_mode: str
+    default_pde_key: str | None = None
+    recommended_mode: str = "data_only"
 
     def __post_init__(self) -> None:  # pragma: no cover - dataclass guard
         if self.n_spatial_dims not in (2, 3):
             raise ValueError(
                 f"WellEntry {self.name!r}: n_spatial_dims must be 2 or 3, got {self.n_spatial_dims}"
             )
-        if len(self.domain) != self.n_spatial_dims:
-            raise ValueError(
-                f"WellEntry {self.name!r}: domain has {len(self.domain)} axes "
-                f"but n_spatial_dims is {self.n_spatial_dims}"
-            )
         if self.recommended_mode not in ("data_only", "data_augmented"):
             raise ValueError(
                 f"WellEntry {self.name!r}: recommended_mode must be one of "
                 f"'data_only', 'data_augmented'"
             )
-        if self.recommended_mode == "data_augmented" and self.default_pde_key is None:
+        if (self.recommended_mode == "data_augmented") != (self.default_pde_key is not None):
             raise ValueError(
-                f"WellEntry {self.name!r}: data_augmented mode requires a default_pde_key"
+                f"WellEntry {self.name!r}: data_augmented mode goes with a default_pde_key"
             )
 
+    @property
+    def n_spatial_dims(self) -> int:
+        """Number of spatial axes (2 or 3)."""
+        return len(self.domain)
 
-# Curated subset of The Well datasets. Names are the canonical
-# ``well_dataset_name`` strings from PolymathicAI/the_well. Extend as
-# needed — every entry here automatically appears in the dashboard's
-# dataset dropdown.
-_PERIODIC_2D_UNIT: tuple[tuple[float, float], ...] = ((0.0, 1.0), (0.0, 1.0))
-_PERIODIC_3D_UNIT: tuple[tuple[float, float], ...] = (
-    (0.0, 1.0),
-    (0.0, 1.0),
-    (0.0, 1.0),
-)
+    @property
+    def default_input_dim(self) -> int:
+        """Network input size: the spatial axes plus time."""
+        return self.n_spatial_dims + 1
+
+    @property
+    def default_output_dim(self) -> int:
+        """Network output size: one per channel."""
+        return len(self.fields)
+
+    @property
+    def time_domain(self) -> tuple[float, float]:
+        """``(0, t_end)`` of a whole trajectory."""
+        return (0.0, self.dt * (self.n_steps - 1))
+
+    def loaded_time_domain(self, n_steps: int | None = None) -> tuple[float, float]:
+        """``(0, t_end)`` of the window :func:`load_well_slice` reads with ``n_steps``."""
+        steps = min(self.n_steps, DEFAULT_LOADED_STEPS if n_steps is None else int(n_steps))
+        return (0.0, self.dt * (steps - 1))
+
+
+def _components(name: str, axes: str, rank: int) -> tuple[str, ...]:
+    """Channel names of a vector (rank 1) or rank-2 tensor field."""
+    if rank == 1:
+        return tuple(f"{name}_{a}" for a in axes)
+    return tuple(f"{name}_{a}{b}" for a in axes for b in axes)
 
 
 WELL_REGISTRY: dict[str, WellEntry] = {
-    "active_matter": WellEntry(
-        name="active_matter",
-        description="2D active nematic fluid — concentration, velocity, orientation tensor, strain rate.",
-        n_spatial_dims=2,
-        fields=(
-            "concentration",
-            "velocity_x",
-            "velocity_y",
-            "orientation_xx",
-            "orientation_xy",
-            "orientation_yx",
-            "orientation_yy",
-            "strain_rate_xx",
-            "strain_rate_xy",
-            "strain_rate_yx",
-            "strain_rate_yy",
+    entry.name: entry
+    for entry in (
+        WellEntry(
+            name="active_matter",
+            description="2D active nematic fluid — concentration, velocity, orientation tensor, strain rate.",
+            fields=(
+                "concentration",
+                *_components("velocity", "xy", 1),
+                *_components("orientation", "xy", 2),
+                *_components("strain_rate", "xy", 2),
+            ),
+            domain=((0.0, 10.0), (0.0, 10.0)),
+            dt=0.25,
+            n_steps=81,
+            default_architecture="fno",
         ),
-        domain=_PERIODIC_2D_UNIT,
-        time_domain=(0.0, 1.0),
-        default_pde_key=None,
-        default_architecture="fno",
-        default_input_dim=3,
-        default_output_dim=11,
-        recommended_mode="data_only",
-    ),
-    "rayleigh_benard": WellEntry(
-        name="rayleigh_benard",
-        description="2D thermal convection between hot and cold plates.",
-        n_spatial_dims=2,
-        fields=("buoyancy", "pressure", "velocity_x", "velocity_y"),
-        domain=((0.0, 4.0), (0.0, 1.0)),
-        time_domain=(0.0, 1.0),
-        default_pde_key=None,
-        default_architecture="fno",
-        default_input_dim=3,
-        default_output_dim=4,
-        recommended_mode="data_only",
-    ),
-    "shear_flow": WellEntry(
-        name="shear_flow",
-        description="2D incompressible shear flow with Kelvin-Helmholtz roll-up.",
-        n_spatial_dims=2,
-        fields=("tracer", "pressure", "velocity_x", "velocity_y"),
-        domain=((0.0, 1.0), (0.0, 2.0)),
-        time_domain=(0.0, 1.0),
-        default_pde_key=None,
-        default_architecture="fno",
-        default_input_dim=3,
-        default_output_dim=4,
-        recommended_mode="data_only",
-    ),
-    "rayleigh_taylor_instability": WellEntry(
-        name="rayleigh_taylor_instability",
-        description="3D buoyancy-driven mixing of two density layers.",
-        n_spatial_dims=3,
-        fields=("density", "pressure", "velocity_x", "velocity_y", "velocity_z"),
-        domain=_PERIODIC_3D_UNIT,
-        time_domain=(0.0, 1.0),
-        default_pde_key=None,
-        default_architecture="feedforward",
-        default_input_dim=4,
-        default_output_dim=5,
-        recommended_mode="data_only",
-    ),
-    "turbulent_radiative_layer_2D": WellEntry(
-        name="turbulent_radiative_layer_2D",
-        description="2D radiatively cooling shear layer (astrophysical).",
-        n_spatial_dims=2,
-        fields=("density", "pressure", "velocity_x", "velocity_y"),
-        domain=((0.0, 1.0), (0.0, 0.5)),
-        time_domain=(0.0, 1.0),
-        default_pde_key=None,
-        default_architecture="fno",
-        default_input_dim=3,
-        default_output_dim=4,
-        recommended_mode="data_only",
-    ),
-    "MHD_64": WellEntry(
-        name="MHD_64",
-        description="3D magneto-hydrodynamic turbulence at 64^3 resolution.",
-        n_spatial_dims=3,
-        fields=(
-            "density",
-            "velocity_x",
-            "velocity_y",
-            "velocity_z",
-            "magnetic_x",
-            "magnetic_y",
-            "magnetic_z",
+        WellEntry(
+            name="rayleigh_benard",
+            description="2D thermal convection between hot and cold plates.",
+            fields=("buoyancy", "pressure", *_components("velocity", "xy", 1)),
+            domain=((0.0, 4.0), (0.0, 1.0)),
+            dt=0.25,
+            n_steps=200,
+            default_architecture="fno",
         ),
-        domain=_PERIODIC_3D_UNIT,
-        time_domain=(0.0, 1.0),
-        default_pde_key=None,
-        default_architecture="feedforward",
-        default_input_dim=4,
-        default_output_dim=7,
-        recommended_mode="data_only",
-    ),
-    "gray_scott_reaction_diffusion": WellEntry(
-        name="gray_scott_reaction_diffusion",
-        description="2D Gray-Scott reaction-diffusion (pattern formation).",
-        n_spatial_dims=2,
-        fields=("A", "B"),
-        domain=_PERIODIC_2D_UNIT,
-        time_domain=(0.0, 1.0),
-        default_pde_key=None,
-        default_architecture="fno",
-        default_input_dim=3,
-        default_output_dim=2,
-        recommended_mode="data_only",
-    ),
-    "euler_multi_quadrants_periodicBC": WellEntry(
-        name="euler_multi_quadrants_periodicBC",
-        description="2D compressible Euler — Riemann-style multi-quadrant ICs (periodic).",
-        n_spatial_dims=2,
-        fields=("density", "pressure", "velocity_x", "velocity_y"),
-        domain=_PERIODIC_2D_UNIT,
-        time_domain=(0.0, 1.0),
-        default_pde_key=None,
-        default_architecture="fno",
-        default_input_dim=3,
-        default_output_dim=4,
-        recommended_mode="data_only",
-    ),
-    "viscoelastic_instability": WellEntry(
-        name="viscoelastic_instability",
-        description="2D viscoelastic flow showing elastic turbulence.",
-        n_spatial_dims=2,
-        fields=("c_xx", "c_xy", "c_yy", "pressure", "velocity_x", "velocity_y"),
-        domain=_PERIODIC_2D_UNIT,
-        time_domain=(0.0, 1.0),
-        default_pde_key=None,
-        default_architecture="fno",
-        default_input_dim=3,
-        default_output_dim=6,
-        recommended_mode="data_only",
-    ),
-    "acoustic_scattering_maze": WellEntry(
-        name="acoustic_scattering_maze",
-        description="2D acoustic wave scattering through a maze geometry.",
-        n_spatial_dims=2,
-        fields=("pressure", "velocity_x", "velocity_y"),
-        domain=_PERIODIC_2D_UNIT,
-        time_domain=(0.0, 1.0),
-        default_pde_key="wave",
-        default_architecture="fno",
-        default_input_dim=3,
-        default_output_dim=3,
-        recommended_mode="data_augmented",
-    ),
-    "helmholtz_staircase": WellEntry(
-        name="helmholtz_staircase",
-        description="2D Helmholtz scattering on a staircase domain.",
-        n_spatial_dims=2,
-        fields=("real", "imaginary"),
-        domain=_PERIODIC_2D_UNIT,
-        time_domain=(0.0, 1.0),
-        default_pde_key="wave",
-        default_architecture="fno",
-        default_input_dim=3,
-        default_output_dim=2,
-        recommended_mode="data_augmented",
-    ),
-    "planetswe": WellEntry(
-        name="planetswe",
-        description="2D shallow-water on a sphere (planetary scale).",
-        n_spatial_dims=2,
-        fields=("height", "velocity_lon", "velocity_lat"),
-        domain=((0.0, 360.0), (-90.0, 90.0)),
-        time_domain=(0.0, 1.0),
-        default_pde_key=None,
-        default_architecture="fno",
-        default_input_dim=3,
-        default_output_dim=3,
-        recommended_mode="data_only",
-    ),
+        WellEntry(
+            name="shear_flow",
+            description="2D incompressible shear flow with Kelvin-Helmholtz roll-up.",
+            fields=("tracer", "pressure", *_components("velocity", "xy", 1)),
+            domain=((0.0, 1.0), (0.0, 1.0)),
+            dt=0.1,
+            n_steps=200,
+            default_architecture="fno",
+        ),
+        WellEntry(
+            name="rayleigh_taylor_instability",
+            description="3D buoyancy-driven mixing of two density layers.",
+            fields=("density", *_components("velocity", "xyz", 1)),
+            domain=((0.0, 1.0), (0.0, 1.0), (0.0, 1.0)),
+            dt=118.004 / 118,
+            n_steps=119,
+            default_architecture="feedforward",
+        ),
+        WellEntry(
+            name="turbulent_radiative_layer_2D",
+            description="2D radiatively cooling shear layer (astrophysical).",
+            fields=("density", "pressure", *_components("velocity", "xy", 1)),
+            domain=((-0.5, 0.5), (-1.0, 2.0)),
+            dt=1.597033,
+            n_steps=101,
+            default_architecture="fno",
+        ),
+        WellEntry(
+            name="MHD_64",
+            description="3D magneto-hydrodynamic turbulence at 64^3 resolution.",
+            fields=(
+                "density",
+                *_components("magnetic", "xyz", 1),
+                *_components("velocity", "xyz", 1),
+            ),
+            domain=((0.0, 1.0), (0.0, 1.0), (0.0, 1.0)),
+            dt=0.01,
+            n_steps=100,
+            default_architecture="feedforward",
+        ),
+        WellEntry(
+            name="gray_scott_reaction_diffusion",
+            description="2D Gray-Scott reaction-diffusion (pattern formation).",
+            fields=("A", "B"),
+            domain=((-1.0, 1.0), (-1.0, 1.0)),
+            dt=10.0,
+            n_steps=1001,
+            default_architecture="fno",
+        ),
+        WellEntry(
+            name="euler_multi_quadrants_openBC",
+            description="2D compressible Euler — Riemann-style multi-quadrant ICs (open boundaries).",
+            fields=("energy", "density", "pressure", *_components("momentum", "xy", 1)),
+            domain=((0.0, 1.0), (0.0, 1.0)),
+            dt=1.0,
+            n_steps=101,
+            default_architecture="fno",
+        ),
+        WellEntry(
+            name="viscoelastic_instability",
+            description="2D viscoelastic flow showing elastic turbulence.",
+            fields=(
+                "pressure",
+                "c_zz",
+                *_components("velocity", "xy", 1),
+                *_components("C", "xy", 2),
+            ),
+            domain=((0.0, 6.2831855), (-1.0, 1.0)),
+            dt=1.0,
+            n_steps=20,
+            default_architecture="fno",
+        ),
+        WellEntry(
+            name="acoustic_scattering_maze",
+            description="2D acoustic scattering through a maze (spatially varying density and sound speed).",
+            fields=("pressure", *_components("velocity", "xy", 1)),
+            domain=((0.0, 1.0), (0.0, 1.0)),
+            dt=4.0 / 201,
+            n_steps=202,
+            default_architecture="fno",
+        ),
+        WellEntry(
+            name="helmholtz_staircase",
+            description="2D Helmholtz (frequency-domain) scattering over a staircase boundary.",
+            fields=("pressure_re", "pressure_im"),
+            domain=((-8.0, 8.0), (-0.5, 3.5)),
+            dt=100.00244 / 49,
+            n_steps=50,
+            default_architecture="fno",
+        ),
+        WellEntry(
+            name="planetswe",
+            description="2D shallow water on a sphere (colatitude theta, longitude phi in radians).",
+            fields=("height", *_components("velocity", ("theta", "phi"), 1)),
+            domain=((0.0093755, 3.1322172), (0.0, 6.2709136)),
+            dt=1007.0045 / 1007,
+            n_steps=1008,
+            default_architecture="fno",
+        ),
+    )
 }
 
 

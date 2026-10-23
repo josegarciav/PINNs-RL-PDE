@@ -18,30 +18,48 @@ from pinnrl.datasets.well_loader import (
     resolve_path,
 )
 
+# Fake trajectories live on x in [0, 4], y in [-1, 1] and t in [2, 2 + dt * n_steps)
+# so the tests can tell real coordinates from placeholders.
+X_RANGE, Y_RANGE, T0, DT = (0.0, 4.0), (-1.0, 1.0), 2.0, 0.5
+
 
 def _install_fake_well_module(monkeypatch, n_traj=2, n_steps=3, hw=4, n_fields=2):
-    """Install a fake ``the_well.data`` module exposing a tiny ``WellDataset``."""
+    """Install a fake ``the_well.data`` module mimicking ``WellDataset`` 1.x samples.
+
+    In ``full_trajectory_mode`` the real class returns the first step in
+    ``input_fields`` and the rest in ``output_fields``, with ``input_time_grid``
+    / ``output_time_grid`` and a ``space_grid`` of shape ``(*spatial, n_dims)``.
+    """
+    calls = []
 
     class FakeWellDataset:
-        def __init__(self, well_base_path, well_dataset_name, well_split_name):
+        def __init__(self, well_base_path, well_dataset_name, well_split_name, **kwargs):
+            calls.append(kwargs)
             self.path = well_base_path
             self.name = well_dataset_name
             self.split = well_split_name
+            # Like the real class: the first step plus up to max_rollout_steps more.
+            steps = 1 + min(n_steps - 1, kwargs.get("max_rollout_steps", 100))
             rng = np.random.default_rng(0)
-            self._fields = rng.standard_normal((n_traj, n_steps, hw, hw, n_fields)).astype(
-                np.float32
-            )
+            self._fields = rng.standard_normal((n_traj, steps, hw, hw, n_fields)).astype(np.float32)
+            self._times = (T0 + DT * np.arange(steps)).astype(np.float32)
+            xs = np.linspace(*X_RANGE, hw, dtype=np.float32)
+            ys = np.linspace(*Y_RANGE, hw, dtype=np.float32)
+            self._grid = np.stack(np.meshgrid(xs, ys, indexing="ij"), axis=-1)
 
         def __len__(self):
             return n_traj
 
         def __getitem__(self, idx):
-            return {
-                "input_fields": torch.from_numpy(self._fields[idx]),
-                "time": np.linspace(0.0, 1.0, n_steps, dtype=np.float32),
-                "space/x": np.linspace(0.0, 1.0, hw, dtype=np.float32),
-                "space/y": np.linspace(0.0, 1.0, hw, dtype=np.float32),
+            sample = {
+                "input_fields": torch.from_numpy(self._fields[idx, :1]),
+                "input_time_grid": torch.from_numpy(self._times[:1]),
+                "space_grid": torch.from_numpy(self._grid),
             }
+            if self._fields.shape[1] > 1:
+                sample["output_fields"] = torch.from_numpy(self._fields[idx, 1:])
+                sample["output_time_grid"] = torch.from_numpy(self._times[1:])
+            return sample
 
     fake_data = types.ModuleType("the_well.data")
     fake_data.WellDataset = FakeWellDataset
@@ -49,6 +67,7 @@ def _install_fake_well_module(monkeypatch, n_traj=2, n_steps=3, hw=4, n_fields=2
     fake_root.data = fake_data
     monkeypatch.setitem(sys.modules, "the_well", fake_root)
     monkeypatch.setitem(sys.modules, "the_well.data", fake_data)
+    return calls
 
 
 def test_resolve_path_defaults_to_huggingface():
@@ -133,9 +152,57 @@ def test_cache_key_partitions_by_base(monkeypatch, tmp_path):
     )
 
     # Two distinct cache files should have been written — one per base.
-    cache_files = sorted(tmp_path.glob("active_matter__train__t1_p4_s0__*.npz"))
+    cache_files = sorted(tmp_path.glob("active_matter__train__t1_p4_s0_*.npz"))
     assert len(cache_files) == 2, cache_files
 
     # Sanity: both runs returned populated tensors.
     assert hf_run["u"].shape == (4, 2)
     assert local_run["u"].shape == (4, 2)
+
+
+def test_load_well_slice_uses_the_real_time_and_space_grids(monkeypatch, tmp_path):
+    """Regression: placeholders put every point at t=0 on [0, 1]^2 whatever the data."""
+    calls = _install_fake_well_module(monkeypatch, n_traj=1, n_steps=5, hw=6)
+    out = load_well_slice("active_matter", n_traj=1, n_points=10_000, use_cache=False)
+    t = out["t"].numpy().ravel()
+    assert np.allclose(np.unique(t), T0 + DT * np.arange(5))
+    assert np.isclose(out["x"][:, 0].min(), X_RANGE[0]) and np.isclose(
+        out["x"][:, 0].max(), X_RANGE[1]
+    )
+    assert np.isclose(out["x"][:, 1].min(), Y_RANGE[0]) and np.isclose(
+        out["x"][:, 1].max(), Y_RANGE[1]
+    )
+    assert calls[0]["full_trajectory_mode"] is True
+
+
+def test_load_well_slice_keeps_x_t_u_aligned(monkeypatch):
+    """Each u value is the field at its own (t, x, y) grid node."""
+    _install_fake_well_module(monkeypatch, n_traj=1, n_steps=3, hw=4, n_fields=1)
+    from the_well.data import WellDataset
+
+    raw = WellDataset("p", "active_matter", "train", full_trajectory_mode=True)._fields[0]
+    out = load_well_slice("active_matter", n_traj=1, n_points=10_000, use_cache=False)
+    xs = np.linspace(*X_RANGE, 4)
+    ys = np.linspace(*Y_RANGE, 4)
+    for (x, y), t, u in zip(
+        out["x"].numpy(), out["t"].numpy().ravel(), out["u"].numpy().ravel(), strict=True
+    ):
+        k, i, j = round((t - T0) / DT), int(np.argmin(abs(xs - x))), int(np.argmin(abs(ys - y)))
+        assert np.isclose(raw[k, i, j, 0], u)
+
+
+def test_n_steps_caps_the_trajectory_and_the_cache_key(monkeypatch, tmp_path):
+    calls = _install_fake_well_module(monkeypatch, n_traj=1, n_steps=5, hw=4)
+    monkeypatch.setenv("PINNRL_WELL_CACHE", str(tmp_path))
+    out = load_well_slice("active_matter", n_traj=1, n_points=10_000, n_steps=2)
+    assert calls[-1]["max_rollout_steps"] == 1
+    assert np.allclose(np.unique(out["t"].numpy()), T0 + DT * np.arange(2))
+    names = sorted(p.name for p in tmp_path.iterdir())
+    assert len(names) == 1 and "_n2__" in names[0] and names[0].endswith("__v2.npz")
+
+
+def test_samples_without_grids_raise_a_clear_error():
+    from pinnrl.datasets.well_loader import _extract_arrays
+
+    with pytest.raises(KeyError, match="return_grid"):
+        _extract_arrays({"input_fields": torch.zeros(1, 4, 4, 2)}, n_spatial_dims=2)

@@ -1,10 +1,11 @@
-"""``_apply_well_dataset_defaults`` should respect a user-supplied training mode.
+"""``_apply_well_dataset_defaults`` and the training mode.
 
 The function fills in domain / dimension / output_dim from the registry
-entry, but ``training.mode`` is special: a user passing ``--mode inverse``
-alongside ``--dataset`` wants to recover trainable parameters, not run the
-dataset's default ``data_only`` regression. The fix keeps an explicit mode
-intact while still defaulting unset modes to the registry's recommendation.
+entry and sets ``training.mode`` to the dataset's recommendation. An explicit
+choice (``--mode`` alongside ``--dataset``) travels in the dataset block as
+``mode`` and wins. A mode already in the config does not count as a choice:
+``config.yaml`` always has one (``forward``), so treating it as explicit meant
+the recommendation never applied.
 """
 
 from pinnrl.training.train import _apply_well_dataset_defaults
@@ -29,22 +30,22 @@ def test_default_mode_is_taken_from_registry_when_user_did_not_set_one():
     assert config["training"]["mode"] == "data_only"
 
 
-def test_user_supplied_inverse_mode_is_preserved():
-    config = {"training": {"mode": "inverse"}}
-    _apply_well_dataset_defaults(config, _dataset_cfg())
+def test_explicit_inverse_mode_is_preserved():
+    config: dict = {}
+    _apply_well_dataset_defaults(config, {**_dataset_cfg(), "mode": "inverse"})
     assert config["training"]["mode"] == "inverse"
 
 
-def test_user_supplied_forward_mode_is_preserved():
+def test_config_yaml_forward_mode_is_replaced_by_the_recommendation():
     config = {"training": {"mode": "forward"}}
     _apply_well_dataset_defaults(config, _dataset_cfg())
-    assert config["training"]["mode"] == "forward"
+    assert config["training"]["mode"] == "data_only"
 
 
 def test_pde_shape_defaults_still_applied_alongside_user_mode():
-    """Mode must be sticky, but the rest of the dataset defaults should still flow in."""
-    config = {"training": {"mode": "inverse"}}
-    _apply_well_dataset_defaults(config, _dataset_cfg())
+    """An explicit mode does not stop the rest of the dataset defaults."""
+    config: dict = {}
+    _apply_well_dataset_defaults(config, {**_dataset_cfg(), "mode": "inverse"})
     assert config["pde"]["dimension"] == 2
     assert config["pde"]["output_dim"] == 11
     assert config["model"]["output_dim"] == 11

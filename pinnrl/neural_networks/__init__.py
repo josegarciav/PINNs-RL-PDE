@@ -107,7 +107,7 @@ class PINNModel(BaseNetwork):
                 "hidden_dim": config.model.hidden_dim,
                 "output_dim": config.model.output_dim,
                 "num_blocks": getattr(config.model, "num_blocks", None) or config.model.num_layers,
-                "modes": getattr(config.model, "modes", 16),
+                "modes": config.model.get("modes", 16),
                 "activation": config.model.activation,
                 "device": self.device,
             }

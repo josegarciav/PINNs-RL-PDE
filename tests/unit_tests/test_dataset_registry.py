@@ -48,3 +48,44 @@ def test_matched_pde_keys_resolve_in_pde_registry(name):
     )
     # Matched entries should default to data_augmented.
     assert entry.recommended_mode == "data_augmented"
+
+
+# Measured from each dataset's first training file on the HF mirror
+# (dimensions/time, dimensions/<axis>, t{0,1,2}_fields); see registry.py.
+@pytest.mark.parametrize(
+    "name, domain, t_end, channels",
+    [
+        ("active_matter", ((0.0, 10.0), (0.0, 10.0)), 20.0, 11),
+        ("rayleigh_benard", ((0.0, 4.0), (0.0, 1.0)), 49.75, 4),
+        ("gray_scott_reaction_diffusion", ((-1.0, 1.0), (-1.0, 1.0)), 10000.0, 2),
+        ("rayleigh_taylor_instability", ((0.0, 1.0),) * 3, 118.004, 4),
+        ("viscoelastic_instability", ((0.0, 6.2831855), (-1.0, 1.0)), 19.0, 8),
+    ],
+)
+def test_registry_matches_the_dataset_files(name, domain, t_end, channels):
+    entry = WELL_REGISTRY[name]
+    assert entry.domain == domain
+    assert entry.time_domain[1] == pytest.approx(t_end, rel=1e-4)
+    assert entry.default_output_dim == channels
+
+
+def test_loaded_window_follows_the_step_cap():
+    entry = WELL_REGISTRY["gray_scott_reaction_diffusion"]  # dt = 10, 1001 steps
+    assert entry.loaded_time_domain() == (0.0, 1000.0)  # the_well default: 101 steps
+    assert entry.loaded_time_domain(3) == (0.0, 20.0)
+    assert entry.loaded_time_domain(10_000) == entry.time_domain
+
+
+def test_dataset_defaults_set_the_pde_window():
+    import yaml
+
+    from pinnrl.config import DEFAULT_CONFIG_PATH
+    from pinnrl.training.train import build_config_dict
+
+    with open(DEFAULT_CONFIG_PATH) as f:
+        raw = yaml.safe_load(f)
+    dataset = {"name": "rayleigh_benard", "n_steps": 5}
+    config = build_config_dict(raw, "heat", "fno", dataset=dataset)
+    assert config["pde"]["domain"] == [[0.0, 4.0], [0.0, 1.0]]
+    assert config["pde"]["time_domain"] == [0.0, 1.0]  # 4 steps of dt = 0.25
+    assert config["pde"]["observation_data"]["n_steps"] == 5

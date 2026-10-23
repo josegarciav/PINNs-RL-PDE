@@ -19,6 +19,8 @@ from dash.dependencies import Input, Output, State
 from pinnrl.config import DEFAULT_CONFIG_PATH
 from pinnrl.datasets import WELL_REGISTRY
 from pinnrl.pdes.registry import PDE_SPECS, get_pde_spec
+from pinnrl.plots import loss_curve_epochs
+from pinnrl.training.train import parse_run_name
 
 # Initialize the Dash app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
@@ -1467,36 +1469,7 @@ def get_experiments():
                             pass
                         is_running = False
 
-                # Parse directory name
-                parts = exp_dir.split("_")
-                if len(parts) >= 3 and len(parts[0]) == 8 and len(parts[1]) == 6:
-                    timestamp = f"{parts[0]}_{parts[1]}"
-                    remainder = exp_dir[len(timestamp) + 1 :]
-
-                    if remainder.endswith("_no_rl"):
-                        rl_status = "no_rl"
-                        middle = remainder[: -len("_no_rl")]
-                    elif remainder.endswith("_rl"):
-                        rl_status = "rl"
-                        middle = remainder[: -len("_rl")]
-                    else:
-                        rl_status = None
-                        middle = remainder
-
-                    if "_" in middle:
-                        last_underscore = middle.rfind("_")
-                        pde_name = middle[:last_underscore]
-                        arch_name = middle[last_underscore + 1 :]
-                    else:
-                        pde_name = middle if middle else "Unknown PDE"
-                        arch_name = "unknown"
-
-                    display_name = f"{timestamp} - {pde_name} ({arch_name})"
-                    if rl_status:
-                        display_name += f" [{rl_status}]"
-                else:
-                    display_name = exp_dir
-
+                display_name = describe_run(exp_dir)
                 if is_running:
                     display_name += " [RUNNING]"
 
@@ -1593,20 +1566,18 @@ def create_empty_3d_figure(message):
     return fig
 
 
+def describe_run(name):
+    """``"YYYY-MM-DD HH:MM - <subject> (<arch>) [rl|no_rl]"``, or ``name`` if it is not a run name."""
+    parsed = parse_run_name(name)
+    if parsed is None:
+        return name
+    rl = "rl" if parsed["rl"] else "no_rl"
+    return f"{parsed['started'][:16]} - {parsed['subject']} ({parsed['architecture']}) [{rl}]"
+
+
 def get_experiment_name(experiment_path):
-    """Extract a readable name from the experiment path."""
-    try:
-        name = os.path.basename(experiment_path)
-        parts = name.split("_")
-        if len(parts) >= 3:
-            timestamp = parts[0]
-            arch = parts[1]
-            rl_status = parts[2]
-            timestamp = f"{timestamp[:4]}-{timestamp[4:6]}-{timestamp[6:8]} {timestamp[9:11]}:{timestamp[11:13]}"
-            return f"{timestamp} ({arch}, {rl_status})"
-        return name
-    except Exception:
-        return name
+    """Readable name of a run directory (see :func:`describe_run`)."""
+    return describe_run(os.path.basename(experiment_path))
 
 
 def load_experiment_data(experiment):
@@ -1832,20 +1803,8 @@ def update_graphs(experiment, _, loss_view):
             total_epochs = config["training"].get("num_epochs", total_epochs)
 
         # Build loss figure
-        train_epochs = list(range(1, len(history["train_loss"]) + 1))
-        final_epoch = len(history["train_loss"])
-
-        # Compute validation epochs once
-        val_epochs = []
-        if "val_loss" in history and history["val_loss"]:
-            val_epochs = list(
-                range(
-                    val_frequency,
-                    len(history["val_loss"]) * val_frequency + 1,
-                    val_frequency,
-                )
-            )
-            val_epochs = val_epochs[: len(history["val_loss"])]
+        train_epochs, val_epochs = loss_curve_epochs(history, val_frequency)
+        final_epoch = len(train_epochs)
 
         show_breakdown = loss_view == "breakdown"
 
@@ -1871,21 +1830,18 @@ def update_graphs(experiment, _, loss_view):
                     )
                 )
         else:
-            # Breakdown view: residual, boundary, initial only
+            # Breakdown view: the per-epoch loss components
             component_colors = {
                 "residual_loss": "#d62728",
                 "boundary_loss": "#2ca02c",
                 "initial_loss": "#9467bd",
+                "data_loss": "#8c564b",
             }
-            for component in ["residual_loss", "boundary_loss", "initial_loss"]:
-                if component in history and history[component]:
-                    if val_epochs:
-                        component_epochs = val_epochs[: len(history[component])]
-                    else:
-                        component_epochs = list(range(1, len(history[component]) + 1))
+            for component in component_colors:
+                if history.get(component) and any(history[component]):
                     loss_fig.add_trace(
                         go.Scatter(
-                            x=component_epochs,
+                            x=train_epochs[: len(history[component])],
                             y=history[component],
                             name=component.replace("_", " ").title(),
                             line=dict(color=component_colors[component]),
@@ -2578,9 +2534,8 @@ def update_architecture_comparison(_):
                     pass
 
         if not architecture:
-            dir_name = os.path.basename(exp_dir)
-            parts = dir_name.split("_")
-            architecture = parts[2] if len(parts) >= 3 else "unknown"
+            parsed = parse_run_name(os.path.basename(exp_dir))
+            architecture = parsed["architecture"] if parsed else "unknown"
 
         history_file = os.path.join(exp_dir, "history.json")
         if not os.path.exists(history_file):
@@ -2676,9 +2631,8 @@ def update_pde_comparison(_):
                     pass
 
         if not pde_type:
-            dir_name = os.path.basename(exp_dir)
-            parts = dir_name.split("_")
-            pde_type = f"{parts[0]}_{parts[1]}" if len(parts) >= 2 else dir_name
+            parsed = parse_run_name(os.path.basename(exp_dir))
+            pde_type = parsed["subject"] if parsed else os.path.basename(exp_dir)
 
         history_file = os.path.join(exp_dir, "history.json")
         if not os.path.exists(history_file):

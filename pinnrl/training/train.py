@@ -8,6 +8,7 @@ by default). :func:`load_run` rebuilds a finished run.
 """
 
 import argparse
+import copy
 import json
 import logging
 import sys
@@ -38,8 +39,9 @@ def _apply_well_dataset_defaults(config: dict, dataset_cfg: dict) -> dict:
     ``use_defaults`` (the default) it also overwrites the PDE domain,
     time domain, dimension and input/output dims (and the model's
     input/output dims) with the registry entry's values, and sets
-    ``training.mode`` to the entry's ``recommended_mode`` only if no mode is
-    present. No-op when ``dataset_cfg`` has no ``name``.
+    ``training.mode`` to ``dataset_cfg["mode"]`` when given (an explicit
+    ``--mode``), else to the entry's ``recommended_mode``. No-op when
+    ``dataset_cfg`` has no ``name``.
     """
     from pinnrl.datasets import get_entry
 
@@ -57,6 +59,7 @@ def _apply_well_dataset_defaults(config: dict, dataset_cfg: dict) -> dict:
         "n_points": int(dataset_cfg.get("n_points", 4096)),
         "seed": int(dataset_cfg.get("seed", 0)),
         "base": dataset_cfg.get("base"),
+        "n_steps": dataset_cfg.get("n_steps"),
     }
 
     if dataset_cfg.get("use_defaults", True):
@@ -64,19 +67,18 @@ def _apply_well_dataset_defaults(config: dict, dataset_cfg: dict) -> dict:
         # defaults" — overwrite the PDE shape fields the analytical config
         # populated, since they no longer match the data we'll fit.
         pde_block["domain"] = [list(b) for b in entry.domain]
-        pde_block["time_domain"] = list(entry.time_domain)
+        # The PDE covers the time window the loader actually reads.
+        pde_block["time_domain"] = list(entry.loaded_time_domain(dataset_cfg.get("n_steps")))
         pde_block["dimension"] = entry.n_spatial_dims
         pde_block["input_dim"] = entry.default_input_dim
         pde_block["output_dim"] = entry.default_output_dim
         model_block = config.setdefault("model", {})
         model_block["input_dim"] = entry.default_input_dim
         model_block["output_dim"] = entry.default_output_dim
-        # Mode is the one default we don't force: a user who passed
-        # --mode inverse alongside --dataset wants the inverse-problem
-        # objective, not the dataset's recommended_mode. setdefault keeps
-        # any training.mode already present, including the one in config.yaml.
+        # An explicit mode (e.g. --mode inverse alongside --dataset) wins;
+        # otherwise the dataset's recommended mode replaces config.yaml's.
         training_block = config.setdefault("training", {})
-        training_block.setdefault("mode", entry.recommended_mode)
+        training_block["mode"] = dataset_cfg.get("mode") or entry.recommended_mode
     return config
 
 
@@ -103,11 +105,10 @@ def build_config_dict(
             overlaid on the PDE/model blocks before training starts.
 
     Returns:
-        The config dict: a shallow copy of ``yaml_config`` (its nested
-        ``training`` and ``rl`` blocks are updated in place) with new ``pde``,
-        ``model`` and ``pde_type`` entries.
+        The config dict: a deep copy of ``yaml_config`` (the input is not
+        modified) with new ``pde``, ``model`` and ``pde_type`` entries.
     """
-    config = yaml_config.copy()
+    config = copy.deepcopy(yaml_config)
 
     spec = get_pde_spec(pde_name)
     pde_name, pde_key = spec.display_name, spec.key
@@ -254,6 +255,40 @@ def load_run(run_dir, device=None):
     return pde, model, config_dict
 
 
+def run_name(subject: str, architecture: str, rl_enabled: bool, when=None) -> str:
+    """Directory name of a run: ``<YYYYMMDD>_<HHMMSS>_<subject>_<architecture>_<rl|no_rl>``.
+
+    ``subject`` is the PDE display name or the Well dataset name.
+    """
+    stamp = (when or datetime.now()).strftime("%Y%m%d_%H%M%S")
+    return f"{stamp}_{subject}_{architecture}_{'rl' if rl_enabled else 'no_rl'}"
+
+
+def parse_run_name(name: str):
+    """Split a :func:`run_name` back into its parts.
+
+    Returns:
+        ``{"started": "YYYY-MM-DD HH:MM:SS", "subject", "architecture", "rl"}``,
+        or ``None`` when ``name`` does not follow the format. Subjects may
+        contain underscores (``active_matter``); architecture names do not.
+    """
+    if name.endswith("_no_rl"):
+        rest, rl = name[: -len("_no_rl")], False
+    elif name.endswith("_rl"):
+        rest, rl = name[: -len("_rl")], True
+    else:
+        return None
+    parts = rest.split("_", 2)
+    if len(parts) < 3 or not (parts[0].isdigit() and len(parts[0]) == 8):
+        return None
+    if not (parts[1].isdigit() and len(parts[1]) == 6) or "_" not in parts[2]:
+        return None
+    subject, architecture = parts[2].rsplit("_", 1)
+    date, clock = parts[0], parts[1]
+    started = f"{date[:4]}-{date[4:6]}-{date[6:]} {clock[:2]}:{clock[2:4]}:{clock[4:]}"
+    return {"started": started, "subject": subject, "architecture": architecture, "rl": rl}
+
+
 def run_training(config_dict, device):
     """Run a full training session.
 
@@ -266,14 +301,9 @@ def run_training(config_dict, device):
     rl_enabled = config_dict["rl"]["enabled"]
 
     # Experiment directory
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    rl_status = "rl" if rl_enabled else "no_rl"
     obs = config_dict.get("pde", {}).get("observation_data") or {}
     dataset_tag = obs.get("name") if isinstance(obs, dict) and obs.get("source") == "well" else None
-    if dataset_tag:
-        experiment_name = f"{timestamp}_{dataset_tag}_{arch_type}_{rl_status}"
-    else:
-        experiment_name = f"{timestamp}_{pde_name}_{arch_type}_{rl_status}"
+    experiment_name = run_name(dataset_tag or pde_name, arch_type, rl_enabled)
     experiment_dir = Path(config_dict["paths"]["results_dir"]) / experiment_name
     experiment_dir.mkdir(parents=True, exist_ok=True)
 
@@ -400,6 +430,12 @@ def main():
         help="Number of (x, t, u) points to sub-sample from the loaded slice",
     )
     parser.add_argument("--dataset-seed", type=int, default=0, help="RNG seed for sub-sampling")
+    parser.add_argument(
+        "--dataset-steps",
+        type=int,
+        default=None,
+        help="Time steps read per trajectory (default: up to 101, the_well's rollout cap)",
+    )
     parser.add_argument(
         "--dataset-base",
         default=None,
@@ -553,7 +589,9 @@ def main():
             "n_points": args.dataset_points,
             "seed": args.dataset_seed,
             "base": args.dataset_base,
+            "n_steps": args.dataset_steps,
             "use_defaults": True,
+            "mode": args.mode,
         }
     config_dict = build_config_dict(
         yaml_config, args.pde, args.arch, args.rl, args.epochs, dataset=dataset_block

@@ -1,9 +1,5 @@
 """``PDEBase._load_observation_data`` should accept Well-source specs."""
 
-import sys
-import types
-
-import numpy as np
 import pytest
 import torch
 
@@ -15,30 +11,12 @@ from pinnrl.config import (
 )
 from pinnrl.pdes.heat_equation import HeatEquation
 from pinnrl.pdes.pde_base import PDEConfig
+from tests.unit_tests.test_well_loader import _install_fake_well_module
 
 
 def _install_fake_well(monkeypatch):
-    class FakeWellDataset:
-        def __init__(self, well_base_path, well_dataset_name, well_split_name):
-            self._fields = np.zeros((1, 2, 3, 3, 1), dtype=np.float32)
-
-        def __len__(self):
-            return 1
-
-        def __getitem__(self, idx):
-            return {
-                "input_fields": torch.from_numpy(self._fields[idx]),
-                "time": np.array([0.0, 1.0], dtype=np.float32),
-                "space/x": np.linspace(0.0, 1.0, 3, dtype=np.float32),
-                "space/y": np.linspace(0.0, 1.0, 3, dtype=np.float32),
-            }
-
-    fake_data = types.ModuleType("the_well.data")
-    fake_data.WellDataset = FakeWellDataset
-    fake_root = types.ModuleType("the_well")
-    fake_root.data = fake_data
-    monkeypatch.setitem(sys.modules, "the_well", fake_root)
-    monkeypatch.setitem(sys.modules, "the_well.data", fake_data)
+    """One 3-step trajectory on a 3x3 grid with a single field (real sample format)."""
+    _install_fake_well_module(monkeypatch, n_traj=1, n_steps=3, hw=3, n_fields=1)
 
 
 def _training_cfg(mode="data_only"):

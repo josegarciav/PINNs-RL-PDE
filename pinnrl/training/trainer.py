@@ -136,6 +136,7 @@ class PDETrainer:
         self._setup_logging()
 
         # Setup optimizer
+        self._num_epochs = config.training.num_epochs
         self._initialize_optimizer_and_scheduler()
 
         # Training history
@@ -411,7 +412,7 @@ class PDETrainer:
     def _build_scheduler(self, force_reduce_lr: bool = False):
         """Build the LR scheduler; ``None`` means a constant learning rate.
 
-        ``cosine`` anneals over ``num_epochs - warmup_epochs`` down to ``min_lr``;
+        ``cosine`` anneals over the planned epochs minus ``warmup_epochs`` down to ``min_lr``;
         ``reduce_lr`` is ReduceLROnPlateau. ``force_reduce_lr`` (L-BFGS) turns
         any non-constant type into ReduceLROnPlateau.
         """
@@ -435,7 +436,7 @@ class PDETrainer:
         if scheduler_type == "cosine":
             return optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer,
-                T_max=max(1, self.config.training.num_epochs - self._warmup_epochs()),
+                T_max=max(1, self._num_epochs - self._warmup_epochs()),
                 eta_min=self.config.training.learning_rate_scheduler.min_lr,
             )
         raise ValueError(f"Unknown scheduler type: {scheduler_type}")
@@ -447,7 +448,7 @@ class PDETrainer:
           - ``adam``       : standard first-order training.
           - ``lbfgs``      : closure-based quasi-Newton training (full batch).
           - ``adam_lbfgs`` : Adam first, switch to L-BFGS after epoch
-            ``int(adam_lbfgs_switch_ratio * config.training.num_epochs)``.
+            ``int(adam_lbfgs_switch_ratio * num_epochs)`` of the planned run.
 
         Trainable PDE parameters (inverse mode) are added to the optimizer
         alongside the model weights. While L-BFGS runs, a non-constant
@@ -464,14 +465,18 @@ class PDETrainer:
             self.optimizer = self._build_adam(params)
             self._is_lbfgs = False
 
-        if optimizer_type == "adam_lbfgs":
+        self._optimizer_type = optimizer_type
+        self._plan_epochs(self._num_epochs)
+
+    def _plan_epochs(self, num_epochs: int) -> None:
+        """Size the LR schedule and the Adam -> L-BFGS switch for a ``num_epochs`` run."""
+        self._num_epochs = num_epochs
+        if self._optimizer_type == "adam_lbfgs":
             ratio = getattr(self.config.training, "adam_lbfgs_switch_ratio", 0.7)
-            self._switch_epoch = max(1, int(self.config.training.num_epochs * ratio))
+            self._switch_epoch = max(1, int(num_epochs * ratio))
         else:
             self._switch_epoch = None
-
         self.scheduler = self._build_scheduler(force_reduce_lr=self._is_lbfgs)
-        self._optimizer_type = optimizer_type
 
     def _switch_to_lbfgs(self):
         """Hot-swap the optimizer to L-BFGS for the second phase of adam_lbfgs."""
@@ -693,6 +698,8 @@ class PDETrainer:
         num_points = training_cfg.num_collocation_points if num_points is None else num_points
         if num_points < batch_size:
             batch_size = num_points
+        if num_epochs != self._num_epochs:
+            self._plan_epochs(num_epochs)  # cosine T_max and the L-BFGS switch follow the run
         self.model.train()
         if hasattr(self.model, "architecture_name"):
             architecture_name = self.model.architecture_name
@@ -737,8 +744,8 @@ class PDETrainer:
             for name in trainable_pde_params:
                 self.history.setdefault(f"param_{name}", [])
 
-        # L-BFGS requires deterministic full-batch loss; override batch_size.
-        # Only checked here, so the L-BFGS phase of adam_lbfgs keeps batch_size.
+        # L-BFGS requires deterministic full-batch loss; override batch_size
+        # (the L-BFGS phase of adam_lbfgs does the same when it starts).
         if getattr(self, "_is_lbfgs", False) and batch_size != num_points:
             self.logger.warning(
                 "L-BFGS optimizer requires full-batch updates; "
@@ -948,6 +955,7 @@ class PDETrainer:
             ):
                 self.logger.info(f"Switching optimizer to L-BFGS at epoch {epoch + 1}")
                 self._switch_to_lbfgs()
+                batch_size = num_points  # L-BFGS needs the full batch
                 if self.use_adaptive_weights:
                     self.logger.warning("Adaptive loss weighting is disabled while running L-BFGS.")
 
