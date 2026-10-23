@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pinnrl.config import Config
 
+from .attention import AttentionNetwork, SelfAttention
 from .autoencoder import AutoEncoder
 from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 from .feedforward import FeedForwardNetwork
@@ -13,67 +14,44 @@ from .fourier import FourierFeatures, FourierNetwork
 from .resnet import ResNet, ResNetBlock
 from .siren import SIREN, SIRENLayer
 
-# Import optional architectures if available
-try:
-    from .attention import AttentionNetwork, SelfAttention
-
-    __all__ = [
-        "BaseNetwork",
-        "InputType",
-        "OutputType",
-        "NetworkConfig",
-        "FeedForwardNetwork",
-        "ResNet",
-        "ResNetBlock",
-        "SIREN",
-        "SIRENLayer",
-        "FourierNetwork",
-        "FourierFeatures",
-        "FNONetwork",
-        "FNOBlock",
-        "SpectralConv1d",
-        "AutoEncoder",
-        "AttentionNetwork",
-        "SelfAttention",
-        "PINNModel",
-    ]
-except ImportError:
-    __all__ = [
-        "BaseNetwork",
-        "InputType",
-        "OutputType",
-        "NetworkConfig",
-        "FeedForwardNetwork",
-        "ResNet",
-        "ResNetBlock",
-        "SIREN",
-        "SIRENLayer",
-        "FourierNetwork",
-        "FourierFeatures",
-        "FNONetwork",
-        "FNOBlock",
-        "SpectralConv1d",
-        "AutoEncoder",
-        "PINNModel",
-    ]
+__all__ = [
+    "BaseNetwork",
+    "InputType",
+    "OutputType",
+    "NetworkConfig",
+    "FeedForwardNetwork",
+    "ResNet",
+    "ResNetBlock",
+    "SIREN",
+    "SIRENLayer",
+    "FourierNetwork",
+    "FourierFeatures",
+    "FNONetwork",
+    "FNOBlock",
+    "SpectralConv1d",
+    "AutoEncoder",
+    "AttentionNetwork",
+    "SelfAttention",
+    "PINNModel",
+]
 
 
 class PINNModel(BaseNetwork):
-    """
-    Physics-Informed Neural Network model factory.
+    """Physics-Informed Neural Network model factory.
 
-    This class provides a unified interface to create different neural network
-    architectures suitable for Physics-Informed Neural Networks.
+    Builds the network named by ``config.model.architecture`` (``fourier``,
+    ``resnet``, ``siren``, ``attention``, ``autoencoder``, ``fno``; anything
+    else gives ``feedforward``) and stores it as ``self.model``.
     """
 
     def __init__(self, config: "Config", device=None, **kwargs):
-        """
-        Initialize the PINN model.
+        """Initialize the PINN model.
 
         Args:
-            config: Configuration object with model settings
+            config: Configuration object with ``model`` and ``device``;
+                ``config.model.device`` is set to the chosen device.
             device: Optional device to override config device
-            **kwargs: Additional architecture-specific parameters
+            **kwargs: Ignored.
         """
         # Store configuration
         self.config = config
@@ -85,7 +63,7 @@ class PINNModel(BaseNetwork):
         config_with_device = config.model
         config_with_device.device = self.device
 
-        # Create base NetworkConfig
+        # BaseNetwork reads the ModelConfig through its dict-like .get
         super().__init__(config_with_device)
 
         # Store architecture type
@@ -142,8 +120,7 @@ class PINNModel(BaseNetwork):
         self.to(self.device)
 
     def forward(self, x):
-        """
-        Forward pass of the model.
+        """Forward pass of the model.
 
         Args:
             x: Input tensor of shape (batch_size, input_dim)

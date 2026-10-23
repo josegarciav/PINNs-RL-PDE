@@ -1,9 +1,11 @@
-# Pendulum equation
-# Application domains: Classical mechanics, nonlinear oscillators
-# Complexity: Nonlinear ODE, 2nd-order in time
+"""Pendulum equation.
 
+Application domains: Classical mechanics, nonlinear oscillators. Complexity: Nonlinear ODE, 2nd-order in time.
+"""
+
+from collections.abc import Callable
 from functools import lru_cache
-from typing import Any, Callable, Dict, Tuple
+from typing import Any
 
 import numpy as np
 import torch
@@ -35,7 +37,8 @@ class PendulumEquation(PDEBase):
     Second order in time: the initial loss enforces ``θ(0) = initial_angle`` and
     ``θ'(0) = velocity`` (default 0).
 
-    Initial condition: ``small_angle`` (alias ``fixed``) with ``initial_angle``.
+    Initial condition: ``small_angle`` (alias ``fixed``) with ``initial_angle``
+    (alias ``value``, default 0.5).
 
     Exact solution: ``ode`` — the full nonlinear damped trajectory from the
     configured initial angle and velocity, integrated with ``scipy`` to 1e-11
@@ -70,7 +73,7 @@ class PendulumEquation(PDEBase):
         d = self.compute_derivatives(model, x, t, temporal_derivatives=[1, 2])
         return d["dt2"] + self.damping * d["dt"] + (self.g / self.L) * torch.sin(d["u"])
 
-    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
         if params.get("type") in ("small_angle", "fixed"):
             theta0 = float(params.get("initial_angle", params.get("value", 0.5)))
             return lambda x, t: torch.full_like(x[:, 0:1], theta0)
@@ -99,7 +102,7 @@ class PendulumEquation(PDEBase):
 
     def compute_phase_space(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Phase-space coordinates ``(θ, θ')``."""
         d = self.compute_derivatives(model, x, t, temporal_derivatives=[1])
         return d["u"], d["dt"]

@@ -1,8 +1,10 @@
-# Burgers' equation
-# Application domains: Fluid dynamics, traffic flow, shock waves
-# Complexity: Nonlinear, 2nd-order
+"""Burgers' equation.
 
-from typing import Any, Callable, Dict
+Application domains: Fluid dynamics, traffic flow, shock waves. Complexity: Nonlinear, 2nd-order.
+"""
+
+from collections.abc import Callable
+from typing import Any
 
 import torch
 
@@ -12,7 +14,8 @@ from .pde_base import PDEBase, PDEConfig
 class BurgersEquation(PDEBase):
     """Viscous Burgers equation ``u_t + u (Σ_d u_{x_d}) = nu ∇²u``.
 
-    Parameters: ``nu`` (viscosity; ``viscosity`` is accepted as an alias).
+    Parameters: ``nu`` (viscosity, default 0.01; ``viscosity`` is accepted as
+    an alias).
 
     Initial conditions: ``sine`` — ``u0 = A Π_d sin(kπ x_d)`` (``amplitude`` A,
     default -1; ``frequency`` k, default 1).
@@ -45,7 +48,7 @@ class BurgersEquation(PDEBase):
             convection = sum(u * d[f"dx{dim + 1}"] for dim in range(self.dimension))
         return d["dt"] + convection - self.nu * d["laplacian"]
 
-    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
         if params.get("type") == "sine":
             a, k = params.get("amplitude", -1.0), params.get("frequency", 1.0)
             return lambda x, t: a * torch.prod(torch.sin(k * torch.pi * x), dim=1, keepdim=True)

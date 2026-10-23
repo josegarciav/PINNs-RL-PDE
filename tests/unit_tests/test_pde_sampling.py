@@ -274,7 +274,7 @@ class TestPDESampling(unittest.TestCase):
 
         strategies = ["uniform", "stratified", "adaptive"]
 
-        for pde_type, pde in pde_models:
+        for _pde_type, pde in pde_models:
             pde_name = pde.__class__.__name__
             for strategy in strategies:
                 x, t = pde.generate_collocation_points(num_points, strategy=strategy)

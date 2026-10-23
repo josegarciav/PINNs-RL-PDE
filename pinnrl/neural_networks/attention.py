@@ -9,11 +9,14 @@ from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 
 
 class SelfAttention(nn.Module):
-    """Self-attention layer."""
+    """Multi-head self-attention over a length-1 sequence, plus residual and LayerNorm.
+
+    Each point is its own sequence, so the softmax weight is always 1 and,
+    without attention dropout, the layer computes ``LayerNorm(x + proj(value(x)))``.
+    """
 
     def __init__(self, dim: int, heads: int = 4, dropout: float = 0.1) -> None:
-        """
-        Initialize the attention layer.
+        """Initialize the attention layer.
 
         Args:
             dim: Input dimension
@@ -35,8 +38,7 @@ class SelfAttention(nn.Module):
         self.layer_norm = nn.LayerNorm(dim)
 
     def forward(self, x: Tensor) -> Tensor:
-        """
-        Forward pass of the layer.
+        """Forward pass of the layer.
 
         Args:
             x: Input tensor of shape (batch_size, dim)
@@ -73,11 +75,10 @@ class SelfAttention(nn.Module):
 
 
 class FeedForwardBlock(nn.Module):
-    """Feed-forward block for transformer architecture."""
+    """Transformer feed-forward block ``LayerNorm(x + MLP(x))`` with a GELU MLP."""
 
     def __init__(self, dim: int, expansion: int = 4, dropout: float = 0.1) -> None:
-        """
-        Initialize the feed-forward block.
+        """Initialize the feed-forward block.
 
         Args:
             dim: Input dimension
@@ -95,8 +96,7 @@ class FeedForwardBlock(nn.Module):
         self.layer_norm = nn.LayerNorm(dim)
 
     def forward(self, x: Tensor) -> Tensor:
-        """
-        Forward pass of the block.
+        """Forward pass of the block.
 
         Args:
             x: Input tensor
@@ -111,18 +111,17 @@ class AttentionNetwork(BaseNetwork):
     """Neural network with self-attention layers."""
 
     def __init__(self, config: NetworkConfig) -> None:
-        """
-        Initialize the network.
+        """Initialize the network.
 
         Args:
             config: Network configuration dictionary containing:
                 - input_dim: Input dimension
                 - hidden_dim: Hidden dimension
                 - output_dim: Output dimension
-                - num_layers: Number of attention layers
-                - num_heads: Number of attention heads
+                - num_layers: Number of SelfAttention + FeedForwardBlock pairs
+                - num_heads: Number of attention heads (must divide hidden_dim)
                 - dropout: Dropout rate
-                - activation: Activation function name
+                - activation: Activation after the input projection only
         """
         super().__init__(config)
         self.input_dim = config["input_dim"]
@@ -156,15 +155,14 @@ class AttentionNetwork(BaseNetwork):
         self.apply(self._init_weights)
 
     def _init_weights(self, module):
-        """Initialize weights with small values to prevent exploding gradients."""
+        """Linear weights ``N(0, 0.02^2)`` and zero biases, to prevent exploding gradients."""
         if isinstance(module, nn.Linear):
             module.weight.data.normal_(mean=0.0, std=0.02)
             if module.bias is not None:
                 module.bias.data.zero_()
 
     def forward(self, x: InputType) -> OutputType:
-        """
-        Forward pass of the network.
+        """Forward pass of the network.
 
         Args:
             x: Input tensor or array

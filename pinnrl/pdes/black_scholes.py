@@ -1,9 +1,11 @@
-# Black-Scholes equation
-# Application domains: Option pricing
-# Complexity: Linear, 2nd-order, variable coefficients
+"""Black-Scholes equation.
+
+Application domains: Option pricing. Complexity: Linear, 2nd-order, variable coefficients.
+"""
 
 import math
-from typing import Any, Callable, Dict
+from collections.abc import Callable
+from typing import Any
 
 import torch
 
@@ -15,9 +17,13 @@ def _normal_cdf(z: torch.Tensor) -> torch.Tensor:
 
 
 class BlackScholesEquation(PDEBase):
-    """Black-Scholes equation in time to maturity ``τ`` (the ``t`` input)::
+    """Black-Scholes equation in time to maturity ``τ`` (the ``t`` input).
+
+    The PDE is::
 
         V_τ = ½ σ² Σ_d S_d² V_{S_d S_d} + r Σ_d S_d V_{S_d} - r V
+
+    (in more than one dimension the assets are uncorrelated: no cross terms).
 
     Writing it in ``τ = T - t`` turns the payoff at maturity into the initial
     condition at ``τ = 0``, which is what the PINN loss imposes.
@@ -26,8 +32,9 @@ class BlackScholesEquation(PDEBase):
     default 0.05).
 
     Initial condition: ``option`` (alias ``call_option``) — the payoff
-    ``max(S - K, 0)`` for ``option_type: call`` or ``max(K - S, 0)`` for ``put``,
-    with ``strike`` K (alias ``strike_price``) on ``Σ_d S_d``.
+    ``max(S - K, 0)`` for ``option_type: call`` (the default) or ``max(K - S, 0)``
+    for ``put``, with ``strike`` K (alias ``strike_price``, default 100) on
+    ``S = Σ_d S_d``.
 
     Exact solution (1-D): ``black_scholes`` — the closed-form European price
     ``S Φ(d1) - K e^{-rτ} Φ(d2)`` (call) or ``K e^{-rτ} Φ(-d2) - S Φ(-d1)`` (put)
@@ -71,7 +78,7 @@ class BlackScholesEquation(PDEBase):
             + self.r * d["u"]
         )
 
-    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
         if params.get("type") in ("option", "call_option"):
             strike, option_type = self._option()
             sign = 1.0 if option_type == "call" else -1.0

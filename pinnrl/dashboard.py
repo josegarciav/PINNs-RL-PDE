@@ -49,7 +49,7 @@ FIELD_STYLE = {"marginBottom": "12px"}
 # Load config.yaml defaults at startup for the training form
 _CONFIG_PATH = DEFAULT_CONFIG_PATH
 try:
-    with open(_CONFIG_PATH, "r") as _f:
+    with open(_CONFIG_PATH) as _f:
         _YAML_CONFIG = yaml.safe_load(_f)
 except Exception:
     _YAML_CONFIG = {}
@@ -712,9 +712,7 @@ app.layout = html.Div(
                                                                                 if _TRAINING_DEFAULTS.get(
                                                                                     "adaptive_weights",
                                                                                     {},
-                                                                                ).get(
-                                                                                    "enabled"
-                                                                                )
+                                                                                ).get("enabled")
                                                                                 else "off"
                                                                             ),
                                                                             clearable=False,
@@ -761,7 +759,7 @@ app.layout = html.Div(
                                                                             clearable=False,
                                                                         ),
                                                                         html.Div(
-                                                                            "Cosine: deterministic decay over a fixed epoch budget. Reduce-on-plateau: drops LR when val loss stalls.",
+                                                                            "Cosine: deterministic decay over a fixed epoch budget. Reduce-on-plateau: drops LR when the epoch training loss stalls.",
                                                                             style={
                                                                                 "fontSize": "11px",
                                                                                 "color": "#888",
@@ -1397,7 +1395,7 @@ app.layout = html.Div(
                                                     step=0.01,
                                                     value=0.5,
                                                     marks={
-                                                        i / 10: f"{i/10:.1f}" for i in range(11)
+                                                        i / 10: f"{i / 10:.1f}" for i in range(11)
                                                     },
                                                 ),
                                             ],
@@ -1423,7 +1421,12 @@ app.layout = html.Div(
 
 
 def get_experiments():
-    """Get list of all experiments with their details."""
+    """List every run folder in ``RESULTS_DIR`` as dropdown options.
+
+    Returns ``{"label", "value", "is_running"}`` dicts, newest first. Stale
+    ``.running`` markers (run finished, no metadata or history, or older than
+    an hour without metadata) are deleted on the way.
+    """
     experiments = []
     experiments_dir = RESULTS_DIR
 
@@ -1444,7 +1447,7 @@ def get_experiments():
 
                     if os.path.exists(meta_file):
                         try:
-                            with open(meta_file, "r") as mf:
+                            with open(meta_file) as mf:
                                 meta = json.load(mf)
                                 if meta.get("status") == "completed" or "end_time" in meta:
                                     stale = True
@@ -1510,7 +1513,7 @@ def get_experiments():
 
 
 def get_live_experiments():
-    """Return only running or recently completed experiments."""
+    """Return running experiments and those whose metadata changed in the last two hours."""
     all_exps = get_experiments()
     live = []
     for exp in all_exps:
@@ -1522,7 +1525,7 @@ def get_live_experiments():
         meta_file = os.path.join(exp_path, "metadata.json")
         if os.path.exists(meta_file):
             try:
-                with open(meta_file, "r") as f:
+                with open(meta_file) as f:
                     meta = json.load(f)
                 end_time_str = meta.get("end_time") or meta.get("last_updated")
                 if end_time_str:
@@ -1613,7 +1616,7 @@ def load_experiment_data(experiment):
     history_file = os.path.join(experiment, "history.json")
     if os.path.exists(history_file):
         try:
-            with open(history_file, "r") as f:
+            with open(history_file) as f:
                 history = json.load(f)
         except (json.JSONDecodeError, OSError):
             pass
@@ -1621,7 +1624,7 @@ def load_experiment_data(experiment):
     metadata_file = os.path.join(experiment, "metadata.json")
     if os.path.exists(metadata_file):
         try:
-            with open(metadata_file, "r") as f:
+            with open(metadata_file) as f:
                 metadata = json.load(f)
         except (json.JSONDecodeError, OSError):
             pass
@@ -1629,7 +1632,7 @@ def load_experiment_data(experiment):
     config_file = os.path.join(experiment, "config.yaml")
     if os.path.exists(config_file):
         try:
-            with open(config_file, "r") as f:
+            with open(config_file) as f:
                 config = yaml.safe_load(f)
         except (yaml.YAMLError, OSError):
             pass
@@ -2357,9 +2360,9 @@ def _empty_3d_figure(message: str) -> go.Figure:
 def update_live_snapshot(experiment, _n_intervals):
     """Read ``live_snapshot.npz`` for the selected experiment and render two surfaces.
 
-    The trainer writes this file every ``validation_frequency`` epochs (and
-    once before the first epoch), so the Monitor tab updates roughly in step
-    with the loss curve while training is running.
+    The trainer writes this file every ``validation_frequency`` epochs (plus
+    once before the first epoch and once after the last), so the Monitor tab
+    updates roughly in step with the loss curve while training is running.
     """
     if not experiment:
         empty = _empty_3d_figure("Select an experiment to view live snapshot")
@@ -2417,8 +2420,8 @@ def update_param_trajectories(experiment, _n_intervals):
 
     Reads ``history.json`` for the ``param_<name>`` series produced by the
     trainer and draws a dashed reference line at the true value (recovered
-    from ``metadata.json["true_parameters"]``). Hidden when no trainable
-    parameters are present.
+    from ``metadata.json["true_parameters"]``). Without trainable parameters
+    it shows a "No trainable PDE parameters" placeholder.
     """
     fig = go.Figure()
     if not experiment:
@@ -2538,7 +2541,7 @@ def download_report(n_clicks, experiment):
     prevent_initial_call=False,
 )
 def update_architecture_comparison(_):
-    """Refresh the architecture comparison chart from completed experiments."""
+    """Refresh the architecture comparison chart from every run with a ``history.json``."""
     architectures = {}
 
     experiment_dirs = []
@@ -2555,7 +2558,7 @@ def update_architecture_comparison(_):
         metadata_file = os.path.join(exp_dir, "metadata.json")
         if os.path.exists(metadata_file):
             try:
-                with open(metadata_file, "r") as f:
+                with open(metadata_file) as f:
                     meta = json.load(f)
                     architecture = meta.get("architecture")
                     if not architecture and "config" in meta and "model" in meta["config"]:
@@ -2567,7 +2570,7 @@ def update_architecture_comparison(_):
             config_file = os.path.join(exp_dir, "config.yaml")
             if os.path.exists(config_file):
                 try:
-                    with open(config_file, "r") as f:
+                    with open(config_file) as f:
                         cfg = yaml.safe_load(f)
                         if "model" in cfg and "architecture" in cfg["model"]:
                             architecture = cfg["model"]["architecture"]
@@ -2584,7 +2587,7 @@ def update_architecture_comparison(_):
             continue
 
         try:
-            with open(history_file, "r") as f:
+            with open(history_file) as f:
                 hist = json.load(f)
 
             if architecture not in architectures:
@@ -2639,7 +2642,7 @@ def update_architecture_comparison(_):
     prevent_initial_call=False,
 )
 def update_pde_comparison(_):
-    """Refresh the PDE comparison chart from completed experiments."""
+    """Refresh the PDE comparison chart from every run with a ``history.json``."""
     pdes = {}
 
     experiment_dirs = []
@@ -2656,7 +2659,7 @@ def update_pde_comparison(_):
         metadata_file = os.path.join(exp_dir, "metadata.json")
         if os.path.exists(metadata_file):
             try:
-                with open(metadata_file, "r") as f:
+                with open(metadata_file) as f:
                     meta = json.load(f)
                     pde_type = meta.get("pde_type") or meta.get("pde_name")
             except Exception:
@@ -2666,7 +2669,7 @@ def update_pde_comparison(_):
             config_file = os.path.join(exp_dir, "config.yaml")
             if os.path.exists(config_file):
                 try:
-                    with open(config_file, "r") as f:
+                    with open(config_file) as f:
                         cfg = yaml.safe_load(f)
                         pde_type = cfg.get("pde_type") or cfg.get("pde", {}).get("name")
                 except Exception:
@@ -2686,14 +2689,14 @@ def update_pde_comparison(_):
                 continue
 
         try:
-            with open(history_file, "r") as f:
+            with open(history_file) as f:
                 hist = json.load(f)
 
             comp_time = None
             hover_text = f"Experiment: {os.path.basename(exp_dir)}"
             if os.path.exists(metadata_file):
                 try:
-                    with open(metadata_file, "r") as f:
+                    with open(metadata_file) as f:
                         meta = json.load(f)
                         comp_time = meta.get("training_time_minutes")
                         if comp_time:
@@ -2765,7 +2768,7 @@ def update_collocation_experiments(tab):
     Input("collocation-experiment-selector", "value"),
 )
 def update_collocation_plot(experiment):
-    """Render the collocation-point distribution plot for the selected experiment."""
+    """Show the newest saved collocation PNG (e.g. ``visualizations/collocation_evolution.png``)."""
     if not experiment:
         return create_empty_figure("Select an experiment", "Collocation Points Distribution")
 
@@ -2889,7 +2892,7 @@ def generate_html_report(experiment_path, figures, metadata):
     """Generate an interactive HTML report for the experiment."""
     config_path = os.path.join(experiment_path, "config.yaml")
     try:
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = yaml.safe_load(f)
     except Exception:
         config = {}
@@ -2925,8 +2928,8 @@ def generate_html_report(experiment_path, figures, metadata):
                 <h1>PINNs-RL-PDE Experiment Report</h1>
                 <h2>{exp_name}</h2>
                 <div>
-                    <span class="status-badge {('rl-enabled' if rl_enabled else 'rl-disabled')}">
-                        RL {('Enabled' if rl_enabled else 'Disabled')}
+                    <span class="status-badge {("rl-enabled" if rl_enabled else "rl-disabled")}">
+                        RL {("Enabled" if rl_enabled else "Disabled")}
                     </span>
                     <span class="status-badge" style="background-color: #007bff;">{architecture}</span>
                 </div>
@@ -2950,10 +2953,10 @@ def generate_html_report(experiment_path, figures, metadata):
             </div>
         </div>
         <script>
-            {figures['loss_plot']}
-            {figures['collocation_plot']}
-            {figures['exact_solution']}
-            {figures['predicted_solution']}
+            {figures["loss_plot"]}
+            {figures["collocation_plot"]}
+            {figures["exact_solution"]}
+            {figures["predicted_solution"]}
         </script>
     </body>
     </html>

@@ -1,20 +1,26 @@
+"""Adaptive loss weighting: gradient-norm (``lrw``) and relative-loss (``rbw``) balancing."""
+
 import logging
 
 import torch
 
 
 class AdaptiveLossWeights:
-    """Handles adaptive weighting of different loss components in PINNs."""
+    """Adaptive weights for the [residual, boundary, initial] loss components.
+
+    The first :meth:`update` call returns ``initial_weights`` (or ones) and
+    seeds the running average; later calls return weights that sum to 1.
+    """
 
     def __init__(self, strategy="rbw", alpha=0.9, eps=1e-5, initial_weights=None):
-        """
-        Initialize adaptive loss weights handler.
+        """Initialize adaptive loss weights handler.
 
         Args:
-            strategy (str): Weight adaptation strategy ('lrw' or 'rbw')
-            alpha (float): Moving average factor for weight updates
-            eps (float): Small constant for numerical stability
-            initial_weights (list): Initial weights for [pde, boundary, initial] components
+            strategy (str): Weight adaptation strategy ('lrw' or 'rbw').
+            alpha (float): EMA retention factor: ``new = alpha * old + (1 - alpha) * current``.
+            eps (float): Small constant for numerical stability.
+            initial_weights (list | None): Weights for [residual, boundary, initial]
+                returned by the first update; ``None`` means ones.
         """
         self.strategy = strategy.lower()
         self.alpha = alpha
@@ -33,11 +39,20 @@ class AdaptiveLossWeights:
         self.prev_weights = None
 
     def update_weights_lrw(self, gradients):
-        """
-        Update weights using Learning Rate based Weighting (LRW).
+        """Update weights using Learning Rate based Weighting (LRW).
+
+        After the first call (which only seeds ``g_bar``)::
+
+            g_bar_i = alpha * g_bar_i + (1 - alpha) * g_i
+            w_i = (1 / (g_bar_i + eps)) / sum_j (1 / (g_bar_j + eps))
+
+        so components with smaller gradient norms get larger weights.
 
         Args:
-            gradients (list): List of gradient norms for each loss component
+            gradients (torch.Tensor): Gradient norm of each loss component, shape ``(n,)``.
+
+        Returns:
+            torch.Tensor: The weights, shape ``(n,)``.
         """
         if self.running_grads is None:
             self.running_grads = gradients
@@ -66,12 +81,22 @@ class AdaptiveLossWeights:
         return self.weights
 
     def update_weights_rbw(self, losses):
-        """
-        Update weights using Relative Error based Weighting (RBW).
-        Gives more weight to terms with bigger losses to balance them.
+        """Update weights using Relative Error based Weighting (RBW).
+
+        Gives more weight to terms with bigger losses. After the first call
+        (which only seeds ``L_bar``)::
+
+            L_bar_i = alpha * L_bar_i + (1 - alpha) * L_i
+            w_i = alpha * w_prev_i + (1 - alpha) * L_bar_i / (sum_j L_bar_j + eps)
+
+        where ``w_prev`` is the previous RBW result; on the second call there is
+        none yet and ``w_i`` is the normalised term alone.
 
         Args:
-            losses (list): List of individual loss components
+            losses (torch.Tensor): Detached value of each loss component, shape ``(n,)``.
+
+        Returns:
+            torch.Tensor: The weights, shape ``(n,)``.
         """
         if self.running_losses is None:
             self.running_losses = losses
@@ -107,15 +132,17 @@ class AdaptiveLossWeights:
         return self.weights
 
     def update(self, losses=None, gradients=None):
-        """
-        Update weights based on chosen strategy.
+        """Update weights based on chosen strategy.
 
         Args:
-            losses (list): List of individual loss components
-            gradients (list): List of gradient norms for each loss component
+            losses (torch.Tensor | None): Loss component values (required for ``rbw``).
+            gradients (torch.Tensor | None): Gradient norm per component (required for ``lrw``).
 
         Returns:
-            torch.Tensor: Updated loss weights
+            torch.Tensor: Updated loss weights.
+
+        Raises:
+            ValueError: If the input the strategy needs is missing, or the strategy is unknown.
         """
         if self.strategy == "lrw" and gradients is not None:
             return self.update_weights_lrw(gradients)

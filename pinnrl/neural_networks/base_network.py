@@ -1,26 +1,25 @@
 """Base class for neural network architectures."""
 
-from typing import Any, Dict, List, Union
+from typing import Any
 
 import numpy as np
 import torch
 import torch.nn as nn
 
 # Type aliases for better readability
-InputType = Union[torch.Tensor, Union[np.ndarray, List]]
-OutputType = Union[torch.Tensor, Union[np.ndarray, List]]
-NetworkConfig = Dict[str, Any]
+InputType = torch.Tensor | np.ndarray | list
+OutputType = torch.Tensor | np.ndarray | list
+NetworkConfig = dict[str, Any]
 
 
 class BaseNetwork(nn.Module):
     """Base class for all neural network architectures."""
 
-    def __init__(self, config: Dict) -> None:
-        """
-        Initialize the base network.
+    def __init__(self, config: dict) -> None:
+        """Initialize the base network.
 
         Args:
-            config: Configuration dictionary
+            config: Configuration mapping with ``.get`` (a dict or a ``ModelConfig``)
         """
         super().__init__()
         self.config = config

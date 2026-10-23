@@ -1,8 +1,10 @@
-# Cahn-Hilliard equation
-# Application domains: Spinodal decomposition, phase separation with mass conservation
-# Complexity: Nonlinear, 4th-order
+"""Cahn-Hilliard equation.
 
-from typing import Any, Callable, Dict
+Application domains: Spinodal decomposition, phase separation with mass conservation. Complexity: Nonlinear, 4th-order.
+"""
+
+from collections.abc import Callable
+from typing import Any
 
 import torch
 
@@ -61,7 +63,7 @@ class CahnHilliardEquation(PDEBase):
             torch.sum(x, dim=1, keepdim=True) / (2 * self.dimension * self.kappa) ** 0.5
         )
 
-    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
         ic_type = params.get("type")
         if ic_type == "tanh":
             return lambda x, t: self._kink(x)

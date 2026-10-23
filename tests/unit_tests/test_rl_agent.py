@@ -42,7 +42,7 @@ def test_update_decays_epsilon_and_syncs_target():
     agent.update(torch.zeros(2), 1, 1.0, torch.zeros(2), False)
     assert agent.epsilon == 0.5  # clamped at epsilon_end
     assert agent.steps == 2
-    for p, q in zip(agent.policy_net.parameters(), agent.target_net.parameters()):
+    for p, q in zip(agent.policy_net.parameters(), agent.target_net.parameters(), strict=False):
         assert torch.equal(p, q)
 
 

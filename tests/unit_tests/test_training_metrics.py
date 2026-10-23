@@ -24,7 +24,7 @@ class TestSaveTrainingMetrics:
         history = {"loss": [1.0, 0.5]}
         save_training_metrics(history, exp_dir)
 
-        with open(os.path.join(exp_dir, "metrics.json"), "r") as f:
+        with open(os.path.join(exp_dir, "metrics.json")) as f:
             data = json.load(f)
         assert data == history
 
@@ -33,7 +33,7 @@ class TestSaveTrainingMetrics:
         history = {"loss": [1.0, 0.5]}
         save_training_metrics(history, exp_dir)
 
-        with open(os.path.join(exp_dir, "history.json"), "r") as f:
+        with open(os.path.join(exp_dir, "history.json")) as f:
             data = json.load(f)
         assert data == history
 
@@ -53,7 +53,7 @@ class TestSaveTrainingMetrics:
         metadata = {"pde": "heat", "arch": "feedforward"}
         save_training_metrics({"loss": [0.1]}, exp_dir, metadata=metadata)
 
-        with open(os.path.join(exp_dir, "metadata.json"), "r") as f:
+        with open(os.path.join(exp_dir, "metadata.json")) as f:
             data = json.load(f)
         assert data["pde"] == "heat"
         assert data["arch"] == "feedforward"
@@ -63,7 +63,7 @@ class TestSaveTrainingMetrics:
         exp_dir = str(tmp_path / "exp")
         save_training_metrics({"loss": []}, exp_dir, metadata={"key": "val"})
 
-        with open(os.path.join(exp_dir, "metadata.json"), "r") as f:
+        with open(os.path.join(exp_dir, "metadata.json")) as f:
             data = json.load(f)
         # Timestamp should be YYYY-MM-DD HH:MM:SS format
         assert len(data["last_updated"]) == 19
@@ -80,7 +80,7 @@ class TestSaveTrainingMetrics:
         new_metadata = {"arch": "resnet", "epochs": 100}
         save_training_metrics({"loss": []}, exp_dir, metadata=new_metadata)
 
-        with open(os.path.join(exp_dir, "metadata.json"), "r") as f:
+        with open(os.path.join(exp_dir, "metadata.json")) as f:
             data = json.load(f)
         # Should have both old and new keys
         assert data["pde"] == "heat"
@@ -98,7 +98,7 @@ class TestSaveTrainingMetrics:
 
         save_training_metrics({"loss": []}, exp_dir, metadata={"epochs": 200})
 
-        with open(os.path.join(exp_dir, "metadata.json"), "r") as f:
+        with open(os.path.join(exp_dir, "metadata.json")) as f:
             data = json.load(f)
         assert data["epochs"] == 200
 
@@ -114,7 +114,7 @@ class TestSaveTrainingMetrics:
         # Should not raise due to bare except in source
         save_training_metrics({"loss": []}, exp_dir, metadata={"key": "val"})
 
-        with open(os.path.join(exp_dir, "metadata.json"), "r") as f:
+        with open(os.path.join(exp_dir, "metadata.json")) as f:
             data = json.load(f)
         assert data["key"] == "val"
         assert "last_updated" in data
@@ -127,7 +127,7 @@ class TestSaveTrainingMetrics:
         }
         save_training_metrics(history, exp_dir)
 
-        with open(os.path.join(exp_dir, "metrics.json"), "r") as f:
+        with open(os.path.join(exp_dir, "metrics.json")) as f:
             data = json.load(f)
         assert data["loss"] == [1.0, 0.5, 0.1]
         assert data["lr"] == [0.01, 0.005]
@@ -143,7 +143,7 @@ class TestSaveTrainingMetrics:
         }
         save_training_metrics(history, exp_dir)
 
-        with open(os.path.join(exp_dir, "metrics.json"), "r") as f:
+        with open(os.path.join(exp_dir, "metrics.json")) as f:
             data = json.load(f)
         assert data["metrics"]["train_loss"] == [1.0, 0.5]
         assert data["grads"][0] == [0.1, 0.2]
@@ -153,7 +153,7 @@ class TestSaveTrainingMetrics:
         metadata = {"best_loss": np.float64(0.001), "dims": np.array([64, 64])}
         save_training_metrics({"loss": []}, exp_dir, metadata=metadata)
 
-        with open(os.path.join(exp_dir, "metadata.json"), "r") as f:
+        with open(os.path.join(exp_dir, "metadata.json")) as f:
             data = json.load(f)
         assert data["dims"] == [64, 64]
 
@@ -161,7 +161,7 @@ class TestSaveTrainingMetrics:
         exp_dir = str(tmp_path / "exp")
         result = save_training_metrics({}, exp_dir)
 
-        with open(os.path.join(exp_dir, "metrics.json"), "r") as f:
+        with open(os.path.join(exp_dir, "metrics.json")) as f:
             data = json.load(f)
         assert data == {}
         assert os.path.isfile(result)
@@ -178,6 +178,6 @@ class TestSaveTrainingMetrics:
         history = {"epoch": 10, "name": "test", "flag": True, "rate": 0.5}
         save_training_metrics(history, exp_dir)
 
-        with open(os.path.join(exp_dir, "metrics.json"), "r") as f:
+        with open(os.path.join(exp_dir, "metrics.json")) as f:
             data = json.load(f)
         assert data == history

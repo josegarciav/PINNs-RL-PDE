@@ -5,15 +5,16 @@ arrays. pinnrl's data-fitting loss expects a flat point cloud of
 ``(x, t, u)`` tuples (see ``PDEBase._compute_data_loss``). The functions here
 bridge those two shapes:
 
-* :func:`resolve_path` picks the Hugging Face mirror by default and falls
-  back to a user-supplied local download dir.
+* :func:`resolve_path` returns the user-supplied local download dir, or the
+  Hugging Face mirror when none is given.
 * :func:`load_well_slice` instantiates ``the_well.data.WellDataset`` (lazily —
-  the dependency is optional), pulls a small slice of trajectories, samples
-  ``n_points`` random spatio-temporal locations, and returns ready-to-use
-  CPU/GPU tensors.
+  the dependency is optional) with its default arguments, flattens a few of
+  its samples, keeps ``n_points`` random spatio-temporal locations, and
+  returns ready-to-use CPU/GPU tensors.
 
-Loaded slices are cached as ``.npz`` under ``~/.cache/pinnrl/well/`` so
-repeat training runs (and CI smoke tests) do not re-download or re-flatten.
+Loaded slices are cached as ``.npz`` under ``~/.cache/pinnrl/well/`` (or
+``$PINNRL_WELL_CACHE``) so repeat training runs (and CI smoke tests) do not
+re-download or re-flatten.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 import torch
@@ -44,12 +45,15 @@ class TheWellNotInstalledError(ImportError):
         )
 
 
-def resolve_path(base: Optional[str] = None) -> str:
+def resolve_path(base: str | None = None) -> str:
     """Return the ``well_base_path`` to hand to ``WellDataset``.
 
     Args:
         base: Local directory if the user has run ``the-well-download``,
-            otherwise ``None`` to stream from Hugging Face.
+            otherwise ``None`` (or blank) to stream from Hugging Face.
+
+    Returns:
+        ``base`` as a string, or ``"hf://datasets/polymathic-ai/"``.
     """
     if base is None or not str(base).strip():
         return _DEFAULT_HF_BASE
@@ -57,14 +61,14 @@ def resolve_path(base: Optional[str] = None) -> str:
 
 
 def _cache_dir() -> Path:
-    """Where flattened ``.npz`` slices are stored."""
+    """Where flattened ``.npz`` slices are stored (``$PINNRL_WELL_CACHE`` overrides)."""
     root = os.environ.get("PINNRL_WELL_CACHE")
     if root:
         return Path(root)
     return Path.home() / ".cache" / "pinnrl" / "well"
 
 
-def _base_tag(base: Optional[str]) -> str:
+def _base_tag(base: str | None) -> str:
     """Stable short tag for the resolved base path.
 
     Distinguishes HF streaming from local mirrors and from each other so two
@@ -83,13 +87,13 @@ def _cache_file(
     n_traj: int,
     n_points: int,
     seed: int,
-    base: Optional[str] = None,
+    base: str | None = None,
 ) -> Path:
     tag = _base_tag(base)
     return _cache_dir() / f"{name}__{split}__t{n_traj}_p{n_points}_s{seed}__{tag}.npz"
 
 
-def _load_well_dataset(name: str, split: str, base: Optional[str]):
+def _load_well_dataset(name: str, split: str, base: str | None):
     """Import ``the_well`` lazily and instantiate a ``WellDataset``."""
     try:
         from the_well.data import WellDataset  # type: ignore
@@ -105,9 +109,9 @@ def _load_well_dataset(name: str, split: str, base: Optional[str]):
 
 def _flatten_trajectory(
     fields: np.ndarray,
-    spatial_axes: Dict[str, np.ndarray],
+    spatial_axes: dict[str, np.ndarray],
     times: np.ndarray,
-) -> Dict[str, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """Flatten ``(n_steps, *spatial, n_fields)`` into ``(N, ...)`` arrays.
 
     ``spatial_axes`` is an ordered dict mapping axis name -> 1D coordinate
@@ -120,12 +124,15 @@ def _flatten_trajectory(
     return {"x": x_flat, "t": t_flat, "u": u_flat}
 
 
-def _extract_arrays(sample: Any, n_spatial_dims: int) -> Dict[str, np.ndarray]:
+def _extract_arrays(sample: Any, n_spatial_dims: int) -> dict[str, np.ndarray]:
     """Coerce a ``WellDataset`` sample into raw numpy arrays.
 
     The Well's sample dict format has shifted between releases; we accept
     the common shapes and surface a clear error otherwise so users know
-    what we needed.
+    what we needed. Fields come from the first of ``input_fields``,
+    ``fields``, ``u`` or ``data``; times from ``time`` and coordinates from
+    ``space/<axis>``, each falling back to ``linspace(0, 1, n)`` when the key
+    is missing or its length does not match.
     """
     if not isinstance(sample, dict):
         raise TypeError(f"Expected WellDataset sample to be a dict, got {type(sample).__name__}")
@@ -154,7 +161,7 @@ def _extract_arrays(sample: Any, n_spatial_dims: int) -> Dict[str, np.ndarray]:
     if times.size != n_steps:
         times = np.linspace(0.0, 1.0, n_steps, dtype=np.float32)
 
-    spatial_axes: Dict[str, np.ndarray] = {}
+    spatial_axes: dict[str, np.ndarray] = {}
     axis_names = ("x", "y", "z")[:n_spatial_dims]
     for i, axis in enumerate(axis_names):
         size = fields.shape[1 + i]
@@ -177,25 +184,33 @@ def load_well_slice(
     n_points: int = 4096,
     seed: int = 0,
     device: str = "cpu",
-    base: Optional[str] = None,
+    base: str | None = None,
     use_cache: bool = True,
-) -> Dict[str, torch.Tensor]:
+) -> dict[str, torch.Tensor]:
     """Sample ``n_points`` flat ``(x, t, u)`` tuples from a Well dataset.
 
     Args:
         name: Registry key — must exist in ``WELL_REGISTRY``.
         split: Dataset split (``train``, ``valid``, ``test``).
-        n_traj: How many trajectories to draw from. Tensors are aggregated
+        n_traj: How many ``WellDataset`` samples to draw (random, without
+            replacement, capped at ``len(dataset)``). Points are pooled
             across them before sub-sampling.
-        n_points: Number of (space, time) samples to retain.
-        seed: RNG seed for reproducible sub-sampling.
+        n_points: Number of (space, time) samples to retain; all are kept
+            when the pool is smaller.
+        seed: RNG seed for the sample choice and the sub-sampling.
         device: Torch device for the returned tensors.
         base: Local download dir; ``None`` = HF streaming.
         use_cache: When True, reuse / write a flattened ``.npz`` under
-            ``~/.cache/pinnrl/well/``. Set False to force a fresh load.
+            the cache dir (``~/.cache/pinnrl/well/`` or ``$PINNRL_WELL_CACHE``).
+            Set False to force a fresh load.
 
     Returns:
         ``{"x": (N, d_space), "t": (N, 1), "u": (N, d_fields)}`` on ``device``.
+
+    Raises:
+        KeyError: If ``name`` is not registered.
+        TheWellNotInstalledError: If the optional ``the_well`` package is missing.
+        RuntimeError: If the split is empty.
     """
     entry = get_entry(name)
     rng = np.random.default_rng(seed)

@@ -64,3 +64,18 @@ def test_rejects_mismatched_agent():
     agent = RLAgent(state_dim=4, action_dim=3, hidden_dim=8)
     with pytest.raises(ValueError, match="does not match"):
         _sampler(agent=agent)
+
+
+def test_distribution_is_deterministic():
+    """Dropout is off when evaluating the policy: same state, same distribution."""
+    sampler = _sampler()
+    state = sampler.probe(_HotSpotPDE(), model=None, progress=0.5)
+    torch.testing.assert_close(sampler.distribution(state), sampler.distribution(state))
+    assert sampler.agent.policy_net.training  # restored for the next replay update
+
+
+def test_probe_cells_capped_at_grid_size():
+    """Asking for more probe cells than exist probes every cell instead of crashing."""
+    sampler = _sampler(n_x_cells=2, n_t_cells=2, probe_cells=32)
+    sampler.probe(_HotSpotPDE(), model=None, progress=0.0)
+    assert len(sampler.agent.memory) == 4

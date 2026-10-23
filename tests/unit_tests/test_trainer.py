@@ -369,7 +369,7 @@ def test_train_steps_time_budget_and_checkpoints():
         on_checkpoint=lambda step, clock, model: seen.append((step, clock)),
     )
     assert out["train_time_s"] >= 0.2
-    assert [c >= mark for (_, c), mark in zip(seen, [0.05, 0.1])] == [True, True]
+    assert [c >= mark for (_, c), mark in zip(seen, [0.05, 0.1], strict=False)] == [True, True]
 
 
 def test_train_steps_resample_every_reuses_points():

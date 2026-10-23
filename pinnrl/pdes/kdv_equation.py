@@ -1,9 +1,11 @@
-# Korteweg-de Vries (KdV) equation
-# Application domains: Shallow-water waves, plasma physics, solitons
-# Complexity: Nonlinear, 3rd-order
+"""Korteweg-de Vries (KdV) equation.
+
+Application domains: Shallow-water waves, plasma physics, solitons. Complexity: Nonlinear, 3rd-order.
+"""
 
 import math
-from typing import Any, Callable, Dict
+from collections.abc import Callable
+from typing import Any
 
 import torch
 
@@ -22,7 +24,7 @@ class KdVEquation(PDEBase):
         u = (3c / alpha) · sech²( ½ √(c / beta) · (x - x0 - c t) )
 
     Substituting ``u = f(x - c t)`` and integrating twice shows this travels at
-    exactly ``c`` and vanishes far from ``x0``.
+    exactly ``c`` and decays to zero away from its crest at ``x0 + c t``.
     """
 
     def __init__(self, config: PDEConfig, **kwargs):
@@ -45,7 +47,7 @@ class KdVEquation(PDEBase):
         """Speed of the soliton in the initial condition."""
         return float(self.config.initial_condition.get("speed", 1.0))
 
-    def _soliton(self, params: Dict[str, Any], x: torch.Tensor, t) -> torch.Tensor:
+    def _soliton(self, params: dict[str, Any], x: torch.Tensor, t) -> torch.Tensor:
         c = float(params.get("speed", 1.0))
         x0 = params.get("position", 0.0)
         width = 0.5 * math.sqrt(float(c) / float(self.beta))
@@ -60,7 +62,7 @@ class KdVEquation(PDEBase):
         )
         return d["dt"] + self.alpha * d["u"] * d["dx"] + self.beta * d["dx3"]
 
-    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
         if params.get("type") == "soliton":
             return lambda x, t: self._soliton(params, x, 0.0)
         return super()._create_initial_condition(params)

@@ -1,14 +1,15 @@
 """Benchmarks: classical solvers and sampling-strategy harness for pinnrl.
 
-This subpackage provides the ``pinnrl-benchmark`` CLI exposes:
+This subpackage provides what the ``pinnrl-benchmark`` CLI exposes:
 
 * :mod:`pinnrl.benchmarks.fdm` — minimal NumPy finite-difference solvers for
   the 1-D heat and wave equations, used as classical baselines for PINN
   accuracy comparisons.
 * :mod:`pinnrl.benchmarks.reference` — high-accuracy numerical reference
   solutions (Burgers via Cole-Hopf, Allen-Cahn via method of lines).
-* :mod:`pinnrl.benchmarks.sampling_study` — equal-wall-clock, multi-seed
-  comparison of collocation samplers (uniform / RAD / RL bandit).
+* :mod:`pinnrl.benchmarks.sampling_study` — multi-seed comparison of
+  collocation samplers (uniform, stratified, periodic uniform, RAD, RL bandit)
+  at equal training steps and at equal residual evaluations.
 * :mod:`pinnrl.benchmarks.cli` — argparse entry point bound to the
   ``pinnrl-benchmark`` console script.
 """

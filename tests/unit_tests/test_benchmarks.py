@@ -14,10 +14,18 @@ from pinnrl.benchmarks.cli import build_parser, main
 class TestFDM:
     def test_heat_solver_matches_analytical(self):
         result = solve_heat_1d(nt=2001, nx=51, t_max=0.5)
-        assert result.l2_error < 1e-3
+        assert result.l2_error < 5e-3  # relative L2; the old duplicated-endpoint grid gave ~1e-1
         assert result.u.shape == (2001, 51)
         assert result.u_exact_final.shape == (51,)
         assert result.wall_time_s >= 0.0
+
+    def test_heat_solver_is_second_order_on_periodic_grid(self):
+        # Doubling the points (at fixed r) must cut the error ~4x; the old grid
+        # duplicated the endpoint and was only first order.
+        coarse = solve_heat_1d(nx=50, nt=1001)
+        fine = solve_heat_1d(nx=100, nt=4001)
+        assert coarse.l2_error / fine.l2_error > 3.0
+        assert solve_heat_1d().l2_error < 1e-3
 
     def test_heat_solver_rejects_unstable_grid(self):
         with pytest.raises(ValueError, match="unstable"):
@@ -47,7 +55,7 @@ class TestCLI:
         assert csv_path.exists()
         with csv_path.open() as fh:
             rows = list(csv.reader(fh))
-        assert rows[0] == ["pde", "params", "nx", "nt", "l2_error", "max_error", "wall_time_s"]
+        assert rows[0] == ["pde", "params", "nx", "nt", "rel_l2_error", "max_error", "wall_time_s"]
         assert rows[1][0] == "heat"
 
     def test_sampling_subcommand_writes_outputs(self, tmp_path: Path, capsys):

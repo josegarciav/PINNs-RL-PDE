@@ -3,7 +3,7 @@
 Two subcommands:
 
 * ``pinnrl-benchmark fdm --pde {heat,wave}`` — solve with the bundled NumPy
-  FDM solver and print L2 / max error against the analytical solution
+  FDM solver and print relative L2 / max error against the analytical solution
   (``--csv PATH`` writes the row to a file).
 * ``pinnrl-benchmark sampling`` — the multi-seed sampling study of
   :mod:`pinnrl.benchmarks.sampling_study` on Burgers and Allen-Cahn at equal
@@ -17,8 +17,8 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Iterable, Sequence
 
 from pinnrl.benchmarks.fdm import FDMResult, solve_heat_1d, solve_wave_1d
 from pinnrl.benchmarks.sampling_study import (
@@ -73,7 +73,7 @@ def _fdm_command(args: argparse.Namespace) -> int:
         )
         params = f"c={args.c}"
 
-    headers = ["pde", "params", "nx", "nt", "l2_error", "max_error", "wall_time_s"]
+    headers = ["pde", "params", "nx", "nt", "rel_l2_error", "max_error", "wall_time_s"]
     row = [
         args.pde,
         params,

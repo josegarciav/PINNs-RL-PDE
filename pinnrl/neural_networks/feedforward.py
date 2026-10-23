@@ -10,17 +10,16 @@ class FeedForwardNetwork(BaseNetwork):
     """Simple feed-forward neural network with configurable hidden layers."""
 
     def __init__(self, config: NetworkConfig) -> None:
-        """
-        Initialize the feed-forward network.
+        """Initialize the feed-forward network.
 
         Args:
             config: Network configuration dictionary containing:
                 - input_dim: Input dimension
                 - hidden_dims: List of hidden layer dimensions
                 - output_dim: Output dimension
-                - activation: Activation function name ('relu', 'tanh', etc.)
-                - dropout: Dropout rate
-                - layer_norm: Whether to use layer normalization
+                - activation: Activation function name ('relu', 'tanh', etc.; default 'relu')
+                - dropout: Dropout rate (default 0.1)
+                - layer_norm: Whether to use layer normalization (default True)
                 - device: Device to place the model on
         """
         super().__init__(config)
@@ -42,7 +41,7 @@ class FeedForwardNetwork(BaseNetwork):
             layers.append(nn.Linear(prev_dim, hidden_dim))
             if self.use_layer_norm:
                 layers.append(nn.LayerNorm(hidden_dim))
-            # Bug #9 fix: create a new activation instance per layer
+            # A fresh activation module per layer
             layers.append(self._get_activation_module(activation_name))
             if self.dropout_rate > 0.0:
                 layers.append(nn.Dropout(self.dropout_rate))
@@ -57,8 +56,7 @@ class FeedForwardNetwork(BaseNetwork):
         self.to(self.device)
 
     def forward(self, x: InputType) -> OutputType:
-        """
-        Forward pass of the network.
+        """Forward pass of the network.
 
         Args:
             x: Input tensor or array

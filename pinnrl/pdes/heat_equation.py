@@ -1,9 +1,11 @@
-# Heat equation
-# Application domains: Heat conduction, diffusion processes
-# Complexity: Linear, 2nd-order
+"""Heat equation.
+
+Application domains: Heat conduction, diffusion processes. Complexity: Linear, 2nd-order.
+"""
 
 import math
-from typing import Any, Callable, Dict
+from collections.abc import Callable
+from typing import Any
 
 import torch
 
@@ -44,14 +46,14 @@ class HeatEquation(PDEBase):
         """Decay rate ``alpha * Σ_d (2π k / L_d)²`` of the ``sin_exp_decay`` mode."""
         return self.alpha * sum(w**2 for w in self._wave_numbers(k))
 
-    def _sine_mode(self, params: Dict[str, Any], x: torch.Tensor) -> torch.Tensor:
+    def _sine_mode(self, params: dict[str, Any], x: torch.Tensor) -> torch.Tensor:
         a, k = params.get("amplitude", 1.0), params.get("frequency", 2.0)
         mode = torch.ones_like(x[:, 0:1])
         for d, w in enumerate(self._wave_numbers(k)):
             mode = mode * torch.sin(w * x[:, d : d + 1])
         return a * mode
 
-    def _sine_2d_mode(self, params: Dict[str, Any], x: torch.Tensor) -> torch.Tensor:
+    def _sine_2d_mode(self, params: dict[str, Any], x: torch.Tensor) -> torch.Tensor:
         a = params.get("amplitude", 1.0)
         kx, ky = params.get("frequency_x", 2.0), params.get("frequency_y", 2.0)
         return a * torch.sin(kx * torch.pi * x[:, 0:1]) * torch.sin(ky * torch.pi * x[:, 1:2])
@@ -63,7 +65,7 @@ class HeatEquation(PDEBase):
         d = self.compute_derivatives(model, x, t, temporal_derivatives=[1], spatial_derivatives=[2])
         return d["dt"] - self.alpha * d["laplacian"]
 
-    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
         ic_type = params.get("type")
         if ic_type in ("sin_exp_decay", "sine"):
             return lambda x, t: self._sine_mode(params, x)

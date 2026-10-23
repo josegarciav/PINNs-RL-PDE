@@ -3,8 +3,9 @@
 Implements a point-wise FNO suitable for PINN training, where inputs are coordinate
 pairs (x, t) rather than gridded fields. The architecture lifts inputs to a
 higher-dimensional channel space, applies spectral convolution layers (FFT along
-the feature dimension -> learnable frequency-domain weights -> IFFT, with a linear
-bypass), and projects back to the solution dimension.
+the feature dimension -> learnable complex mixing of the lowest modes -> IFFT, with
+a linear bypass), and projects back to the solution dimension. Unlike the
+reference FNO, the FFT runs over each point's feature vector, not over space.
 
 Reference: Li et al., "Fourier Neural Operator for Parametric Partial Differential
 Equations" (2021), arXiv:2010.08895.
@@ -19,10 +20,15 @@ from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 class SpectralConv1d(nn.Module):
     """1D spectral convolution layer operating in Fourier space.
 
-    Treats the feature/channel dimension as a 1D signal:
-    1. FFT along the feature dimension
-    2. Multiply low-frequency modes by learnable complex weights
-    3. IFFT back to feature space
+    Treats the feature/channel dimension as a 1D signal::
+
+        X = rfft(x)                                    # (batch, channels // 2 + 1)
+        Y[:, n] = sum_{m < M} X[:, m] * W[m, n]        # n < M; Y = 0 for n >= M
+        y = irfft(Y, n=channels)
+
+    with ``M = min(modes, channels // 2 + 1)`` and ``W`` a learnable complex
+    ``(M, M)`` matrix (initialised ``N(0, 1) / (channels * M)`` per real and
+    imaginary part), so the kept modes are mixed, not scaled one by one.
     """
 
     def __init__(self, channels: int, modes: int):
@@ -61,7 +67,10 @@ class SpectralConv1d(nn.Module):
 
 
 class FNOBlock(nn.Module):
-    """Single FNO layer: spectral convolution + linear bypass + activation."""
+    """Single FNO layer: ``act(LayerNorm(spectral(x) + linear(x) + x))``.
+
+    Unknown activation names fall back to GELU.
+    """
 
     def __init__(self, channels: int, modes: int, activation: str = "gelu"):
         super().__init__()
@@ -96,9 +105,13 @@ class FNONetwork(BaseNetwork):
     """Fourier Neural Operator network for point-wise PINN training.
 
     Architecture:
-        Input(input_dim) -> Lift(hidden_dim) ->
+        Input(input_dim) -> Lift(Linear-GELU-Linear, hidden_dim) ->
         [FNOBlock(hidden_dim)] x num_blocks ->
-        Project(output_dim)
+        Project(Linear-GELU-Linear, output_dim)
+
+    Config keys: ``input_dim``, ``output_dim``, ``hidden_dim`` (default 128),
+    ``num_blocks`` (default 4), ``modes`` (default 16) and ``activation`` of
+    the blocks (default ``gelu``).
     """
 
     def __init__(self, config: NetworkConfig) -> None:
@@ -133,6 +146,7 @@ class FNONetwork(BaseNetwork):
         self.to(self.device)
 
     def forward(self, x: InputType) -> OutputType:
+        """Map ``(x, t)`` points to the solution through the spectral blocks."""
         x = self._prepare_input(x)
 
         # Lift to channel space

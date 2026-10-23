@@ -157,7 +157,6 @@ class TestConfigNonexistentPath:
 
 
 class TestValidateConfig:
-
     def test_valid_config_passes(self):
         """A minimal valid config should not raise."""
         _config_from_dict(_minimal_config_dict())
@@ -233,7 +232,6 @@ class TestValidateConfig:
 
 
 class TestGetDevice:
-
     def test_cpu_always_returns_cpu(self):
         d = _minimal_config_dict()
         d["device"] = "cpu"
@@ -286,7 +284,6 @@ class TestGetDevice:
 
 
 class TestConfigDictAccess:
-
     def test_getitem_model(self):
         cfg = _config_from_dict(_minimal_config_dict())
         assert cfg["model"] is cfg.model
@@ -320,7 +317,6 @@ class TestConfigDictAccess:
 
 
 class TestModelConfig:
-
     def test_basic_construction(self):
         mc = ModelConfig(
             input_dim=2,
@@ -405,7 +401,6 @@ class TestModelConfig:
 
 
 class TestTrainingConfig:
-
     def _make_training_config(self, **overrides):
         defaults = dict(
             num_epochs=100,
@@ -488,7 +483,6 @@ class TestTrainingConfig:
 
 
 class TestAdaptiveWeightsConfig:
-
     def test_defaults(self):
         aw = AdaptiveWeightsConfig()
         assert aw.enabled is False
@@ -516,7 +510,6 @@ class TestAdaptiveWeightsConfig:
 
 
 class TestDataclassInstantiation:
-
     def test_learning_rate_scheduler_config(self):
         lrs = LearningRateSchedulerConfig(
             type="cosine", warmup_epochs=100, min_lr=1e-6, factor=0.5, patience=50
@@ -709,7 +702,6 @@ class TestArchitectureParamInjection:
 
 
 class TestPDEConfigSelection:
-
     def test_heat_pde_selected_by_default(self):
         cfg = Config()
         assert cfg.pde_type == "heat"
@@ -746,7 +738,6 @@ class TestPDEConfigSelection:
 
 
 class TestSchedulerConfigLoading:
-
     def test_cosine_scheduler_params(self):
         d = _minimal_config_dict()
         d["training"]["scheduler_type"] = "cosine"

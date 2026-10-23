@@ -1,6 +1,4 @@
-"""
-Partial differential equations (PDEs).
-"""
+"""Partial differential equations (PDEs)."""
 
 from .allen_cahn import AllenCahnEquation
 from .black_scholes import BlackScholesEquation

@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Headless training script for PINNs-RL-PDE.
 
-Launched by the dashboard or CLI. Reads config.yaml, accepts PDE/architecture
-overrides via CLI arguments, and runs training to completion.
+Launched by the dashboard or CLI (``pinnrl-train``). Reads config.yaml, accepts
+PDE/architecture and hyperparameter overrides via CLI arguments, and runs
+training to completion in a run folder under ``paths.results_dir`` (``./runs/``
+by default). :func:`load_run` rebuilds a finished run.
 """
 
 import argparse
 import json
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -31,11 +34,12 @@ from pinnrl.training.trainer import PDETrainer
 def _apply_well_dataset_defaults(config: dict, dataset_cfg: dict) -> dict:
     """Overlay a Well-dataset block onto the config in place.
 
-    Adds an ``observation_data`` Well spec under the active PDE and, when
-    the dataset has a matched analytical PDE in the registry, fills in the
-    domain / time / dimension / output_dim defaults that a fresh user
-    would otherwise have to enter by hand. The function is a no-op for
-    config keys the user has already populated.
+    Always sets ``pde.observation_data`` to the Well spec. With
+    ``use_defaults`` (the default) it also overwrites the PDE domain,
+    time domain, dimension and input/output dims (and the model's
+    input/output dims) with the registry entry's values, and sets
+    ``training.mode`` to the entry's ``recommended_mode`` only if no mode is
+    present. No-op when ``dataset_cfg`` has no ``name``.
     """
     from pinnrl.datasets import get_entry
 
@@ -69,8 +73,8 @@ def _apply_well_dataset_defaults(config: dict, dataset_cfg: dict) -> dict:
         model_block["output_dim"] = entry.default_output_dim
         # Mode is the one default we don't force: a user who passed
         # --mode inverse alongside --dataset wants the inverse-problem
-        # objective, not the dataset's recommended_mode. Only fill it in
-        # when the caller hasn't already set one.
+        # objective, not the dataset's recommended_mode. setdefault keeps
+        # any training.mode already present, including the one in config.yaml.
         training_block = config.setdefault("training", {})
         training_block.setdefault("mode", entry.recommended_mode)
     return config
@@ -87,11 +91,21 @@ def build_config_dict(
     """Build a full config dict from yaml base + overrides.
 
     Args:
+        yaml_config: Parsed ``config.yaml``.
+        pde_name: PDE key or display name (resolved through the registry).
+        arch_type: Architecture key from the ``architectures:`` block.
+        use_rl: Enable the experimental RL bandit sampler.
+        epochs: Optional override of ``training.num_epochs``.
         dataset: Optional Well dataset block, e.g.
             ``{"name": "active_matter", "split": "train", "n_traj": 1,
             "n_points": 4096, "seed": 0, "base": None,
             "use_defaults": True}``. When supplied, registry defaults are
             overlaid on the PDE/model blocks before training starts.
+
+    Returns:
+        The config dict: a shallow copy of ``yaml_config`` (its nested
+        ``training`` and ``rl`` blocks are updated in place) with new ``pde``,
+        ``model`` and ``pde_type`` entries.
     """
     config = yaml_config.copy()
 
@@ -141,7 +155,12 @@ def build_config_dict(
 
 
 def create_pde(config_dict, device):
-    """Create a PDE instance from config dict."""
+    """Create the PDE described by a ``build_config_dict`` result.
+
+    In inverse mode with trainable parameters but no observation data,
+    synthetic noisy observations are generated (``inverse.obs_points``,
+    ``obs_noise``, ``obs_seed``; defaults 200, 0.01, 0).
+    """
     pde_cls = get_pde_spec(config_dict["pde"]["name"]).cls
 
     training_cfg = config_dict["training"]
@@ -179,7 +198,12 @@ def create_pde(config_dict, device):
 
 
 def build_model(config_dict, device):
-    """Build the PINNModel described by a ``build_config_dict`` result."""
+    """Build the PINNModel described by a ``build_config_dict`` result.
+
+    Returns:
+        ``(model, config)`` with the model on ``device`` and the
+        :class:`~pinnrl.config.Config` it was built from.
+    """
     arch_type = config_dict["model"]["architecture"]
     config_obj = Config()
     config_obj.device = device
@@ -202,12 +226,16 @@ def load_run(run_dir, device=None):
     parameters, so its exact solution is the reference even for inverse runs;
     observation data is not reloaded.
 
+    Args:
+        run_dir: Run folder written by :func:`run_training`.
+        device: Torch device; defaults to CPU.
+
     Returns:
         ``(pde, model, config_dict)`` with the model in eval mode.
     """
     device = device or torch.device("cpu")
     run_dir = Path(run_dir)
-    with open(run_dir / "config.yaml", "r") as f:
+    with open(run_dir / "config.yaml") as f:
         config_dict = yaml.safe_load(f)
     pde_only = {
         **config_dict,
@@ -227,7 +255,12 @@ def load_run(run_dir, device=None):
 
 
 def run_training(config_dict, device):
-    """Run a full training session."""
+    """Run a full training session.
+
+    Creates ``<paths.results_dir>/<timestamp>_<pde name or dataset>_<arch>_<rl|no_rl>``,
+    writes the ``config.yaml`` snapshot there and trains into it. On failure
+    the error is recorded in ``metadata.json`` (``status: failed``) and re-raised.
+    """
     arch_type = config_dict["model"]["architecture"]
     pde_name = config_dict["pde"]["name"]
     rl_enabled = config_dict["rl"]["enabled"]
@@ -295,6 +328,13 @@ def run_training(config_dict, device):
 
 
 def main():
+    """Entry point of ``pinnrl-train``: parse flags, build the config and train."""
+    # Headless CLI: save figures without a GUI backend. Library imports leave the
+    # user's backend alone (inline plots in notebooks keep working).
+    import matplotlib
+
+    matplotlib.use("agg")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser(description="Train a PINN model")
     parser.add_argument(
         "--pde",
@@ -321,7 +361,7 @@ def main():
         "--collocation-distribution",
         choices=["uniform", "stratified", "residual_based"],
         default=None,
-        help=("Collocation point sampling strategy. Overridden to 'adaptive' " "when --rl is set."),
+        help=("Collocation point sampling strategy. Overridden to 'adaptive' when --rl is set."),
     )
     parser.add_argument(
         "--optimizer",
@@ -348,7 +388,10 @@ def main():
         "--dataset-split", default="train", help="Well dataset split (train/valid/test)"
     )
     parser.add_argument(
-        "--dataset-traj", type=int, default=1, help="Number of trajectories to load"
+        "--dataset-traj",
+        type=int,
+        default=1,
+        help="Number of WellDataset samples to draw (random, without replacement)",
     )
     parser.add_argument(
         "--dataset-points",
@@ -416,7 +459,10 @@ def main():
         "--lr-scheduler",
         choices=["cosine", "reduce_lr"],
         default=None,
-        help="Learning-rate scheduler: 'cosine' annealing or 'reduce_lr' on plateau.",
+        help=(
+            "Learning-rate scheduler: 'cosine' annealing or 'reduce_lr' on a plateau "
+            "of the epoch training loss."
+        ),
     )
     parser.add_argument(
         "--early-stopping",
@@ -447,7 +493,7 @@ def main():
         print(f"Available: {', '.join(spec.key for spec in PDE_SPECS)}")
         sys.exit(1)
 
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         yaml_config = yaml.safe_load(f)
 
     if args.device:
@@ -467,9 +513,9 @@ def main():
     if args.initial_points is not None:
         yaml_config.setdefault("training", {})["num_initial_points"] = args.initial_points
     if args.collocation_distribution is not None:
-        yaml_config.setdefault("training", {})[
-            "collocation_distribution"
-        ] = args.collocation_distribution
+        yaml_config.setdefault("training", {})["collocation_distribution"] = (
+            args.collocation_distribution
+        )
     if args.optimizer is not None:
         yaml_config.setdefault("training", {})["optimizer"] = args.optimizer
     if args.mode is not None:

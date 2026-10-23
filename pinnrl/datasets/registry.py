@@ -9,14 +9,14 @@ solver, ``data_only`` otherwise).
 Names match the strings accepted by ``the_well.data.WellDataset`` as
 ``well_dataset_name``. Domain and time extents come from the Well dataset
 specification page; values that vary per-trajectory are left as the
-canonical normalised range and refined at load time from the HDF5
-``dimensions`` group when available.
+canonical normalised range. These extents become the PDE domain; the
+observation coordinates themselves are built by
+:func:`pinnrl.datasets.well_loader.load_well_slice`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -25,12 +25,13 @@ class WellEntry:
 
     Attributes:
         name: WellDataset identifier — passed straight to ``well_dataset_name``.
-        description: One-line human-readable summary for the dashboard pill.
-        n_spatial_dims: 2 or 3 (Well does not ship 1D datasets).
+        description: One-line human-readable summary for the dashboard's dataset info box.
+        n_spatial_dims: 2 or 3 (only 2-D and 3-D datasets are registered).
         fields: Channel names in the order returned by the loader.
         domain: Per-axis ``(low, high)`` bounds for spatial coordinates.
         time_domain: ``(t_min, t_max)`` over a single trajectory.
-        default_pde_key: Key into ``PDE_REGISTRY`` when a matched analytical
+        default_pde_key: PDE key accepted by
+            :func:`pinnrl.pdes.registry.get_pde_spec` when a matched analytical
             solver exists, else ``None`` (use ``data_only`` mode).
         default_architecture: Architecture preset most appropriate for the
             field shape (FNO for periodic 2D fluids, MLP for the rest).
@@ -42,10 +43,10 @@ class WellEntry:
     name: str
     description: str
     n_spatial_dims: int
-    fields: Tuple[str, ...]
-    domain: Tuple[Tuple[float, float], ...]
-    time_domain: Tuple[float, float]
-    default_pde_key: Optional[str]
+    fields: tuple[str, ...]
+    domain: tuple[tuple[float, float], ...]
+    time_domain: tuple[float, float]
+    default_pde_key: str | None
     default_architecture: str
     default_input_dim: int
     default_output_dim: int
@@ -54,8 +55,7 @@ class WellEntry:
     def __post_init__(self) -> None:  # pragma: no cover - dataclass guard
         if self.n_spatial_dims not in (2, 3):
             raise ValueError(
-                f"WellEntry {self.name!r}: n_spatial_dims must be 2 or 3, "
-                f"got {self.n_spatial_dims}"
+                f"WellEntry {self.name!r}: n_spatial_dims must be 2 or 3, got {self.n_spatial_dims}"
             )
         if len(self.domain) != self.n_spatial_dims:
             raise ValueError(
@@ -69,22 +69,23 @@ class WellEntry:
             )
         if self.recommended_mode == "data_augmented" and self.default_pde_key is None:
             raise ValueError(
-                f"WellEntry {self.name!r}: data_augmented mode requires a " f"default_pde_key"
+                f"WellEntry {self.name!r}: data_augmented mode requires a default_pde_key"
             )
 
 
 # Curated subset of The Well datasets. Names are the canonical
 # ``well_dataset_name`` strings from PolymathicAI/the_well. Extend as
-# needed — every entry here automatically appears in the dashboard.
-_PERIODIC_2D_UNIT: Tuple[Tuple[float, float], ...] = ((0.0, 1.0), (0.0, 1.0))
-_PERIODIC_3D_UNIT: Tuple[Tuple[float, float], ...] = (
+# needed — every entry here automatically appears in the dashboard's
+# dataset dropdown.
+_PERIODIC_2D_UNIT: tuple[tuple[float, float], ...] = ((0.0, 1.0), (0.0, 1.0))
+_PERIODIC_3D_UNIT: tuple[tuple[float, float], ...] = (
     (0.0, 1.0),
     (0.0, 1.0),
     (0.0, 1.0),
 )
 
 
-WELL_REGISTRY: Dict[str, WellEntry] = {
+WELL_REGISTRY: dict[str, WellEntry] = {
     "active_matter": WellEntry(
         name="active_matter",
         description="2D active nematic fluid — concentration, velocity, orientation tensor, strain rate.",
@@ -264,7 +265,7 @@ WELL_REGISTRY: Dict[str, WellEntry] = {
 }
 
 
-def list_dataset_names() -> List[str]:
+def list_dataset_names() -> list[str]:
     """Names of every Well dataset known to the registry, sorted."""
     return sorted(WELL_REGISTRY)
 
@@ -273,6 +274,6 @@ def get_entry(name: str) -> WellEntry:
     """Look up a dataset by name. Raises ``KeyError`` with a helpful list."""
     if name not in WELL_REGISTRY:
         raise KeyError(
-            f"Unknown Well dataset {name!r}. Known datasets: " f"{', '.join(list_dataset_names())}"
+            f"Unknown Well dataset {name!r}. Known datasets: {', '.join(list_dataset_names())}"
         )
     return WELL_REGISTRY[name]

@@ -142,7 +142,7 @@ def allen_cahn_reference(
     Args:
         epsilon: Interface parameter in the residual ``u_t - eps² u_xx - u + u³``.
         t_max: Final time.
-        nx: Output spatial points on ``[-1, 1]`` (``nx - 1`` must divide evenly).
+        nx: Output spatial points on ``[-1, 1]``.
         nt: Output time points on ``[0, t_max]``.
         refine: Solver-grid refinement factor relative to the output grid.
         boundary_value: Dirichlet value at both ends.

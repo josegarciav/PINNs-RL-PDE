@@ -2,22 +2,22 @@
 
 These are deliberately small, self-contained NumPy routines used only as
 PINN accuracy baselines from the ``pinnrl-benchmark`` CLI. They are not
-production solvers — for those, see :mod:`pinnrl.numerical_solvers` or a
-dedicated package such as FEniCS.
+production solvers — for those, use a dedicated package such as FEniCS.
 
-Both solvers integrate the PDE on a periodic spatial domain, which matches
-the boundary conditions used by the analytical solutions in
-:class:`pinnrl.pdes.heat_equation.HeatEquation` and
+Both solvers integrate the PDE with a periodic stencil from a sinusoidal
+initial condition whose closed-form solution is known. The heat solution is
+the unit-amplitude ``sin_exp_decay`` mode of
+:class:`pinnrl.pdes.heat_equation.HeatEquation` on a unit-length domain; the
+wave solution is a travelling wave, not one of the standing waves of
 :class:`pinnrl.pdes.wave_equation.WaveEquation`. They return both the full
-``(nt, nx)`` solution grid and the L2 / max errors against the closed-form
-solution at the final time, which is what the CLI prints.
+``(nt, nx)`` solution grid and the relative L2 / max errors against the
+closed-form solution at the final time, which is what the CLI prints.
 """
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Tuple
 
 import numpy as np
 
@@ -32,7 +32,9 @@ class FDMResult:
             spatial grid, shape ``(nx,)``.
         x: Spatial grid, shape ``(nx,)``.
         t: Time grid, shape ``(nt,)``.
-        l2_error: Mean-squared error between FDM and analytical at final time.
+        l2_error: Relative L2 error ``‖u − u*‖ / ‖u*‖`` at the final time (the same
+            definition as ``PDEBase.validate``).
+        mse: Mean-squared error at the final time.
         max_error: Inf-norm error between FDM and analytical at final time.
         wall_time_s: Solver wall time in seconds (excluding setup).
     """
@@ -42,12 +44,13 @@ class FDMResult:
     x: np.ndarray
     t: np.ndarray
     l2_error: float
+    mse: float
     max_error: float
     wall_time_s: float
 
 
 def _heat_exact(x: np.ndarray, t: float, alpha: float, frequency: float) -> np.ndarray:
-    """Analytical heat solution ``A·exp(-α·k²·t)·sin(k·x)`` with ``k = 2πf``."""
+    """Analytical heat solution ``exp(-α·k²·t)·sin(k·x)`` with ``k = 2πf``."""
     k = 2.0 * np.pi * frequency
     return np.exp(-alpha * k**2 * t) * np.sin(k * x)
 
@@ -55,7 +58,7 @@ def _heat_exact(x: np.ndarray, t: float, alpha: float, frequency: float) -> np.n
 def solve_heat_1d(
     alpha: float = 0.1,
     frequency: float = 1.0,
-    domain: Tuple[float, float] = (0.0, 1.0),
+    domain: tuple[float, float] = (0.0, 1.0),
     t_max: float = 1.0,
     nx: int = 101,
     nt: int = 4001,
@@ -63,16 +66,16 @@ def solve_heat_1d(
     """Explicit-Euler FDM solver for the 1-D heat equation on a periodic domain.
 
     Solves ``u_t = α·u_xx`` with initial condition ``sin(2π·f·x)`` and
-    periodic boundaries. The default ``(nx, nt)`` keeps the diffusion
-    number ``r = α·dt/dx²`` well below the explicit-stability cap of 0.5.
+    periodic boundaries. The defaults give a diffusion number
+    ``r = α·dt/dx² ≈ 0.26``, about half the explicit-stability cap of 0.5.
 
     Args:
         alpha: Thermal diffusivity.
         frequency: Spatial frequency of the sinusoidal initial condition.
         domain: Spatial domain ``(x_min, x_max)``.
         t_max: Final time.
-        nx: Number of spatial grid points (``dx = (x_max - x_min) / (nx - 1)``).
-        nt: Number of time steps.
+        nx: Number of distinct points on the periodic grid (``dx = (x_max - x_min) / nx``).
+        nt: Number of time levels including ``t = 0`` (``nt - 1`` steps).
 
     Returns:
         :class:`FDMResult` containing the full solution grid, the analytical
@@ -83,9 +86,10 @@ def solve_heat_1d(
             chosen ``(nx, nt, alpha)``.
     """
     x_min, x_max = float(domain[0]), float(domain[1])
-    x = np.linspace(x_min, x_max, nx, dtype=np.float64)
+    # Periodic grid: x_max is the same point as x_min, so it is excluded.
+    x = np.linspace(x_min, x_max, nx, endpoint=False, dtype=np.float64)
     t = np.linspace(0.0, t_max, nt, dtype=np.float64)
-    dx = (x_max - x_min) / (nx - 1)
+    dx = (x_max - x_min) / nx
     dt = t_max / (nt - 1)
     r = alpha * dt / (dx**2)
     if r > 0.5:
@@ -111,20 +115,21 @@ def solve_heat_1d(
         u_exact_final=u_exact_final,
         x=x,
         t=t,
-        l2_error=float(np.mean(err**2)),
+        l2_error=float(np.linalg.norm(err) / np.linalg.norm(u_exact_final)),
+        mse=float(np.mean(err**2)),
         max_error=float(np.max(np.abs(err))),
         wall_time_s=wall,
     )
 
 
 def _wave_exact(x: np.ndarray, t: float, c: float) -> np.ndarray:
-    """Analytical 1-D wave solution ``sin(2π(x − c·t))`` matching ``WaveEquation``."""
+    """Analytical 1-D travelling wave ``sin(2π(x − c·t))``."""
     return np.sin(2.0 * np.pi * (x - c * t))
 
 
 def solve_wave_1d(
     c: float = 1.0,
-    domain: Tuple[float, float] = (0.0, 1.0),
+    domain: tuple[float, float] = (0.0, 1.0),
     t_max: float = 1.0,
     nx: int = 201,
     nt: int = 4001,
@@ -133,27 +138,29 @@ def solve_wave_1d(
 
     Solves ``u_tt = c²·u_xx`` with the travelling-wave initial condition
     ``u(x, 0) = sin(2πx)``, ``u_t(x, 0) = -2π·c·cos(2πx)`` so that the
-    closed-form solution is ``sin(2π(x − c·t))`` — matching
-    :meth:`pinnrl.pdes.wave_equation.WaveEquation.exact_solution`.
+    closed-form solution is the right-moving wave ``sin(2π(x − c·t))``. This
+    is not :class:`pinnrl.pdes.wave_equation.WaveEquation`'s standing-wave
+    exact solution, which starts at rest.
 
     Args:
         c: Wave speed.
         domain: Spatial domain ``(x_min, x_max)``.
         t_max: Final time.
-        nx: Number of spatial grid points.
-        nt: Number of time steps.
+        nx: Number of distinct points on the periodic grid (``dx = (x_max - x_min) / nx``).
+        nt: Number of time levels including ``t = 0`` (``nt - 1`` steps).
 
     Returns:
         :class:`FDMResult` containing the full solution grid, the analytical
         solution at ``t_max``, and L2/max error metrics.
 
     Raises:
-        ValueError: If the leap-frog CFL condition ``c·dt/dx > 1`` is violated.
+        ValueError: If the leap-frog CFL condition ``c·dt/dx ≤ 1`` is violated.
     """
     x_min, x_max = float(domain[0]), float(domain[1])
-    x = np.linspace(x_min, x_max, nx, dtype=np.float64)
+    # Periodic grid: x_max is the same point as x_min, so it is excluded.
+    x = np.linspace(x_min, x_max, nx, endpoint=False, dtype=np.float64)
     t = np.linspace(0.0, t_max, nt, dtype=np.float64)
-    dx = (x_max - x_min) / (nx - 1)
+    dx = (x_max - x_min) / nx
     dt = t_max / (nt - 1)
     cfl = c * dt / dx
     if cfl > 1.0:
@@ -183,7 +190,8 @@ def solve_wave_1d(
         u_exact_final=u_exact_final,
         x=x,
         t=t,
-        l2_error=float(np.mean(err**2)),
+        l2_error=float(np.linalg.norm(err) / np.linalg.norm(u_exact_final)),
+        mse=float(np.mean(err**2)),
         max_error=float(np.max(np.abs(err))),
         wall_time_s=wall,
     )

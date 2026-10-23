@@ -7,7 +7,6 @@ uses it with ``gamma = 0``, i.e. as a contextual bandit over domain cells.
 
 import random
 from collections import deque
-from typing import List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -16,7 +15,7 @@ import torch.optim as optim
 
 
 class DQNNetwork(nn.Module):
-    """Deep Q-Network for point selection."""
+    """MLP mapping a state to one Q-value per action (Linear-LayerNorm-ReLU-Dropout blocks)."""
 
     def __init__(
         self,
@@ -26,15 +25,14 @@ class DQNNetwork(nn.Module):
         num_layers: int = 3,
         dropout: float = 0.1,
     ):
-        """
-        Initialize DQN network.
+        """Initialize DQN network.
 
         Args:
             state_dim: State dimension.
             action_dim: Action dimension.
             hidden_dim: Hidden layer dimension.
-            num_layers: Number of layers.
-            dropout: Dropout rate.
+            num_layers: Number of linear layers, input and output included.
+            dropout: Dropout rate after each hidden block.
         """
         super().__init__()
 
@@ -79,8 +77,7 @@ class DQNNetwork(nn.Module):
                     nn.init.zeros_(m.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through the network.
+        """Forward pass through the network.
 
         Args:
             x: Input tensor.
@@ -95,8 +92,7 @@ class ReplayBuffer:
     """Experience replay buffer for training stability."""
 
     def __init__(self, capacity: int):
-        """
-        Initialize replay buffer.
+        """Initialize replay buffer.
 
         Args:
             capacity: Maximum number of experiences to store.
@@ -111,8 +107,7 @@ class ReplayBuffer:
         next_state: torch.Tensor,
         done: bool,
     ):
-        """
-        Add experience to buffer.
+        """Add experience to buffer.
 
         Args:
             state: Current state.
@@ -123,9 +118,8 @@ class ReplayBuffer:
         """
         self.buffer.append((state, action, reward, next_state, done))
 
-    def sample(self, batch_size: int) -> List[Tuple]:
-        """
-        Sample batch of experiences.
+    def sample(self, batch_size: int) -> list[tuple]:
+        """Sample batch of experiences.
 
         Args:
             batch_size: Size of batch to sample.
@@ -156,10 +150,9 @@ class RLAgent:
         memory_size: int = 10000,
         batch_size: int = 64,
         target_update: int = 100,
-        device: Optional[torch.device] = None,
+        device: torch.device | None = None,
     ):
-        """
-        Initialize RL agent.
+        """Initialize RL agent.
 
         Args:
             state_dim: State dimension.
@@ -202,8 +195,10 @@ class RLAgent:
         next_state: torch.Tensor,
         done: bool,
     ):
-        """
-        Store a transition, train on a replayed batch, and decay ε.
+        """Store a transition, train on a replayed batch, and decay ε.
+
+        Training starts once the buffer holds ``batch_size`` transitions; the
+        target network is synced every ``target_update`` calls.
 
         Args:
             state: Current state.
@@ -221,10 +216,10 @@ class RLAgent:
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
     def _train(self):
-        """Train the policy network."""
+        """One Huber-loss step of the policy net toward ``r + γ (1 - done) max_a Q_target``."""
         # Sample batch
         batch = self.memory.sample(self.batch_size)
-        states, actions, rewards, next_states, dones = zip(*batch)
+        states, actions, rewards, next_states, dones = zip(*batch, strict=False)
 
         # Convert to tensors
         states = torch.stack(states).to(self.device)

@@ -31,10 +31,10 @@ import json
 import logging
 import math
 import multiprocessing as mp
+from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -86,7 +86,7 @@ class StudySettings:
     n_collocation: int = 1000
     resample_every: int = 100
     learning_rate: float = 1e-3
-    hidden_dims: Tuple[int, ...] = (64, 64, 64, 64)
+    hidden_dims: tuple[int, ...] = (64, 64, 64, 64)
     n_checkpoints: int = 50
     rad_k: float = 1.0
     rad_c: float = 1.0
@@ -105,7 +105,7 @@ class StudyRun:
     Attributes:
         pde: PDE key.
         strategy: Sampling strategy.
-        seed: Seed for weights and sampling.
+        seed: Seed for the initial weights; ``seed + 10_000`` seeds sampling.
         rel_l2: Final relative L2 error against the reference.
         steps: Optimizer steps taken.
         train_time_s: Training wall-clock (sampling + steps, evaluation excluded).
@@ -123,10 +123,10 @@ class StudyRun:
     steps: int
     train_time_s: float
     residual_evals: int
-    curve_step: List[int] = field(default_factory=list)
-    curve_time_s: List[float] = field(default_factory=list)
-    curve_evals: List[int] = field(default_factory=list)
-    curve_rel_l2: List[float] = field(default_factory=list)
+    curve_step: list[int] = field(default_factory=list)
+    curve_time_s: list[float] = field(default_factory=list)
+    curve_evals: list[int] = field(default_factory=list)
+    curve_rel_l2: list[float] = field(default_factory=list)
 
 
 def _training_config(settings: StudySettings) -> TrainingConfig:
@@ -180,12 +180,12 @@ def _build_allen_cahn(device: torch.device) -> PDEBase:
     return AllenCahnEquation(config=cfg)
 
 
-_PDE_BUILDERS: Dict[str, Callable[[torch.device], PDEBase]] = {
+_PDE_BUILDERS: dict[str, Callable[[torch.device], PDEBase]] = {
     "burgers": _build_burgers,
     "allen_cahn": _build_allen_cahn,
 }
 
-_REFERENCES: Dict[str, Callable[[], ReferenceSolution]] = {
+_REFERENCES: dict[str, Callable[[], ReferenceSolution]] = {
     "burgers": burgers_reference,
     "allen_cahn": allen_cahn_reference,
 }
@@ -234,8 +234,8 @@ def _make_sampler(
     pde: PDEBase,
     settings: StudySettings,
     device: torch.device,
-    overhead: Dict[str, int],
-) -> Callable[[torch.nn.Module, float], Tuple[torch.Tensor, torch.Tensor]]:
+    overhead: dict[str, int],
+) -> Callable[[torch.nn.Module, float], tuple[torch.Tensor, torch.Tensor]]:
     """Return ``sample(model, progress) -> (x, t)``; extra residual evaluations go to ``overhead``."""
     n = settings.n_collocation
     (x_lo, x_hi), (t_lo, t_hi) = pde.domain[0], pde.time_domain
@@ -276,7 +276,8 @@ def _make_sampler(
         bandit = ResidualBanditSampler((x_lo, x_hi), (t_lo, t_hi), device=device)
 
         def sample_bandit(model, progress):
-            overhead["evals"] += bandit.probe_cells * bandit.probe_points
+            # Default probe_every=1: every call probes.
+            overhead["evals"] += min(bandit.probe_cells, bandit.n_cells) * bandit.probe_points
             return bandit.sample(pde, model, n, progress=progress)
 
         return sample_bandit
@@ -290,7 +291,7 @@ def run_study_case(
     seed: int,
     settings: StudySettings,
     reference: ReferenceSolution,
-    device: Optional[torch.device] = None,
+    device: torch.device | None = None,
 ) -> StudyRun:
     """Train one PINN for ``settings.num_steps`` steps under one sampler."""
     if pde_name not in _PDE_BUILDERS:
@@ -348,14 +349,14 @@ def run_sampling_study(
     pdes: Sequence[str] = STUDY_PDES,
     strategies: Sequence[str] = STUDY_STRATEGIES,
     seeds: Sequence[int] = tuple(range(10)),
-    settings: Optional[StudySettings] = None,
+    settings: StudySettings | None = None,
     workers: int = 1,
-    on_result: Optional[Callable[[StudyRun], None]] = None,
-) -> List[StudyRun]:
+    on_result: Callable[[StudyRun], None] | None = None,
+) -> list[StudyRun]:
     """Run every ``(pde, strategy, seed)`` combination.
 
-    Tasks are ordered seed-major so the strategies for one seed run side by
-    side under similar machine load. ``workers > 1`` uses a spawn-based
+    Tasks are ordered by PDE, then seed, then strategy, so the strategies for
+    one seed run side by side under similar machine load. ``workers > 1`` uses a spawn-based
     process pool; ``workers = 1`` runs inline.
 
     Args:
@@ -385,7 +386,7 @@ def run_sampling_study(
         for strategy in strategies
     ]
 
-    results: List[StudyRun] = []
+    results: list[StudyRun] = []
     if workers <= 1:
         for task in tasks:
             run = run_study_case(*task)
@@ -416,9 +417,11 @@ class StudySummary:
         q25_rel_l2: 25th percentile.
         q75_rel_l2: 75th percentile.
         median_time_s: Median training wall-clock at the budget.
-        wins_vs_uniform: Seeds on which this strategy beat ``uniform``.
+        wins_vs_uniform: Seeds on which this strategy beat ``uniform`` (0 for
+            ``uniform`` itself).
         p_vs_uniform: Two-sided Wilcoxon signed-rank p-value against
-            ``uniform`` on paired seeds (``nan`` if not computable).
+            ``uniform`` on paired seeds; ``nan`` for ``uniform`` itself, with
+            fewer than 5 paired seeds, or when every paired difference is 0.
     """
 
     budget: str
@@ -433,8 +436,12 @@ class StudySummary:
     p_vs_uniform: float
 
 
-def _at_budget(run: StudyRun, max_evals: Optional[int]) -> Tuple[float, float]:
-    """``(rel_l2, time_s)`` at the last checkpoint within ``max_evals`` (or at the end)."""
+def _at_budget(run: StudyRun, max_evals: int | None) -> tuple[float, float]:
+    """``(rel_l2, time_s)`` at the last checkpoint within ``max_evals``.
+
+    ``max_evals=None`` means the end of the run; if no checkpoint fits the
+    cap, the first checkpoint is used.
+    """
     if max_evals is None:
         return run.rel_l2, run.train_time_s
     idx = [i for i, e in enumerate(run.curve_evals) if e <= max_evals]
@@ -442,7 +449,7 @@ def _at_budget(run: StudyRun, max_evals: Optional[int]) -> Tuple[float, float]:
     return run.curve_rel_l2[i], run.curve_time_s[i]
 
 
-def summarize(runs: Sequence[StudyRun], budget: str = "steps") -> List[StudySummary]:
+def summarize(runs: Sequence[StudyRun], budget: str = "steps") -> list[StudySummary]:
     """Median/IQR per ``(pde, strategy)`` plus a paired comparison against ``uniform``.
 
     ``budget="steps"`` compares final errors (equal training points).
@@ -454,17 +461,17 @@ def summarize(runs: Sequence[StudyRun], budget: str = "steps") -> List[StudySumm
 
     if budget not in ("steps", "evals"):
         raise ValueError(f"budget must be 'steps' or 'evals', got {budget!r}")
-    cap: Dict[str, int] = {}
+    cap: dict[str, int] = {}
     if budget == "evals":
         for run in runs:
             cap[run.pde] = min(cap.get(run.pde, run.residual_evals), run.residual_evals)
 
-    by_key: Dict[Tuple[str, str], Dict[int, Tuple[float, float]]] = {}
+    by_key: dict[tuple[str, str], dict[int, tuple[float, float]]] = {}
     for run in runs:
         point = _at_budget(run, cap.get(run.pde))
         by_key.setdefault((run.pde, run.strategy), {})[run.seed] = point
 
-    summaries: List[StudySummary] = []
+    summaries: list[StudySummary] = []
     for (pde, strategy), seed_vals in sorted(by_key.items()):
         errors = np.array([v[0] for v in seed_vals.values()])
         baseline = by_key.get((pde, "uniform"), {})
@@ -497,7 +504,7 @@ RUN_FIELDS = ("pde", "strategy", "seed", "rel_l2", "steps", "train_time_s", "res
 
 def write_study_outputs(
     out_dir: Path, runs: Sequence[StudyRun], settings: StudySettings
-) -> List[StudySummary]:
+) -> list[StudySummary]:
     """Write ``runs.csv``, ``curves.json``, ``summary.csv`` and ``settings.json``.
 
     ``summary.csv`` holds both budgets (column ``budget``); the returned list

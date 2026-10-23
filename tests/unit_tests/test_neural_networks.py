@@ -177,7 +177,7 @@ class TestNeuralNetworks(unittest.TestCase):
         loss = torch.mean(output)
         loss.backward()
         # Verify omega_0 parameter - skip is_first check that doesn't exist
-        for i, layer in enumerate(model.layers[:-1]):
+        for _i, layer in enumerate(model.layers[:-1]):
             self.assertEqual(layer.omega_0, config["omega_0"])
 
     def test_attention_network(self):

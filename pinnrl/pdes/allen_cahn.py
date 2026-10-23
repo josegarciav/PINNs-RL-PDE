@@ -1,9 +1,11 @@
-# Allen-Cahn equation
-# Application domains: Phase separation, interface motion
-# Complexity: Nonlinear reaction-diffusion, 2nd-order
+"""Allen-Cahn equation.
+
+Application domains: Phase separation, interface motion. Complexity: Nonlinear reaction-diffusion, 2nd-order.
+"""
 
 import math
-from typing import Any, Callable, Dict
+from collections.abc import Callable
+from typing import Any
 
 import torch
 
@@ -53,7 +55,7 @@ class AllenCahnEquation(PDEBase):
         u = d["u"]
         return d["dt"] - self.epsilon**2 * d["laplacian"] - self.reaction_rate * (u - u**3)
 
-    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
         ic_type = params.get("type")
         if ic_type == "tanh":
             return lambda x, t: self._kink(x)

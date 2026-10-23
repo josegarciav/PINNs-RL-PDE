@@ -1,4 +1,4 @@
-"""Autoencoder neural network architecture for dimensionality reduction and feature learning."""
+"""Encoder-decoder MLP with a latent bottleneck, used as a PINN function approximator."""
 
 import torch
 import torch.nn as nn
@@ -7,18 +7,23 @@ from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 
 
 class AutoEncoder(BaseNetwork):
-    """Autoencoder neural network."""
+    """Encoder-decoder MLP: ``input -> hidden_dims -> latent -> reversed(hidden_dims) -> output``.
+
+    It maps coordinates to the solution; it does not reconstruct its input.
+    """
 
     def __init__(self, config: NetworkConfig) -> None:
-        """
-        Initialize the network.
+        """Initialize the network.
 
         Args:
             config: Network configuration dictionary containing:
                 - input_dim: Input dimension
                 - latent_dim: Latent space dimension
-                - hidden_dims: List of hidden layer dimensions
+                - hidden_dims: Encoder hidden widths; the decoder uses them reversed
+                - output_dim: Output dimension (default 1)
                 - activation: Activation function name
+                - dropout: Dropout rate (default 0.0)
+                - layer_norm: LayerNorm after each hidden linear layer (default True)
         """
         super().__init__(config)
         self.input_dim = config["input_dim"]
@@ -30,8 +35,8 @@ class AutoEncoder(BaseNetwork):
 
         self.output_dim = config.get("output_dim", 1)
 
-        # Bug #14 fix: encoder maps input -> latent (not input -> input)
-        # Decoder maps latent -> output_dim for PINN function approximation.
+        # Encoder maps input -> latent; the decoder maps latent -> output_dim
+        # for PINN function approximation.
         self.encoder = nn.ModuleList()
         prev_dim = self.input_dim
         for hidden_dim in self.hidden_dims:
@@ -58,8 +63,7 @@ class AutoEncoder(BaseNetwork):
         self.decoder.append(nn.Linear(prev_dim, self.output_dim))
 
     def encode(self, x: InputType) -> torch.Tensor:
-        """
-        Encode input to latent space.
+        """Encode input to latent space.
 
         Args:
             x: Input tensor or array
@@ -73,8 +77,7 @@ class AutoEncoder(BaseNetwork):
         return x
 
     def decode(self, z: torch.Tensor) -> torch.Tensor:
-        """
-        Decode latent space to output.
+        """Decode latent space to output.
 
         Args:
             z: Latent space tensor
@@ -87,14 +90,13 @@ class AutoEncoder(BaseNetwork):
         return z
 
     def forward(self, x: InputType) -> OutputType:
-        """
-        Forward pass of the network.
+        """Forward pass of the network.
 
         Args:
             x: Input tensor or array
 
         Returns:
-            Reconstructed output
+            Predicted solution, shape ``(batch, output_dim)``
         """
         z = self.encode(x)
         return self.decode(z)

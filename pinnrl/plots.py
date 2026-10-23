@@ -15,16 +15,13 @@ copy is written only when ``kaleido`` is installed.
 import importlib.util
 import logging
 import os
-from typing import Optional, Sequence, Tuple
+from collections.abc import Sequence
 
-import matplotlib
-
-matplotlib.use("agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import plotly.graph_objects as go  # noqa: E402
-import torch  # noqa: E402
-from plotly.subplots import make_subplots  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
+import plotly.graph_objects as go
+import torch
+from plotly.subplots import make_subplots
 
 _HAS_KALEIDO = importlib.util.find_spec("kaleido") is not None
 _LOGGER = logging.getLogger(__name__)
@@ -40,18 +37,25 @@ def _write_plotly(fig, save_path):
 
 
 def solution_grid(
-    model, pde, n: int, t: Optional[float] = None
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    model, pde, n: int, t: float | None = None
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Evaluate ``model`` and ``pde.exact_solution`` on a regular grid.
 
     1-D PDEs use an ``(x, t)`` grid over the whole time domain, or the single
     time ``t`` when given. 2-D PDEs use an ``(x1, x2)`` grid at time ``t``
     (default: the start of the time domain).
 
+    Args:
+        model: Trained network; its parameters' device is used.
+        pde: PDE providing the domain and ``exact_solution``.
+        n: Points per axis.
+        t: Optional time of the slice.
+
     Returns:
         ``(A, B, u_pred, u_exact)``, each of shape ``(n, n)`` (or ``(n, 1)``
-        for a single-time 1-D slice), with ``A, B`` the grid coordinates.
-        ``u_exact`` is ``None`` when the PDE has no exact solution.
+        for a single-time 1-D slice), with ``A, B`` the grid coordinates and
+        ``u_pred`` the model's output channel 0. ``u_exact`` is ``None`` when
+        the PDE has no exact solution.
     """
     device = next(model.parameters()).device
     t_lo, t_hi = float(pde.time_domain[0]), float(pde.time_domain[1])
@@ -99,19 +103,21 @@ def plot_solution(
     model,
     pde,
     num_points: int = 1000,
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
     return_figs: bool = False,
-    time_point: Optional[float] = None,
+    time_point: float | None = None,
 ):  # pragma: no cover
     """Exact and predicted solution as two interactive 3-D surfaces.
 
     Args:
         model: The trained PINN model.
         pde: The PDE instance.
-        num_points: Total grid points (``sqrt(num_points)`` per axis).
+        num_points: Total grid points (``sqrt(num_points)`` per axis, and as many
+            time frames for an animated 2-D plot).
         save_path: Optional ``.html`` path; writes ``*_exact.html`` and ``*_predicted.html``.
         return_figs: Return ``(exact_fig, predicted_fig)`` instead of saving/showing.
-        time_point: Time of the slice (2-D PDEs: animated over time when omitted).
+        time_point: Time of the slice. When omitted, 1-D PDEs show the full
+            ``(x, t)`` surface and 2-D PDEs are animated over time.
     """
     n = int(np.sqrt(num_points))
     if pde.dimension == 2:
@@ -143,11 +149,11 @@ def plot_solution(
         if exacts[0] is not None:
             exact_fig.frames = [
                 go.Frame(data=[go.Surface(x=A, y=B, z=z)], name=label)
-                for z, label in zip(exacts, labels)
+                for z, label in zip(exacts, labels, strict=False)
             ]
         predicted_fig.frames = [
             go.Frame(data=[go.Surface(x=A, y=B, z=z)], name=label)
-            for z, label in zip(preds, labels)
+            for z, label in zip(preds, labels, strict=False)
         ]
         sliders = [
             dict(
@@ -199,7 +205,11 @@ def plot_solution(
 
 
 def plot_training_history(trainer, save_path=None):  # pragma: no cover
-    """Loss curves (log scale), plus loss-weight curves when adaptive weights are on."""
+    """Loss curves (log scale), plus loss-weight curves when adaptive weights are on.
+
+    Without adaptive weights every history series except ``lr`` and
+    ``loss_weights`` is drawn on the log loss axis.
+    """
     history = trainer.history
     weights = np.array(history.get("loss_weights", []))
     if trainer.use_adaptive_weights and len(weights) > 0:
@@ -234,7 +244,8 @@ def plot_training_history(trainer, save_path=None):  # pragma: no cover
 def plot_solution_comparison(trainer, num_points=50, save_path=None):  # pragma: no cover
     """Exact, predicted and log-error surfaces side by side.
 
-    2-D PDEs get one frame per time step with a slider.
+    ``num_points`` is the grid size per axis. 2-D PDEs get ten time frames
+    with a slider and a Play button. Skipped when the PDE has no exact solution.
     """
     pde, model = trainer.pde, trainer.model
     if not pde.has_exact_solution:

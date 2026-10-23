@@ -79,9 +79,7 @@ class TestPDEs(unittest.TestCase):
                 "activation": "tanh",
                 "device": self.device,
             }
-        ).to(
-            self.device
-        )  # Explicitly move to device
+        ).to(self.device)  # Explicitly move to device
 
         # Set up common test tensors - ensure they're on the right device
         self.x = torch.linspace(0, 1, 10, device=self.device).reshape(-1, 1).requires_grad_(True)
@@ -99,9 +97,7 @@ class TestPDEs(unittest.TestCase):
                 "activation": "tanh",
                 "device": self.device,
             }
-        ).to(
-            self.device
-        )  # Explicitly move to device
+        ).to(self.device)  # Explicitly move to device
 
         # Ensure model parameters require gradients
         for param in self.model_2d.parameters():

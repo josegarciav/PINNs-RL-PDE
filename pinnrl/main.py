@@ -1,4 +1,4 @@
-"""Entry point for the PINNs-RL-PDE framework."""
+"""Entry point of ``pinnrl-dashboard``: open a browser tab and serve the Dash dashboard."""
 
 import argparse
 import sys
@@ -6,7 +6,11 @@ import webbrowser
 
 
 def run_dashboard(port=8050):
-    """Run the dashboard module."""
+    """Serve the Dash app on ``port`` (blocking).
+
+    Tries the next port (three attempts in all) on an ``Exception`` whose
+    message contains "Address already in use"; other errors exit with status 1.
+    """
     try:
         from pinnrl.dashboard import app
 
@@ -22,7 +26,7 @@ def run_dashboard(port=8050):
                 break
             except Exception as e:
                 if "Address already in use" in str(e):
-                    print(f"Port {current_port} is in use. Trying port {current_port+1}...")
+                    print(f"Port {current_port} is in use. Trying port {current_port + 1}...")
                     current_port += 1
                     if attempt == max_retries - 1:
                         print(f"Could not find available port after {max_retries} attempts.")
@@ -41,9 +45,9 @@ def run_dashboard(port=8050):
 
 
 def parse_args():
-    """Parse command-line arguments for the main application."""
+    """Parse the ``pinnrl-dashboard`` command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="PINNs-RL-PDE Main Application",
+        description="PINNs-RL-PDE dashboard",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -52,6 +56,9 @@ Examples:
 
   Specify dashboard port:
     pinnrl-dashboard --port 8051
+
+  Serve without opening a browser tab:
+    pinnrl-dashboard --no-browser
 
   Run headless training directly:
     pinnrl-train --pde "Heat Equation" --arch fourier --epochs 500
@@ -72,7 +79,7 @@ Examples:
 
 
 def main():
-    """Entry point: launch the PINNs-RL-PDE dashboard."""
+    """Open ``http://127.0.0.1:<port>/`` (unless ``--no-browser``) and serve the dashboard."""
     args = parse_args()
 
     print("\n" + "=" * 50)

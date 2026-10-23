@@ -1,9 +1,11 @@
-# Wave equation
-# Application domains: Acoustics, vibrating strings and membranes
-# Complexity: Linear, 2nd-order in time and space
+"""Wave equation.
+
+Application domains: Acoustics, vibrating strings and membranes. Complexity: Linear, 2nd-order in time and space.
+"""
 
 import math
-from typing import Any, Callable, Dict
+from collections.abc import Callable
+from typing import Any
 
 import torch
 
@@ -40,7 +42,7 @@ class WaveEquation(PDEBase):
         """Wave speed."""
         return self.get_parameter("c", default=1.0)
 
-    def _mode(self, params: Dict[str, Any], x: torch.Tensor):
+    def _mode(self, params: dict[str, Any], x: torch.Tensor):
         """Spatial shape and angular frequency of the configured standing wave."""
         a = params.get("amplitude", 1.0)
         if params.get("type") == "sine_2d":
@@ -58,7 +60,7 @@ class WaveEquation(PDEBase):
         d = self.compute_derivatives(model, x, t, temporal_derivatives=[2], spatial_derivatives=[2])
         return d["dt2"] - self.c**2 * d["laplacian"]
 
-    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
         if params.get("type") == "sine" or (
             params.get("type") == "sine_2d" and self.dimension == 2
         ):

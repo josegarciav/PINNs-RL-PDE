@@ -1,9 +1,12 @@
+"""``PDETrainer``: the single training loop (epoch-based ``train`` and step-based ``train_steps``)."""
+
 import json
 import logging
 import os
 import time
+from collections.abc import Callable, Sequence
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
@@ -20,16 +23,23 @@ if TYPE_CHECKING:
 
 
 def save_training_metrics(
-    history: Dict[str, Any],
+    history: dict[str, Any],
     experiment_dir: str,
-    metadata: Optional[Dict[str, Any]] = None,
+    metadata: dict[str, Any] | None = None,
 ):
-    """Save training metrics to JSON file.
+    """Save training metrics to JSON files.
+
+    Writes the same history to ``metrics.json`` and ``history.json``. When
+    ``metadata`` is given it is merged into an existing ``metadata.json`` and
+    stamped with ``last_updated``.
 
     Args:
         history: Dictionary containing training metrics
         experiment_dir: Directory to save the metrics
         metadata: Optional metadata about the experiment
+
+    Returns:
+        Path of ``history.json``.
     """
     # Create experiment directory if it doesn't exist
     os.makedirs(experiment_dir, exist_ok=True)
@@ -63,7 +73,7 @@ def save_training_metrics(
         # Update existing metadata if it exists
         if os.path.exists(metadata_file):
             try:
-                with open(metadata_file, "r") as f:
+                with open(metadata_file) as f:
                     existing_metadata = json.load(f)
                 # Update with new metadata
                 existing_metadata.update(metadata)
@@ -95,11 +105,10 @@ class PDETrainer:
         model: nn.Module,
         pde: "PDEBase",
         config: "Config",
-        device: Optional[torch.device] = None,
+        device: torch.device | None = None,
         bandit_sampler=None,
     ):
-        """
-        Initialize trainer.
+        """Initialize trainer.
 
         Args:
             model: PINN model.
@@ -111,7 +120,7 @@ class PDETrainer:
                 ``collocation_distribution`` is ``"adaptive"``) collocation points
                 come from the experimental RL bandit sampler.
         """
-        # Use device from config by default, fall back to provided device or cpu
+        # An explicit device wins, then config.device, then MPS if available, else CPU
         self.device = device or (
             config.device
             if hasattr(config, "device")
@@ -168,19 +177,19 @@ class PDETrainer:
             self.adaptive_weights = None
 
     def _setup_logging(self):
-        """Setup logging configuration."""
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s - %(levelname)s - %(message)s",
-            handlers=[logging.StreamHandler()],
-        )
+        """Use the module logger; console output is configured by the application.
+
+        A library must not configure the root logger: ``pinnrl-train`` sets up
+        console logging in its entry point, and notebooks stay quiet unless the
+        user enables ``logging.getLogger("pinnrl")``.
+        """
         self.logger = logging.getLogger(__name__)
 
     def setup_experiment_logging(self, experiment_dir=None):
-        """
-        Setup experiment-specific logging if experiment_dir is provided.
+        """Log to ``<experiment_dir>/experiment.log``, replacing earlier file handlers.
 
-        :param experiment_dir: Directory for the experiment
+        Args:
+            experiment_dir: Directory for the experiment; ``None`` is a no-op.
         """
         if experiment_dir:
             # Remove all FileHandlers from the logger
@@ -194,15 +203,25 @@ class PDETrainer:
             file_handler.setFormatter(
                 logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
             )
+            file_handler.setLevel(logging.INFO)
             self.logger.addHandler(file_handler)
+            # The run log records INFO even when the application logs at WARNING.
+            if self.logger.getEffectiveLevel() > logging.INFO:
+                self.logger.setLevel(logging.INFO)
             self.logger.info(f"Experiment logs will be saved to {log_file}")
 
-    def _compute_validation_loss(self, num_points: int = 1000) -> Dict[str, float]:
-        """
-        Compute validation loss on a separate set of points.
+    def _compute_validation_loss(self, num_points: int = 1000) -> dict[str, float]:
+        """Compute the loss on freshly drawn uniform collocation points.
 
-        :param num_points: Number of validation points
-        :return: Dictionary of validation losses
+        ``total_loss`` is ``PDEBase.compute_loss``'s total: static
+        ``loss_weights``, or unit physics weights when adaptive weighting is on.
+        Leaves the model in eval mode.
+
+        Args:
+            num_points: Number of validation points.
+
+        Returns:
+            ``{"total_loss", "residual_loss", "boundary_loss", "initial_loss"}`` as floats.
         """
         self.model.eval()
 
@@ -222,7 +241,11 @@ class PDETrainer:
         }
 
     def _update_scheduler(self, val_loss=None):
-        """Step the LR scheduler (plateau scheduling uses ``val_loss`` or the last train loss)."""
+        """Step the LR scheduler.
+
+        ReduceLROnPlateau gets ``val_loss`` (``train`` passes the epoch-mean
+        training loss), or the last recorded train loss when it is ``None``.
+        """
         if self.scheduler is None:
             return
         if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
@@ -252,8 +275,9 @@ class PDETrainer:
     ) -> None:
         """Persist a small grid of predictions + residuals for the live dashboard.
 
-        Writes ``live_snapshot.npz`` with predicted ``u`` and residual fields
-        sampled on a fixed grid. The dashboard's Monitor sub-tab polls this
+        Writes ``live_snapshot.npz`` with predicted ``u`` (output channel 0) and
+        residual fields on a ``grid_size``² grid: ``(x, t)`` for 1-D PDEs,
+        ``(x1, x2)`` at the mid time for 2-D. The dashboard's Monitor sub-tab polls this
         file via the existing ``dcc.Interval`` and renders ``go.Surface``
         plots, giving the user a live view of the solution as it converges.
 
@@ -385,7 +409,12 @@ class PDETrainer:
         )
 
     def _build_scheduler(self, force_reduce_lr: bool = False):
-        """Build the LR scheduler; ``None`` means a constant learning rate."""
+        """Build the LR scheduler; ``None`` means a constant learning rate.
+
+        ``cosine`` anneals over ``num_epochs - warmup_epochs`` down to ``min_lr``;
+        ``reduce_lr`` is ReduceLROnPlateau. ``force_reduce_lr`` (L-BFGS) turns
+        any non-constant type into ReduceLROnPlateau.
+        """
         sched_cfg = self.config.training.learning_rate_scheduler
         scheduler_type = "constant" if sched_cfg is None else sched_cfg.type
         if scheduler_type == "constant":
@@ -417,11 +446,12 @@ class PDETrainer:
         Branches on ``training.optimizer``:
           - ``adam``       : standard first-order training.
           - ``lbfgs``      : closure-based quasi-Newton training (full batch).
-          - ``adam_lbfgs`` : Adam first, switch to L-BFGS at
-            ``adam_lbfgs_switch_ratio * num_epochs``.
+          - ``adam_lbfgs`` : Adam first, switch to L-BFGS after epoch
+            ``int(adam_lbfgs_switch_ratio * config.training.num_epochs)``.
 
         Trainable PDE parameters (inverse mode) are added to the optimizer
-        alongside the model weights.
+        alongside the model weights. While L-BFGS runs, a non-constant
+        scheduler is replaced by ReduceLROnPlateau.
         """
         optimizer_type = getattr(self.config.training, "optimizer", "adam")
         params = self._collect_optimizable_params()
@@ -452,7 +482,7 @@ class PDETrainer:
 
     def _lbfgs_step(self, x_batch, t_batch):
         """One L-BFGS optimizer step using a recompute-loss closure."""
-        captured: Dict[str, torch.Tensor] = {}
+        captured: dict[str, torch.Tensor] = {}
 
         def closure():
             self.optimizer.zero_grad()
@@ -464,7 +494,7 @@ class PDETrainer:
 
         self.optimizer.step(closure)
         if "losses" not in captured:
-            # No closure call happened (rare; e.g. tolerance already met).
+            # Defensive: torch's LBFGS.step always evaluates the closure at least once.
             captured["losses"] = self.pde.compute_loss(self.model, x_batch, t_batch)
         return captured["losses"]
 
@@ -490,7 +520,8 @@ class PDETrainer:
     def _adaptive_total(self, losses):
         """Replace ``losses["total"]`` with the adaptively weighted objective."""
         # Adaptive weighting reweights the physics components only
-        # (residual / boundary / initial). In ``data_only`` mode those
+        # (residual / boundary / initial); the data term keeps its static
+        # ``loss_weights["data"]``. In ``data_only`` mode those
         # are zero contributions to the objective, so adaptive
         # weighting is a no-op and we trust the total assembled by
         # ``PDEBase.compute_loss`` (already ``data`` only).
@@ -499,7 +530,8 @@ class PDETrainer:
             return
         component_names = ["residual", "boundary", "initial"]
         if self.config.training.adaptive_weights.strategy == "lrw":
-            # Learning-rate weighting balances the gradient norm of each component.
+            # Learning-rate weighting balances the gradient norm of each component
+            # (over the model parameters, not trainable PDE parameters).
             # torch.autograd.grad leaves .grad untouched, so the total backward in
             # _step() sees only its own gradient; components without a graph count as 0.
             params = [p for p in self.model.parameters() if p.requires_grad]
@@ -537,7 +569,8 @@ class PDETrainer:
         """One optimizer step on a batch; returns the loss components.
 
         Shared by :meth:`train` and :meth:`train_steps`. Applies adaptive loss
-        weighting (if enabled) and gradient clipping, or an L-BFGS closure step.
+        weighting (if enabled) and gradient clipping of the model parameters, or
+        an L-BFGS closure step (no adaptive weighting, no clipping).
         """
         if getattr(self, "_is_lbfgs", False):
             return self._lbfgs_step(x_batch, t_batch)
@@ -555,26 +588,28 @@ class PDETrainer:
 
     def train_steps(
         self,
-        num_steps: Optional[int] = None,
-        time_budget_s: Optional[float] = None,
-        sample_fn: Optional[Callable] = None,
+        num_steps: int | None = None,
+        time_budget_s: float | None = None,
+        sample_fn: Callable | None = None,
         resample_every: int = 1,
         checkpoints: Sequence[float] = (),
-        on_checkpoint: Optional[Callable] = None,
-    ) -> Dict[str, Any]:
+        on_checkpoint: Callable | None = None,
+    ) -> dict[str, Any]:
         """Step-based training loop for benchmarks and studies.
 
         Runs :meth:`_step` (the same update as :meth:`train`) until
         ``num_steps`` steps or until training time reaches ``time_budget_s``.
         Training time is the summed wall-clock of sampling plus optimizer steps;
         checkpoint callbacks are excluded. There is no validation, early
-        stopping, LR scheduling, progress bar or disk I/O.
+        stopping, LR warm-up or scheduling, progress bar or disk I/O.
 
         Args:
             num_steps: Stop after this many steps.
             time_budget_s: Stop once training time reaches this many seconds.
-            sample_fn: ``sample_fn(model, progress) -> (x, t)``; defaults to the
-                configured collocation strategy with ``config.training.batch_size``.
+            sample_fn: ``sample_fn(model, progress) -> (x, t)``, where ``progress``
+                in [0, 1) is the elapsed fraction of the time budget (or of
+                ``num_steps`` without one); defaults to the configured
+                collocation strategy with ``config.training.batch_size``.
             resample_every: Draw new points every N steps and reuse them between.
             checkpoints: Increasing training-time marks (seconds).
             on_checkpoint: Called as ``on_checkpoint(step, train_time_s, model)``
@@ -582,6 +617,9 @@ class PDETrainer:
 
         Returns:
             ``{"steps", "train_time_s", "loss"}`` with the per-step total loss.
+
+        Raises:
+            ValueError: If neither ``num_steps`` nor ``time_budget_s`` is given.
         """
         if num_steps is None and time_budget_s is None:
             raise ValueError("Pass num_steps, time_budget_s, or both.")
@@ -621,19 +659,33 @@ class PDETrainer:
 
     def train(
         self,
-        num_epochs: Optional[int] = None,
-        batch_size: Optional[int] = None,
-        num_points: Optional[int] = None,
-        experiment_dir: Optional[str] = None,
+        num_epochs: int | None = None,
+        batch_size: int | None = None,
+        num_points: int | None = None,
+        experiment_dir: str | None = None,
         progress: bool = True,
     ):
         """Train the model.
 
-        ``num_epochs``, ``batch_size`` and ``num_points`` default to
-        ``config.training.num_epochs``, ``.batch_size`` and
-        ``.num_collocation_points``. Each epoch takes ``num_points // batch_size``
-        optimizer steps. ``progress`` shows one progress bar over epochs.
-        Losses are logged every ``validation_frequency`` epochs.
+        Each epoch takes ``max(1, num_points // batch_size)`` optimizer steps on
+        freshly sampled batches (one full batch when ``optimizer`` is ``lbfgs``). Every
+        ``validation_frequency`` epochs (starting at epoch 0) it validates,
+        logs, checks early stopping (patience counted in epochs) and, with
+        ``experiment_dir``, saves history, metadata and the live snapshot.
+
+        Args:
+            num_epochs: Defaults to ``config.training.num_epochs``.
+            batch_size: Defaults to ``config.training.batch_size``; capped at
+                ``num_points``.
+            num_points: Collocation points per epoch; defaults to
+                ``config.training.num_collocation_points``.
+            experiment_dir: Run folder for ``experiment.log``, ``metadata.json``,
+                ``metrics.json``/``history.json``, ``live_snapshot.npz``,
+                ``final_model.pt`` and ``visualizations/``; ``None`` writes nothing.
+            progress: Show one tqdm progress bar over epochs.
+
+        Returns:
+            The training history dict (``self.history``).
         """
         training_cfg = self.config.training
         num_epochs = training_cfg.num_epochs if num_epochs is None else num_epochs
@@ -686,6 +738,7 @@ class PDETrainer:
                 self.history.setdefault(f"param_{name}", [])
 
         # L-BFGS requires deterministic full-batch loss; override batch_size.
+        # Only checked here, so the L-BFGS phase of adam_lbfgs keeps batch_size.
         if getattr(self, "_is_lbfgs", False) and batch_size != num_points:
             self.logger.warning(
                 "L-BFGS optimizer requires full-batch updates; "
@@ -694,7 +747,7 @@ class PDETrainer:
             batch_size = num_points
 
         # Adaptive weights are incompatible with the L-BFGS closure (per-component
-        # gradient passes are too expensive); silently disable for the LBFGS phase.
+        # gradient passes are too expensive); _step skips them during L-BFGS.
         if getattr(self, "_is_lbfgs", False) and self.use_adaptive_weights:
             self.logger.warning("Adaptive loss weighting is disabled while running L-BFGS.")
 
@@ -754,7 +807,7 @@ class PDETrainer:
         self.points_history = []
 
         # Emit an initial live snapshot so the Monitor tab has something to show
-        # before the first validation_frequency epochs elapse.
+        # before the first epoch finishes.
         if experiment_dir:
             self._save_live_snapshot(experiment_dir, epoch=0)
 
@@ -831,7 +884,7 @@ class PDETrainer:
                 val_losses = self._compute_validation_loss()
                 self.history["val_loss"].append(val_losses["total_loss"])
                 self.logger.info(
-                    f"Epoch {epoch+1}/{num_epochs}, "
+                    f"Epoch {epoch + 1}/{num_epochs}, "
                     f"Train Loss: {avg_epoch_loss:.6f}, "
                     f"Val Loss: {val_losses['total_loss']:.6f}, "
                     f"LR: {current_lr:.6f}{weights_str}"
@@ -849,7 +902,7 @@ class PDETrainer:
 
                     if self.patience_counter >= self.patience:
                         self.logger.info(
-                            f"Early stopping triggered at epoch {epoch+1}, "
+                            f"Early stopping triggered at epoch {epoch + 1}, "
                             f"best val loss: {self.best_val_loss:.6f}"
                         )
                         break
@@ -859,7 +912,7 @@ class PDETrainer:
                 save_training_metrics(self.history, experiment_dir)
                 metadata_path = os.path.join(experiment_dir, "metadata.json")
                 try:
-                    with open(metadata_path, "r") as f:
+                    with open(metadata_path) as f:
                         partial_metadata = json.load(f)
                 except (FileNotFoundError, json.JSONDecodeError):
                     partial_metadata = {}

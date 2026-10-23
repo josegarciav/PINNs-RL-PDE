@@ -9,11 +9,10 @@ from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 
 
 class SIRENLayer(nn.Module):
-    """SIREN layer with sinusoidal activation."""
+    """SIREN layer ``sin(omega_0 * (W x + b))``."""
 
     def __init__(self, in_features: int, out_features: int, omega_0: float = 30.0) -> None:
-        """
-        Initialize the layer.
+        """Initialize the layer.
 
         Args:
             in_features: Input dimension
@@ -26,7 +25,12 @@ class SIRENLayer(nn.Module):
         self.initialize_weights()
 
     def initialize_weights(self) -> None:
-        """Initialize the weights using SIREN initialization."""
+        """Draw ``W ~ U(-sqrt(6 / in) / omega_0, sqrt(6 / in) / omega_0)``.
+
+        This is the SIREN hidden-layer rule; it is used for every layer,
+        including the first (the paper's first-layer ``U(-1/in, 1/in)`` is not
+        applied). Biases keep PyTorch's default ``nn.Linear`` initialization.
+        """
         with torch.no_grad():
             self.linear.weight.uniform_(
                 -np.sqrt(6 / self.linear.in_features) / self.omega_0,
@@ -34,8 +38,7 @@ class SIRENLayer(nn.Module):
             )
 
     def forward(self, x: Tensor) -> Tensor:
-        """
-        Forward pass of the layer.
+        """Forward pass of the layer.
 
         Args:
             x: Input tensor
@@ -47,18 +50,17 @@ class SIRENLayer(nn.Module):
 
 
 class SIREN(BaseNetwork):
-    """Sinusoidal Representation Network."""
+    """Sinusoidal Representation Network: ``SIRENLayer`` stack and a linear output layer."""
 
     def __init__(self, config: NetworkConfig) -> None:
-        """
-        Initialize the network.
+        """Initialize the network.
 
         Args:
             config: Network configuration dictionary containing:
                 - input_dim: Input dimension
                 - hidden_dims: List of hidden layer dimensions
                 - output_dim: Output dimension
-                - omega_0: Frequency parameter
+                - omega_0: Frequency parameter (default 30.0); ``activation`` is ignored
         """
         super().__init__(config)
         self.input_dim = config["input_dim"]
@@ -75,8 +77,7 @@ class SIREN(BaseNetwork):
         self.layers.append(nn.Linear(prev_dim, self.output_dim))
 
     def forward(self, x: InputType) -> OutputType:
-        """
-        Forward pass of the network.
+        """Forward pass of the network.
 
         Args:
             x: Input tensor or array

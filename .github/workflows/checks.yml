@@ -2,9 +2,12 @@ name: Checks
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -13,72 +16,65 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          version: "latest"
-
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Run tests
-        run: uv run pytest tests/ -v --tb=short
-
-      - name: Check coverage (>=80%)
-        if: matrix.python-version == '3.11'
-        run: uv run pytest tests/ --cov=pinnrl --cov-report=term-missing --cov-fail-under=80
+      - name: Install
+        run: uv sync --locked --all-extras --python ${{ matrix.python-version }}
+      - name: Tests (coverage gate on 3.12)
+        run: >
+          uv run pytest -q
+          ${{ matrix.python-version == '3.12' && '--cov=pinnrl --cov-report=term-missing --cov-fail-under=80' || '' }}
 
   lint:
-    name: Lint & format
+    name: Lint, format, lockfile
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          version: "latest"
+      - run: uv lock --check
+      - run: uv sync --locked --extra dev
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
 
-      - name: Install dev dependencies
-        run: uv sync --frozen --group dev
+  docs:
+    name: Docs build (strict)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --locked --extra docs
+      - run: uv run mkdocs build --strict
 
-      - name: Run black
-        run: uv run black --check pinnrl/ tests/
-
-      - name: Run ruff
-        run: uv run ruff check pinnrl/ tests/
-
-      - name: Check docstrings (pydocstyle)
-        run: uv run pydocstyle pinnrl/
-
-      - name: Verify uv.lock is up to date
-        run: uv lock --check
+  wheel-smoke:
+    name: Clean-wheel release gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: scripts/verify_release.sh 3.12
+        env:
+          SKIP_NOTEBOOKS: all   # PR speed; the release workflow and the local gate run them
 
   commit-message:
     name: Conventional commits
     runs-on: ubuntu-latest
     if: |
       !contains(github.actor, '[bot]') &&
-      !contains(github.event.head_commit.message, 'Jules') &&
       !contains(github.event.head_commit.message, 'Co-Authored-By: Claude')
-
     steps:
       - uses: actions/checkout@v5
-
-      - name: Validate commit messages
-        uses: gsactions/commit-message-checker@v2
+      - uses: gsactions/commit-message-checker@v2
         with:
-          pattern: '^(feat|fix|docs|style|refactor|perf|test|chore)(\(.+\))?: .+'
+          pattern: '^(feat|fix|docs|style|refactor|perf|test|chore|merge)(\(.+\))?: .+'
           flags: 'i'
           error: 'Commit message must follow Conventional Commits: feat|fix|docs|style|refactor|perf|test|chore'

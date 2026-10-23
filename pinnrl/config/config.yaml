@@ -2,7 +2,7 @@
 # Configuration file for Physics-Informed Neural Networks
 
 # Device Configuration
-device: "mps"  # Options: "mps", "cpu" (cpu is slower for deep networks)
+device: "mps"  # Options: "mps", "cuda", "cpu"; an unavailable backend falls back to cpu
 
 # Architecture-specific configurations
 architectures:
@@ -23,12 +23,12 @@ architectures:
     omega_0: 30.0  # Frequency parameter for sin activation
 
   fourier:
-    mapping_size: 512
-    hidden_dims: [512, 512, 512, 512]
-    scale: 4.0  # Increased to better capture high frequencies
+    mapping_size: 512  # B has shape (input_dim, mapping_size); features are [sin(xB), cos(xB)]
+    hidden_dims: [512, 512, 512, 512]  # width = hidden_dims[0]; len = linear layers incl. output (3 hidden here)
+    scale: 4.0  # B ~ N(0, scale^2); larger captures higher frequencies
     activation: "tanh"
-    dropout: 0.0  # No dropout for PINN training
-    layer_norm: true
+    dropout: 0.0  # not read by FourierNetwork
+    layer_norm: true  # not read by FourierNetwork
 
   attention:
     hidden_dim: 124
@@ -39,7 +39,7 @@ architectures:
 
   autoencoder:
     latent_dim: 64  # Dimension of the latent space
-    hidden_dims: [124, 248, 124]  # Encoder -> latent -> output (PINN function approximation)
+    hidden_dims: [124, 248, 124]  # Encoder widths; the decoder mirrors them: in -> 124-248-124 -> latent -> 124-248-124 -> out
     activation: "relu"
     dropout: 0.0  # No dropout for PINN training
     layer_norm: true
@@ -47,12 +47,12 @@ architectures:
   fno:
     hidden_dim: 256
     num_blocks: 4  # Number of spectral convolution blocks
-    modes: 16  # Number of Fourier modes to keep (frequency cutoff)
+    modes: 16  # Number of Fourier modes to keep (frequency cutoff); required for fno
     activation: "gelu"
-    dropout: 0.0  # No dropout for PINN training
+    dropout: 0.0  # not read by FNONetwork
 
 # Default PDE type to train
-pde_type: "heat"  # Options: "heat", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
+pde_type: "heat"  # Options: "heat", "heat_2d", "wave", "burgers", "convection", "kdv", "allen_cahn", "cahn_hilliard", "black_scholes", "pendulum"
 
 # PDE-specific configurations
 pde_configs:
@@ -64,13 +64,13 @@ pde_configs:
     output_dim: 1  # u(x,t)
     parameters:
       alpha: 0.01  # Thermal diffusivity DO NOT CHANGE
-    domain: [[0, 2]]  # [0, π] 3.14159 6.28318
+    domain: [[0, 2]]
     time_domain: [0, 10]
     dimension: 1
     initial_condition:
       type: "sin_exp_decay"
       amplitude: 1.0
-      frequency: 2.0  # Number of periods in [0,1]
+      frequency: 2.0  # k: periods over the domain length L, u0 = A sin(2 pi k x / L)
     boundary_conditions:
       periodic: {}  # Periodic boundary conditions
       #dirichlet: { value: 0.0 }
@@ -283,20 +283,22 @@ training:
   collocation_distribution: "uniform"  # Options: "uniform", "stratified", "residual_based" (RAD), "adaptive" (RL bandit, experimental)
   adaptive_weights:
     enabled: false # Whether to use adaptive weights for loss terms
-    strategy: "rbw"  # Options: "lrw" (Learning Rate Weighting) or "rbw" (Relative Error Weighting)
-    alpha: 0.7     # Lower alpha for faster adaptation
+    strategy: "rbw"  # Options: "lrw" (weights ~ 1 / EMA gradient norm) or "rbw" (weights ~ EMA loss); replaces loss_weights for residual/boundary/initial
+    alpha: 0.7     # EMA retention; lower alpha adapts faster
     eps: 1.0e-6
-    initial_weights: [0.3, 0.4, 0.3]  # More balanced weights
-  validation_frequency: 10
+    initial_weights: [0.3, 0.4, 0.3]  # [residual, boundary, initial] for the first step only
+  validation_frequency: 10  # validate, log, check early stopping and checkpoint every N epochs
   early_stopping:
     enabled: true
-    patience: 100  # Increased patience
+    patience: 100  # epochs without val-loss improvement
     min_delta: 1.0e-7
   optimizer_config:
     learning_rate: 0.005  # Reduced for more stable training
     weight_decay: 0.0005  # Added weight decay for regularization
-  # "cosine" anneals over num_epochs down to reduce_lr_params.min_lr;
-  # "reduce_lr" is ReduceLROnPlateau; "constant" disables scheduling.
+  # "cosine" anneals over num_epochs - warmup_epochs down to reduce_lr_params.min_lr;
+  # "reduce_lr" is ReduceLROnPlateau on the epoch training loss; "constant" disables
+  # scheduling. An optional training.warmup_epochs (default 0) ramps the LR linearly
+  # first. L-BFGS replaces any non-constant scheduler with ReduceLROnPlateau.
   scheduler_type: "cosine"  # Options: "cosine" | "reduce_lr" | "constant"
   reduce_lr_params:
     factor: 0.5
@@ -306,15 +308,16 @@ training:
     residual: 15.0  # Weight for PDE residual loss
     boundary: 20.0  # Weight for boundary condition loss
     initial: 10.0   # Weight for initial condition loss
-    data: 10.0      # Weight for data-fitting loss (inverse problems)
-  # Forward training optimizes only network weights;
-  # inverse mode also identifies selected PDE parameters from observations.
-  mode: "forward"  # Options: "forward" or "inverse"
+    data: 10.0      # Weight for data-fitting loss (any run with observation data)
+  # forward: physics terms (+ data if observations are attached); inverse: physics +
+  # data, also identifying selected PDE parameters; data_augmented: physics + data;
+  # data_only: data term only.
+  mode: "forward"  # Options: "forward" | "inverse" | "data_only" | "data_augmented"
   optimizer: "adam"  # Options: "adam" | "lbfgs" | "adam_lbfgs"
   adam_lbfgs_switch_ratio: 0.7  # Fraction of epochs in the Adam phase before switching to L-BFGS
   loss_function: "mse"  # Options: "mse" | "mae" | "huber"
   huber_delta: 1.0      # Delta for Huber loss (only used when loss_function = huber)
-  lbfgs:
+  lbfgs:  # passed to torch.optim.LBFGS
     history_size: 50
     max_iter: 20
     line_search_fn: "strong_wolfe"
@@ -336,4 +339,4 @@ rl:
 
 # Paths
 paths:
-  results_dir: "runs"  # gitignored; experiments/ holds tracked research
+  results_dir: "runs"  # relative to the working directory (./runs/); gitignored; experiments/ holds tracked research

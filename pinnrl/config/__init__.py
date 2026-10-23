@@ -1,7 +1,9 @@
+"""Configuration dataclasses built from ``config.yaml`` and device resolution."""
+
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import torch
 import yaml
@@ -27,11 +29,12 @@ class LearningRateSchedulerConfig:
     """Learning rate scheduler settings.
 
     Attributes:
-        type: Scheduler type (``"cosine"`` or ``"reduce_lr"``).
-        warmup_epochs: Epochs of linear LR warm-up before the scheduler starts.
-        min_lr: Minimum learning rate.
+        type: Scheduler type (``"cosine"``, ``"reduce_lr"`` or ``"constant"``).
+        warmup_epochs: Epochs of linear LR warm-up before the scheduler starts;
+            cosine then anneals over ``num_epochs - warmup_epochs``.
+        min_lr: Minimum learning rate (cosine ``eta_min`` and ``reduce_lr`` floor).
         factor: Multiplicative factor for ``reduce_lr`` scheduler.
-        patience: Epochs to wait before reducing LR.
+        patience: Epochs without improvement before ``reduce_lr`` lowers the LR.
     """
 
     type: str
@@ -47,8 +50,9 @@ class EarlyStoppingConfig:
 
     Attributes:
         enabled: Whether early stopping is active.
-        patience: Epochs without improvement before stopping.
-        min_delta: Minimum loss decrease to count as improvement.
+        patience: Epochs without validation-loss improvement before stopping
+            (checked every ``validation_frequency`` epochs).
+        min_delta: Minimum validation-loss decrease to count as improvement.
     """
 
     enabled: bool
@@ -63,7 +67,7 @@ class LBFGSConfig:
     Attributes:
         history_size: Number of past gradients/updates retained for the
             inverse-Hessian approximation.
-        max_iter: Max iterations of the inner line search per ``step()`` call.
+        max_iter: Max L-BFGS iterations per ``step()`` call.
         line_search_fn: Line-search strategy passed to ``torch.optim.LBFGS``
             (``"strong_wolfe"`` or ``None``).
         tolerance_grad: First-order optimality tolerance.
@@ -72,7 +76,7 @@ class LBFGSConfig:
 
     history_size: int = 50
     max_iter: int = 20
-    line_search_fn: Optional[str] = "strong_wolfe"
+    line_search_fn: str | None = "strong_wolfe"
     tolerance_grad: float = 1e-7
     tolerance_change: float = 1e-9
 
@@ -96,16 +100,17 @@ class AdaptiveWeightsConfig:
     Attributes:
         enabled: Whether adaptive weighting is active.
         strategy: Weight adaptation strategy (``"lrw"`` or ``"rbw"``).
-        alpha: Moving average factor (0–1).
+        alpha: EMA retention factor (0–1); higher adapts more slowly.
         eps: Small constant for numerical stability.
-        initial_weights: Initial weights for [residual, boundary, initial] components.
+        initial_weights: Weights for [residual, boundary, initial] returned by
+            the first update.
     """
 
     enabled: bool = False
     strategy: str = "rbw"  # Options: "lrw" or "rbw"
-    alpha: float = 0.9  # Moving average factor (0-1)
+    alpha: float = 0.9  # EMA retention factor (0-1)
     eps: float = 1e-5  # Small constant for numerical stability
-    initial_weights: List[float] = None  # Initial weights for [pde, boundary, initial] components
+    initial_weights: list[float] = None  # First-step weights for [residual, boundary, initial]
 
     def __post_init__(self):
         if self.initial_weights is None:
@@ -124,12 +129,21 @@ class TrainingConfig:
         num_initial_points: Number of initial condition points.
         learning_rate: Optimizer learning rate.
         weight_decay: L2 regularisation coefficient.
-        gradient_clipping: Max gradient norm for clipping.
+        gradient_clipping: Max gradient norm for clipping (``0`` disables).
         early_stopping: Early-stopping configuration.
         learning_rate_scheduler: LR scheduler configuration.
-        collocation_distribution: Sampling distribution for collocation points.
+        collocation_distribution: Collocation sampling strategy (``"uniform"``,
+            ``"stratified"``, ``"residual_based"`` or ``"adaptive"``).
         adaptive_weights: Adaptive loss weighting configuration.
-        loss_weights: Static loss component weights.
+        loss_weights: Static weights for ``residual``, ``boundary``, ``initial``
+            and ``data``.
+        optimizer: ``"adam"``, ``"lbfgs"`` or ``"adam_lbfgs"``.
+        adam_lbfgs_switch_ratio: Fraction of ``num_epochs`` run with Adam before
+            ``adam_lbfgs`` switches to L-BFGS.
+        lbfgs: L-BFGS settings.
+        mode: ``"forward"``, ``"inverse"``, ``"data_only"`` or ``"data_augmented"``.
+        loss_function: Reduction of each loss term (``"mse"``, ``"mae"`` or ``"huber"``).
+        huber_delta: Delta of the Huber loss.
         validation_frequency: Epochs between validation, logging and run checkpoints.
     """
 
@@ -145,10 +159,10 @@ class TrainingConfig:
     learning_rate_scheduler: LearningRateSchedulerConfig
     collocation_distribution: str = "uniform"
     adaptive_weights: AdaptiveWeightsConfig = None
-    loss_weights: Dict[str, float] = None
+    loss_weights: dict[str, float] = None
     optimizer: str = "adam"  # "adam" | "lbfgs" | "adam_lbfgs"
     adam_lbfgs_switch_ratio: float = 0.7
-    lbfgs: Optional[LBFGSConfig] = None
+    lbfgs: LBFGSConfig | None = None
     mode: str = "forward"  # "forward" | "inverse" | "data_only" | "data_augmented"
     loss_function: str = "mse"  # "mse" | "mae" | "huber"
     huber_delta: float = 1.0
@@ -175,12 +189,12 @@ class TrainingConfig:
             )
         if self.loss_function not in ("mse", "mae", "huber"):
             raise ValueError(
-                f"Invalid loss_function '{self.loss_function}'. " "Choose 'mse', 'mae', or 'huber'."
+                f"Invalid loss_function '{self.loss_function}'. Choose 'mse', 'mae', or 'huber'."
             )
 
     @property
-    def optimizer_config(self) -> Dict[str, Any]:
-        """Get optimizer configuration."""
+    def optimizer_config(self) -> dict[str, Any]:
+        """Learning rate and weight decay, shaped like the ``optimizer_config`` YAML block."""
         return {"learning_rate": self.learning_rate, "weight_decay": self.weight_decay}
 
     def __getitem__(self, key: str) -> Any:
@@ -196,13 +210,17 @@ class TrainingConfig:
         return getattr(self, key, default)
 
     @classmethod
-    def from_dict(cls, cfg: Dict[str, Any]) -> "TrainingConfig":
+    def from_dict(cls, cfg: dict[str, Any]) -> "TrainingConfig":
         """Build from the ``training:`` block of ``config.yaml``.
 
         This is the one place the YAML layout is translated into a
         ``TrainingConfig``; both :class:`Config` and ``pinnrl-train`` use it.
-        Missing keys fall back to defaults. Numeric fields are coerced with
-        ``float()`` because YAML 1.1 reads ``1e-7`` (no decimal point) as a string.
+        ``learning_rate`` and ``weight_decay`` come from ``optimizer_config``
+        (or the top level); the scheduler from ``scheduler_type``,
+        ``warmup_epochs`` and ``reduce_lr_params``; a legacy ``pde`` key in
+        ``loss_weights`` is renamed to ``residual``. Missing keys fall back to
+        defaults. Float fields are coerced with ``float()`` because YAML 1.1
+        reads ``1e-7`` (no decimal point) as a string.
         """
         optimizer_cfg = cfg.get("optimizer_config", {})
         early_stopping = cfg.get("early_stopping", {})
@@ -267,14 +285,18 @@ class ModelConfig:
         input_dim: Number of input features (e.g. 2 for (x, t)).
         hidden_dim: Width of hidden layers.
         output_dim: Number of output features.
-        num_layers: Depth of the network.
+        num_layers: Depth: linear layers after the feature map for Fourier
+            (the last is the output layer), attention blocks, and the block
+            count for ResNet / FNO when ``num_blocks`` is unset.
         activation: Activation function name.
-        fourier_features: Whether to use Fourier feature mapping.
-        fourier_scale: Scale parameter for Fourier features.
+        fourier_features: ``True`` for the Fourier architecture (informational;
+            no network reads it).
+        fourier_scale: Copy of ``scale`` (informational; no network reads it).
         dropout: Dropout rate (0.0 disables).
         layer_norm: Whether to apply layer normalisation.
         architecture: Architecture backend name.
-        hidden_dims: Per-layer widths (overrides ``hidden_dim``).
+        hidden_dims: Hidden-layer widths for feedforward, SIREN and the
+            autoencoder encoder; defaults to ``[hidden_dim] * num_layers``.
         omega_0: Frequency factor for SIREN networks.
         num_blocks: Number of residual / FNO blocks.
         num_heads: Number of attention heads.
@@ -290,18 +312,18 @@ class ModelConfig:
     num_layers: int
     activation: str
     fourier_features: bool
-    fourier_scale: Optional[float]
+    fourier_scale: float | None
     dropout: float
     layer_norm: bool
     architecture: str
-    hidden_dims: Optional[List[int]] = None
-    omega_0: Optional[float] = None  # For SIREN networks
-    num_blocks: Optional[int] = None  # For ResNet
-    num_heads: Optional[int] = None  # For attention networks
-    latent_dim: Optional[int] = None  # For autoencoder
+    hidden_dims: list[int] | None = None
+    omega_0: float | None = None  # For SIREN networks
+    num_blocks: int | None = None  # For ResNet and FNO
+    num_heads: int | None = None  # For attention networks
+    latent_dim: int | None = None  # For autoencoder
     mapping_size: int = 32  # Default mapping size for Fourier features
     scale: float = 10.0  # Default scale for Fourier features
-    modes: Optional[int] = None  # For FNO (number of Fourier modes)
+    modes: int | None = None  # For FNO (number of Fourier modes)
 
     def __init__(
         self,
@@ -346,15 +368,16 @@ class ModelConfig:
     def from_architecture(
         cls,
         architecture: str,
-        arch_cfg: Dict[str, Any],
+        arch_cfg: dict[str, Any],
         input_dim: int,
         output_dim: int,
     ) -> "ModelConfig":
         """Build from one entry of the ``architectures:`` block of ``config.yaml``.
 
         ``hidden_dim`` and ``num_layers`` default to the first width and the
-        length of ``hidden_dims`` when only the list is given. Architecture
-        extras (``omega_0``, ``modes``, ...) are copied when present.
+        length of ``hidden_dims`` when only the list is given (else 128 and 4);
+        ``activation`` defaults to ``tanh``. Architecture extras
+        (``omega_0``, ``modes``, ...) are copied when present.
         """
         hidden_dims = arch_cfg.get("hidden_dims")
         model = cls(
@@ -397,20 +420,20 @@ class RLConfig:
     """
 
     enabled: bool = False
-    n_x_cells: Optional[int] = None
-    n_t_cells: Optional[int] = None
-    policy_fraction: Optional[float] = None
-    temperature: Optional[float] = None
-    probe_cells: Optional[int] = None
-    probe_points: Optional[int] = None
-    probe_every: Optional[int] = None
+    n_x_cells: int | None = None
+    n_t_cells: int | None = None
+    policy_fraction: float | None = None
+    temperature: float | None = None
+    probe_cells: int | None = None
+    probe_points: int | None = None
+    probe_every: int | None = None
 
     @classmethod
-    def from_dict(cls, cfg: Dict[str, Any]) -> "RLConfig":
+    def from_dict(cls, cfg: dict[str, Any]) -> "RLConfig":
         """Build from the ``rl:`` block of ``config.yaml``; unknown keys are ignored."""
         return cls(**{k: v for k, v in cfg.items() if k in cls.__dataclass_fields__})
 
-    def build_sampler(self, pde, device: Optional[torch.device] = None):
+    def build_sampler(self, pde, device: torch.device | None = None):
         """Create the :class:`ResidualBanditSampler` these settings describe for ``pde``."""
         from pinnrl.rl.bandit_sampler import ResidualBanditSampler
 
@@ -459,7 +482,7 @@ class Config:
 
     def _load_config(self):
         """Load configuration from YAML file."""
-        with open(self.config_path, "r") as f:
+        with open(self.config_path) as f:
             config_dict = yaml.safe_load(f)
 
         self.pde_type = config_dict.get("pde_type", "heat")

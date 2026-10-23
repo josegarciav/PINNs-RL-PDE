@@ -37,7 +37,7 @@ def load_pde_config(pde_type, device=None):
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         config = yaml.safe_load(f)
 
     # Get PDE-specific configuration

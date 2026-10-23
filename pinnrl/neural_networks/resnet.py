@@ -7,7 +7,10 @@ from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 
 
 class ResNetBlock(nn.Module):
-    """Base component for ResNet architecture - a single residual block with skip connection."""
+    """Residual block ``act(x + F(x))``.
+
+    ``F`` is Linear -> LayerNorm -> act -> Dropout -> Linear -> LayerNorm -> Dropout.
+    """
 
     def __init__(
         self,
@@ -16,8 +19,7 @@ class ResNetBlock(nn.Module):
         activation: str = "relu",
         dropout: float = 0.1,
     ):
-        """
-        Initialize a single residual block component.
+        """Initialize a single residual block component.
 
         Args:
             in_dim: Input dimension
@@ -53,8 +55,7 @@ class ResNetBlock(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass with residual connection.
+        """Forward pass with residual connection.
 
         Args:
             x: Input tensor
@@ -69,17 +70,16 @@ class ResNet(BaseNetwork):
     """Residual Neural Network architecture built from multiple ResNetBlock components."""
 
     def __init__(self, config: NetworkConfig) -> None:
-        """
-        Initialize the ResNet architecture.
+        """Initialize the ResNet architecture.
 
         Args:
             config: Network configuration dictionary containing:
                 - input_dim: Input dimension
-                - hidden_dim: Hidden layer dimension
-                - num_blocks: Number of ResNetBlock components
+                - hidden_dim: Hidden layer dimension (else ``hidden_dims[0]``, else 124)
+                - num_blocks: Number of ResNetBlock components (else ``num_layers``, else 4)
                 - output_dim: Output dimension
-                - activation: Activation function name
-                - dropout: Dropout rate
+                - activation: Activation function name (default ``relu``)
+                - dropout: Dropout rate (default 0.1)
         """
         super().__init__(config)
         self.input_dim = config["input_dim"]
@@ -126,8 +126,7 @@ class ResNet(BaseNetwork):
         self.output_layer = nn.Linear(self.hidden_dim, self.output_dim)
 
     def forward(self, x: InputType) -> OutputType:
-        """
-        Forward pass of the network.
+        """Forward pass of the network.
 
         Args:
             x: Input tensor or array

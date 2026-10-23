@@ -39,7 +39,7 @@ def test_lrw_does_not_leak_component_gradients():
     ref_losses = trainer.pde.compute_loss(reference, x, t)
     total = trainer.pde.weighted_total(ref_losses, *weights[:3])
     expected = torch.autograd.grad(total, list(reference.parameters()))
-    for (name, _), g in zip(reference.named_parameters(), expected):
+    for (name, _), g in zip(reference.named_parameters(), expected, strict=False):
         torch.testing.assert_close(applied[name], g, rtol=1e-4, atol=1e-6)
     assert torch.isfinite(losses["total"])
 
@@ -168,3 +168,35 @@ def test_early_stopping_patience_counts_epochs():
     trainer.validation_frequency = 2
     trainer.train(num_epochs=50, batch_size=16, num_points=32, progress=False)
     assert len(trainer.history["train_loss"]) <= 7
+
+
+def test_importing_pinnrl_keeps_the_matplotlib_backend():
+    """The library must not force a backend at import (it broke inline notebook plots)."""
+    import subprocess
+    import sys
+
+    code = (
+        "import matplotlib; matplotlib.use('pdf'); "
+        "import pinnrl.plots, pinnrl.training.trainer; print(matplotlib.get_backend())"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip().lower() == "pdf"
+
+
+def test_creating_a_trainer_does_not_configure_root_logging():
+    """The library must leave the root logger alone (it made every notebook print INFO lines)."""
+    import logging
+
+    root = logging.getLogger()
+    handlers_before = list(root.handlers)
+    _make_trainer()
+    assert root.handlers == handlers_before
+
+
+def test_package_exposes_version():
+    """``pinnrl.__version__`` comes from the installed package metadata."""
+    import importlib.metadata
+
+    import pinnrl
+
+    assert pinnrl.__version__ == importlib.metadata.version("pinnrl")

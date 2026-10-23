@@ -1,13 +1,13 @@
 """Single source of truth for the PDEs that ship with pinnrl.
 
-Every entry point (``pinnrl-train``, the dashboard, the dataset registry)
-resolves PDE names through :func:`get_pde_spec`, which accepts either the
-config key used under ``pde_configs`` in ``config.yaml`` (``"heat"``,
-``"allen_cahn"``) or the display name (``"Heat Equation"``).
+``pinnrl-train`` and the dashboard resolve PDE names through
+:func:`get_pde_spec`, which accepts either the config key used under
+``pde_configs`` in ``config.yaml`` (``"heat"``, ``"allen_cahn"``) or the
+display name (``"Heat Equation"``). The dataset registry's
+``default_pde_key`` values are these config keys.
 """
 
 from dataclasses import dataclass
-from typing import Dict, Tuple, Type
 
 from .allen_cahn import AllenCahnEquation
 from .black_scholes import BlackScholesEquation
@@ -33,10 +33,10 @@ class PDESpec:
 
     key: str
     display_name: str
-    cls: Type[PDEBase]
+    cls: type[PDEBase]
 
 
-PDE_SPECS: Tuple[PDESpec, ...] = (
+PDE_SPECS: tuple[PDESpec, ...] = (
     PDESpec("heat", "Heat Equation", HeatEquation),
     PDESpec("heat_2d", "Heat Equation 2D", HeatEquation),
     PDESpec("wave", "Wave Equation", WaveEquation),
@@ -49,7 +49,7 @@ PDE_SPECS: Tuple[PDESpec, ...] = (
     PDESpec("pendulum", "Pendulum Equation", PendulumEquation),
 )
 
-_LOOKUP: Dict[str, PDESpec] = {}
+_LOOKUP: dict[str, PDESpec] = {}
 for _spec in PDE_SPECS:
     _LOOKUP[_spec.key] = _spec
     _LOOKUP[_spec.display_name.lower()] = _spec
