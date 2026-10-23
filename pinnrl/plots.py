@@ -116,8 +116,9 @@ def plot_solution(
             time frames for an animated 2-D plot).
         save_path: Optional ``.html`` path; writes ``*_exact.html`` and ``*_predicted.html``.
         return_figs: Return ``(exact_fig, predicted_fig)`` instead of saving/showing.
-        time_point: Time of the slice. When omitted, 1-D PDEs show the full
-            ``(x, t)`` surface and 2-D PDEs are animated over time.
+        time_point: Time of the slice for 2-D PDEs (animated over time when
+            omitted). 1-D PDEs always show the whole ``(x, t)`` surface: a
+            single-time slice of a 1-D field is a line, which a surface cannot draw.
     """
     n = int(np.sqrt(num_points))
     if pde.dimension == 2:
@@ -131,7 +132,7 @@ def plot_solution(
         preds = [g[2] for g in grids]
         exacts = [g[3] for g in grids]
     else:
-        A, B, pred, exact = solution_grid(model, pde, n, time_point)
+        A, B, pred, exact = solution_grid(model, pde, n)
         times, preds, exacts = [None], [pred], [exact]
 
     if exacts[0] is None:
@@ -204,23 +205,48 @@ def plot_solution(
 # ---------------------------------------------------------------------------
 
 
-def plot_training_history(trainer, save_path=None):  # pragma: no cover
-    """Loss curves (log scale), plus loss-weight curves when adaptive weights are on.
+def loss_curve_epochs(history, validation_frequency):
+    """1-based x positions for the per-epoch losses and for ``val_loss``.
 
-    Without adaptive weights every history series except ``lr`` and
-    ``loss_weights`` is drawn on the log loss axis.
+    Every ``*_loss`` series except ``val_loss`` has one value per epoch. The
+    trainer validates at 0-based epochs ``0, f, 2f, ...``, i.e. 1-based epochs
+    ``1, f + 1, 2f + 1, ...``.
+    """
+    epochs = list(range(1, len(history.get("train_loss", [])) + 1))
+    val = [1 + k * validation_frequency for k in range(len(history.get("val_loss", [])))]
+    return epochs, val
+
+
+def plot_training_history(trainer, save_path=None):  # pragma: no cover
+    """Loss curves on a log axis, plus loss-weight curves when adaptive weights are on.
+
+    Only the ``*_loss`` series are drawn: ``val_loss`` at the epochs it was
+    measured, the others once per epoch. The learning rate and parameter
+    trajectories are not losses and are left out.
     """
     history = trainer.history
+    epochs, val_epochs = loss_curve_epochs(history, trainer.validation_frequency)
+    loss_keys = [key for key, values in history.items() if key.endswith("_loss") and values]
     weights = np.array(history.get("loss_weights", []))
-    if trainer.use_adaptive_weights and len(weights) > 0:
+    with_weights = trainer.use_adaptive_weights and len(weights) > 0
+    if with_weights:
         fig = make_subplots(rows=2, cols=1, subplot_titles=("Losses", "Loss Weights"))
-        for key in ["train_loss", "val_loss", "residual_loss", "boundary_loss", "initial_loss"]:
-            if history.get(key):
-                fig.add_trace(go.Scatter(y=history[key], name=key, mode="lines"), row=1, col=1)
+    else:
+        fig = go.Figure()
+    loss_cell = {"row": 1, "col": 1} if with_weights else {}
+    for key in loss_keys:
+        x = val_epochs if key == "val_loss" else epochs[: len(history[key])]
+        fig.add_trace(go.Scatter(x=x, y=history[key], name=key, mode="lines"), **loss_cell)
+    if with_weights:
         for i, component in enumerate(["residual", "boundary", "initial"]):
             if i < weights.shape[1]:
                 fig.add_trace(
-                    go.Scatter(y=weights[:, i], name=f"{component}_weight", mode="lines"),
+                    go.Scatter(
+                        x=epochs[: len(weights)],
+                        y=weights[:, i],
+                        name=f"{component}_weight",
+                        mode="lines",
+                    ),
                     row=2,
                     col=1,
                 )
@@ -229,10 +255,6 @@ def plot_training_history(trainer, save_path=None):  # pragma: no cover
         fig.update_yaxes(title="Weight Value", row=2, col=1)
         fig.update_xaxes(title="Epoch", row=2, col=1)
     else:
-        fig = go.Figure()
-        for key, values in history.items():
-            if key not in ("lr", "loss_weights") and values:
-                fig.add_trace(go.Scatter(y=values, name=key, mode="lines"))
         fig.update_layout(
             title="Training History", xaxis_title="Epoch", yaxis_title="Loss", yaxis_type="log"
         )

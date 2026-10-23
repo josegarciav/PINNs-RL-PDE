@@ -44,9 +44,14 @@ class AdaptiveLossWeights:
         After the first call (which only seeds ``g_bar``)::
 
             g_bar_i = alpha * g_bar_i + (1 - alpha) * g_i
-            w_i = (1 / (g_bar_i + eps)) / sum_j (1 / (g_bar_j + eps))
+            w_i = (1 / (g_bar_i + eps)) / sum_{j active} (1 / (g_bar_j + eps))
 
-        so components with smaller gradient norms get larger weights.
+        over the *active* components (``g_bar_i > 0``), so components with smaller
+        gradient norms get larger weights. A component whose gradient norm is zero
+        (a constant loss, e.g. a PDE with no boundary conditions) gets weight 0:
+        it cannot be minimised, and ``1 / eps`` would otherwise hand it almost all
+        the weight and switch the other terms off. If no component is active the
+        weights are uniform.
 
         Args:
             gradients (torch.Tensor): Gradient norm of each loss component, shape ``(n,)``.
@@ -61,7 +66,7 @@ class AdaptiveLossWeights:
                 if self.initial_weights is not None
                 else torch.ones_like(gradients)
             )
-            self.logger.info(f"LRW - Initialized weights: {self.weights}")
+            self.logger.debug(f"LRW - Initialized weights: {self.weights}")
             return self.weights
 
         # Update running average of gradients
@@ -70,11 +75,19 @@ class AdaptiveLossWeights:
         # Ensure eps is a tensor on the same device as the gradients
         eps_tensor = torch.tensor(self.eps, device=self.running_grads.device)
 
-        # Compute weights inversely proportional to gradient magnitudes
-        inv_grads = 1.0 / (self.running_grads + eps_tensor)
-        self.weights = inv_grads / torch.sum(inv_grads)
+        # Inverse-gradient weights over the components that have a gradient at all.
+        active = self.running_grads > 0
+        if not torch.any(active):
+            self.weights = torch.full_like(self.running_grads, 1.0 / len(self.running_grads))
+        else:
+            inv_grads = torch.where(
+                active,
+                1.0 / (self.running_grads + eps_tensor),
+                torch.zeros_like(self.running_grads),
+            )
+            self.weights = inv_grads / torch.sum(inv_grads)
 
-        self.logger.info(
+        self.logger.debug(
             f"LRW - Updated weights: gradients={gradients.detach().cpu().numpy()}, running_grads={self.running_grads.detach().cpu().numpy()}, weights={self.weights.detach().cpu().numpy()}"
         )
 
@@ -125,7 +138,7 @@ class AdaptiveLossWeights:
 
         self.prev_weights = self.weights.clone()
 
-        self.logger.info(
+        self.logger.debug(
             f"RBW - Updated weights: losses={losses.detach().cpu().numpy()}, running_losses={self.running_losses.detach().cpu().numpy()}, weights={self.weights.detach().cpu().numpy()}"
         )
 

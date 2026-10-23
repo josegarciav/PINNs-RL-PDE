@@ -1,9 +1,5 @@
 """``PDEBase._load_observation_data`` should accept Well-source specs."""
 
-import sys
-import types
-
-import numpy as np
 import pytest
 import torch
 
@@ -15,30 +11,12 @@ from pinnrl.config import (
 )
 from pinnrl.pdes.heat_equation import HeatEquation
 from pinnrl.pdes.pde_base import PDEConfig
+from tests.unit_tests.test_well_loader import DT, T0, _install_fake_well_module
 
 
 def _install_fake_well(monkeypatch):
-    class FakeWellDataset:
-        def __init__(self, well_base_path, well_dataset_name, well_split_name):
-            self._fields = np.zeros((1, 2, 3, 3, 1), dtype=np.float32)
-
-        def __len__(self):
-            return 1
-
-        def __getitem__(self, idx):
-            return {
-                "input_fields": torch.from_numpy(self._fields[idx]),
-                "time": np.array([0.0, 1.0], dtype=np.float32),
-                "space/x": np.linspace(0.0, 1.0, 3, dtype=np.float32),
-                "space/y": np.linspace(0.0, 1.0, 3, dtype=np.float32),
-            }
-
-    fake_data = types.ModuleType("the_well.data")
-    fake_data.WellDataset = FakeWellDataset
-    fake_root = types.ModuleType("the_well")
-    fake_root.data = fake_data
-    monkeypatch.setitem(sys.modules, "the_well", fake_root)
-    monkeypatch.setitem(sys.modules, "the_well.data", fake_data)
+    """One 3-step trajectory on a 3x3 grid with a single field (real sample format)."""
+    _install_fake_well_module(monkeypatch, n_traj=1, n_steps=3, shape=(3, 3), n_fields=1)
 
 
 def _training_cfg(mode="data_only"):
@@ -116,3 +94,75 @@ def test_unknown_well_dataset_propagates_keyerror(monkeypatch, tmp_path):
     # the registry; the unknown name bubbles up as KeyError.
     with pytest.raises(KeyError):
         HeatEquation(config=bad_config)
+
+
+def _heat_config(time_domain, observation_data):
+    return PDEConfig(
+        name="heat",
+        domain=[[0.0, 1.0]],
+        time_domain=time_domain,
+        parameters={"alpha": 0.05},
+        boundary_conditions={"dirichlet": {"value": 0.0}},
+        initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 1.0},
+        exact_solution={"type": "sin_exp_decay", "amplitude": 1.0, "frequency": 1.0},
+        dimension=1,
+        device=torch.device("cpu"),
+        training=_training_cfg("data_only"),
+        observation_data=observation_data,
+    )
+
+
+def test_a_pde_without_a_time_window_spans_its_observations(monkeypatch, tmp_path):
+    """The Well fake runs on t in [2, 3]; nothing in the registry says so."""
+    _install_fake_well(monkeypatch)
+    monkeypatch.setenv("PINNRL_WELL_CACHE", str(tmp_path))
+    spec = {"source": "well", "name": "rayleigh_benard", "n_points": 10_000}
+    pde = HeatEquation(config=_heat_config(None, spec))
+    assert pde.time_domain == (T0, T0 + 2 * DT)
+    assert HeatEquation(config=_heat_config(None, None)).time_domain == (0.0, 1.0)
+    assert HeatEquation(config=_heat_config([0.0, 5.0], spec)).time_domain == (0.0, 5.0)
+
+
+def test_a_well_run_trains_on_the_window_its_data_covers(monkeypatch, tmp_path):
+    """Regression: the window came from the registry's dt, wrong when files differ (RTI)."""
+    import yaml
+
+    from pinnrl.config import DEFAULT_CONFIG_PATH
+    from pinnrl.datasets.registry import DEFAULT_LOADED_STEPS_3D
+    from pinnrl.training.train import build_config_dict, create_pde
+
+    _install_fake_well_module(monkeypatch, n_traj=2, n_steps=30, shape=(2, 3, 4), n_fields=7)
+    monkeypatch.setenv("PINNRL_WELL_CACHE", str(tmp_path))
+    with open(DEFAULT_CONFIG_PATH) as f:
+        raw = yaml.safe_load(f)
+    dataset = {"name": "MHD_64", "n_traj": 2, "n_points": 50_000}
+    pde = create_pde(build_config_dict(raw, "heat", "feedforward", dataset=dataset), "cpu")
+    assert pde.time_domain == (T0, T0 + DT * (DEFAULT_LOADED_STEPS_3D - 1))
+    t = pde.observation_data["t"]
+    assert pde.time_domain[0] <= float(t.min()) and float(t.max()) <= pde.time_domain[1]
+
+
+def test_load_run_restores_the_window_a_well_run_trained_on(monkeypatch, tmp_path):
+    """Regression: the snapshot kept time_domain None, and load_run (which loads no data) used [0, 1]."""
+    import yaml
+
+    from pinnrl.config import DEFAULT_CONFIG_PATH
+    from pinnrl.training.train import build_config_dict, load_run, run_training
+
+    _install_fake_well_module(monkeypatch, n_traj=1, n_steps=9, shape=(4, 4), n_fields=11)
+    monkeypatch.setenv("PINNRL_WELL_CACHE", str(tmp_path / "cache"))
+    with open(DEFAULT_CONFIG_PATH) as f:
+        raw = yaml.safe_load(f)
+    dataset = {"name": "active_matter", "n_steps": 9, "n_points": 10_000}
+    config = build_config_dict(raw, "heat", "feedforward", epochs=2, dataset=dataset)
+    config["paths"]["results_dir"] = str(tmp_path / "runs")
+    config["training"].update(
+        num_collocation_points=64, batch_size=32, num_boundary_points=16, num_initial_points=16
+    )
+    run_training(config, torch.device("cpu"))
+    assert config["pde"]["time_domain"] is None  # the caller's dict is left alone
+
+    (run_dir,) = (tmp_path / "runs").iterdir()
+    pde, _, snapshot = load_run(run_dir)
+    assert snapshot["pde"]["time_domain"] == [T0, T0 + 8 * DT]  # the observations' range
+    assert pde.time_domain == (T0, T0 + 8 * DT)

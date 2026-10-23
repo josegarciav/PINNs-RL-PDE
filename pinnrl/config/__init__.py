@@ -357,8 +357,13 @@ class ModelConfig:
             self.num_blocks = num_layers
 
     def get(self, key: str, default: Any = None) -> Any:
-        """Get the value for a given key or return the default value if the key doesn't exist."""
-        return getattr(self, key, default)
+        """Return the attribute ``key``, or ``default`` when it is missing or ``None``.
+
+        Optional fields (``omega_0``, ``num_heads``, ``latent_dim``, ``modes``) default
+        to ``None``; treating ``None`` as unset lets each network apply its own default.
+        """
+        value = getattr(self, key, None)
+        return default if value is None else value
 
     def __getitem__(self, key: str) -> Any:
         """Get the value for a given key, also to make it subscriptable."""

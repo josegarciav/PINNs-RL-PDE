@@ -24,7 +24,7 @@ architectures:
 
   fourier:
     mapping_size: 512  # B has shape (input_dim, mapping_size); features are [sin(xB), cos(xB)]
-    hidden_dims: [512, 512, 512, 512]  # width = hidden_dims[0]; len = linear layers incl. output (3 hidden here)
+    hidden_dims: [512, 512, 512, 512]  # one hidden layer per entry (4 here), then the output layer
     scale: 4.0  # B ~ N(0, scale^2); larger captures higher frequencies
     activation: "tanh"
     dropout: 0.0  # not read by FourierNetwork

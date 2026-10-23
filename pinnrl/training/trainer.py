@@ -136,6 +136,7 @@ class PDETrainer:
         self._setup_logging()
 
         # Setup optimizer
+        self._num_epochs = config.training.num_epochs
         self._initialize_optimizer_and_scheduler()
 
         # Training history
@@ -146,8 +147,9 @@ class PDETrainer:
             "boundary_loss": [],
             "initial_loss": [],
             "learning_rate": [],
-            "loss_weights": [],  # Track weight evolution
+            "loss_weights": [],  # adaptive weights at the end of each epoch that updated them
         }
+        self._latest_loss_weights = None  # set by every adaptive step, recorded per epoch
 
         es_cfg = config.training.early_stopping
         self.early_stopping_enabled = es_cfg.enabled
@@ -411,7 +413,7 @@ class PDETrainer:
     def _build_scheduler(self, force_reduce_lr: bool = False):
         """Build the LR scheduler; ``None`` means a constant learning rate.
 
-        ``cosine`` anneals over ``num_epochs - warmup_epochs`` down to ``min_lr``;
+        ``cosine`` anneals over the planned epochs minus ``warmup_epochs`` down to ``min_lr``;
         ``reduce_lr`` is ReduceLROnPlateau. ``force_reduce_lr`` (L-BFGS) turns
         any non-constant type into ReduceLROnPlateau.
         """
@@ -435,7 +437,7 @@ class PDETrainer:
         if scheduler_type == "cosine":
             return optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer,
-                T_max=max(1, self.config.training.num_epochs - self._warmup_epochs()),
+                T_max=max(1, self._num_epochs - self._warmup_epochs()),
                 eta_min=self.config.training.learning_rate_scheduler.min_lr,
             )
         raise ValueError(f"Unknown scheduler type: {scheduler_type}")
@@ -447,7 +449,7 @@ class PDETrainer:
           - ``adam``       : standard first-order training.
           - ``lbfgs``      : closure-based quasi-Newton training (full batch).
           - ``adam_lbfgs`` : Adam first, switch to L-BFGS after epoch
-            ``int(adam_lbfgs_switch_ratio * config.training.num_epochs)``.
+            ``int(adam_lbfgs_switch_ratio * num_epochs)`` of the planned run.
 
         Trainable PDE parameters (inverse mode) are added to the optimizer
         alongside the model weights. While L-BFGS runs, a non-constant
@@ -464,14 +466,24 @@ class PDETrainer:
             self.optimizer = self._build_adam(params)
             self._is_lbfgs = False
 
-        if optimizer_type == "adam_lbfgs":
+        self._optimizer_type = optimizer_type
+        self._plan_epochs(self._num_epochs)
+
+    def _plan_epochs(self, num_epochs: int) -> None:
+        """Size the LR schedule and the Adam -> L-BFGS switch for a ``num_epochs`` run.
+
+        The run starts from ``training.learning_rate``, not from wherever the
+        previous run's schedule left the optimizer.
+        """
+        self._num_epochs = num_epochs
+        for group in self.optimizer.param_groups:
+            group["lr"] = group["initial_lr"] = self.config.training.learning_rate
+        if self._optimizer_type == "adam_lbfgs":
             ratio = getattr(self.config.training, "adam_lbfgs_switch_ratio", 0.7)
-            self._switch_epoch = max(1, int(self.config.training.num_epochs * ratio))
+            self._switch_epoch = max(1, int(num_epochs * ratio))
         else:
             self._switch_epoch = None
-
         self.scheduler = self._build_scheduler(force_reduce_lr=self._is_lbfgs)
-        self._optimizer_type = optimizer_type
 
     def _switch_to_lbfgs(self):
         """Hot-swap the optimizer to L-BFGS for the second phase of adam_lbfgs."""
@@ -557,13 +569,12 @@ class PDETrainer:
             {name: float(weights[i]) for i, name in enumerate(component_names) if i < len(weights)},
         )
 
-        # Store weights for visualization/tracking
+        # train() records the last weights of each epoch, so loss_weights lines
+        # up with the other per-epoch series.
         if isinstance(weights, torch.Tensor):
-            weights_np = weights.detach().cpu().numpy()
+            self._latest_loss_weights = weights.detach().cpu().numpy()
         else:
-            weights_np = np.array(weights)
-
-        self.history["loss_weights"].append(weights_np)
+            self._latest_loss_weights = np.array(weights)
 
     def _step(self, x_batch, t_batch):
         """One optimizer step on a batch; returns the loss components.
@@ -673,6 +684,11 @@ class PDETrainer:
         logs, checks early stopping (patience counted in epochs) and, with
         ``experiment_dir``, saves history, metadata and the live snapshot.
 
+        Each call is planned as its own run: the learning rate restarts at
+        ``training.learning_rate`` and the schedule and the Adam -> L-BFGS
+        switch are sized to ``num_epochs``. Weights, optimizer moments and
+        history carry over from earlier calls.
+
         Args:
             num_epochs: Defaults to ``config.training.num_epochs``.
             batch_size: Defaults to ``config.training.batch_size``; capped at
@@ -693,6 +709,9 @@ class PDETrainer:
         num_points = training_cfg.num_collocation_points if num_points is None else num_points
         if num_points < batch_size:
             batch_size = num_points
+        # Each call is its own run: the LR restarts and cosine T_max and the
+        # L-BFGS switch follow num_epochs. Weights and optimizer moments carry over.
+        self._plan_epochs(num_epochs)
         self.model.train()
         if hasattr(self.model, "architecture_name"):
             architecture_name = self.model.architecture_name
@@ -737,8 +756,8 @@ class PDETrainer:
             for name in trainable_pde_params:
                 self.history.setdefault(f"param_{name}", [])
 
-        # L-BFGS requires deterministic full-batch loss; override batch_size.
-        # Only checked here, so the L-BFGS phase of adam_lbfgs keeps batch_size.
+        # L-BFGS requires deterministic full-batch loss; override batch_size
+        # (the L-BFGS phase of adam_lbfgs does the same when it starts).
         if getattr(self, "_is_lbfgs", False) and batch_size != num_points:
             self.logger.warning(
                 "L-BFGS optimizer requires full-batch updates; "
@@ -818,12 +837,17 @@ class PDETrainer:
             self._apply_warmup(epoch)
             epoch_losses = []
             epoch_points = []  # Store all points for this epoch
+            self._latest_loss_weights = None
 
             for _ in range(max(1, num_points // batch_size)):
                 x_batch, t_batch = self._sample_batch(batch_size, epoch / max(1, num_epochs))
                 epoch_points.append(torch.cat([x_batch, t_batch], dim=1).detach().cpu().numpy())
                 losses = self._step(x_batch, t_batch)
                 epoch_losses.append(float(losses["total"].item()))
+            # L-BFGS epochs do not weight adaptively and record nothing; they
+            # come after the Adam epochs, so the recorded epochs stay a prefix.
+            if self._latest_loss_weights is not None:
+                self.history["loss_weights"].append(self._latest_loss_weights)
             if pbar is not None:
                 pbar.set_postfix(
                     loss=f"{epoch_losses[-1]:.3e}",
@@ -948,6 +972,7 @@ class PDETrainer:
             ):
                 self.logger.info(f"Switching optimizer to L-BFGS at epoch {epoch + 1}")
                 self._switch_to_lbfgs()
+                batch_size = num_points  # L-BFGS needs the full batch
                 if self.use_adaptive_weights:
                     self.logger.warning("Adaptive loss weighting is disabled while running L-BFGS.")
 

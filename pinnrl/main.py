@@ -1,47 +1,78 @@
 """Entry point of ``pinnrl-dashboard``: open a browser tab and serve the Dash dashboard."""
 
 import argparse
+import contextlib
+import io
 import sys
 import webbrowser
 
+HOST = "127.0.0.1"
 
-def run_dashboard(port=8050):
-    """Serve the Dash app on ``port`` (blocking).
 
-    Tries the next port (three attempts in all) on an ``Exception`` whose
-    message contains "Address already in use"; other errors exit with status 1.
+def bind_server(wsgi_app, port: int, attempts: int = 3):
+    """Bind a werkzeug server for ``wsgi_app`` on the first free port from ``port``.
+
+    The real server is bound, not a probe socket, so the port cannot be taken
+    between the check and serving, and the check uses the server's own socket
+    options (werkzeug sets ``SO_REUSEADDR``, so a port in ``TIME_WAIT`` counts
+    as free).
+
+    Args:
+        wsgi_app: The WSGI application to serve (``app.server`` for Dash).
+        port: Preferred port; ``port + 1, ...`` are tried next.
+        attempts: How many ports to try.
+
+    Returns:
+        A bound, listening ``werkzeug.serving.BaseWSGIServer``; call
+        ``serve_forever()`` on it.
+
+    Raises:
+        RuntimeError: If every candidate port is taken.
+    """
+    from werkzeug.serving import make_server
+
+    for candidate in range(port, port + attempts):
+        # On a bind error werkzeug prints advice to stderr and calls sys.exit(1).
+        with contextlib.redirect_stderr(io.StringIO()):
+            try:
+                return make_server(HOST, candidate, wsgi_app, threaded=True)
+            except (OSError, SystemExit):
+                pass
+        print(f"Port {candidate} is in use.")
+    raise RuntimeError(f"No free port in {port}-{port + attempts - 1}")
+
+
+def run_dashboard(port=8050, open_browser=False):
+    """Serve the Dash app on the first free port from ``port`` (blocking).
+
+    Args:
+        port: Preferred port; up to two higher ports are tried if it is taken.
+        open_browser: Open the dashboard in a web browser once the server is listening.
     """
     try:
         from pinnrl.dashboard import app
-
-        print(f"\nStarting PINNs-RL-PDE Dashboard on port {port}")
-        print(f"Open http://127.0.0.1:{port}/ in your browser")
-
-        max_retries = 3
-        current_port = port
-
-        for attempt in range(max_retries):
-            try:
-                app.run(debug=False, port=current_port)
-                break
-            except Exception as e:
-                if "Address already in use" in str(e):
-                    print(f"Port {current_port} is in use. Trying port {current_port + 1}...")
-                    current_port += 1
-                    if attempt == max_retries - 1:
-                        print(f"Could not find available port after {max_retries} attempts.")
-                        print("Please close any running dashboards and try again.")
-                        sys.exit(1)
-                else:
-                    print(f"Error starting dashboard: {e}")
-                    sys.exit(1)
     except ImportError as e:
         print(f"Error importing dashboard: {e}")
         print("Make sure all dependencies are installed (dash, plotly, etc.)")
         sys.exit(1)
-    except Exception as e:
-        print(f"Error running dashboard: {e}")
+    try:
+        server = bind_server(app.server, port)
+    except RuntimeError as e:
+        print(f"{e}. Please close any running dashboards and try again.")
         sys.exit(1)
+
+    url = f"http://{HOST}:{server.server_port}/"
+    print(f"\nStarting PINNs-RL-PDE Dashboard on port {server.server_port}")
+    print(f"Open {url} in your browser")
+    if open_browser:
+        webbrowser.open(url)
+    app.enable_dev_tools(debug=False)  # what app.run() sets up before serving
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
 
 
 def parse_args():
@@ -86,9 +117,7 @@ def main():
     print("PINNs-RL-PDE Framework")
     print("=" * 50 + "\n")
 
-    if not args.no_browser:
-        webbrowser.open(f"http://127.0.0.1:{args.port}/")
-    run_dashboard(args.port)
+    run_dashboard(args.port, open_browser=not args.no_browser)
 
 
 if __name__ == "__main__":

@@ -70,9 +70,9 @@ class FourierNetwork(BaseNetwork):
             config: Network configuration dictionary containing:
                 - input_dim: Input dimension
                 - mapping_size: Size of the Fourier feature mapping (default 32)
-                - hidden_dim: Hidden layer dimension
-                - num_layers: Linear layers after the features, including the
-                  output layer, so ``num_layers - 1`` hidden layers (default 4)
+                - hidden_dims: Width of each hidden layer (one layer per entry,
+                  like the feedforward network); falls back to
+                  ``[hidden_dim] * num_layers`` (``num_layers`` default 4)
                 - output_dim: Output dimension
                 - activation: Activation function name (default ``relu``)
                 - scale: Standard deviation of ``B`` (default 10.0)
@@ -80,8 +80,9 @@ class FourierNetwork(BaseNetwork):
         super().__init__(config)
         self.input_dim = config["input_dim"]
         self.mapping_size = config.get("mapping_size", 32)  # Default mapping size
-        self.hidden_dim = config["hidden_dim"]
-        self.num_layers = config.get("num_layers", 4)  # Default to 4 layers
+        self.hidden_dims = list(
+            config.get("hidden_dims") or [config["hidden_dim"]] * config.get("num_layers", 4)
+        )
         self.output_dim = config["output_dim"]
         activation_name = config.get("activation", "relu")
         self.activation_fn = self._get_activation_module(activation_name)
@@ -94,10 +95,10 @@ class FourierNetwork(BaseNetwork):
         self.layers = nn.ModuleList()
         prev_dim = 2 * self.mapping_size  # Sine and cosine features
 
-        # Create hidden layers
-        for _ in range(self.num_layers - 1):  # -1 because we add output layer separately
-            self.layers.append(nn.Linear(prev_dim, self.hidden_dim))
-            prev_dim = self.hidden_dim
+        # One hidden layer per width, then the output layer
+        for width in self.hidden_dims:
+            self.layers.append(nn.Linear(prev_dim, width))
+            prev_dim = width
 
         # Add output layer
         self.layers.append(nn.Linear(prev_dim, self.output_dim))
