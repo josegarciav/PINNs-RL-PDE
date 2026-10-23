@@ -4,14 +4,12 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-from torch.jit import script
 
 from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
 
 
-@script
 def _fourier_feature_transform(x: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
-    """Optimized Fourier feature transformation using TorchScript."""
+    """Fourier feature map ``[sin(x B), cos(x B)]``."""
     x_proj = x @ B
     return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
 

@@ -14,17 +14,21 @@ pinn/
 .idea/
 .DS_Store
 .ruff_cache
+.mypy_cache/
 
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
 
-# Training artifacts (generated runs and benchmark outputs)
+# Training artifacts (generated runs go to runs/; experiments/ is tracked research)
 runs/
-experiments/
+experiments/**/results/
 checkpoints/
+visualizations/
+logs/
 *.log
+*.npz
 
 # Model weights
 *.pth

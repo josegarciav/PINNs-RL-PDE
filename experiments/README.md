@@ -1,0 +1,40 @@
+# Experiments
+
+Research studies built on the `pinnrl` package. The package (`pinnrl/`) holds
+reusable code that ships to PyPI. This folder holds the questions we are
+asking with it, and how each one was answered.
+
+- [BACKLOG.md](BACKLOG.md) lists 100 prioritized experiments with IDs `A01`–`J10`.
+- Generated outputs from ad-hoc training (`pinnrl-train`, the dashboard) go to
+  `runs/`. That folder is gitignored and is not part of this tree.
+
+## Layout
+
+One folder per experiment, named after its backlog ID:
+
+```
+experiments/
+  BACKLOG.md
+  <ID>_<slug>/            e.g. B01_sampling_equal_compute/
+    README.md             question, setup, result, conclusion
+    run.py | *.ipynb      how to reproduce it (calls into pinnrl)
+    config.yaml           optional: the exact config used
+    results/              gitignored: CSVs, curves, figures
+```
+
+The experiment `README.md` should record:
+
+1. **Question:** the backlog question, verbatim.
+2. **Setup:** PDE, architecture, budget, seeds, and the command to rerun it.
+3. **Result:** the table or figure, with the median and IQR across seeds.
+4. **Conclusion:** what changed in the package or in the backlog because of it.
+
+When an experiment shows that a feature works, move the reusable code into
+`pinnrl/` with tests. Keep only the study-specific driver here.
+
+## Current folders
+
+| Folder | Backlog | Contents |
+|---|---|---|
+| `A03_pinn_vs_numerical/` | A03 | Early standalone notebooks (pure PyTorch, no `pinnrl` imports) comparing PINNs with numerical solvers for heat (1-D/2-D), Allen–Cahn and KdV. Formerly `pinnrl/numerical_solvers/`. |
+| `B07_quasi_random_sampling/` | B07 | Visual comparison of uniform, LHS and Halton point sets. Formerly `notebooks/sampling_techniques.ipynb`. |

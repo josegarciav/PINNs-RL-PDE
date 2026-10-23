@@ -4,8 +4,8 @@ import numpy as np
 
 from pinnrl.benchmarks.reference import (
     ReferenceSolution,
-    _burgers_cole_hopf,
     allen_cahn_reference,
+    burgers_cole_hopf,
     burgers_reference,
 )
 
@@ -13,9 +13,7 @@ from pinnrl.benchmarks.reference import (
 def test_burgers_matches_basdevant_benchmark():
     """Max |u_x| at x=0, t=1.6037/pi is 152.00516 (Basdevant et al., 1986)."""
     nu, t_star, h = 0.01 / np.pi, 1.6037 / np.pi, 1e-6
-    z = np.linspace(-15.0, 15.0, 6001)
-    up = _burgers_cole_hopf(np.array([h]), t_star, nu, z)[0]
-    um = _burgers_cole_hopf(np.array([-h]), t_star, nu, z)[0]
+    up, um = burgers_cole_hopf(np.array([h, -h]), t_star, nu)
     assert abs((up - um) / (2 * h) + 152.00516) < 1e-3
 
 

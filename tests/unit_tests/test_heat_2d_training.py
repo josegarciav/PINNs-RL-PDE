@@ -80,13 +80,12 @@ def _build_2d_setup(num_epochs=3):
     )
     config.training = training_cfg
     model = PINNModel(config=config, device=DEVICE)
+    config.training.validation_frequency = 5
     trainer = PDETrainer(
         model=model,
         pde=pde,
-        optimizer_config={"learning_rate": 5e-3, "weight_decay": 0.0},
         config=config,
         device=DEVICE,
-        validation_frequency=5,
     )
     return trainer, pde, model
 

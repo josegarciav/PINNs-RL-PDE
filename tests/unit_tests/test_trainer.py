@@ -6,6 +6,7 @@ import tempfile
 import pytest
 import torch
 
+from pinnrl import plots
 from pinnrl.config import (
     AdaptiveWeightsConfig,
     Config,
@@ -80,7 +81,7 @@ def _make_pde():
         domain=[[0.0, 1.0]],
         time_domain=[0.0, 1.0],
         parameters={"alpha": 0.01},
-        boundary_conditions={"type": {"value": 0.0}},
+        boundary_conditions={"dirichlet": {"value": 0.0}},
         initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 1.0},
         exact_solution={"type": "sin_exp_decay", "amplitude": 1.0, "frequency": 1.0},
         dimension=1,
@@ -112,7 +113,6 @@ def _make_trainer(config=None, pde=None, **kwargs):
     return PDETrainer(
         model=model,
         pde=pde,
-        optimizer_config={"learning_rate": 1e-3, "weight_decay": 0.0},
         config=config,
         device=DEVICE,
         **kwargs,
@@ -125,16 +125,20 @@ def _make_trainer(config=None, pde=None, **kwargs):
 def test_trainer_init_default():
     """PDETrainer initialises with default early stopping config."""
     trainer = _make_trainer()
+    # Without an override, early stopping comes from config.training.early_stopping.
     assert trainer.early_stopping_enabled is True
-    assert trainer.patience == 10  # default from trainer when no config passed
+    assert trainer.patience == 5
+    assert trainer.min_delta == 1e-7
     assert trainer.best_val_loss == float("inf")
     assert isinstance(trainer.history, dict)
     assert "train_loss" in trainer.history
 
 
 def test_trainer_init_no_early_stopping():
-    """PDETrainer respects early_stopping_config override."""
-    trainer = _make_trainer(early_stopping_config={"enabled": False, "patience": 100})
+    """Early stopping settings come from config.training.early_stopping."""
+    config = _make_config()
+    config.training.early_stopping = EarlyStoppingConfig(enabled=False, patience=100, min_delta=0)
+    trainer = _make_trainer(config=config)
     assert trainer.early_stopping_enabled is False
     assert trainer.patience == 100
 
@@ -207,7 +211,8 @@ def test_train_early_stopping():
     """Early stopping fires when val_loss doesn't improve."""
     config = _make_config()
     config.training.early_stopping = EarlyStoppingConfig(enabled=True, patience=1, min_delta=1e-7)
-    trainer = _make_trainer(config=config, validation_frequency=1)
+    config.training.validation_frequency = 1
+    trainer = _make_trainer(config=config)
     # Run enough epochs for early stopping to trigger
     trainer.train(num_epochs=50, batch_size=32, num_points=64)
     # Should have stopped before 50 epochs
@@ -270,13 +275,34 @@ def test_setup_experiment_logging_none():
 # ── History retrieval ────────────────────────────────────────────────────
 
 
-def test_get_training_history():
-    """get_training_history returns the history dict."""
+def test_train_returns_history():
+    """train() returns the trainer's history dict."""
     trainer = _make_trainer()
-    trainer.train(num_epochs=1, batch_size=32, num_points=64)
-    h = trainer.get_training_history()
+    h = trainer.train(num_epochs=1, batch_size=32, num_points=64)
     assert h is trainer.history
     assert len(h["train_loss"]) == 1
+
+
+def test_train_defaults_from_config():
+    """train() with no arguments uses config.training epochs/batch/points."""
+    trainer = _make_trainer()
+    h = trainer.train()
+    assert len(h["train_loss"]) == 2  # config.training.num_epochs
+
+
+def test_constant_learning_rate_when_scheduler_is_none():
+    """learning_rate_scheduler=None means no scheduler and a fixed LR."""
+    config = _make_config()
+    config.training.learning_rate_scheduler = None
+    trainer = _make_trainer(config=config)
+    assert trainer.scheduler is None
+    trainer.train(num_epochs=2)
+    assert trainer.history["learning_rate"] == [1e-3, 1e-3]
+
+
+def test_constant_scheduler_type():
+    trainer = _make_trainer(config=_make_config(scheduler_type="constant"))
+    assert trainer.scheduler is None
 
 
 # ── Plotting (no display, just verify it doesn't crash) ─────────────────
@@ -287,9 +313,9 @@ def test_plot_training_history():
     trainer = _make_trainer()
     trainer.train(num_epochs=2, batch_size=32, num_points=64)
     with tempfile.TemporaryDirectory() as tmpdir:
-        save_path = os.path.join(tmpdir, "history.html")
-        # Should not raise
-        trainer.plot_training_history(save_path=save_path)
+        save_path = os.path.join(tmpdir, "history.png")
+        plots.plot_training_history(trainer, save_path=save_path)
+        assert os.path.exists(os.path.join(tmpdir, "history.html"))
 
 
 def test_save_plots():
@@ -321,3 +347,95 @@ def test_trainer_adaptive_weights_lrw():
     trainer = _make_trainer(config=config)
     history = trainer.train(num_epochs=1, batch_size=32, num_points=64)
     assert len(history["train_loss"]) == 1
+
+
+# ── Step-based loop (benchmarks / studies) ──────────────────────────────
+
+
+def test_train_steps_num_steps():
+    trainer = _make_trainer()
+    out = trainer.train_steps(num_steps=5)
+    assert out["steps"] == 5
+    assert len(out["loss"]) == 5
+    assert out["train_time_s"] > 0
+
+
+def test_train_steps_time_budget_and_checkpoints():
+    trainer = _make_trainer()
+    seen = []
+    out = trainer.train_steps(
+        time_budget_s=0.2,
+        checkpoints=[0.05, 0.1],
+        on_checkpoint=lambda step, clock, model: seen.append((step, clock)),
+    )
+    assert out["train_time_s"] >= 0.2
+    assert [c >= mark for (_, c), mark in zip(seen, [0.05, 0.1])] == [True, True]
+
+
+def test_train_steps_resample_every_reuses_points():
+    trainer = _make_trainer()
+    calls = []
+
+    def sample_fn(model, progress):
+        calls.append(progress)
+        return trainer.pde.generate_collocation_points(16)
+
+    trainer.train_steps(num_steps=6, sample_fn=sample_fn, resample_every=3)
+    assert len(calls) == 2
+
+
+def test_train_steps_matches_train_step():
+    """train() and train_steps() run the same update for the same points."""
+    a, b = _make_trainer(), _make_trainer()
+    b.model.load_state_dict(a.model.state_dict())
+    x, t = a.pde.generate_collocation_points(32)
+    la = a._step(x, t)["total"].item()
+    lb = b.train_steps(num_steps=1, sample_fn=lambda m, p: (x, t))["loss"][0]
+    assert la == pytest.approx(lb)
+
+
+def test_train_steps_requires_a_stop_condition():
+    with pytest.raises(ValueError):
+        _make_trainer().train_steps()
+
+
+# ── pinnrl-train run directories ────────────────────────────────────────
+
+
+def test_run_training_and_load_run_round_trip(tmp_path, monkeypatch):
+    """A run written by run_training reloads into the same model and the true-parameter PDE."""
+    import yaml
+
+    from pinnrl.config import DEFAULT_CONFIG_PATH
+    from pinnrl.training.train import build_config_dict, load_run, run_training
+
+    monkeypatch.chdir(tmp_path)
+    with open(DEFAULT_CONFIG_PATH) as f:
+        raw = yaml.safe_load(f)
+    raw["training"].update(batch_size=32, num_collocation_points=32)
+    config = build_config_dict(raw, "heat", "feedforward", epochs=1)
+    config["pde"]["trainable_parameters"] = ["alpha"]
+    config["pde"]["parameter_initial_guesses"] = {"alpha": 0.5}
+    config["training"]["mode"] = "inverse"
+    run_training(config, torch.device("cpu"))
+
+    (run_dir,) = (tmp_path / "runs").iterdir()
+    pde, model, saved = load_run(run_dir)
+    assert pde.alpha == raw["pde_configs"]["heat"]["parameters"]["alpha"]  # true value, not the guess
+    state = torch.load(run_dir / "final_model.pt")
+    assert all(torch.equal(state[k], v) for k, v in model.state_dict().items())
+    assert saved["pde"]["name"] == "Heat Equation"
+
+
+def test_linear_warmup_then_scheduler():
+    config = _make_config(scheduler_type="constant")
+    config.training.learning_rate_scheduler.warmup_epochs = 4
+    trainer = _make_trainer(config=config)
+    trainer.train(num_epochs=6)
+    assert trainer.history["learning_rate"] == pytest.approx([2.5e-4, 5e-4, 7.5e-4, 1e-3, 1e-3, 1e-3])
+
+
+def test_reduce_lr_steps_on_last_train_loss_by_default():
+    trainer = _make_trainer(config=_make_config(scheduler_type="reduce_lr"))
+    trainer.history["train_loss"].append(1.0)
+    trainer._update_scheduler()  # used to read a never-set attribute

@@ -1,9 +1,8 @@
 # Burgers' equation
-# Application domains: Turbulence, traffic modeling, shock waves.
+# Application domains: Fluid dynamics, traffic flow, shock waves
 # Complexity: Nonlinear, 2nd-order
 
-
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 import torch
 
@@ -11,169 +10,62 @@ from .pde_base import PDEBase, PDEConfig
 
 
 class BurgersEquation(PDEBase):
-    """
-    Implementation of the Burgers' Equation: ∂u/∂t + u∂u/∂x = ν∂²u/∂x²
-    where ν is the kinematic viscosity and u is the velocity field.
-    This equation combines nonlinear convection and diffusion.
+    """Viscous Burgers equation ``u_t + u (Σ_d u_{x_d}) = nu ∇²u``.
+
+    Parameters: ``nu`` (viscosity; ``viscosity`` is accepted as an alias).
+
+    Initial conditions: ``sine`` — ``u0 = A Π_d sin(kπ x_d)`` (``amplitude`` A,
+    default -1; ``frequency`` k, default 1).
+
+    Exact solution (1-D): ``cole_hopf`` — the Cole-Hopf integral for the
+    configured ``sine`` initial condition and ``nu``, evaluated by
+    :func:`pinnrl.benchmarks.reference.burgers_cole_hopf`.
     """
 
     def __init__(self, config: PDEConfig, **kwargs):
-        """
-        Initialize the Burgers' Equation.
-
-        :param config: PDEConfig instance containing all necessary parameters
-        :param kwargs: Additional keyword arguments
-        """
         super().__init__(config)
-
-    def _validate_parameters(self):
-        """Validate required parameters for Burgers equation."""
-        super()._validate_parameters()
-        # Burgers equation requires viscosity parameter
-        self.get_parameter("nu", default=0.01)
 
     @property
     def nu(self):
-        """Kinematic viscosity coefficient."""
-        return self.get_parameter("nu", default=0.01)
+        """Viscosity coefficient."""
+        name = "viscosity" if "viscosity" in (self.config.parameters or {}) else "nu"
+        return self.get_parameter(name, default=0.01)
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
     ) -> torch.Tensor:
-        """
-        Compute the Burgers' equation residual.
-
-        Burgers' equation: ∂u/∂t + u·∇u = ν·Δu.
-
-        :param model: Neural network model
-        :param x: Spatial coordinates
-        :param t: Time coordinates
-        :return: Residual tensor
-        """
-        derivatives = self.compute_derivatives(
-            model,
-            x,
-            t,
-            spatial_derivatives=[1, 2],
-            temporal_derivatives=[1],
+        """``u_t + u Σ_d u_{x_d} - nu ∇²u``."""
+        d = self.compute_derivatives(
+            model, x, t, temporal_derivatives=[1], spatial_derivatives=[1, 2]
         )
-
-        # ``compute_derivatives`` stores 1D first/second derivatives under
-        # ``"dx"`` and ``"dx2"``; multi-dim derivatives are ``"dx1"``,
-        # ``"dx1x1"``, etc. The Laplacian is always exposed as ``"laplacian"``.
-        u = model(torch.cat([x, t], dim=1))
-        u_t = derivatives["dt"]
-        diffusion = self.nu * derivatives["laplacian"]
-
+        u = d["u"]
         if self.dimension == 1:
-            convection = u * derivatives["dx"]
+            convection = u * d["dx"]
         else:
-            convection = torch.zeros_like(u)
-            for dim in range(self.dimension):
-                convection = convection + u * derivatives[f"dx{dim + 1}"]
+            convection = sum(u * d[f"dx{dim + 1}"] for dim in range(self.dimension))
+        return d["dt"] + convection - self.nu * d["laplacian"]
 
-        return u_t + convection - diffusion
+    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+        if params.get("type") == "sine":
+            a, k = params.get("amplitude", -1.0), params.get("frequency", 1.0)
+            return lambda x, t: a * torch.prod(torch.sin(k * torch.pi * x), dim=1, keepdim=True)
+        return super()._create_initial_condition(params)
 
-    def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """
-        Compute exact analytical solution for Burgers' equation.
+    def _exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        ic = self.config.initial_condition
+        if (
+            self.config.exact_solution.get("type") == "cole_hopf"
+            and self.dimension == 1
+            and ic.get("type") == "sine"
+        ):
+            from pinnrl.benchmarks.reference import burgers_cole_hopf
 
-        :param x: Spatial coordinates
-        :param t: Time coordinates
-        :return: Exact solution tensor
-        """
-        if not self.config.exact_solution:
-            return None
-
-        solution_type = self.config.exact_solution.get("type", "cole_hopf")
-        if solution_type == "cole_hopf":
-            # Cole-Hopf transformation solution
-            nu = self.config.exact_solution.get("viscosity", self.nu)
-            self.config.exact_solution.get("initial_amplitude", -1.0)
-            k = self.config.exact_solution.get("initial_frequency", 1.0)
-
-            if self.dimension == 1:
-                # Compute Cole-Hopf transformation solution
-                phi = -torch.cos(k * torch.pi * x) * torch.exp(-nu * (k * torch.pi) ** 2 * t)
-                phi_x = torch.autograd.grad(
-                    phi, x, grad_outputs=torch.ones_like(phi), create_graph=True
-                )[0]
-                return -2 * nu * phi_x / phi
-            else:
-                # For higher dimensions, use product solution
-                solution = torch.ones_like(x[:, 0:1])
-                for dim in range(self.dimension):
-                    phi = -torch.cos(k * torch.pi * x[:, dim : dim + 1]) * torch.exp(
-                        -nu * (k * torch.pi) ** 2 * t
-                    )
-                    phi_x = torch.autograd.grad(
-                        phi,
-                        x[:, dim : dim + 1],
-                        grad_outputs=torch.ones_like(phi),
-                        create_graph=True,
-                    )[0]
-                    solution *= -2 * nu * phi_x / phi
-                return solution
-        elif solution_type == "tanh":
-            epsilon = self.config.exact_solution.get("epsilon", 0.1)
-            if self.dimension == 1:
-                # Traveling wave solution
-                return torch.tanh((x - 0.5 - self.nu * t) / epsilon)
-            else:
-                # For higher dimensions, use product of tanh waves
-                solution = torch.ones_like(x[:, 0:1])
-                for dim in range(self.dimension):
-                    solution *= torch.tanh((x[:, dim : dim + 1] - 0.5 - self.nu * t) / epsilon)
-                return solution
-        else:
-            raise ValueError(f"Unsupported exact solution type: {solution_type}")
-
-    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
-        """
-        Create boundary condition function from parameters.
-
-        :param bc_type: Type of boundary condition
-        :param params: Parameters for the boundary condition
-        :return: Boundary condition function
-        """
-        if bc_type == "initial":
-            ic_type = params.get("type", "sine")
-            if ic_type == "sine":
-                A = params.get("amplitude", -1.0)
-                k = params.get("frequency", 1.0)
-                if self.dimension == 1:
-                    return lambda x, t: A * torch.sin(k * torch.pi * x)
-                else:
-                    return lambda x, t: A * torch.prod(
-                        torch.sin(k * torch.pi * x), dim=1, keepdim=True
-                    )
-            elif ic_type == "tanh":
-                epsilon = params.get("epsilon", 0.1)
-                if self.dimension == 1:
-                    return lambda x, t: torch.tanh((x - 0.5) / epsilon)
-                else:
-                    return lambda x, t: torch.prod(
-                        torch.tanh((x - 0.5) / epsilon), dim=1, keepdim=True
-                    )
-            else:
-                raise ValueError(f"Unsupported initial condition type: {ic_type}")
-        else:
-            return super()._create_boundary_condition(bc_type, params)
-
-    def validate(self, model, num_points=1000):
-        """
-        Validate the model's solution against exact solution.
-
-        :param model: Neural network model
-        :param num_points: Number of validation points
-        :return: Dictionary of error metrics
-        """
-        x, t = self.generate_collocation_points(num_points)
-        u_pred = model(torch.cat([x, t], dim=1))
-        u_exact = self.exact_solution(x, t)
-        error = torch.abs(u_pred - u_exact)
-        return {
-            "l2_error": torch.mean(error**2).item(),
-            "max_error": torch.max(error).item(),
-            "mean_error": torch.mean(error).item(),
-        }
+            u = burgers_cole_hopf(
+                x.detach().cpu().numpy(),
+                t.detach().cpu().numpy(),
+                float(self.nu),
+                amplitude=ic.get("amplitude", -1.0),
+                frequency=ic.get("frequency", 1.0),
+            )
+            return torch.as_tensor(u, dtype=x.dtype, device=x.device)
+        return super()._exact_solution(x, t)

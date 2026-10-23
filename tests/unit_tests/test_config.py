@@ -18,12 +18,8 @@ from pinnrl.config import (
     AdaptiveWeightsConfig,
     Config,
     EarlyStoppingConfig,
-    EvaluationConfig,
     LearningRateSchedulerConfig,
-    LoggingConfig,
     ModelConfig,
-    PathsConfig,
-    PDEConfig,
     RLConfig,
     TrainingConfig,
 )
@@ -89,40 +85,8 @@ def _minimal_config_dict() -> dict:
             "early_stopping": {"enabled": True, "patience": 10, "min_delta": 1e-4},
             "loss_weights": {"residual": 1.0, "boundary": 1.0, "initial": 1.0},
         },
-        "rl": {
-            "enabled": False,
-            "state_dim": 2,
-            "action_dim": 1,
-            "hidden_dim": 64,
-            "learning_rate": 0.001,
-            "gamma": 0.99,
-            "epsilon_start": 1.0,
-            "epsilon_end": 0.01,
-            "epsilon_decay": 0.995,
-            "memory_size": 1000,
-            "batch_size": 32,
-            "target_update": 10,
-            "reward_weights": {
-                "residual": 1.0,
-                "boundary": 1.0,
-                "initial": 1.0,
-                "exploration": 0.1,
-            },
-        },
-        "evaluation": {
-            "resolution": 50,
-            "num_test_points": 100,
-            "metrics": ["l2_error"],
-            "save_plots": False,
-            "plot_frequency": 10,
-        },
-        "logging": {"level": "INFO", "save_tensorboard": False, "log_frequency": 50},
-        "paths": {
-            "experiments_dir": "experiments",
-            "model_dir": "models",
-            "log_dir": "logs",
-            "tensorboard_dir": "runs",
-        },
+        "rl": {"enabled": False, "n_x_cells": 8, "n_t_cells": 4},
+        "paths": {"results_dir": "runs"},
     }
 
 
@@ -148,10 +112,8 @@ class TestConfigDefaultLoading:
     def test_default_config_loads(self):
         cfg = Config()
         assert cfg.model is not None
-        assert cfg.pde is not None
         assert cfg.training is not None
         assert cfg.rl is not None
-        assert cfg.paths is not None
 
     def test_default_config_path(self):
         cfg = Config()
@@ -165,10 +127,6 @@ class TestConfigDefaultLoading:
         cfg = Config()
         assert isinstance(cfg.model, ModelConfig)
 
-    def test_pde_is_pde_config(self):
-        cfg = Config()
-        assert isinstance(cfg.pde, PDEConfig)
-
     def test_training_is_training_config(self):
         cfg = Config()
         assert isinstance(cfg.training, TrainingConfig)
@@ -177,25 +135,9 @@ class TestConfigDefaultLoading:
         cfg = Config()
         assert isinstance(cfg.rl, RLConfig)
 
-    def test_paths_is_paths_config(self):
-        cfg = Config()
-        assert isinstance(cfg.paths, PathsConfig)
-
-    def test_evaluation_is_evaluation_config(self):
-        cfg = Config()
-        assert isinstance(cfg.evaluation, EvaluationConfig)
-
-    def test_logging_is_logging_config(self):
-        cfg = Config()
-        assert isinstance(cfg.logging, LoggingConfig)
-
     def test_pde_type_stored(self):
         cfg = Config()
         assert cfg.pde_type == "heat"
-
-    def test_pde_full_config_stored(self):
-        cfg = Config()
-        assert isinstance(cfg.pde_full_config, dict)
 
 
 class TestConfigNonexistentPath:
@@ -204,10 +146,8 @@ class TestConfigNonexistentPath:
     def test_no_file_gives_none_attributes(self):
         cfg = Config(config_path="/nonexistent/path/to/config.yaml")
         assert cfg.model is None
-        assert cfg.pde is None
         assert cfg.training is None
         assert cfg.rl is None
-        assert cfg.paths is None
         assert cfg.device == torch.device("cpu")
 
 
@@ -264,24 +204,6 @@ class TestValidateConfig:
 
     # -- PDE validation --
 
-    def test_invalid_domain_format(self):
-        d = _minimal_config_dict()
-        d["pde_configs"]["heat"]["domain"] = [1, 2, 3]
-        with pytest.raises(ValueError, match="domain"):
-            _config_from_dict(d)
-
-    def test_invalid_t_domain(self):
-        d = _minimal_config_dict()
-        d["pde_configs"]["heat"]["time_domain"] = [0, 1, 2]
-        with pytest.raises(ValueError, match="t_domain"):
-            _config_from_dict(d)
-
-    def test_invalid_diffusion_coefficient(self):
-        d = _minimal_config_dict()
-        d["pde_configs"]["heat"]["diffusion_coefficient"] = -0.5
-        with pytest.raises(ValueError, match="diffusion_coefficient must be positive"):
-            _config_from_dict(d)
-
     # -- Training validation --
 
     def test_invalid_num_epochs(self):
@@ -302,56 +224,11 @@ class TestValidateConfig:
         with pytest.raises(ValueError, match="learning_rate must be positive"):
             _config_from_dict(d)
 
-    # -- RL validation (only when enabled) --
-
-    def test_rl_invalid_state_dim_when_enabled(self):
-        d = _minimal_config_dict()
-        d["rl"]["enabled"] = True
-        d["rl"]["state_dim"] = 0
-        with pytest.raises(ValueError, match="state_dim must be positive"):
-            _config_from_dict(d)
-
-    def test_rl_invalid_action_dim_when_enabled(self):
-        d = _minimal_config_dict()
-        d["rl"]["enabled"] = True
-        d["rl"]["action_dim"] = -1
-        with pytest.raises(ValueError, match="action_dim must be positive"):
-            _config_from_dict(d)
-
-    def test_rl_invalid_gamma_when_enabled(self):
-        d = _minimal_config_dict()
-        d["rl"]["enabled"] = True
-        d["rl"]["gamma"] = 1.5
-        with pytest.raises(ValueError, match="gamma must be between 0 and 1"):
-            _config_from_dict(d)
-
-    def test_rl_not_validated_when_disabled(self):
-        """RL fields are not validated when rl.enabled is False."""
-        d = _minimal_config_dict()
-        d["rl"]["enabled"] = False
-        d["rl"]["state_dim"] = -999
-        # Should NOT raise
-        _config_from_dict(d)
-
     # -- Domain format variants --
-
-    def test_valid_flat_domain(self):
-        """[0.0, 1.0] is a valid domain (simple 1D)."""
-        d = _minimal_config_dict()
-        d["pde_configs"]["heat"]["domain"] = [0.0, 1.0]
-        cfg = _config_from_dict(d)
-        assert cfg.pde.domain == [0.0, 1.0]
-
-    def test_valid_nested_domain_2d(self):
-        """[[0,1],[0,1]] is a valid 2D domain."""
-        d = _minimal_config_dict()
-        d["pde_configs"]["heat"]["domain"] = [[0, 1], [0, 1]]
-        cfg = _config_from_dict(d)
-        assert cfg.pde.domain == [[0, 1], [0, 1]]
 
 
 # ===========================================================================
-# 3. Config._get_device()
+# 3. Device resolution (resolve_device, used by Config and pinnrl-train)
 # ===========================================================================
 
 
@@ -394,9 +271,6 @@ class TestGetDevice:
     def test_unknown_device_falls_back_to_cpu(self):
         d = _minimal_config_dict()
         d["device"] = "tpu"
-        # _get_device returns cpu for unknown, but _validate_config may reject
-        # Actually _get_device returns cpu for unknown string, then validate
-        # checks against valid_devices list -- cpu is valid so it passes.
         cfg = _config_from_dict(d)
         assert cfg.device == torch.device("cpu")
 
@@ -404,75 +278,6 @@ class TestGetDevice:
 # ===========================================================================
 # 4. Config.to_dict() — round-trip
 # ===========================================================================
-
-
-class TestToDict:
-
-    def test_to_dict_returns_dict(self):
-        cfg = _config_from_dict(_minimal_config_dict())
-        result = cfg.to_dict()
-        assert isinstance(result, dict)
-
-    def test_to_dict_has_all_top_level_keys(self):
-        cfg = _config_from_dict(_minimal_config_dict())
-        result = cfg.to_dict()
-        expected_keys = {
-            "device",
-            "model",
-            "pde",
-            "training",
-            "rl",
-            "evaluation",
-            "logging",
-            "paths",
-        }
-        assert expected_keys == set(result.keys())
-
-    def test_to_dict_model_section(self):
-        cfg = _config_from_dict(_minimal_config_dict())
-        model = cfg.to_dict()["model"]
-        assert model["input_dim"] == cfg.model.input_dim
-        assert model["hidden_dim"] == cfg.model.hidden_dim
-        assert model["output_dim"] == cfg.model.output_dim
-        assert model["architecture"] == cfg.model.architecture
-
-    def test_to_dict_training_section(self):
-        cfg = _config_from_dict(_minimal_config_dict())
-        training = cfg.to_dict()["training"]
-        assert training["num_epochs"] == cfg.training.num_epochs
-        assert training["learning_rate"] == cfg.training.learning_rate
-        assert "early_stopping" in training
-        assert "learning_rate_scheduler" in training
-        assert "loss_weights" in training
-
-    def test_to_dict_pde_section(self):
-        cfg = _config_from_dict(_minimal_config_dict())
-        pde = cfg.to_dict()["pde"]
-        assert pde["domain"] == cfg.pde.domain
-        assert pde["t_domain"] == cfg.pde.t_domain
-
-    def test_to_dict_rl_section(self):
-        cfg = _config_from_dict(_minimal_config_dict())
-        rl = cfg.to_dict()["rl"]
-        assert rl["enabled"] == cfg.rl.enabled
-        assert rl["gamma"] == cfg.rl.gamma
-        assert "reward_weights" in rl
-
-    def test_to_dict_device_is_torch_device(self):
-        cfg = _config_from_dict(_minimal_config_dict())
-        assert isinstance(cfg.to_dict()["device"], torch.device)
-
-    def test_to_dict_preserves_loss_weights(self):
-        d = _minimal_config_dict()
-        d["training"]["loss_weights"] = {"residual": 5.0, "boundary": 3.0, "initial": 2.0}
-        cfg = _config_from_dict(d)
-        # TrainingConfig backfills a default ``data`` weight for inverse mode;
-        # the user-supplied keys must round-trip unchanged.
-        out = cfg.to_dict()["training"]["loss_weights"]
-        assert out["residual"] == 5.0
-        assert out["boundary"] == 3.0
-        assert out["initial"] == 2.0
-        assert "data" in out
 
 
 # ===========================================================================
@@ -489,10 +294,6 @@ class TestConfigDictAccess:
     def test_getitem_training(self):
         cfg = _config_from_dict(_minimal_config_dict())
         assert cfg["training"] is cfg.training
-
-    def test_getitem_pde(self):
-        cfg = _config_from_dict(_minimal_config_dict())
-        assert cfg["pde"] is cfg.pde
 
     def test_getitem_device(self):
         cfg = _config_from_dict(_minimal_config_dict())
@@ -732,62 +533,37 @@ class TestDataclassInstantiation:
         assert es.patience == 20
         assert es.min_delta == 1e-5
 
-    def test_pde_config(self):
-        pc = PDEConfig(
-            domain=[0.0, 1.0],
-            t_domain=[0.0, 1.0],
-            initial_condition="sin(pi*x)",
-            boundary_conditions={"left": "0.0", "right": "0.0"},
-            diffusion_coefficient=0.01,
-            source_term="0.0",
-        )
-        assert pc.domain == [0.0, 1.0]
-        assert pc.diffusion_coefficient == 0.01
-
-    def test_rl_config(self):
-        rc = RLConfig(
-            enabled=True,
-            state_dim=4,
-            action_dim=2,
-            hidden_dim=64,
-            learning_rate=0.001,
-            gamma=0.99,
-            epsilon_start=1.0,
-            epsilon_end=0.01,
-            epsilon_decay=0.995,
-            memory_size=10000,
-            batch_size=64,
-            target_update=100,
-            reward_weights={"residual": 1.0},
-        )
+    def test_rl_config_from_dict_ignores_unknown_keys(self):
+        rc = RLConfig.from_dict({"enabled": True, "n_x_cells": 4, "gamma": 0.9})
         assert rc.enabled is True
-        assert rc.gamma == 0.99
+        assert rc.n_x_cells == 4
+        assert rc.probe_every is None
 
-    def test_evaluation_config(self):
-        ec = EvaluationConfig(
-            resolution=100,
-            num_test_points=500,
-            metrics=["l2_error", "max_error"],
-            save_plots=True,
-            plot_frequency=50,
+    def test_rl_config_build_sampler(self):
+        from pinnrl.pdes.heat_equation import HeatEquation
+        from pinnrl.pdes.pde_base import PDEConfig as PDEDomainConfig
+        from pinnrl.rl.bandit_sampler import ResidualBanditSampler
+
+        pde = HeatEquation(
+            PDEDomainConfig(
+                name="heat",
+                domain=[[0.0, 2.0]],
+                time_domain=[0.0, 1.0],
+                parameters={"alpha": 0.01},
+                boundary_conditions={},
+                initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 1.0},
+                exact_solution={"type": "sin_exp_decay", "amplitude": 1.0, "frequency": 1.0},
+                device=torch.device("cpu"),
+            )
         )
-        assert ec.resolution == 100
-        assert "l2_error" in ec.metrics
+        sampler = RLConfig(n_x_cells=4, n_t_cells=2).build_sampler(pde)
+        assert isinstance(sampler, ResidualBanditSampler)
+        assert sampler.n_cells == 8
+        assert (sampler.x_lo, sampler.x_hi) == (0.0, 2.0)
 
-    def test_logging_config(self):
-        lc = LoggingConfig(level="DEBUG", save_tensorboard=True, log_frequency=10)
-        assert lc.level == "DEBUG"
-        assert lc.save_tensorboard is True
-
-    def test_paths_config(self):
-        pc = PathsConfig(
-            experiments_dir="exp",
-            model_dir="mod",
-            log_dir="log",
-            tensorboard_dir="tb",
-        )
-        assert pc.experiments_dir == "exp"
-        assert pc.tensorboard_dir == "tb"
+    def test_config_reads_rl_block(self):
+        cfg = _config_from_dict(_minimal_config_dict())
+        assert cfg.rl == RLConfig(enabled=False, n_x_cells=8, n_t_cells=4)
 
 
 # ===========================================================================
@@ -974,13 +750,9 @@ class TestSchedulerConfigLoading:
     def test_cosine_scheduler_params(self):
         d = _minimal_config_dict()
         d["training"]["scheduler_type"] = "cosine"
-        d["training"]["cosine_params"] = {
-            "T_max": 200,
-            "eta_min": 1e-7,
-            "warmup_epochs": 50,
-            "min_lr": 1e-7,
-        }
+        d["training"]["warmup_epochs"] = 50
         cfg = _config_from_dict(d)
+        assert cfg.training.learning_rate_scheduler.type == "cosine"
         assert cfg.training.learning_rate_scheduler.warmup_epochs == 50
 
     def test_reduce_lr_scheduler_params(self):
@@ -992,15 +764,10 @@ class TestSchedulerConfigLoading:
             "min_lr": 1e-5,
         }
         cfg = _config_from_dict(d)
+        # The type used to be lost here: Config always reported "cosine".
+        assert cfg.training.learning_rate_scheduler.type == "reduce_lr"
         assert cfg.training.learning_rate_scheduler.factor == 0.3
         assert cfg.training.learning_rate_scheduler.patience == 25
-
-    def test_scheduler_type_as_dict(self):
-        d = _minimal_config_dict()
-        d["training"]["scheduler_type"] = {"type": "cosine"}
-        d["training"]["cosine_params"] = {"warmup_epochs": 20, "min_lr": 1e-6}
-        cfg = _config_from_dict(d)
-        assert cfg.training.learning_rate_scheduler.warmup_epochs == 20
 
 
 # ===========================================================================
@@ -1060,3 +827,60 @@ class TestDefaultConfigYAMLValues:
     def test_adaptive_weights_disabled(self):
         cfg = Config()
         assert cfg.training.adaptive_weights.enabled is False
+
+
+# ===========================================================================
+# Shared YAML builders (used by Config and pinnrl-train)
+# ===========================================================================
+
+
+class TestTrainingConfigFromDict:
+    def test_empty_dict_uses_defaults(self):
+        tc = TrainingConfig.from_dict({})
+        assert tc.collocation_distribution == "uniform"
+        assert tc.learning_rate_scheduler.type == "cosine"
+        assert tc.loss_function == "mse"
+
+    def test_collocation_distribution_passed_through(self):
+        """pinnrl-train used to drop this key, so --collocation-distribution did nothing."""
+        tc = TrainingConfig.from_dict({"collocation_distribution": "residual_based"})
+        assert tc.collocation_distribution == "residual_based"
+
+    def test_loss_function_passed_through(self):
+        """Config used to drop these keys."""
+        tc = TrainingConfig.from_dict({"loss_function": "huber", "huber_delta": 0.3})
+        assert tc.loss_function == "huber"
+        assert tc.huber_delta == 0.3
+
+    def test_adaptive_initial_weights_read(self):
+        tc = TrainingConfig.from_dict({"adaptive_weights": {"initial_weights": [0.2, 0.5, 0.3]}})
+        assert tc.adaptive_weights.initial_weights == [0.2, 0.5, 0.3]
+
+    def test_partial_lbfgs_block(self):
+        tc = TrainingConfig.from_dict({"lbfgs": {"max_iter": 5, "unknown_key": 1}})
+        assert tc.lbfgs.max_iter == 5
+        assert tc.lbfgs.history_size == 50
+
+    def test_matches_config_loader(self):
+        with open(DEFAULT_CONFIG_PATH) as f:
+            raw = yaml.safe_load(f)
+        assert TrainingConfig.from_dict(raw["training"]) == Config().training
+
+
+class TestModelConfigFromArchitecture:
+    def test_hidden_dims_drive_width_and_depth(self):
+        mc = ModelConfig.from_architecture("feedforward", {"hidden_dims": [64, 64, 64]}, 2, 1)
+        assert mc.hidden_dim == 64
+        assert mc.num_layers == 3
+        assert mc.hidden_dims == [64, 64, 64]
+
+    def test_extras_copied(self):
+        mc = ModelConfig.from_architecture("fno", {"hidden_dim": 32, "modes": 8}, 3, 2)
+        assert mc.modes == 8
+        assert mc.input_dim == 3
+        assert mc.output_dim == 2
+
+    def test_fourier_flag(self):
+        mc = ModelConfig.from_architecture("fourier", {"scale": 4.0}, 2, 1)
+        assert mc.fourier_features is True
+        assert mc.scale == 4.0

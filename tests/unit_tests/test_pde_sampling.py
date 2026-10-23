@@ -181,23 +181,6 @@ class TestPDESampling(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "1-D PDEs only"):
             self.heat_eq_2d.generate_collocation_points(100, strategy="adaptive", model=model)
 
-    # ── Collocation history ───────────────────────────────────────────
-
-    def test_collocation_history(self):
-        """Adaptive sampling records each batch in the collocation history."""
-        num_points = 100
-        model = self._make_dummy_model(2)
-        for _ in range(3):
-            self.heat_eq_1d.generate_collocation_points(
-                num_points, strategy="adaptive", model=model
-            )
-
-        self.assertEqual(len(self.heat_eq_1d.collocation_history), 3)
-        for h in self.heat_eq_1d.collocation_history:
-            self.assertEqual(h.shape, (num_points, 2))  # 1D spatial + time
-
-    # ── General / edge cases ──────────────────────────────────────────
-
     def test_invalid_strategy(self):
         """Test that an invalid strategy raises an error."""
         with self.assertRaises(ValueError):
@@ -312,7 +295,3 @@ class TestPDESampling(unittest.TestCase):
                     f"Wrong time shape for {pde_name} with {strategy}",
                 )
                 self._assert_bounds(x, t, pde)
-
-
-if __name__ == "__main__":
-    unittest.main()

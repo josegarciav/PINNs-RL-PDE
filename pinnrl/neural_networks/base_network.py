@@ -80,14 +80,6 @@ class BaseNetwork(nn.Module):
         """Count the number of trainable parameters."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def get_model_summary(self) -> Dict:
-        """Get a summary of the model architecture."""
-        return {
-            "num_parameters": self.count_parameters(),
-            "device": str(self.device),
-            "memory_usage": f"{sum(p.numel() * p.element_size() for p in self.parameters()) / 1024**2:.2f} MB",
-        }
-
     def _get_activation_module(self, activation_name: str) -> nn.Module:
         """Convert activation function name to module."""
         if activation_name == "relu":

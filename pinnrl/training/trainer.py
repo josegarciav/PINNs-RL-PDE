@@ -1,27 +1,90 @@
 import json
 import logging
 import os
+import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence
 
-import matplotlib
 import numpy as np
-import plotly.graph_objects as go
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from plotly.subplots import make_subplots
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
-from pinnrl.components.adaptive_weights import AdaptiveLossWeights
-from pinnrl.utils.utils import save_training_metrics
+from pinnrl import plots
+from pinnrl.training.adaptive_weights import AdaptiveLossWeights
 
 if TYPE_CHECKING:
     from pinnrl.config import Config
     from pinnrl.pdes.pde_base import PDEBase
 
-matplotlib.use("agg")
-import matplotlib.pyplot as plt
+
+def save_training_metrics(
+    history: Dict[str, Any],
+    experiment_dir: str,
+    metadata: Optional[Dict[str, Any]] = None,
+):
+    """Save training metrics to JSON file.
+
+    Args:
+        history: Dictionary containing training metrics
+        experiment_dir: Directory to save the metrics
+        metadata: Optional metadata about the experiment
+    """
+    # Create experiment directory if it doesn't exist
+    os.makedirs(experiment_dir, exist_ok=True)
+
+    # Convert NumPy arrays to Python lists in history
+    def convert_to_serializable(obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {k: convert_to_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_to_serializable(item) for item in obj]
+        return obj
+
+    serializable_history = convert_to_serializable(history)
+
+    # Save metrics.json directly in the experiment directory
+    metrics_file = os.path.join(experiment_dir, "metrics.json")
+    with open(metrics_file, "w") as f:
+        json.dump(serializable_history, f, indent=2)
+
+    # Save history.json directly in the experiment directory
+    history_file = os.path.join(experiment_dir, "history.json")
+    with open(history_file, "w") as f:
+        json.dump(serializable_history, f, indent=2)
+
+    # Save metadata if provided
+    if metadata:
+        metadata_file = os.path.join(experiment_dir, "metadata.json")
+
+        # Update existing metadata if it exists
+        if os.path.exists(metadata_file):
+            try:
+                with open(metadata_file, "r") as f:
+                    existing_metadata = json.load(f)
+                # Update with new metadata
+                existing_metadata.update(metadata)
+                metadata = existing_metadata
+            except Exception:
+                pass
+
+        # Add timestamp
+        metadata["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Convert metadata to serializable format
+        serializable_metadata = convert_to_serializable(metadata)
+
+        with open(metadata_file, "w") as f:
+            json.dump(serializable_metadata, f, indent=2)
+
+    return history_file
+
+
+def _as_float(value):
+    return value.item() if isinstance(value, torch.Tensor) else value
 
 
 class PDETrainer:
@@ -31,13 +94,9 @@ class PDETrainer:
         self,
         model: nn.Module,
         pde: "PDEBase",
-        optimizer_config: Dict,
         config: "Config",
         device: Optional[torch.device] = None,
         bandit_sampler=None,
-        viz_frequency=10,
-        validation_frequency=10,
-        early_stopping_config=None,
     ):
         """
         Initialize trainer.
@@ -45,15 +104,12 @@ class PDETrainer:
         Args:
             model: PINN model.
             pde: PDE instance.
-            optimizer_config: Optimizer configuration.
-            config: Full configuration object.
+            config: Full configuration object. Optimizer, scheduler, early
+                stopping and loss settings all come from ``config.training``.
             device: Device to train on.
             bandit_sampler: Optional ``ResidualBanditSampler``. When given (or when
                 ``collocation_distribution`` is ``"adaptive"``) collocation points
                 come from the experimental RL bandit sampler.
-            viz_frequency: Frequency of visualization.
-            validation_frequency: Frequency of validation checks.
-            early_stopping_config: Early stopping configuration.
         """
         # Use device from config by default, fall back to provided device or cpu
         self.device = device or (
@@ -65,7 +121,7 @@ class PDETrainer:
         self.model = model.to(self.device)
         self.pde = pde
         self.config = config
-        self.validation_frequency = validation_frequency
+        self.validation_frequency = config.training.validation_frequency
 
         # Setup logging up-front so optimizer init can warn through self.logger.
         self._setup_logging()
@@ -84,12 +140,10 @@ class PDETrainer:
             "loss_weights": [],  # Track weight evolution
         }
 
-        # Early stopping configuration
-        if early_stopping_config is None:
-            early_stopping_config = {"enabled": True, "patience": 10}
-
-        self.early_stopping_enabled = early_stopping_config.get("enabled", True)
-        self.patience = early_stopping_config.get("patience", 10)
+        es_cfg = config.training.early_stopping
+        self.early_stopping_enabled = es_cfg.enabled
+        self.patience = es_cfg.patience
+        self.min_delta = float(es_cfg.min_delta)
         self.best_val_loss = float("inf")
         self.patience_counter = 0
 
@@ -99,7 +153,6 @@ class PDETrainer:
         )
         if bandit_sampler is not None:
             pde.bandit_sampler = bandit_sampler
-        self.viz_frequency = viz_frequency
 
         # Initialize adaptive weights handler if enabled
         self.use_adaptive_weights = config.training.adaptive_weights.enabled
@@ -169,11 +222,27 @@ class PDETrainer:
         }
 
     def _update_scheduler(self, val_loss=None):
-        """Update the learning rate scheduler."""
+        """Step the LR scheduler (plateau scheduling uses ``val_loss`` or the last train loss)."""
+        if self.scheduler is None:
+            return
         if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
-            self.scheduler.step(val_loss if val_loss is not None else self.train_loss)
+            if val_loss is None:
+                val_loss = self.history["train_loss"][-1]
+            self.scheduler.step(val_loss)
         else:
             self.scheduler.step()
+
+    def _warmup_epochs(self) -> int:
+        sched_cfg = self.config.training.learning_rate_scheduler
+        return 0 if sched_cfg is None else int(sched_cfg.warmup_epochs or 0)
+
+    def _apply_warmup(self, epoch: int) -> None:
+        """Linear LR warm-up over the first ``warmup_epochs`` epochs (first-order phase only)."""
+        warmup = self._warmup_epochs()
+        if warmup > 0 and epoch < warmup and not getattr(self, "_is_lbfgs", False):
+            lr = self.config.training.learning_rate * (epoch + 1) / warmup
+            for group in self.optimizer.param_groups:
+                group["lr"] = lr
 
     def _save_live_snapshot(
         self,
@@ -316,7 +385,11 @@ class PDETrainer:
         )
 
     def _build_scheduler(self, force_reduce_lr: bool = False):
-        scheduler_type = self.config.training.learning_rate_scheduler.type
+        """Build the LR scheduler; ``None`` means a constant learning rate."""
+        sched_cfg = self.config.training.learning_rate_scheduler
+        scheduler_type = "constant" if sched_cfg is None else sched_cfg.type
+        if scheduler_type == "constant":
+            return None
         if force_reduce_lr or scheduler_type == "reduce_lr":
             if force_reduce_lr and scheduler_type != "reduce_lr":
                 self.logger.warning(
@@ -395,14 +468,175 @@ class PDETrainer:
             captured["losses"] = self.pde.compute_loss(self.model, x_batch, t_batch)
         return captured["losses"]
 
+    def _sample_batch(self, batch_size: int, progress: float):
+        """Draw one batch of collocation points with the configured strategy.
+
+        ``progress`` in [0, 1] is passed to the adaptive (bandit) sampler.
+        """
+        # Generate batch of collocation points; adaptive samplers need the model
+        sampling_strategy = (
+            "adaptive" if self.use_rl else self.config.training.collocation_distribution
+        )
+        sampling_kwargs = {}
+        if sampling_strategy in ("residual_based", "adaptive"):
+            sampling_kwargs["model"] = self.model
+        if sampling_strategy == "adaptive":
+            sampling_kwargs["progress"] = progress
+        x_batch, t_batch = self.pde.generate_collocation_points(
+            batch_size, strategy=sampling_strategy, **sampling_kwargs
+        )
+        return x_batch.to(self.device), t_batch.to(self.device)
+
+    def _adaptive_total(self, losses):
+        """Replace ``losses["total"]`` with the adaptively weighted objective."""
+        # Adaptive weighting reweights the physics components only
+        # (residual / boundary / initial). In ``data_only`` mode those
+        # are zero contributions to the objective, so adaptive
+        # weighting is a no-op and we trust the total assembled by
+        # ``PDEBase.compute_loss`` (already ``data`` only).
+        training_mode = self.config.training.mode
+        if training_mode == "data_only":
+            return
+        component_names = ["residual", "boundary", "initial"]
+        if self.config.training.adaptive_weights.strategy == "lrw":
+            # Learning-rate weighting balances the gradient norm of each component.
+            grad_norms = []
+            for name in component_names:
+                self.optimizer.zero_grad()
+                losses[name].backward(retain_graph=True)
+                grad_norm = sum(
+                    p.grad.norm().item() ** 2 for p in self.model.parameters() if p.grad is not None
+                )
+                grad_norms.append(torch.tensor(grad_norm**0.5, device=self.device))
+            weights = self.adaptive_weights.update(gradients=torch.stack(grad_norms))
+        else:
+            # Relative error weighting balances the component values themselves.
+            components = torch.stack([losses[name].detach() for name in component_names])
+            weights = self.adaptive_weights.update(losses=components)
+
+        losses["total"] = self.pde.weighted_total(losses, *weights[:3])
+
+        self.logger.debug(
+            "Adaptive weights (%s): %s",
+            self.config.training.adaptive_weights.strategy,
+            {name: float(weights[i]) for i, name in enumerate(component_names) if i < len(weights)},
+        )
+
+        # Store weights for visualization/tracking
+        if isinstance(weights, torch.Tensor):
+            weights_np = weights.detach().cpu().numpy()
+        else:
+            weights_np = np.array(weights)
+
+        self.history["loss_weights"].append(weights_np)
+
+    def _step(self, x_batch, t_batch):
+        """One optimizer step on a batch; returns the loss components.
+
+        Shared by :meth:`train` and :meth:`train_steps`. Applies adaptive loss
+        weighting (if enabled) and gradient clipping, or an L-BFGS closure step.
+        """
+        if getattr(self, "_is_lbfgs", False):
+            return self._lbfgs_step(x_batch, t_batch)
+        self.optimizer.zero_grad()
+        losses = self.pde.compute_loss(self.model, x_batch, t_batch)
+        if self.use_adaptive_weights:
+            self._adaptive_total(losses)
+        losses["total"].backward()
+        if self.config.training.gradient_clipping > 0:
+            nn.utils.clip_grad_norm_(
+                self.model.parameters(), self.config.training.gradient_clipping
+            )
+        self.optimizer.step()
+        return losses
+
+    def train_steps(
+        self,
+        num_steps: Optional[int] = None,
+        time_budget_s: Optional[float] = None,
+        sample_fn: Optional[Callable] = None,
+        resample_every: int = 1,
+        checkpoints: Sequence[float] = (),
+        on_checkpoint: Optional[Callable] = None,
+    ) -> Dict[str, Any]:
+        """Step-based training loop for benchmarks and studies.
+
+        Runs :meth:`_step` (the same update as :meth:`train`) until
+        ``num_steps`` steps or until training time reaches ``time_budget_s``.
+        Training time is the summed wall-clock of sampling plus optimizer steps;
+        checkpoint callbacks are excluded. There is no validation, early
+        stopping, LR scheduling, progress bar or disk I/O.
+
+        Args:
+            num_steps: Stop after this many steps.
+            time_budget_s: Stop once training time reaches this many seconds.
+            sample_fn: ``sample_fn(model, progress) -> (x, t)``; defaults to the
+                configured collocation strategy with ``config.training.batch_size``.
+            resample_every: Draw new points every N steps and reuse them between.
+            checkpoints: Increasing training-time marks (seconds).
+            on_checkpoint: Called as ``on_checkpoint(step, train_time_s, model)``
+                when training time first passes each mark.
+
+        Returns:
+            ``{"steps", "train_time_s", "loss"}`` with the per-step total loss.
+        """
+        if num_steps is None and time_budget_s is None:
+            raise ValueError("Pass num_steps, time_budget_s, or both.")
+        if sample_fn is None:
+            batch_size = self.config.training.batch_size
+
+            def sample_fn(_model, progress):
+                return self._sample_batch(batch_size, progress)
+
+        pending = list(checkpoints)
+        loss_curve = []
+        clock = 0.0
+        step = 0
+        x_batch = t_batch = None
+        self.model.train()
+        while (num_steps is None or step < num_steps) and (
+            time_budget_s is None or clock < time_budget_s
+        ):
+            if time_budget_s is not None:
+                progress = clock / time_budget_s
+            else:
+                progress = step / num_steps
+            start = time.perf_counter()
+            if step % resample_every == 0:
+                x_batch, t_batch = sample_fn(self.model, progress)
+            losses = self._step(x_batch, t_batch)
+            clock += time.perf_counter() - start
+            step += 1
+            loss_curve.append(float(losses["total"].item()))
+            while pending and clock >= pending[0]:
+                pending.pop(0)
+                if on_checkpoint is not None:
+                    on_checkpoint(step, clock, self.model)
+                    self.model.train()
+        return {"steps": step, "train_time_s": clock, "loss": loss_curve}
+
     def train(
         self,
-        num_epochs: int,
-        batch_size: int,
-        num_points: int,
-        experiment_dir: str = None,
+        num_epochs: Optional[int] = None,
+        batch_size: Optional[int] = None,
+        num_points: Optional[int] = None,
+        experiment_dir: Optional[str] = None,
+        progress: bool = True,
     ):
-        """Train the model."""
+        """Train the model.
+
+        ``num_epochs``, ``batch_size`` and ``num_points`` default to
+        ``config.training.num_epochs``, ``.batch_size`` and
+        ``.num_collocation_points``. Each epoch takes ``num_points // batch_size``
+        optimizer steps. ``progress`` shows one progress bar over epochs.
+        Losses are logged every ``validation_frequency`` epochs.
+        """
+        training_cfg = self.config.training
+        num_epochs = training_cfg.num_epochs if num_epochs is None else num_epochs
+        batch_size = training_cfg.batch_size if batch_size is None else batch_size
+        num_points = training_cfg.num_collocation_points if num_points is None else num_points
+        if num_points < batch_size:
+            batch_size = num_points
         self.model.train()
         if hasattr(self.model, "architecture_name"):
             architecture_name = self.model.architecture_name
@@ -433,19 +667,6 @@ class PDETrainer:
             self.logger.info(f"  Fixed weights: {weights_dict}")
         self.logger.info("=" * 50)
 
-        # Initialize adaptive weights history
-        if self.use_adaptive_weights and "loss_weights" not in self.history:
-            self.history["loss_weights"] = []
-
-        # Initialize the adaptive weights object if it's enabled but not initialized
-        if self.use_adaptive_weights and self.adaptive_weights is None:
-            self.logger.info("Initializing adaptive weights")
-            self.adaptive_weights = AdaptiveLossWeights(
-                strategy=self.config.training.adaptive_weights.strategy,
-                alpha=self.config.training.adaptive_weights.alpha,
-                eps=self.config.training.adaptive_weights.eps,
-            )
-
         # Inverse-problem warm-up: announce trainable parameters and seed history
         # buckets so the dashboard can render trajectories from epoch 0.
         trainable_pde_params = {}
@@ -472,10 +693,30 @@ class PDETrainer:
         # gradient passes are too expensive); silently disable for the LBFGS phase.
         if getattr(self, "_is_lbfgs", False) and self.use_adaptive_weights:
             self.logger.warning("Adaptive loss weighting is disabled while running L-BFGS.")
-            self._lbfgs_adaptive_disabled = True
 
         # Record start time
         start_time = datetime.now()
+
+        # Fields shared by the initial and the final metadata.json.
+        run_info = {
+            "pde_type": getattr(self.pde, "pde_type", type(self.pde).__name__),
+            "pde_name": getattr(self.pde.config, "name", ""),
+            "architecture": getattr(self.model, "architecture_name", type(self.model).__name__),
+            "training_params": {
+                "num_epochs": num_epochs,
+                "batch_size": batch_size,
+                "num_points": num_points,
+                "validation_frequency": self.validation_frequency,
+            },
+            "collocation_distribution": (
+                "adaptive" if self.use_rl else self.config.training.collocation_distribution
+            ),
+            "rl_enabled": self.use_rl,
+            "optimizer": self._optimizer_type,
+            "mode": self.config.training.mode,
+            "trainable_parameters": list(trainable_pde_params.keys()),
+            "true_parameters": dict(getattr(self.pde, "_true_parameters", {})),
+        }
 
         # Create directories for visualizations and experiment data
         if experiment_dir:
@@ -492,42 +733,12 @@ class PDETrainer:
             running_file = os.path.join(experiment_dir, ".running")
             open(running_file, "w").close()
 
-            # Save initial metadata
             initial_metadata = {
                 "status": "running",
                 "start_time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
                 "total_epochs": num_epochs,
                 "current_epoch": 0,
-                "pde_type": getattr(
-                    self.pde,
-                    "pde_type",
-                    getattr(self.pde, "name", type(self.pde).__name__),
-                ),
-                "pde_name": getattr(self.pde.config, "name", getattr(self.pde, "name", "")),
-                "architecture": getattr(
-                    self.model,
-                    "architecture_name",
-                    getattr(
-                        self.config,
-                        "architecture",
-                        (
-                            getattr(self.config.model, "architecture", "unknown")
-                            if hasattr(self.config, "model")
-                            else "unknown"
-                        ),
-                    ),
-                ),
-                "training_params": {
-                    "num_epochs": num_epochs,
-                    "batch_size": batch_size,
-                    "num_points": num_points,
-                    "validation_frequency": self.validation_frequency,
-                },
-                "rl_enabled": self.use_rl,
-                "optimizer": getattr(self, "_optimizer_type", "adam"),
-                "mode": getattr(self.config.training, "mode", "forward"),
-                "trainable_parameters": list(trainable_pde_params.keys()),
-                "true_parameters": dict(getattr(self.pde, "_true_parameters", {})),
+                **run_info,
             }
             metadata_path = os.path.join(experiment_dir, "metadata.json")
             with open(metadata_path, "w") as f:
@@ -543,193 +754,49 @@ class PDETrainer:
         if experiment_dir:
             self._save_live_snapshot(experiment_dir, epoch=0)
 
+        # tqdm.auto renders a widget in notebooks; refresh at most twice a second.
+        pbar = tqdm(total=num_epochs, desc="Training", mininterval=0.5) if progress else None
         for epoch in range(num_epochs):
             self.model.train()
+            self._apply_warmup(epoch)
             epoch_losses = []
             epoch_points = []  # Store all points for this epoch
 
-            # Training loop with progress bar
-            pbar = tqdm(range(num_points // batch_size), desc=f"Epoch {epoch+1}/{num_epochs}")
-            for _ in pbar:
-                # Generate batch of collocation points; adaptive samplers need the model
-                sampling_strategy = (
-                    "adaptive" if self.use_rl else self.config.training.collocation_distribution
+            for _ in range(max(1, num_points // batch_size)):
+                x_batch, t_batch = self._sample_batch(batch_size, epoch / max(1, num_epochs))
+                epoch_points.append(torch.cat([x_batch, t_batch], dim=1).detach().cpu().numpy())
+                losses = self._step(x_batch, t_batch)
+                epoch_losses.append(float(losses["total"].item()))
+            if pbar is not None:
+                pbar.set_postfix(
+                    loss=f"{epoch_losses[-1]:.3e}",
+                    res=f"{losses['residual'].item():.3e}",
+                    refresh=False,
                 )
-                sampling_kwargs = {}
-                if sampling_strategy in ("residual_based", "adaptive"):
-                    sampling_kwargs["model"] = self.model
-                if sampling_strategy == "adaptive":
-                    sampling_kwargs["progress"] = epoch / max(1, num_epochs)
-                x_batch, t_batch = self.pde.generate_collocation_points(
-                    batch_size, strategy=sampling_strategy, **sampling_kwargs
-                )
-                # Ensure the tensors are on the right device
-                x_batch = x_batch.to(self.device)
-                t_batch = t_batch.to(self.device)
-
-                # Store points for visualization
-                points = torch.cat([x_batch, t_batch], dim=1)  # t_batch is already [N, 1]
-                epoch_points.append(points.cpu().detach().numpy())
-
-                # L-BFGS: closure-based step that recomputes loss internally.
-                if getattr(self, "_is_lbfgs", False):
-                    losses = self._lbfgs_step(x_batch, t_batch)
-                    loss = losses["total"]
-                    pbar.set_postfix({"loss": loss.item(), "res": losses["residual"].item()})
-                    epoch_losses.append(float(loss.item()))
-                    continue
-
-                # Forward pass
-                self.optimizer.zero_grad()
-                losses = self.pde.compute_loss(self.model, x_batch, t_batch)
-
-                # Adaptive weighting reweights the physics components only
-                # (residual / boundary / initial). In ``data_only`` mode those
-                # are zero contributions to the objective, so adaptive
-                # weighting is a no-op and we trust the total assembled by
-                # ``PDEBase.compute_loss`` (already ``data`` only).
-                training_mode = self.config.training.mode
-                if self.use_adaptive_weights and training_mode == "data_only":
-                    # Skip the recomputation block below.
-                    pass
-                elif self.use_adaptive_weights:
-                    # Prepare loss components tensor - include smoothness if present
-                    loss_components = []
-                    component_names = ["residual", "boundary", "initial"]
-
-                    # Add each component to the list
-                    for component in component_names:
-                        loss_components.append(losses[component])
-
-                    # Add smoothness component if it exists and has a non-zero weight
-                    smoothness_weight = self.config.training.loss_weights.get("smoothness", 0.0)
-                    if "smoothness" in losses and smoothness_weight > 0:
-                        loss_components.append(losses["smoothness"])
-                        component_names.append("smoothness")
-
-                    # Convert to tensor
-                    loss_components = torch.tensor(loss_components, device=self.device)
-
-                    if self.config.training.adaptive_weights.strategy == "lrw":
-                        # For Learning Rate Weighting, we need gradients
-                        # First, get individual gradients for each component
-                        grad_norms = []
-                        for i, loss_name in enumerate(component_names):
-                            component_loss = losses[loss_name]
-                            self.optimizer.zero_grad()
-                            component_loss.backward(retain_graph=True)
-
-                            # Calculate gradient norm for this component
-                            grad_norm = 0.0
-                            for param in self.model.parameters():
-                                if param.grad is not None:
-                                    grad_norm += param.grad.norm().item() ** 2
-                            grad_norm = torch.tensor(grad_norm**0.5, device=self.device)
-                            grad_norms.append(grad_norm)
-
-                        # Get adaptive weights based on gradients
-                        grad_norms = torch.stack(grad_norms)
-                        weights = self.adaptive_weights.update(gradients=grad_norms)
-                    else:
-                        # For Relative Error Weighting
-                        weights = self.adaptive_weights.update(losses=loss_components)
-
-                    # Apply weights to compute the weighted loss
-                    total_loss = 0
-                    for i, component in enumerate(component_names):
-                        if i < len(weights):  # Ensure we have a weight for this component
-                            total_loss += weights[i] * losses[component]
-
-                    # Outside ``forward`` mode the data term is part of the
-                    # objective. Adaptive weighting only sees physics
-                    # components, so re-attach the data term explicitly.
-                    if training_mode in ("inverse", "data_augmented") and "data" in losses:
-                        data_w = self.config.training.loss_weights.get("data", 1.0) or 1.0
-                        total_loss = total_loss + data_w * losses["data"]
-
-                    losses["total"] = total_loss
-
-                    # Print detailed debugging info
-                    print("\nAdaptive weights calculation:")
-                    print(f"- Strategy: {self.config.training.adaptive_weights.strategy}")
-                    for i, component in enumerate(component_names):
-                        if i < len(weights):
-                            # Ensure values are Python floats, not tensors
-                            loss_val = (
-                                losses[component].item()
-                                if isinstance(losses[component], torch.Tensor)
-                                else losses[component]
-                            )
-                            weight_val = (
-                                weights[i].item()
-                                if isinstance(weights[i], torch.Tensor)
-                                else weights[i]
-                            )
-                            weighted_val = weight_val * loss_val
-                            print(
-                                f"- {component}: loss={loss_val:.6f}, weight={weight_val:.6f}, weighted={weighted_val:.6f}"
-                            )
-
-                    # Ensure total_loss is a Python float
-                    total_loss_val = (
-                        total_loss.item() if isinstance(total_loss, torch.Tensor) else total_loss
-                    )
-                    print(f"- Total loss: {total_loss_val:.6f}\n")
-
-                    # Store weights for visualization/tracking
-                    if isinstance(weights, torch.Tensor):
-                        weights_np = weights.detach().cpu().numpy()
-                    else:
-                        weights_np = np.array(weights)
-
-                    # Ensure we have 4 weights (including smoothness) for consistency in visualization
-                    if len(weights_np) < 4:
-                        padding = np.zeros(4 - len(weights_np))
-                        weights_np = np.concatenate([weights_np, padding])
-
-                    self.history["loss_weights"].append(weights_np)
-
-                loss = losses["total"]
-
-                # Backward pass
-                loss.backward()
-                if self.config.training.gradient_clipping > 0:
-                    nn.utils.clip_grad_norm_(
-                        self.model.parameters(), self.config.training.gradient_clipping
-                    )
-                self.optimizer.step()
-
-                # Update progress bar
-                pbar.set_postfix({"loss": loss.item(), "res": losses["residual"].item()})
-                epoch_losses.append(loss.item())
+                pbar.update()
 
             # End of epoch
             avg_epoch_loss = sum(epoch_losses) / len(epoch_losses)
             points_array = np.concatenate(epoch_points, axis=0)
             self.points_history.append(points_array)
 
-            # Update learning rate
-            self._update_scheduler(avg_epoch_loss)
+            # Update learning rate (the scheduler takes over after warm-up)
+            if epoch >= self._warmup_epochs():
+                self._update_scheduler(avg_epoch_loss)
 
             # Log metrics
             current_lr = self.optimizer.param_groups[0]["lr"]
 
-            # Ensure all values are Python floats, not tensors
-            def ensure_float(val):
-                if isinstance(val, torch.Tensor):
-                    return val.item()
-                return val
-
             epoch_data = {
                 "epoch": epoch,
                 "train_loss": avg_epoch_loss,
-                "residual_loss": ensure_float(losses["residual"]),
-                "boundary_loss": ensure_float(losses["boundary"]),
-                "initial_loss": ensure_float(losses["initial"]),
+                "residual_loss": _as_float(losses["residual"]),
+                "boundary_loss": _as_float(losses["boundary"]),
+                "initial_loss": _as_float(losses["initial"]),
                 "learning_rate": current_lr,
             }
             if "data" in losses:
-                epoch_data["data_loss"] = ensure_float(losses["data"])
+                epoch_data["data_loss"] = _as_float(losses["data"])
                 self.history.setdefault("data_loss", [])
 
             # Capture each trainable PDE parameter's current value so the
@@ -743,26 +810,10 @@ class PDETrainer:
                 current_weights = self.history["loss_weights"][-1]
                 weights_str = ""
                 component_names = ["residual", "boundary", "initial"]
-                if len(current_weights) >= 4:
-                    component_names.append("smoothness")
-
                 for i, name in enumerate(component_names):
                     if i < len(current_weights):
-                        weight_value = current_weights[i]
-                        # Ensure weight_value is a Python float, not a tensor
-                        if isinstance(weight_value, torch.Tensor):
-                            weight_value = weight_value.item()
-                        weights_str += f", {name}_weight={weight_value:.4f}"
+                        weights_str += f", {name}_weight={float(current_weights[i]):.4f}"
 
-                # Ensure weights_str is a string, not a tensor
-                if isinstance(weights_str, torch.Tensor):
-                    weights_str = (
-                        weights_str.item()
-                        if weights_str.numel() == 1
-                        else str(weights_str.tolist())
-                    )
-
-                self.logger.info(f"Adaptive weights:{weights_str}")
             else:
                 weights_str = ""
 
@@ -775,14 +826,6 @@ class PDETrainer:
             if epoch % self.validation_frequency == 0:
                 val_losses = self._compute_validation_loss()
                 self.history["val_loss"].append(val_losses["total_loss"])
-                # Ensure weights_str is a string, not a tensor
-                if isinstance(weights_str, torch.Tensor):
-                    weights_str = (
-                        weights_str.item()
-                        if weights_str.numel() == 1
-                        else str(weights_str.tolist())
-                    )
-
                 self.logger.info(
                     f"Epoch {epoch+1}/{num_epochs}, "
                     f"Train Loss: {avg_epoch_loss:.6f}, "
@@ -793,7 +836,7 @@ class PDETrainer:
                 # Early stopping check
                 if self.early_stopping_enabled:
                     val_loss = val_losses["total_loss"]
-                    if val_loss < self.best_val_loss - 1e-6:
+                    if val_loss < self.best_val_loss - self.min_delta:
                         self.best_val_loss = val_loss
                         self.patience_counter = 0
                     else:
@@ -805,20 +848,6 @@ class PDETrainer:
                             f"best val loss: {self.best_val_loss:.6f}"
                         )
                         break
-            else:
-                # Ensure weights_str is a string, not a tensor
-                if isinstance(weights_str, torch.Tensor):
-                    weights_str = (
-                        weights_str.item()
-                        if weights_str.numel() == 1
-                        else str(weights_str.tolist())
-                    )
-
-                self.logger.info(
-                    f"Epoch {epoch+1}/{num_epochs}, "
-                    f"Train Loss: {avg_epoch_loss:.6f}, "
-                    f"LR: {current_lr:.6f}{weights_str}"
-                )
 
             # Periodic save of history and metadata
             if experiment_dir and epoch % self.validation_frequency == 0:
@@ -864,6 +893,9 @@ class PDETrainer:
                 if self.use_adaptive_weights:
                     self.logger.warning("Adaptive loss weighting is disabled while running L-BFGS.")
 
+        if pbar is not None:
+            pbar.close()
+
         # End of training
         train_time = (datetime.now() - start_time).total_seconds() / 60.0
         self.logger.info(f"Training completed in {train_time} minutes")
@@ -872,6 +904,7 @@ class PDETrainer:
         if experiment_dir:
             # Create metadata with training information
             metadata = {
+                **run_info,
                 "status": "completed",
                 "training_time_minutes": train_time,
                 "total_epochs": num_epochs,
@@ -885,51 +918,15 @@ class PDETrainer:
                     self.patience_counter >= self.patience if self.early_stopping_enabled else False
                 ),
                 "current_epoch": len(self.history["train_loss"]),
-                "training_params": {
-                    "num_epochs": num_epochs,
-                    "batch_size": batch_size,
-                    "num_points": num_points,
-                    "validation_frequency": self.validation_frequency,
-                },
-                "rl_enabled": self.use_rl,
                 "start_time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
                 "end_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                # PDE information
-                "pde_type": getattr(
-                    self.pde,
-                    "pde_type",
-                    getattr(self.pde, "name", type(self.pde).__name__),
-                ),
-                "pde_name": getattr(self.pde.config, "name", getattr(self.pde, "name", "")),
-                # PDE parameters and conditions
-                "domain": getattr(self.pde, "domain", []),
-                "time_domain": getattr(self.pde, "time_domain", []),
-                "boundary_conditions": getattr(self.pde.config, "boundary_conditions", {}),
-                "initial_condition": getattr(self.pde.config, "initial_condition", {}),
-                "pde_parameters": getattr(self.pde.config, "parameters", {}),
-                # Inverse-problem bookkeeping (empty in forward mode).
-                "optimizer": getattr(self, "_optimizer_type", "adam"),
-                "mode": getattr(self.config.training, "mode", "forward"),
-                "trainable_parameters": list(trainable_pde_params.keys()),
-                "true_parameters": dict(getattr(self.pde, "_true_parameters", {})),
+                "domain": self.pde.domain,
+                "time_domain": self.pde.time_domain,
+                "boundary_conditions": self.pde.config.boundary_conditions,
+                "initial_condition": self.pde.config.initial_condition,
+                "pde_parameters": self.pde.config.parameters,
                 "identified_parameters": (
-                    self.pde.get_trainable_parameter_values()
-                    if hasattr(self.pde, "get_trainable_parameter_values") and trainable_pde_params
-                    else {}
-                ),
-                # Architecture information
-                "architecture": getattr(
-                    self.model,
-                    "architecture_name",
-                    getattr(
-                        self.config,
-                        "architecture",
-                        (
-                            getattr(self.config.model, "architecture", "unknown")
-                            if hasattr(self.config, "model")
-                            else "unknown"
-                        ),
-                    ),
+                    self.pde.get_trainable_parameter_values() if trainable_pde_params else {}
                 ),
             }
 
@@ -957,743 +954,8 @@ class PDETrainer:
             self.logger.info("Generating and saving all plots...")
             self.save_plots(viz_dir)
 
-            # # Generate FDM comparison plots explicitly
-            # self.logger.info("Generating FDM comparison plots...")
-            # try:
-            #     self.generate_fdm_comparison(experiment_dir)
-            # except Exception as e:
-            #     self.logger.error(f"Error generating FDM comparison: {str(e)}")
-            #     import traceback
-
-            #     traceback.print_exc()
-
         return self.history
-
-    def get_training_history(self) -> Dict[str, List[float]]:
-        """
-        Get training history.
-
-        :return: Dictionary of training metrics
-        """
-        return self.history
-
-    def plot_training_history(self, save_path=None):  # pragma: no cover
-        """Plot training history."""
-        try:
-            # Create parent directory if it doesn't exist
-            if save_path:
-                os.makedirs(os.path.dirname(save_path), exist_ok=True)
-
-            # Create two subplots: one for losses and one for weights if using adaptive weights
-            if self.use_adaptive_weights and len(self.history["loss_weights"]) > 0:
-                fig = make_subplots(rows=2, cols=1, subplot_titles=("Losses", "Loss Weights"))
-
-                # Add traces for each loss component in first subplot
-                for key in [
-                    "train_loss",
-                    "val_loss",
-                    "residual_loss",
-                    "boundary_loss",
-                    "initial_loss",
-                ]:
-                    if key in self.history and self.history[key]:
-                        fig.add_trace(
-                            go.Scatter(y=self.history[key], name=key, mode="lines"),
-                            row=1,
-                            col=1,
-                        )
-
-                # Add traces for loss weights in second subplot
-                weights = np.array(self.history["loss_weights"])
-                if len(weights) > 0:
-                    components = ["residual", "boundary", "initial", "smoothness"]
-                    for i, component in enumerate(components):
-                        if i < weights.shape[1]:  # Ensure we have data for this component
-                            fig.add_trace(
-                                go.Scatter(
-                                    y=weights[:, i],
-                                    name=f"{component}_weight",
-                                    mode="lines",
-                                ),
-                                row=2,
-                                col=1,
-                            )
-
-                # Update layout
-                fig.update_layout(
-                    title="Training History",
-                    height=800,  # Increase height for two subplots
-                )
-
-                # Update y-axis for losses to be log scale
-                fig.update_yaxes(type="log", title="Loss", row=1, col=1)
-
-                # Update y-axis for weights
-                fig.update_yaxes(title="Weight Value", row=2, col=1)
-
-                # Update x-axis
-                fig.update_xaxes(title="Epoch", row=2, col=1)
-            else:
-                # Original single plot for losses
-                fig = go.Figure()
-
-                # Add traces for each loss component
-                for key in self.history.keys():
-                    if (
-                        key not in ["lr", "loss_weights"] and self.history[key]
-                    ):  # Skip learning rate and weights
-                        fig.add_trace(go.Scatter(y=self.history[key], name=key, mode="lines"))
-
-                # Update layout
-                fig.update_layout(
-                    title="Training History",
-                    xaxis_title="Epoch",
-                    yaxis_title="Loss",
-                    yaxis_type="log",  # Use log scale for loss
-                )
-
-            if save_path:
-                # Save both interactive HTML and static PNG
-                html_path = save_path.replace(".png", ".html")
-                fig.write_html(html_path)
-                fig.write_image(save_path)
-
-        except Exception as e:
-            logging.warning(f"Error plotting training history: {e}")
-
-    def plot_solution_comparison(self, num_points=50, save_path=None):  # pragma: no cover
-        """Plot comparison between exact and predicted solutions"""
-        try:
-            if self.pde.dimension == 2:
-                # Generate grid points for x and y
-                x = torch.linspace(
-                    self.pde.domain[0][0],
-                    self.pde.domain[0][1],
-                    num_points,
-                    device=self.device,
-                )
-                y = torch.linspace(
-                    self.pde.domain[1][0],
-                    self.pde.domain[1][1],
-                    num_points,
-                    device=self.device,
-                )
-                X, Y = torch.meshgrid(x, y, indexing="ij")
-
-                # Generate frames for different time points
-                frames = []
-                times = torch.linspace(
-                    self.pde.config.time_domain[0],
-                    self.pde.config.time_domain[1],
-                    10,
-                    device=self.device,
-                )
-
-                for t in times:
-                    # Prepare input for the model
-                    t_repeated = t.repeat(num_points * num_points)
-                    points = torch.stack([X.flatten(), Y.flatten(), t_repeated], dim=1)
-
-                    # Get predictions and exact solutions
-                    with torch.no_grad():
-                        pred = self.model(points).reshape(num_points, num_points).cpu().numpy()
-
-                        # Add logging and error checking for exact solution
-                        logging.info(f"Computing exact solution for t={t.item()}")
-                        exact = self.pde.exact_solution(X.flatten(), Y.flatten(), t)
-                        if exact is None:
-                            raise ValueError("exact_solution returned None")
-
-                        logging.info(f"Exact solution shape before reshape: {exact.shape}")
-                        exact = exact.reshape(num_points, num_points).cpu().numpy()
-                        abs_error = np.abs(pred - exact)
-                        rel_error = np.abs(
-                            (pred - exact) / (exact + 1e-10)
-                        )  # Add small constant to avoid division by zero
-
-                        # Take the minimum between absolute and relative errors
-                        error = np.minimum(abs_error, rel_error)
-
-                        # Apply log scale to error
-                        error = np.log10(error + 1e-10)  # Add small constant to avoid log(0)
-
-                    # Create frame with both plots side by side and error
-                    frame = go.Frame(
-                        data=[
-                            go.Surface(
-                                x=X.cpu().numpy(),
-                                y=Y.cpu().numpy(),
-                                z=exact,
-                                colorscale="viridis",
-                                name="Exact",
-                                showscale=True,
-                                subplot="scene1",
-                            ),
-                            go.Surface(
-                                x=X.cpu().numpy(),
-                                y=Y.cpu().numpy(),
-                                z=pred,
-                                colorscale="viridis",
-                                name="PINN Predicted",
-                                showscale=True,
-                                subplot="scene2",
-                            ),
-                            go.Surface(
-                                x=X.cpu().numpy(),
-                                y=Y.cpu().numpy(),
-                                z=error,
-                                colorscale="viridis",
-                                name="Log Min Error",
-                                showscale=True,
-                                subplot="scene3",
-                            ),
-                        ],
-                        name=f"t={t.item():.2f}",
-                    )
-                    frames.append(frame)
-
-                # Create figure with animation and subplots
-                fig = go.Figure(
-                    data=[frames[0].data[0], frames[0].data[1], frames[0].data[2]],
-                    frames=frames,
-                )
-
-                # Update layout with three subplots side by side
-                fig.update_layout(
-                    scene=dict(domain=dict(x=[0, 0.33], y=[0, 1])),
-                    scene2=dict(domain=dict(x=[0.33, 0.66], y=[0, 1])),
-                    scene3=dict(domain=dict(x=[0.66, 1], y=[0, 1])),
-                    title="Solution Comparison (2D)",
-                    width=1800,  # Increased width for better visibility
-                    height=600,
-                )
-
-                # Add play button and slider
-                fig.update_layout(
-                    updatemenus=[
-                        {
-                            "type": "buttons",
-                            "showactive": False,
-                            "buttons": [
-                                {
-                                    "label": "Play",
-                                    "method": "animate",
-                                    "args": [
-                                        None,
-                                        {
-                                            "frame": {"duration": 500, "redraw": True},
-                                            "fromcurrent": True,
-                                        },
-                                    ],
-                                }
-                            ],
-                        }
-                    ],
-                    sliders=[
-                        {
-                            "currentvalue": {"prefix": "t="},
-                            "steps": [
-                                {
-                                    "args": [
-                                        [f.name],
-                                        {
-                                            "frame": {"duration": 0, "redraw": True},
-                                            "mode": "immediate",
-                                        },
-                                    ],
-                                    "label": f.name,
-                                    "method": "animate",
-                                }
-                                for f in frames
-                            ],
-                        }
-                    ],
-                )
-
-                if save_path:
-                    try:
-                        # First save the requested format (png, jpg, etc.)
-                        fig.write_image(save_path)
-
-                        # Then try to save HTML format as well
-                        base_path = os.path.splitext(save_path)[0]
-                        html_path = base_path + ".html"
-                        fig.write_html(html_path)
-
-                        # Remove individual time step saving to simplify output
-                        logging.info(f"Saved visualizations to {save_path} and {html_path}")
-                    except Exception as e:
-                        logging.warning(f"Error saving visualization: {e}")
-
-            else:  # 1D case
-                # Generate points
-                x = torch.linspace(
-                    self.pde.domain[0][0],
-                    self.pde.domain[0][1],
-                    num_points,
-                    device=self.device,
-                )
-                t = torch.linspace(
-                    self.pde.config.time_domain[0],
-                    self.pde.config.time_domain[1],
-                    num_points,
-                    device=self.device,
-                )
-                X, T = torch.meshgrid(x, t, indexing="ij")
-                points = torch.stack([X.flatten(), T.flatten()], dim=1)
-
-                # Get predictions and exact solutions
-                with torch.no_grad():
-                    pred = self.model(points).reshape(num_points, num_points).cpu().numpy()
-
-                    # Add logging and error checking for exact solution
-                    logging.info("Computing exact solution for 1D case")
-                    exact = self.pde.exact_solution(X.flatten(), t=T.flatten())
-                    if exact is None:
-                        raise ValueError("exact_solution returned None")
-
-                    logging.info(f"Exact solution shape before reshape: {exact.shape}")
-                    exact = exact.reshape(num_points, num_points).cpu().numpy()
-
-                    # Calculate both absolute and relative errors
-                    abs_error = np.abs(pred - exact)
-                    rel_error = np.abs(
-                        (pred - exact) / (exact + 1e-10)
-                    )  # Add small constant to avoid division by zero
-
-                    # Take the minimum between absolute and relative errors
-                    error = np.minimum(abs_error, rel_error)
-
-                    # Apply log scale to error
-                    error = np.log10(error + 1e-10)  # Add small constant to avoid log(0)
-
-                # Create figure with subplots
-                fig = make_subplots(
-                    rows=1,
-                    cols=3,
-                    subplot_titles=("Exact", "PINN Predicted", "Log Min Error"),
-                    specs=[[{"type": "surface"}, {"type": "surface"}, {"type": "surface"}]],
-                )
-
-                # Add surfaces for exact, predicted, and error
-                fig.add_trace(
-                    go.Surface(
-                        x=X.cpu().numpy(),
-                        y=T.cpu().numpy(),
-                        z=exact,
-                        colorscale="viridis",
-                        name="Exact",
-                        showscale=False,  # Hide colorscale for exact solution
-                    ),
-                    row=1,
-                    col=1,
-                )
-                fig.add_trace(
-                    go.Surface(
-                        x=X.cpu().numpy(),
-                        y=T.cpu().numpy(),
-                        z=pred,
-                        colorscale="viridis",
-                        name="PINN Predicted",
-                        showscale=False,  # Hide colorscale for predicted solution
-                    ),
-                    row=1,
-                    col=2,
-                )
-                fig.add_trace(
-                    go.Surface(
-                        x=X.cpu().numpy(),
-                        y=T.cpu().numpy(),
-                        z=error,
-                        colorscale="viridis",
-                        name="Log Min Error",
-                        showscale=True,  # Only show colorscale for error
-                        colorbar=dict(
-                            title="Log Error",
-                            x=0.98,  # Position colorbar at the right edge
-                            y=0.5,  # Center colorbar vertically
-                        ),
-                    ),
-                    row=1,
-                    col=3,
-                )
-
-                # Update layout
-                fig.update_layout(
-                    title="Solution Comparison (1D)",
-                    width=1800,  # Increased width for better visibility
-                    height=600,
-                    scene=dict(
-                        xaxis_title="x",
-                        yaxis_title="t",
-                        zaxis_title="u(x,t)",
-                    ),
-                    scene2=dict(
-                        xaxis_title="x",
-                        yaxis_title="t",
-                        zaxis_title="u(x,t)",
-                    ),
-                    scene3=dict(
-                        xaxis_title="x",
-                        yaxis_title="t",
-                        zaxis_title="u(x,t)",
-                    ),
-                )
-
-                if save_path:
-                    try:
-                        # First save the requested format (png, jpg, etc.)
-                        fig.write_image(save_path)
-
-                        # Then try to save HTML format as well
-                        base_path = os.path.splitext(save_path)[0]
-                        html_path = base_path + ".html"
-                        fig.write_html(html_path)
-
-                        # Remove individual time step saving to simplify output
-                        logging.info(f"Saved visualizations to {save_path} and {html_path}")
-                    except Exception as e:
-                        logging.warning(f"Error saving visualization: {e}")
-
-        except Exception as e:
-            logging.error(f"Error in plot_solution_comparison: {str(e)}")
-            raise  # Re-raise the exception after logging
 
     def save_plots(self, save_dir):  # pragma: no cover
-        """Save training plots"""
-        try:
-            # Create visualization directory if it doesn't exist
-            os.makedirs(save_dir, exist_ok=True)
-            logging.info(f"Saving plots to directory: {save_dir}")
-
-            # Save training history plot
-            history_path = os.path.join(save_dir, "final_training_history.png")
-            self.plot_training_history(save_path=history_path)
-            logging.info("Training history plot saved successfully")
-
-            # Save solution comparison plot
-            solution_path = os.path.join(save_dir, "final_solution_comparison.png")
-            self.plot_solution_comparison(num_points=100, save_path=solution_path)
-            logging.info("Solution comparison plots saved successfully")
-
-            # Save collocation points evolution if available
-            if hasattr(self, "points_history") and self.points_history:
-                collocation_path = os.path.join(save_dir, "collocation_evolution.png")
-                self.visualize_collocation_evolution(save_path=collocation_path)
-                logging.info("Collocation evolution plot saved successfully")
-
-            logging.info(f"All plots saved successfully to {save_dir}")
-        except Exception as e:
-            logging.error(f"Error saving plots: {str(e)}")
-
-    def visualize_collocation_evolution(self, save_path=None):
-        """Visualize the evolution of collocation points in a unified 2x2 grid"""
-        try:
-            # Check if we have points history from training
-            if not hasattr(self, "points_history") or not self.points_history:
-                logging.warning("No collocation points history available")
-                return
-
-            # Create parent directory if it doesn't exist
-            if save_path:
-                os.makedirs(os.path.dirname(save_path), exist_ok=True)
-
-            # We'll use matplotlib for this visualization to create a 2x2 grid
-            import matplotlib.pyplot as plt
-
-            # Create a figure with 2x2 subplots
-            fig, axs = plt.subplots(2, 2, figsize=(16, 14))
-            fig.suptitle("Evolution of Collocation Points", fontsize=20)
-
-            # Define custom colormaps for each subplot
-            colors = {
-                "initial": plt.cm.Blues,  # Blue for initial
-                "mid": plt.cm.Greens,  # Green for mid-training
-                "final": plt.cm.Reds,  # Red for final
-            }
-
-            # Extract domain information
-            if self.pde.dimension == 1:
-                x_domain = self.pde.domain[0]
-                t_domain = self.pde.config.time_domain
-
-                # Determine indices for snapshots
-                num_snapshots = len(self.points_history)
-                initial_idx = 0
-                mid_idx = num_snapshots // 2
-                final_idx = num_snapshots - 1
-
-                # Top-left: Evolution of points over time (superimpose snapshots)
-                ax = axs[0, 0]
-                ax.set_title("Progression of Points", fontsize=16)
-
-                # Plot multiple snapshots with different colors
-                snapshot_indices = []
-                if num_snapshots >= 5:
-                    # Choose 5 evenly spaced snapshots
-                    step = num_snapshots // 5
-                    snapshot_indices = [i * step for i in range(5)]
-                    if snapshot_indices[-1] != num_snapshots - 1:
-                        snapshot_indices[-1] = num_snapshots - 1
-                else:
-                    # Use all available snapshots
-                    snapshot_indices = list(range(num_snapshots))
-
-                for i, idx in enumerate(snapshot_indices):
-                    points = self.points_history[idx]
-                    label = f"Snapshot {idx}"
-                    # Use different markers and colors for different snapshots
-                    ax.scatter(
-                        points[:, 0],
-                        points[:, 1],
-                        s=3,
-                        alpha=0.5,
-                        label=label,
-                        marker=".",
-                        edgecolors="none",
-                    )
-
-                # Add legend and labels
-                ax.legend(fontsize=10)
-                ax.set_xlabel("x", fontsize=14)
-                ax.set_ylabel("t", fontsize=14)
-                ax.set_xlim(x_domain)
-                ax.set_ylim(t_domain)
-                ax.grid(alpha=0.3)
-
-                # Top-right: Initial distribution (heatmap)
-                ax = axs[0, 1]
-                initial_points = self.points_history[initial_idx]
-                self._plot_density_heatmap(
-                    ax,
-                    initial_points,
-                    colors["initial"],
-                    "Initial Distribution",
-                    x_domain,
-                    t_domain,
-                )
-
-                # Bottom-left: Intermediate distribution (heatmap)
-                ax = axs[1, 0]
-                mid_points = self.points_history[mid_idx]
-                self._plot_density_heatmap(
-                    ax,
-                    mid_points,
-                    colors["mid"],
-                    f"Intermediate Distribution (Snapshot {mid_idx})",
-                    x_domain,
-                    t_domain,
-                )
-
-                # Bottom-right: Final distribution (heatmap)
-                ax = axs[1, 1]
-                final_points = self.points_history[final_idx]
-                self._plot_density_heatmap(
-                    ax,
-                    final_points,
-                    colors["final"],
-                    "Final Distribution",
-                    x_domain,
-                    t_domain,
-                )
-
-            else:  # 2D case
-                # Similar structure but with 3D plots for spatial+time dimensions
-                logging.warning(
-                    "2D visualization not fully implemented, showing basic scatter plots"
-                )
-
-                # Simplified version for 2D: Just show scatter plots
-                x_domain = self.pde.domain[0]
-                y_domain = self.pde.domain[1]
-                t_domain = self.pde.config.time_domain
-
-                # Determine indices for snapshots
-                num_snapshots = len(self.points_history)
-                initial_idx = 0
-                mid_idx = num_snapshots // 2
-                final_idx = num_snapshots - 1
-
-                # Top-left: Multiple snapshots
-                ax = axs[0, 0]
-                ax.set_title("Progression of Points (x-y projection)", fontsize=16)
-
-                snapshot_indices = []
-                if num_snapshots >= 5:
-                    step = num_snapshots // 5
-                    snapshot_indices = [i * step for i in range(5)]
-                    if snapshot_indices[-1] != num_snapshots - 1:
-                        snapshot_indices[-1] = num_snapshots - 1
-                else:
-                    snapshot_indices = list(range(num_snapshots))
-
-                for i, idx in enumerate(snapshot_indices):
-                    points = self.points_history[idx]
-                    label = f"Snapshot {idx}"
-                    ax.scatter(
-                        points[:, 0],
-                        points[:, 1],
-                        s=3,
-                        alpha=0.5,
-                        label=label,
-                        marker=".",
-                        edgecolors="none",
-                    )
-
-                ax.legend(fontsize=10)
-                ax.set_xlabel("x", fontsize=14)
-                ax.set_ylabel("y", fontsize=14)
-                ax.set_xlim(x_domain)
-                ax.set_ylim(y_domain)
-                ax.grid(alpha=0.3)
-
-                # Other three plots: show density plots
-                # Top-right: Initial
-                ax = axs[0, 1]
-                initial_points = self.points_history[initial_idx]
-                self._plot_density_heatmap_2d(
-                    ax,
-                    initial_points,
-                    colors["initial"],
-                    "Initial Distribution",
-                    x_domain,
-                    y_domain,
-                )
-
-                # Bottom-left: Mid-training
-                ax = axs[1, 0]
-                mid_points = self.points_history[mid_idx]
-                self._plot_density_heatmap_2d(
-                    ax,
-                    mid_points,
-                    colors["mid"],
-                    f"Intermediate Distribution (Snapshot {mid_idx})",
-                    x_domain,
-                    y_domain,
-                )
-
-                # Bottom-right: Final
-                ax = axs[1, 1]
-                final_points = self.points_history[final_idx]
-                self._plot_density_heatmap_2d(
-                    ax,
-                    final_points,
-                    colors["final"],
-                    "Final Distribution",
-                    x_domain,
-                    y_domain,
-                )
-
-            # Adjust layout and save
-            plt.tight_layout()
-
-            # Save the figure
-            if save_path:
-                plt.savefig(save_path, dpi=300, bbox_inches="tight")
-                plt.close()
-                logging.info(f"Collocation evolution saved to {save_path}")
-            else:
-                plt.show()
-
-        except Exception as e:
-            logging.warning(f"Error visualizing collocation evolution: {e}")
-            import traceback
-
-            traceback.print_exc()
-
-    def _plot_density_heatmap(
-        self, ax, points, colormap, title, x_domain, t_domain, bins=50
-    ):  # pragma: no cover
-        """Helper method to plot density heatmap for 1D PDE collocation points"""
-        # Create 2D histogram
-        counts, xedges, yedges = np.histogram2d(
-            points[:, 0], points[:, 1], bins=bins, range=[x_domain, t_domain]
-        )
-
-        # Display heatmap
-        im = ax.imshow(
-            counts.T,
-            origin="lower",
-            aspect="auto",
-            extent=[x_domain[0], x_domain[1], t_domain[0], t_domain[1]],
-            cmap=colormap,
-        )
-
-        # Add colorbar
-        cbar = plt.colorbar(im, ax=ax)
-        cbar.set_label("Number of Points", fontsize=12)
-
-        # Set labels and title
-        ax.set_title(title, fontsize=16)
-        ax.set_xlabel("x", fontsize=14)
-        ax.set_ylabel("t", fontsize=14)
-
-    def _plot_density_heatmap_2d(
-        self, ax, points, colormap, title, x_domain, y_domain, bins=50
-    ):  # pragma: no cover
-        """Helper method to plot density heatmap for 2D PDE collocation points"""
-        # Create 2D histogram (using x and y coordinates)
-        counts, xedges, yedges = np.histogram2d(
-            points[:, 0], points[:, 1], bins=bins, range=[x_domain, y_domain]
-        )
-
-        # Display heatmap
-        im = ax.imshow(
-            counts.T,
-            origin="lower",
-            aspect="auto",
-            extent=[x_domain[0], x_domain[1], y_domain[0], y_domain[1]],
-            cmap=colormap,
-        )
-
-        # Add colorbar
-        cbar = plt.colorbar(im, ax=ax)
-        cbar.set_label("Number of Points", fontsize=12)
-
-        # Set labels and title
-        ax.set_title(title, fontsize=16)
-        ax.set_xlabel("x", fontsize=14)
-        ax.set_ylabel("y", fontsize=14)
-
-    def generate_fdm_comparison(self, experiment_dir):  # pragma: no cover
-        """
-        Generate comparison plots with finite difference method solutions.
-
-        Args:
-            experiment_dir: Directory to save visualizations
-        """
-        try:
-            # Import required components
-            from pinnrl.numerical_solvers.heat_equation_fdm import HeatEquationFDM
-
-            # Check if the PDE type is supported
-            pde_type = getattr(self.pde, "pde_type", None)
-            if pde_type is None and hasattr(self.pde, "config"):
-                pde_type = getattr(self.pde.config, "type", None)
-
-            if pde_type == "heat":
-                # Create visualization directory
-                viz_dir = os.path.join(experiment_dir, "visualizations")
-                os.makedirs(viz_dir, exist_ok=True)
-
-                # Generate FDM comparison plots
-                metrics = HeatEquationFDM.generate_fdm_comparison_plots(
-                    pde=self.pde,
-                    model=self.model,
-                    device=self.device,
-                    viz_dir=viz_dir,
-                    logger=self.logger,
-                )
-
-                if metrics:
-                    self.logger.info("FDM comparison plots generated successfully")
-                    self.logger.info(f"Error metrics: {metrics}")
-                else:
-                    self.logger.warning("Failed to generate FDM comparison plots")
-            else:
-                self.logger.info(f"FDM comparison not supported for PDE type: {pde_type}")
-
-        except ImportError as e:
-            self.logger.warning(f"Could not import required packages for FDM comparison: {str(e)}")
-        except Exception as e:
-            self.logger.error(f"Error generating FDM comparison: {str(e)}")
+        """Write the post-training figures to ``save_dir``."""
+        plots.save_training_plots(self, save_dir)

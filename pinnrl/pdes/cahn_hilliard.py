@@ -1,8 +1,8 @@
 # Cahn-Hilliard equation
-# Application domains: Phase separation, material science, pattern formation
+# Application domains: Spinodal decomposition, phase separation with mass conservation
 # Complexity: Nonlinear, 4th-order
 
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 import torch
 
@@ -10,212 +10,64 @@ from .pde_base import PDEBase, PDEConfig
 
 
 class CahnHilliardEquation(PDEBase):
-    """
-    Implementation of the Cahn-Hilliard Equation: ∂u/∂t = ∇²(ε²∇²u + u - u³)
-    where ε is the interface width parameter and ∇² is the Laplacian operator.
-    This equation describes phase separation and coarsening in binary mixtures.
+    """Cahn-Hilliard equation ``u_t = M ∇²μ`` with ``μ = u³ - u - kappa ∇²u``.
+
+    Parameters: ``mobility`` M (alias ``M``, default 1) and ``kappa`` (gradient
+    energy; if absent, ``epsilon²`` with ``epsilon`` default 0.1).
+
+    Initial conditions:
+
+    * ``tanh`` — the planar kink ``tanh(Σ_d x_d / √(2 d kappa))``. It makes
+      ``μ ≡ 0``, so it is a stationary solution.
+    * ``random`` (from the base class) — a smooth, reproducible perturbation for
+      spinodal-decomposition runs. No closed form.
+
+    Exact solution: ``tanh`` — the stationary kink above.
     """
 
     def __init__(self, config: PDEConfig, **kwargs):
-        """
-        Initialize the Cahn-Hilliard Equation.
-
-        :param config: PDEConfig instance containing all necessary parameters
-        :param kwargs: Additional keyword arguments
-        """
         super().__init__(config)
 
-    def _validate_parameters(self):
-        """Validate required parameters for Cahn-Hilliard equation."""
-        super()._validate_parameters()
-        # Cahn-Hilliard equation requires epsilon parameter
-        self.get_parameter("epsilon", default=0.1)
+    @property
+    def mobility(self):
+        """Mobility M."""
+        name = "M" if "M" in (self.config.parameters or {}) else "mobility"
+        return self.get_parameter(name, default=1.0)
+
+    @property
+    def kappa(self):
+        """Gradient-energy coefficient (interface width squared)."""
+        if "kappa" in (self.config.parameters or {}):
+            return self.get_parameter("kappa")
+        return self.get_parameter("epsilon", default=0.1) ** 2
 
     @property
     def epsilon(self):
-        """Interface width parameter."""
-        return self.get_parameter("epsilon", default=0.1)
+        """Interface width ``sqrt(kappa)``."""
+        return self.kappa**0.5
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
     ) -> torch.Tensor:
-        """
-        Compute the Cahn-Hilliard equation residual.
-
-        :param model: Neural network model
-        :param x: Spatial coordinates
-        :param t: Time coordinates
-        :return: Residual tensor
-        """
-        # Ensure input tensors require gradients
-        x = x.detach().requires_grad_(True)
-        t = t.detach().requires_grad_(True)
-
-        # Combine inputs
-        xt = torch.cat([x, t], dim=1)
-
-        # Get model prediction
-        u = model(xt)
-
-        # Compute time derivative
-        u_t = torch.autograd.grad(
-            u, t, grad_outputs=torch.ones_like(u), create_graph=True, allow_unused=True
-        )[0]
-        if u_t is None:
-            u_t = torch.zeros_like(u)
-
-        # Compute chemical potential μ = -ε²∇²u + f'(u)
-        # where f'(u) = u³ - u is the derivative of the double-well potential
-        if self.dimension == 1:
-            u_x = torch.autograd.grad(
-                u,
-                x,
-                grad_outputs=torch.ones_like(u),
-                create_graph=True,
-                allow_unused=True,
-            )[0]
-            if u_x is None:
-                u_x = torch.zeros_like(u)
-            u_xx = torch.autograd.grad(
-                u_x,
-                x,
-                grad_outputs=torch.ones_like(u_x),
-                create_graph=True,
-                allow_unused=True,
-            )[0]
-            if u_xx is None:
-                u_xx = torch.zeros_like(u)
-            laplacian = u_xx
-        else:
-            # For higher dimensions, compute Laplacian as sum of second derivatives
-            laplacian = torch.zeros_like(u)
-            for dim in range(self.dimension):
-                u_x = torch.autograd.grad(
-                    u,
-                    x[:, dim : dim + 1],
-                    grad_outputs=torch.ones_like(u),
-                    create_graph=True,
-                    allow_unused=True,
-                )[0]
-                if u_x is not None:
-                    u_xx = torch.autograd.grad(
-                        u_x,
-                        x[:, dim : dim + 1],
-                        grad_outputs=torch.ones_like(u_x),
-                        create_graph=True,
-                        allow_unused=True,
-                    )[0]
-                    if u_xx is not None:
-                        laplacian += u_xx
-
-        # Chemical potential μ = -ε²∇²u + f'(u)
-        # Clamp u to prevent numerical overflow in u³ with untrained networks
+        """``u_t - M ∇²(u³ - u - kappa ∇²u)``."""
+        x, t, u = self._prepare_inputs(model, x, t)
+        # Clamp u inside μ so u³ cannot overflow for an untrained network.
         u_clamped = torch.clamp(u, -10.0, 10.0)
-        mu = -self.epsilon**2 * laplacian + u_clamped**3 - u_clamped
+        mu = u_clamped**3 - u_clamped - self.kappa * self.laplacian(u, x)
+        return self._grad(u, t) - self.mobility * self.laplacian(mu, x)
 
-        # Compute ∇²μ
-        if self.dimension == 1:
-            mu_x = torch.autograd.grad(
-                mu,
-                x,
-                grad_outputs=torch.ones_like(mu),
-                create_graph=True,
-                allow_unused=True,
-            )[0]
-            if mu_x is None:
-                mu_x = torch.zeros_like(mu)
-            mu_xx = torch.autograd.grad(
-                mu_x,
-                x,
-                grad_outputs=torch.ones_like(mu_x),
-                create_graph=True,
-                allow_unused=True,
-            )[0]
-            if mu_xx is None:
-                mu_xx = torch.zeros_like(mu)
-            laplacian_mu = mu_xx
-        else:
-            # For higher dimensions, compute Laplacian as sum of second derivatives
-            laplacian_mu = torch.zeros_like(mu)
-            for dim in range(self.dimension):
-                mu_x = torch.autograd.grad(
-                    mu,
-                    x[:, dim : dim + 1],
-                    grad_outputs=torch.ones_like(mu),
-                    create_graph=True,
-                    allow_unused=True,
-                )[0]
-                if mu_x is not None:
-                    mu_xx = torch.autograd.grad(
-                        mu_x,
-                        x[:, dim : dim + 1],
-                        grad_outputs=torch.ones_like(mu_x),
-                        create_graph=True,
-                        allow_unused=True,
-                    )[0]
-                    if mu_xx is not None:
-                        laplacian_mu += mu_xx
+    def _kink(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.tanh(
+            torch.sum(x, dim=1, keepdim=True) / (2 * self.dimension * self.kappa) ** 0.5
+        )
 
-        # Cahn-Hilliard equation: u_t = ∇²μ
-        return u_t - laplacian_mu
+    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+        ic_type = params.get("type")
+        if ic_type == "tanh":
+            return lambda x, t: self._kink(x)
+        return super()._create_initial_condition(params)
 
-    def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """
-        Compute exact analytical solution (tanh profile).
-
-        :param x: Spatial coordinates
-        :param t: Time coordinates
-        :return: Exact solution tensor
-        """
-        if self.dimension == 1:
-            # 1D Cahn-Hilliard solution (tanh profile)
-            return torch.tanh(x / (2 * self.epsilon))
-        else:
-            # For higher dimensions, use product of tanh profiles
-            solution = torch.ones_like(x[:, 0:1])
-            for dim in range(self.dimension):
-                solution *= torch.tanh(x[:, dim : dim + 1] / (2 * self.epsilon))
-            return solution
-
-    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
-        """
-        Create boundary condition function from parameters.
-
-        :param bc_type: Type of boundary condition
-        :param params: Parameters for the boundary condition
-        :return: Boundary condition function
-        """
-        if bc_type == "initial":
-            ic_type = params.get("type", "tanh")
-            if ic_type == "tanh":
-                if self.dimension == 1:
-                    return lambda x, t: torch.tanh(x / (2 * self.epsilon))
-                else:
-                    return lambda x, t: torch.tanh(
-                        torch.sum(x, dim=1, keepdim=True) / (2 * self.epsilon)
-                    )
-            elif ic_type == "random":
-                amp = params.get("amplitude", 0.1)
-                return lambda x, t: amp * (2 * torch.rand_like(x[:, 0:1]) - 1)
-            else:
-                raise ValueError(f"Unsupported initial condition type: {ic_type}")
-        else:
-            return super()._create_boundary_condition(bc_type, params)
-
-    def validate(self, model, num_points=1000):
-        """
-        Validate the model's solution against exact solution.
-
-        :param model: Neural network model
-        :param num_points: Number of validation points
-        :return: Dictionary of error metrics
-        """
-        x, t = self.generate_collocation_points(num_points)
-        u_pred = model(torch.cat([x, t], dim=1))
-        u_exact = self.exact_solution(x, t)
-        error = torch.abs(u_pred - u_exact)
-        return {
-            "l2_error": torch.mean(error**2).item(),
-            "max_error": torch.max(error).item(),
-            "mean_error": torch.mean(error).item(),
-        }
+    def _exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        if self.config.exact_solution.get("type") == "tanh":
+            return self._kink(x)
+        return super()._exact_solution(x, t)

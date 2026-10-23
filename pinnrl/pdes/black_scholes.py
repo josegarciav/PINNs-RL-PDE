@@ -1,39 +1,45 @@
 # Black-Scholes equation
-# Application domains: Financial derivatives, option pricing
-# Complexity: Nonlinear, 2nd-order
+# Application domains: Option pricing
+# Complexity: Linear, 2nd-order, variable coefficients
 
-from typing import Any, Dict
+import math
+from typing import Any, Callable, Dict
 
 import torch
 
 from .pde_base import PDEBase, PDEConfig
 
 
+def _normal_cdf(z: torch.Tensor) -> torch.Tensor:
+    return 0.5 * (1.0 + torch.erf(z / math.sqrt(2.0)))
+
+
 class BlackScholesEquation(PDEBase):
-    """
-    Implementation of the Black-Scholes Equation: ∂V/∂t + (1/2)σ²S²∂²V/∂S² + rS∂V/∂S - rV = 0
-    where V is the option price, S is the stock price, σ is volatility, and r is the risk-free rate.
+    """Black-Scholes equation in time to maturity ``τ`` (the ``t`` input)::
+
+        V_τ = ½ σ² Σ_d S_d² V_{S_d S_d} + r Σ_d S_d V_{S_d} - r V
+
+    Writing it in ``τ = T - t`` turns the payoff at maturity into the initial
+    condition at ``τ = 0``, which is what the PINN loss imposes.
+
+    Parameters: ``sigma`` (volatility, default 0.2), ``r`` (risk-free rate,
+    default 0.05).
+
+    Initial condition: ``option`` (alias ``call_option``) — the payoff
+    ``max(S - K, 0)`` for ``option_type: call`` or ``max(K - S, 0)`` for ``put``,
+    with ``strike`` K (alias ``strike_price``) on ``Σ_d S_d``.
+
+    Exact solution (1-D): ``black_scholes`` — the closed-form European price
+    ``S Φ(d1) - K e^{-rτ} Φ(d2)`` (call) or ``K e^{-rτ} Φ(-d2) - S Φ(-d1)`` (put)
+    for the configured option.
     """
 
     def __init__(self, config: PDEConfig, **kwargs):
-        """
-        Initialize the Black-Scholes Equation.
-
-        :param config: PDEConfig instance containing all necessary parameters
-        :param kwargs: Additional keyword arguments
-        """
         super().__init__(config)
-
-    def _validate_parameters(self):
-        """Validate required parameters for Black-Scholes equation."""
-        super()._validate_parameters()
-        # Black-Scholes equation requires volatility and risk-free rate
-        self.get_parameter("sigma", default=0.2)
-        self.get_parameter("r", default=0.05)
 
     @property
     def sigma(self):
-        """Volatility coefficient."""
+        """Volatility."""
         return self.get_parameter("sigma", default=0.2)
 
     @property
@@ -41,128 +47,55 @@ class BlackScholesEquation(PDEBase):
         """Risk-free interest rate."""
         return self.get_parameter("r", default=0.05)
 
+    def _option(self):
+        ic = self.config.initial_condition
+        strike = float(ic.get("strike", ic.get("strike_price", 100.0)))
+        return strike, ic.get("option_type", "call")
+
     def compute_residual(
-        self,
-        model: torch.nn.Module,
-        x: torch.Tensor,
-        t: torch.Tensor,
+        self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
     ) -> torch.Tensor:
-        """
-        Compute the Black-Scholes equation residual.
-
-        :param model: Neural network model
-        :param x: Spatial coordinates (stock prices)
-        :param t: Time coordinates (time to maturity)
-        :return: Residual tensor
-        """
-        # Ensure tensors require gradients
-        x = x.detach().requires_grad_(True)
-        t = t.detach().requires_grad_(True)
-
-        # Ensure model parameters require gradients
-        for param in model.parameters():
-            param.requires_grad_(True)
-
-        # Set model to training mode
-        model.train()
-
-        # Get derivatives
-        derivatives = self.compute_derivatives(
-            model, x, t, spatial_derivatives=[1, 2], temporal_derivatives=[1]
+        """``V_τ - ½σ² Σ S² V_SS - r Σ S V_S + r V``."""
+        d = self.compute_derivatives(
+            model, x, t, temporal_derivatives=[1], spatial_derivatives=[1, 2]
+        )
+        if self.dimension == 1:
+            v_s, v_ss = d["dx"], d["dx2"]
+        else:
+            v_s = torch.cat([d[f"dx{i + 1}"] for i in range(self.dimension)], dim=1)
+            v_ss = torch.cat([d["d" + f"x{i + 1}" * 2] for i in range(self.dimension)], dim=1)
+        return (
+            d["dt"]
+            - 0.5 * self.sigma**2 * torch.sum(x**2 * v_ss, dim=1, keepdim=True)
+            - self.r * torch.sum(x * v_s, dim=1, keepdim=True)
+            + self.r * d["u"]
         )
 
-        # Get the derivatives we need
-        V_t = derivatives["dt"]
-        V_S = derivatives["dx"] if self.dimension == 1 else derivatives["dx1"]
-        V_SS = derivatives["dx2"] if self.dimension == 1 else derivatives["dx1x1"]
-
-        # Black-Scholes equation: V_t + (1/2)σ²S²V_SS + rSV_S - rV = 0
-        V = model(torch.cat([x, t], dim=1))
-
-        if self.dimension == 1:
-            residual = V_t + 0.5 * self.sigma**2 * x**2 * V_SS + self.r * x * V_S - self.r * V
-        else:
-            # For higher dimensions, sum over all dimensions
-            residual = (
-                V_t
-                + 0.5 * self.sigma**2 * torch.sum(x**2 * V_SS, dim=1, keepdim=True)
-                + self.r * torch.sum(x * V_S, dim=1, keepdim=True)
-                - self.r * V
+    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+        if params.get("type") in ("option", "call_option"):
+            strike, option_type = self._option()
+            sign = 1.0 if option_type == "call" else -1.0
+            return lambda x, t: torch.clamp(
+                sign * (torch.sum(x, dim=1, keepdim=True) - strike), min=0.0
             )
+        return super()._create_initial_condition(params)
 
-        return residual
-
-    def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """
-        Compute exact analytical solution (European call option).
-
-        :param x: Spatial coordinates (stock prices)
-        :param t: Time coordinates
-        :return: Exact solution tensor
-        """
-        if not self.config.exact_solution:
-            return None
-
-        K = self.config.exact_solution.get("strike_price", 1.0)  # Strike price
-
-        if self.dimension == 1:
-            # 1D Black-Scholes solution (European call option)
-            d1 = (torch.log(x / K) + (self.r + 0.5 * self.sigma**2) * t) / (
-                self.sigma * torch.sqrt(t)
-            )
-            d2 = d1 - self.sigma * torch.sqrt(t)
-            return x * torch.erf(d1) - K * torch.exp(-self.r * t) * torch.erf(d2)
+    def _exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        if self.config.exact_solution.get("type") != "black_scholes" or self.dimension != 1:
+            return super()._exact_solution(x, t)
+        strike, option_type = self._option()
+        tau = torch.clamp(t, min=1e-12)
+        vol = self.sigma * torch.sqrt(tau)
+        d1 = (
+            torch.log(torch.clamp(x, min=1e-12) / strike) + (self.r + 0.5 * self.sigma**2) * tau
+        ) / vol
+        d2 = d1 - vol
+        discount = strike * torch.exp(-self.r * tau)
+        if option_type == "call":
+            price = x * _normal_cdf(d1) - discount * _normal_cdf(d2)
+            payoff = torch.clamp(x - strike, min=0.0)
         else:
-            # For higher dimensions, use product of 1D solutions
-            solution = torch.ones_like(x[:, 0:1])
-            for dim in range(self.dimension):
-                d1 = (torch.log(x[:, dim : dim + 1] / K) + (self.r + 0.5 * self.sigma**2) * t) / (
-                    self.sigma * torch.sqrt(t)
-                )
-                d2 = d1 - self.sigma * torch.sqrt(t)
-                solution *= x[:, dim : dim + 1] * torch.erf(d1) - K * torch.exp(
-                    -self.r * t
-                ) * torch.erf(d2)
-            return solution
-
-    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
-        """
-        Create boundary condition function from parameters.
-
-        :param bc_type: Type of boundary condition
-        :param params: Parameters for the boundary condition
-        :return: Boundary condition function
-        """
-        if bc_type == "initial":
-            ic_type = params.get("type", "call_option")
-            if ic_type in ("call_option", "option"):
-                K = params.get("strike_price", params.get("strike", 1.0))
-                if self.dimension == 1:
-                    return lambda x, t: torch.maximum(x - K, torch.zeros_like(x))
-                else:
-                    return lambda x, t: torch.maximum(
-                        torch.sum(x, dim=1, keepdim=True) - K,
-                        torch.zeros_like(x[:, 0:1]),
-                    )
-            else:
-                raise ValueError(f"Unsupported initial condition type: {ic_type}")
-        else:
-            return super()._create_boundary_condition(bc_type, params)
-
-    def validate(self, model, num_points=1000):
-        """
-        Validate the model's solution against exact solution.
-
-        :param model: Neural network model
-        :param num_points: Number of validation points
-        :return: Dictionary of error metrics
-        """
-        x, t = self.generate_collocation_points(num_points)
-        u_pred = model(torch.cat([x, t], dim=1))
-        u_exact = self.exact_solution(x, t)
-        error = torch.abs(u_pred - u_exact)
-        return {
-            "l2_error": torch.mean(error**2).item(),
-            "max_error": torch.max(error).item(),
-            "mean_error": torch.mean(error).item(),
-        }
+            price = discount * _normal_cdf(-d2) - x * _normal_cdf(-d1)
+            payoff = torch.clamp(strike - x, min=0.0)
+        # Prices are non-negative; the clamp only removes float32 cancellation (~1e-6).
+        return torch.where(t > 0, torch.clamp(price, min=0.0), payoff)

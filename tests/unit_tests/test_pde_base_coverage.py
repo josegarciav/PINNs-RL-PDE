@@ -1,8 +1,5 @@
 """Tests for uncovered paths in src/pdes/pde_base.py."""
 
-import os
-import tempfile
-
 import pytest
 import torch
 
@@ -47,7 +44,7 @@ def _make_heat_pde(**overrides):
         domain=[[0.0, 1.0]],
         time_domain=[0.0, 1.0],
         parameters={"alpha": 0.01},
-        boundary_conditions={"type": {"value": 0.0}},
+        boundary_conditions={"dirichlet": {"value": 0.0}},
         initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 1.0},
         exact_solution={"type": "sin_exp_decay", "amplitude": 1.0, "frequency": 1.0},
         dimension=1,
@@ -112,7 +109,7 @@ def test_init_string_device():
         domain=[[0.0, 1.0]],
         time_domain=[0.0, 1.0],
         parameters={"alpha": 0.01},
-        boundary_conditions={"type": {"value": 0.0}},
+        boundary_conditions={"dirichlet": {"value": 0.0}},
         initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 1.0},
         exact_solution={},
         dimension=1,
@@ -167,157 +164,52 @@ def test_get_parameter_no_parameters():
         pde.get_parameter("alpha", required=True)
 
 
-# ── Boundary condition creation ──────────────────────────────────────────
+# ── Initial-condition factory (boundary semantics: test_physics_consistency) ──
 
 
-def test_create_dirichlet_bc():
-    """Dirichlet BC returns constant value (via PDEBase method)."""
-    pde = _make_heat_pde()
-    # Use PDEBase's version directly since HeatEquation overrides it
-    bc = PDEBase._create_boundary_condition(pde, "dirichlet", {"value": 5.0})
-    x = torch.randn(10, 1)
-    t = torch.randn(10, 1)
-    assert torch.allclose(bc(x, t), torch.full((10, 1), 5.0))
-
-
-def test_create_neumann_bc():
-    """Neumann BC returns constant value."""
-    pde = _make_heat_pde()
-    bc = PDEBase._create_boundary_condition(pde, "neumann", {"value": 3.0})
-    x = torch.randn(10, 1)
-    t = torch.randn(10, 1)
-    assert torch.allclose(bc(x, t), torch.full((10, 1), 3.0))
-
-
-def test_create_periodic_bc_1d():
-    """Periodic BC returns sin(2*pi*x) for 1D."""
-    pde = _make_heat_pde()
-    bc = PDEBase._create_boundary_condition(pde, "periodic", {})
-    x = torch.tensor([[0.25]])
-    t = torch.tensor([[0.0]])
-    expected = torch.sin(2 * torch.pi * x[:, 0:1])
-    assert torch.allclose(bc(x, t), expected)
-
-
-def test_create_left_right_bc():
-    """left/right bc_type maps to dirichlet."""
-    pde = _make_heat_pde()
-    bc_left = PDEBase._create_boundary_condition(pde, "left", {"value": 1.0})
-    bc_right = PDEBase._create_boundary_condition(pde, "right", {"value": 2.0})
-    x = torch.randn(5, 1)
-    t = torch.randn(5, 1)
-    assert torch.allclose(bc_left(x, t), torch.full((5, 1), 1.0))
-    assert torch.allclose(bc_right(x, t), torch.full((5, 1), 2.0))
+def _ic(pde, **params):
+    return PDEBase._create_initial_condition(pde, params)
 
 
 def test_initial_condition_sine():
-    """Sine initial condition."""
-    pde = _make_heat_pde()
-    bc = PDEBase._create_boundary_condition(
-        pde, "initial", {"type": "sine", "amplitude": 2.0, "frequency": 1.0}
-    )
-    x = torch.tensor([[0.5]])
-    t = torch.tensor([[0.0]])
-    expected = 2.0 * torch.sin(1.0 * torch.pi * x[:, 0:1])
-    assert torch.allclose(bc(x, t), expected)
+    x, t = torch.tensor([[0.5]]), torch.tensor([[0.0]])
+    u0 = _ic(_make_heat_pde(), type="sine", amplitude=2.0, frequency=1.0)
+    assert torch.allclose(u0(x, t), 2.0 * torch.sin(torch.pi * x))
 
 
 def test_initial_condition_tanh():
-    """Tanh initial condition."""
-    pde = _make_heat_pde()
-    bc = PDEBase._create_boundary_condition(pde, "initial", {"type": "tanh", "epsilon": 0.1})
-    x = torch.tensor([[0.5]])
-    t = torch.tensor([[0.0]])
-    expected = torch.tanh(x[:, 0:1] / 0.1)
-    assert torch.allclose(bc(x, t), expected)
+    x, t = torch.tensor([[0.5]]), torch.tensor([[0.0]])
+    assert torch.allclose(
+        _ic(_make_heat_pde(), type="tanh", epsilon=0.1)(x, t), torch.tanh(x / 0.1)
+    )
 
 
 def test_initial_condition_gaussian():
-    """Gaussian initial condition."""
-    pde = _make_heat_pde()
-    bc = PDEBase._create_boundary_condition(
-        pde, "initial", {"type": "gaussian", "mean": 0.0, "std": 0.1}
-    )
-    x = torch.tensor([[0.0]])
-    t = torch.tensor([[0.0]])
-    result = bc(x, t)
-    assert result.shape == (1, 1)
-    assert result.item() == pytest.approx(1.0, abs=0.01)  # exp(0) = 1
+    u0 = _ic(_make_heat_pde(), type="gaussian", mean=0.0, std=0.1)
+    assert u0(torch.zeros(1, 1), torch.zeros(1, 1)).item() == pytest.approx(1.0)
 
 
 def test_initial_condition_fixed():
-    """Fixed initial condition."""
+    u0 = _ic(_make_heat_pde(), type="fixed", value=7.0)
+    assert torch.allclose(u0(torch.randn(5, 1), torch.zeros(5, 1)), torch.full((5, 1), 7.0))
+
+
+def test_initial_condition_random_is_bounded_and_reproducible():
     pde = _make_heat_pde()
-    bc = PDEBase._create_boundary_condition(pde, "initial", {"type": "fixed", "value": 7.0})
-    x = torch.randn(5, 1)
-    t = torch.zeros(5, 1)
-    assert torch.allclose(bc(x, t), torch.full((5, 1), 7.0))
+    x = torch.rand(100, 1)
+    a = _ic(pde, type="random", amplitude=0.5, seed=1)(x, None)
+    b = _ic(pde, type="random", amplitude=0.5, seed=1)(x, None)
+    assert a.shape == (100, 1) and torch.equal(a, b)
+    assert a.abs().max() <= 0.5 + 1e-6
 
 
-def test_initial_condition_random():
-    """Random initial condition has correct shape and bounded amplitude."""
-    pde = _make_heat_pde()
-    bc = PDEBase._create_boundary_condition(pde, "initial", {"type": "random", "amplitude": 0.5})
-    x = torch.randn(100, 1)
-    t = torch.zeros(100, 1)
-    result = bc(x, t)
-    assert result.shape == (100, 1)
-    assert result.abs().max() <= 0.5 + 1e-6
+def test_initial_condition_empty_means_none():
+    assert PDEBase._create_initial_condition(_make_heat_pde(), {}) is None
 
 
-def test_initial_condition_small_angle():
-    """Small angle initial condition for pendulum."""
-    pde = _make_heat_pde()
-    bc = PDEBase._create_boundary_condition(
-        pde, "initial", {"type": "small_angle", "initial_angle": 0.3}
-    )
-    x = torch.randn(5, 1)
-    t = torch.zeros(5, 1)
-    assert torch.allclose(bc(x, t), torch.full((5, 1), 0.3))
-
-
-def test_initial_condition_option_call():
-    """Black-Scholes call option initial condition."""
-    pde = _make_heat_pde()
-    bc = PDEBase._create_boundary_condition(
-        pde, "initial", {"type": "option", "strike": 100.0, "option_type": "call"}
-    )
-    x = torch.tensor([[120.0], [80.0]])
-    t = torch.zeros(2, 1)
-    result = bc(x, t)
-    assert result[0].item() == pytest.approx(20.0)
-    assert result[1].item() == pytest.approx(0.0)
-
-
-def test_initial_condition_option_put():
-    """Black-Scholes put option initial condition."""
-    pde = _make_heat_pde()
-    bc = PDEBase._create_boundary_condition(
-        pde, "initial", {"type": "option", "strike": 100.0, "option_type": "put"}
-    )
-    x = torch.tensor([[120.0], [80.0]])
-    t = torch.zeros(2, 1)
-    result = bc(x, t)
-    assert result[0].item() == pytest.approx(0.0)
-    assert result[1].item() == pytest.approx(20.0)
-
-
-def test_initial_condition_unknown_type():
-    """Unknown IC type defaults to zero."""
-    pde = _make_heat_pde()
-    bc = PDEBase._create_boundary_condition(pde, "initial", {"type": "totally_unknown"})
-    x = torch.randn(5, 1)
-    t = torch.zeros(5, 1)
-    assert torch.allclose(bc(x, t), torch.zeros(5, 1))
-
-
-def test_unsupported_bc_type():
-    """Unknown BC type defaults to zero."""
-    pde = _make_heat_pde()
-    bc = PDEBase._create_boundary_condition(pde, "fancy_bc", {})
-    x = torch.randn(5, 1)
-    t = torch.zeros(5, 1)
-    assert torch.allclose(bc(x, t), torch.zeros(5, 1))
+def test_initial_condition_unknown_type_raises():
+    with pytest.raises(ValueError, match="unsupported initial condition"):
+        _ic(_make_heat_pde(), type="totally_unknown")
 
 
 # ── Sampling strategies ──────────────────────────────────────────────────
@@ -519,108 +411,47 @@ def test_validate():
 # ── save/load state ──────────────────────────────────────────────────────
 
 
-def test_save_load_state():
-    """save_state and load_state round-trip works."""
-    pde = _make_heat_pde()
-    with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as f:
-        path = f.name
-    try:
-        pde.save_state(path)
-        pde2 = _make_heat_pde()
-        # Use safe_globals context to allow PDEConfig unpickling
-        with torch.serialization.safe_globals(
-            [
-                PDEConfig,
-                TrainingConfig,
-                EarlyStoppingConfig,
-                LearningRateSchedulerConfig,
-                AdaptiveWeightsConfig,
-            ]
-        ):
-            pde2.load_state(path)
-        assert pde2.config.name == "heat"
-    finally:
-        os.unlink(path)
-
-
-# ── PDEBase.create factory ───────────────────────────────────────────────
-
-
-def test_create_unknown_pde():
-    """PDEBase.create with unknown type raises ValueError."""
-    with pytest.raises(ValueError, match="Could not find PDE"):
-        PDEBase.create("totally_nonexistent_pde")
-
-
-def test_create_exercises_factory_code():
-    """PDEBase.create exercises the factory logic even when module not found.
-
-    The create() factory has a module path issue (strips 'equation' from
-    module names), so we test that it exercises all the alternative class
-    name generation and handles ImportError gracefully.
-    """
-    # This exercises lines 58-122: class name generation, alternative names,
-    # import attempts, and the final ValueError
-    with pytest.raises(ValueError):
-        PDEBase.create("heat")
-
-    # Also exercise the underscore branch (heat_equation → HeatEquation)
-    with pytest.raises(ValueError):
-        PDEBase.create("heat_equation")
-
-
-# ── _validate_parameters (base does nothing) ────────────────────────────
-
-
-def test_validate_parameters_base():
-    """Base _validate_parameters is a no-op."""
-    pde = _make_heat_pde()
-    pde._validate_parameters()  # Should not raise
-
-
 # ── 2D sampling ──────────────────────────────────────────────────────────
 
 
-# ── create_pde factory ───────────────────────────────────────────────
+# ── PDE registry ─────────────────────────────────────────────────────
 
 
-def test_create_pde_factory():
-    """pdes/__init__.py create_pde covers the if/elif chain."""
-    from pinnrl.pdes import create_pde
+@pytest.mark.parametrize(
+    "pde_type, ic",
+    [
+        ("heat", {"type": "sine", "amplitude": 1.0, "frequency": 1.0}),
+        ("wave", {"type": "sine", "amplitude": 1.0, "frequency": 1.0}),
+        ("burgers", {"type": "sine", "amplitude": 1.0, "frequency": 1.0}),
+        ("kdv", {"type": "soliton", "amplitude": 2.0, "speed": 1.0}),
+        ("convection", {"type": "sine", "amplitude": 1.0, "frequency": 1.0}),
+        ("allen_cahn", {"type": "tanh", "epsilon": 0.1}),
+        ("black_scholes", {"type": "option", "strike": 100.0, "option_type": "call"}),
+        ("pendulum", {"type": "small_angle", "initial_angle": 0.5}),
+    ],
+)
+def test_create_pde_by_key(pde_type, ic):
+    from pinnrl.pdes import create_pde, get_pde_spec
 
-    tc = _training_config()
-    # Each PDE type with its compatible IC
-    pde_configs = {
-        "heat": {"type": "sine", "amplitude": 1.0, "frequency": 1.0},
-        "wave": {"type": "sine", "amplitude": 1.0, "frequency": 1.0},
-        "burgers": {"type": "sine", "amplitude": 1.0, "frequency": 1.0},
-        "kdv": {"type": "soliton", "amplitude": 2.0, "speed": 1.0},
-        "convection": {"type": "sine", "amplitude": 1.0, "frequency": 1.0},
-        "allen_cahn": {"type": "tanh", "epsilon": 0.1},
-        "black_scholes": {"type": "option", "strike": 100.0, "option_type": "call"},
-        "pendulum": {"type": "small_angle", "initial_angle": 0.5},
-    }
-    for pde_type, ic in pde_configs.items():
-        cfg = PDEConfig(
-            name=pde_type,
-            domain=[[0.0, 1.0]],
-            time_domain=[0.0, 1.0],
-            parameters={},
-            boundary_conditions={},
-            initial_condition=ic,
-            exact_solution={},
-            dimension=1,
-            device=DEVICE,
-            training=tc,
-        )
-        cfg.type = pde_type
-        pde = create_pde(cfg)
-        assert pde is not None
+    cfg = PDEConfig(
+        name=pde_type,
+        domain=[[0.0, 1.0]],
+        time_domain=[0.0, 1.0],
+        parameters={},
+        boundary_conditions={},
+        initial_condition=ic,
+        exact_solution={},
+        dimension=1,
+        device=DEVICE,
+        training=_training_config(),
+    )
+    pde = create_pde(pde_type, cfg)
+    assert isinstance(pde, get_pde_spec(pde_type).cls)
 
 
 def test_create_pde_cahn_hilliard():
     """create_pde for cahn_hilliard (2D PDE)."""
-    from pinnrl.pdes import create_pde
+    from pinnrl.pdes import CahnHilliardEquation, create_pde
 
     cfg = PDEConfig(
         name="cahn_hilliard",
@@ -634,30 +465,37 @@ def test_create_pde_cahn_hilliard():
         device=DEVICE,
         training=_training_config(),
     )
-    cfg.type = "cahn_hilliard"
-    pde = create_pde(cfg)
-    assert pde is not None
+    assert isinstance(create_pde("cahn_hilliard", cfg), CahnHilliardEquation)
 
 
-def test_create_pde_unknown():
-    """create_pde raises for unknown PDE type."""
-    from pinnrl.pdes import create_pde
+def test_pde_spec_accepts_key_and_display_name():
+    from pinnrl.pdes import HeatEquation, get_pde_spec
 
-    cfg = PDEConfig(
-        name="unknown",
-        domain=[[0.0, 1.0]],
-        time_domain=[0.0, 1.0],
-        parameters={},
-        boundary_conditions={},
-        initial_condition={},
-        exact_solution={},
-        dimension=1,
-        device=DEVICE,
-        training=_training_config(),
-    )
-    cfg.type = "nonexistent"
-    with pytest.raises(ValueError, match="PDE type not supported"):
-        create_pde(cfg)
+    assert get_pde_spec("heat") is get_pde_spec("Heat Equation")
+    assert get_pde_spec("heat equation").cls is HeatEquation
+    assert get_pde_spec("Heat Equation 2D").key == "heat_2d"
+
+
+def test_pde_spec_unknown_raises():
+    from pinnrl.pdes import get_pde_spec
+
+    with pytest.raises(KeyError, match="Unknown PDE 'nonexistent'"):
+        get_pde_spec("nonexistent")
+
+
+def test_registry_covers_config_yaml():
+    """Every pde_configs entry in config.yaml resolves, by key and by its name field."""
+    import yaml
+
+    from pinnrl.config import DEFAULT_CONFIG_PATH
+    from pinnrl.pdes import get_pde_spec
+
+    with open(DEFAULT_CONFIG_PATH) as f:
+        pde_configs = yaml.safe_load(f)["pde_configs"]
+    for key, cfg in pde_configs.items():
+        assert get_pde_spec(key).key == key
+        if "name" in cfg:
+            assert get_pde_spec(cfg["name"]).key == key
 
 
 # ── 2D sampling ──────────────────────────────────────────────────────
@@ -705,3 +543,55 @@ def test_sample_stratified_2d():
     x, t = pde._sample_stratified(100)
     assert x.shape == (100, 2)
     assert t.shape == (100, 1)
+
+
+# ── Multi-dimensional derivatives ────────────────────────────────────────
+
+
+class _Quadratic2D(torch.nn.Module):
+    """u = x1² + x2², so ∇²u = 4 and u_t = 0."""
+
+    def forward(self, inp):
+        return inp[:, 0:1] ** 2 + inp[:, 1:2] ** 2
+
+
+@pytest.mark.parametrize(
+    "pde_cls, params, ic, expected",
+    [
+        ("WaveEquation", {"c": 1.0}, {"type": "sine", "amplitude": 1.0, "frequency": 1.0}, -4.0),
+        (
+            "HeatEquation",
+            {"alpha": 0.1},
+            {"type": "sine", "amplitude": 1.0, "frequency": 1.0},
+            -0.4,
+        ),
+    ],
+)
+def test_2d_residual_includes_laplacian(pde_cls, params, ic, expected):
+    """Regression: n-D derivatives used to be taken w.r.t. a column slice and vanish."""
+    import pinnrl.pdes as pdes
+
+    pde = getattr(pdes, pde_cls)(
+        PDEConfig(
+            name="p",
+            domain=[[0.0, 1.0], [0.0, 1.0]],
+            time_domain=[0.0, 1.0],
+            parameters=params,
+            boundary_conditions={},
+            initial_condition=ic,
+            exact_solution={},
+            dimension=2,
+            device=DEVICE,
+        )
+    )
+    x, t = torch.rand(6, 2), torch.rand(6, 1)
+    residual = pde.compute_residual(_Quadratic2D(), x, t)
+    assert torch.allclose(residual, torch.full_like(residual, expected), atol=1e-5)
+
+
+def test_laplacian_of_derived_field():
+    """laplacian() differentiates any field built from the input leaf."""
+    pde = _make_heat_pde()
+    x = torch.rand(5, 1, requires_grad=True)
+    f = torch.sin(3 * x)
+    assert torch.allclose(pde.laplacian(f, x), -9 * torch.sin(3 * x), atol=1e-5)

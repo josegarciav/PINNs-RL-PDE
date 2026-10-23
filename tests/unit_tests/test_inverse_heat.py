@@ -55,7 +55,7 @@ def _build_inverse_setup(num_epochs=20):
         domain=[[0.0, 1.0]],
         time_domain=[0.0, 1.0],
         parameters={"alpha": TRUE_ALPHA},
-        boundary_conditions={"type": {"value": 0.0}},
+        boundary_conditions={"dirichlet": {"value": 0.0}},
         initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 1.0},
         exact_solution={"type": "sin_exp_decay", "amplitude": 1.0, "frequency": 1.0},
         dimension=1,
@@ -79,13 +79,12 @@ def _build_inverse_setup(num_epochs=20):
     )
     config.training = training_cfg
     model = PINNModel(config=config, device=DEVICE)
+    config.training.validation_frequency = 5
     trainer = PDETrainer(
         model=model,
         pde=pde,
-        optimizer_config={"learning_rate": 5e-3, "weight_decay": 0.0},
         config=config,
         device=DEVICE,
-        validation_frequency=5,
     )
     return trainer, pde
 

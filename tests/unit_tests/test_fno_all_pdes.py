@@ -141,7 +141,3 @@ class TestFNOAllPDEs(unittest.TestCase):
 
     def test_pendulum(self):
         self._test_pde("pendulum")
-
-
-if __name__ == "__main__":
-    unittest.main()

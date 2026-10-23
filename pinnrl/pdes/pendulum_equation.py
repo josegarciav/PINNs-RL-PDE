@@ -1,8 +1,9 @@
 # Pendulum equation
-# Application domains: Mechanical systems, classical mechanics, robotics
-# Complexity: Nonlinear, 2nd-order
+# Application domains: Classical mechanics, nonlinear oscillators
+# Complexity: Nonlinear ODE, 2nd-order in time
 
-from typing import Any, Dict, Tuple
+from functools import lru_cache
+from typing import Any, Callable, Dict, Tuple
 
 import numpy as np
 import torch
@@ -10,33 +11,42 @@ import torch
 from .pde_base import PDEBase, PDEConfig
 
 
+@lru_cache(maxsize=16)
+def _pendulum_trajectory(theta0, omega0, damping, g_over_l, t_max):
+    """Dense ``θ(t)`` of ``θ'' + b θ' + (g/L) sin θ = 0`` (tight-tolerance RK45)."""
+    from scipy.integrate import solve_ivp
+
+    def rhs(_t, y):
+        return [y[1], -damping * y[1] - g_over_l * np.sin(y[0])]
+
+    return solve_ivp(
+        rhs, (0.0, t_max), [theta0, omega0], rtol=1e-11, atol=1e-12, dense_output=True
+    ).sol
+
+
 class PendulumEquation(PDEBase):
-    """Pendulum Equation implementation.
+    """Damped nonlinear pendulum ``θ'' + b θ' + (g/L) sin θ = 0``.
 
-    The pendulum equation describes the motion of a simple pendulum:
-    d²θ/dt² + (g/L)sin(θ) = 0
+    The angle ``θ(t)`` is the network output; the spatial input is a dummy
+    coordinate the solution does not depend on.
 
-    where:
-    - θ is the angular displacement
-    - g is the gravitational acceleration
-    - L is the length of the pendulum
+    Parameters: ``g`` (default 9.81), ``L`` (default 1), ``damping`` b (default 0).
+
+    Second order in time: the initial loss enforces ``θ(0) = initial_angle`` and
+    ``θ'(0) = velocity`` (default 0).
+
+    Initial condition: ``small_angle`` (alias ``fixed``) with ``initial_angle``.
+
+    Exact solution: ``ode`` — the full nonlinear damped trajectory from the
+    configured initial angle and velocity, integrated with ``scipy`` to 1e-11
+    relative tolerance (there is no elementary closed form; the small-angle
+    formula ``θ0 cos(ωt)`` is only an approximation).
     """
 
+    time_order = 2
+
     def __init__(self, config: PDEConfig, **kwargs):
-        """Initialize the Pendulum Equation.
-
-        Args:
-            config: PDEConfig instance containing all necessary parameters
-            kwargs: Additional keyword arguments
-        """
         super().__init__(config)
-
-    def _validate_parameters(self):
-        """Validate required parameters for pendulum equation."""
-        super()._validate_parameters()
-        # Pendulum equation requires gravity and length parameters
-        self.get_parameter("g", default=9.81)
-        self.get_parameter("L", default=1.0)
 
     @property
     def g(self):
@@ -48,242 +58,48 @@ class PendulumEquation(PDEBase):
         """Pendulum length."""
         return self.get_parameter("L", default=1.0)
 
+    @property
+    def damping(self):
+        """Linear damping coefficient b."""
+        return self.get_parameter("damping", default=0.0)
+
     def compute_residual(
-        self,
-        model: torch.nn.Module,
-        x: torch.Tensor,
-        t: torch.Tensor,
+        self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
     ) -> torch.Tensor:
-        """Compute the residual of the pendulum equation.
+        """``θ'' + b θ' + (g/L) sin θ``."""
+        d = self.compute_derivatives(model, x, t, temporal_derivatives=[1, 2])
+        return d["dt2"] + self.damping * d["dt"] + (self.g / self.L) * torch.sin(d["u"])
 
-        Args:
-            model: Neural network model
-            x: Spatial coordinates
-            t: Time coordinates
+    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+        if params.get("type") in ("small_angle", "fixed"):
+            theta0 = float(params.get("initial_angle", params.get("value", 0.5)))
+            return lambda x, t: torch.full_like(x[:, 0:1], theta0)
+        return super()._create_initial_condition(params)
 
-        Returns:
-            Residual values
-        """
-        # Ensure tensors require gradients
-        x = x.detach().requires_grad_(True)
-        t = t.detach().requires_grad_(True)
-
-        # Ensure model parameters require gradients
-        for param in model.parameters():
-            param.requires_grad_(True)
-
-        # Set model to training mode
-        model.train()
-
-        # Get derivatives
-        derivatives = self.compute_derivatives(
-            model,
-            x,
-            t,
-            temporal_derivatives=[1, 2],  # Need first and second time derivatives
-            spatial_derivatives=set(),  # No spatial derivatives needed for pendulum equation
+    def _exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        if self.config.exact_solution.get("type") != "ode":
+            return super()._exact_solution(x, t)
+        ic = self.config.initial_condition
+        trajectory = _pendulum_trajectory(
+            float(ic.get("initial_angle", ic.get("value", 0.5))),
+            float(ic.get("velocity", 0.0)),
+            float(self.damping),
+            float(self.g) / float(self.L),
+            float(self.time_domain[1]),
         )
-
-        # Get solution and derivatives
-        u = model(torch.cat([x, t], dim=1))
-        derivatives["dt"]
-        u_tt = derivatives["dt2"]
-
-        # Compute residual: d²θ/dt² + (g/L)sin(θ)
-        residual = u_tt + (self.g / self.L) * torch.sin(u)
-        return residual
-
-    def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """Compute exact analytical solution if available.
-
-        Args:
-            x: Spatial coordinates
-            t: Time coordinates
-
-        Returns:
-            Exact solution values
-        """
-        if not self.config.exact_solution:
-            return None
-
-        solution_type = self.config.exact_solution.get("type", "small_angle")
-
-        if solution_type == "small_angle":
-            # Small angle approximation: θ(t) = θ₀cos(ωt)
-            theta_0 = self.config.exact_solution.get("initial_angle", 0.1)
-            omega = torch.sqrt(self.g / self.L)
-            return theta_0 * torch.cos(omega * t)
-
-        elif solution_type == "sine":
-            amplitude = self.config.exact_solution.get("amplitude", 1.0)
-            frequency = self.config.exact_solution.get("frequency", 1.0)
-            return amplitude * torch.sin(frequency * (x + t))
-
-        else:
-            raise ValueError(f"Unknown exact solution type: {solution_type}")
-
-    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
-        """Create boundary condition function from parameters.
-
-        Args:
-            bc_type: Type of boundary condition
-            params: Parameters for the boundary condition
-
-        Returns:
-            Boundary condition function
-        """
-        if bc_type == "initial":
-            ic_type = params.get("type", "small_angle")
-
-            if ic_type == "small_angle":
-                theta_0 = params.get("initial_angle", 0.1)
-                return lambda x, t: torch.full_like(x, theta_0)
-
-            elif ic_type == "sine":
-                amplitude = params.get("amplitude", 1.0)
-                frequency = params.get("frequency", 1.0)
-                return lambda x, t: amplitude * torch.sin(frequency * x)
-
-            elif ic_type == "gaussian":
-                amplitude = params.get("amplitude", 1.0)
-                center = params.get("center", 0.0)
-                sigma = params.get("sigma", 0.1)
-                return lambda x, t: amplitude * torch.exp(-((x - center) ** 2) / (2 * sigma**2))
-
-            else:
-                raise ValueError(f"Unknown initial condition type: {ic_type}")
-        else:
-            return super()._create_boundary_condition(bc_type, params)
+        theta = trajectory(t.detach().cpu().numpy().ravel())[0]
+        return torch.as_tensor(theta, dtype=t.dtype, device=t.device).reshape(-1, 1)
 
     def compute_energy(
-        self,
-        model: torch.nn.Module,
-        x: torch.Tensor,
-        t: torch.Tensor,
+        self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
     ) -> torch.Tensor:
-        """Compute the total energy of the system.
-
-        Args:
-            model: Neural network model
-            x: Spatial coordinates
-            t: Time coordinates
-
-        Returns:
-            Total energy values
-        """
-        # Get solution and its time derivative
-        derivatives = self.compute_derivatives(
-            model, x, t, temporal_derivatives=[1], spatial_derivatives=set()
-        )
-
-        # Get the solution
-        u = model(torch.cat([x, t], dim=1))
-
-        # Kinetic energy: (1/2) * m * L^2 * (du/dt)^2
-        kinetic = 0.5 * self.L * self.L * derivatives["dt"].pow(2)
-
-        # Potential energy: m * g * L * (1 - cos(u))
-        potential = self.g * self.L * (1 - torch.cos(u))
-
-        # Total energy is the sum of kinetic and potential
-        return kinetic + potential
+        """Mechanical energy per unit mass, ``½ L² θ'² + g L (1 - cos θ)``."""
+        d = self.compute_derivatives(model, x, t, temporal_derivatives=[1])
+        return 0.5 * self.L**2 * d["dt"] ** 2 + self.g * self.L * (1 - torch.cos(d["u"]))
 
     def compute_phase_space(
-        self,
-        model: torch.nn.Module,
-        x: torch.Tensor,
-        t: torch.Tensor,
+        self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute the phase space coordinates (θ, dθ/dt).
-
-        Args:
-            model: Neural network model
-            x: Spatial coordinates
-            t: Time coordinates
-
-        Returns:
-            Tuple of (angular displacement, angular velocity)
-        """
-        # Get solution and its time derivative
-        derivatives = self.compute_derivatives(model, x, t, temporal_derivatives=[1])
-        u = model(torch.cat([x, t], dim=1))
-        u_t = derivatives["dt"]
-
-        return u, u_t
-
-    def validate(self, model, num_points=1000):
-        """Validate the model's solution against exact solution.
-
-        Args:
-            model: Neural network model
-            num_points: Number of validation points
-
-        Returns:
-            Dictionary of error metrics
-        """
-        x, t = self.generate_collocation_points(num_points)
-        u_pred = model(torch.cat([x, t], dim=1))
-        u_exact = self.exact_solution(x, t)
-        error = torch.abs(u_pred - u_exact)
-        return {
-            "l2_error": torch.mean(error**2).item(),
-            "max_error": torch.max(error).item(),
-            "mean_error": torch.mean(error).item(),
-        }
-
-    def compute_initial_condition(self, x: torch.Tensor) -> torch.Tensor:
-        """Compute the initial condition.
-
-        Args:
-            x: Spatial coordinates
-
-        Returns:
-            Initial condition values
-        """
-        if not self.config.initial_condition:
-            return None
-
-        ic_type = self.config.initial_condition.get("type", "small_angle")
-
-        if ic_type == "small_angle":
-            theta_0 = self.config.initial_condition.get("initial_angle", 0.1)
-            return torch.full_like(x, theta_0)
-
-        elif ic_type == "sine":
-            amplitude = self.config.initial_condition.get("amplitude", 1.0)
-            frequency = self.config.initial_condition.get("frequency", 1.0)
-            return amplitude * torch.sin(frequency * x)
-
-        elif ic_type == "gaussian":
-            amplitude = self.config.initial_condition.get("amplitude", 1.0)
-            center = self.config.initial_condition.get("center", 0.0)
-            sigma = self.config.initial_condition.get("sigma", 0.1)
-            return amplitude * torch.exp(-((x - center) ** 2) / (2 * sigma**2))
-
-        else:
-            raise ValueError(f"Unknown initial condition type: {ic_type}")
-
-    def compute_boundary_condition(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """Compute the boundary condition.
-
-        Args:
-            x: Spatial coordinates
-            t: Time coordinates
-
-        Returns:
-            Boundary condition values
-        """
-        if not self.config.boundary_conditions:
-            return None
-
-        bc_type = self.config.boundary_conditions.get("dirichlet", {}).get("type", "fixed")
-
-        if bc_type == "fixed":
-            value = self.config.boundary_conditions["dirichlet"].get("value", 0.0)
-            return torch.full_like(x, value)
-
-        elif bc_type == "periodic":
-            return torch.sin(2 * np.pi * x)
-
-        else:
-            raise ValueError(f"Unknown boundary condition type: {bc_type}")
+        """Phase-space coordinates ``(θ, θ')``."""
+        d = self.compute_derivatives(model, x, t, temporal_derivatives=[1])
+        return d["u"], d["dt"]
