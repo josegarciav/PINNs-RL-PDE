@@ -80,6 +80,15 @@ class LBFGSConfig:
 _LBFGS_FIELDS = tuple(LBFGSConfig.__dataclass_fields__)
 
 
+def _lbfgs_value(key: str, value: Any) -> Any:
+    """Coerce YAML L-BFGS settings (``1e-7`` parses as a string) to their field types."""
+    if key in ("tolerance_grad", "tolerance_change"):
+        return float(value)
+    if key in ("history_size", "max_iter"):
+        return int(value)
+    return value
+
+
 @dataclass
 class AdaptiveWeightsConfig:
     """Configuration for adaptive loss weighting.
@@ -239,8 +248,10 @@ class TrainingConfig:
             ),
             loss_weights=loss_weights,
             optimizer=cfg.get("optimizer", "adam"),
-            adam_lbfgs_switch_ratio=cfg.get("adam_lbfgs_switch_ratio", 0.7),
-            lbfgs=LBFGSConfig(**{k: v for k, v in lbfgs.items() if k in _LBFGS_FIELDS}),
+            adam_lbfgs_switch_ratio=float(cfg.get("adam_lbfgs_switch_ratio", 0.7)),
+            lbfgs=LBFGSConfig(
+                **{k: _lbfgs_value(k, v) for k, v in lbfgs.items() if k in _LBFGS_FIELDS}
+            ),
             mode=cfg.get("mode", "forward"),
             loss_function=cfg.get("loss_function", "mse"),
             huber_delta=float(cfg.get("huber_delta", 1.0)),

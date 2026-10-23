@@ -421,7 +421,9 @@ def test_run_training_and_load_run_round_trip(tmp_path, monkeypatch):
 
     (run_dir,) = (tmp_path / "runs").iterdir()
     pde, model, saved = load_run(run_dir)
-    assert pde.alpha == raw["pde_configs"]["heat"]["parameters"]["alpha"]  # true value, not the guess
+    assert (
+        pde.alpha == raw["pde_configs"]["heat"]["parameters"]["alpha"]
+    )  # true value, not the guess
     state = torch.load(run_dir / "final_model.pt")
     assert all(torch.equal(state[k], v) for k, v in model.state_dict().items())
     assert saved["pde"]["name"] == "Heat Equation"
@@ -432,7 +434,9 @@ def test_linear_warmup_then_scheduler():
     config.training.learning_rate_scheduler.warmup_epochs = 4
     trainer = _make_trainer(config=config)
     trainer.train(num_epochs=6)
-    assert trainer.history["learning_rate"] == pytest.approx([2.5e-4, 5e-4, 7.5e-4, 1e-3, 1e-3, 1e-3])
+    assert trainer.history["learning_rate"] == pytest.approx(
+        [2.5e-4, 5e-4, 7.5e-4, 1e-3, 1e-3, 1e-3]
+    )
 
 
 def test_reduce_lr_steps_on_last_train_loss_by_default():

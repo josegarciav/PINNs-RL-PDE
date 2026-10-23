@@ -42,6 +42,20 @@ class PDEConfig:
 _BOUNDARY_KINDS = ("dirichlet", "neumann", "periodic")
 
 
+def _as_scalar(name: str, value: Any) -> Optional[float]:
+    """A trainable parameter value as a float; one-element lists are unwrapped."""
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        if len(value) != 1:
+            raise ValueError(
+                f"Parameter {name!r} has {len(value)} components; only scalar "
+                "parameters can be identified in inverse mode."
+            )
+        value = value[0]
+    return float(value)
+
+
 class PDEBase:
     """Base class for PDEs solved by PINNs.
 
@@ -141,13 +155,13 @@ class PDEBase:
         # trainable, so we can plot a reference line in the dashboard.
         self._true_parameters: Dict[str, float] = {}
         for name in trainable_names:
-            true_val = config.parameters.get(name)
+            true_val = _as_scalar(name, config.parameters.get(name))
             if true_val is not None:
-                self._true_parameters[name] = float(true_val)
-            init_val = initial_guesses.get(name, true_val if true_val is not None else 1.0)
-            self._trainable_params[name] = nn.Parameter(
-                torch.tensor(float(init_val), device=self.device)
+                self._true_parameters[name] = true_val
+            init_val = _as_scalar(
+                name, initial_guesses.get(name, true_val if true_val is not None else 1.0)
             )
+            self._trainable_params[name] = nn.Parameter(torch.tensor(init_val, device=self.device))
 
         # Load observation data (used by the data-fitting loss in inverse mode).
         self.observation_data: Optional[Dict[str, torch.Tensor]] = self._load_observation_data(
@@ -629,7 +643,8 @@ class PDEBase:
         """Closed-form ``u(x, t)``, or ``None`` when ``exact_solution`` is not configured."""
         if not self.has_exact_solution:
             return None
-        return self._exact_solution(x, t)
+        # Exact solutions start from the IC at t = 0; shift so they hold for any t0.
+        return self._exact_solution(x, t - float(self.time_domain[0]))
 
     def _exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError(
@@ -728,13 +743,15 @@ class PDEBase:
             residuals = self.compute_residual(model, x_pool, t_pool)
             if isinstance(residuals, tuple):
                 residuals = residuals[0]
-            residual_mag = torch.abs(residuals.detach()).squeeze()
+            residual_mag = torch.abs(residuals.detach()).reshape(-1)
         except Exception:
             return self._sample_uniform(num_points)
 
         # Convert residual magnitudes to sampling probabilities
         # Add small epsilon so zero-residual regions still have a chance
         weights = residual_mag**k
+        if not torch.isfinite(weights).all() or weights.sum() <= 0:
+            return self._sample_uniform(num_points)
         probs = weights / weights.mean() + c + 1e-8
         probs = probs / probs.sum()
 

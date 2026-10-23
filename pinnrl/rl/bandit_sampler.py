@@ -151,7 +151,10 @@ class ResidualBanditSampler:
         self._calls += 1
         state = self._state
         n_policy = int(round(num_points * self.policy_fraction))
-        cells = torch.multinomial(self.distribution(state), n_policy, replacement=True)
+        if n_policy > 0:
+            cells = torch.multinomial(self.distribution(state), n_policy, replacement=True)
+        else:
+            cells = torch.empty(0, dtype=torch.long, device=self.device)
         x_p, t_p = self._points_in_cells(cells)
         x_u, t_u = self._uniform(num_points - n_policy)
         return torch.cat([x_p, x_u]).detach(), torch.cat([t_p, t_u]).detach()

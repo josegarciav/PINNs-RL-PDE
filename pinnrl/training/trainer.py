@@ -406,7 +406,7 @@ class PDETrainer:
         if scheduler_type == "cosine":
             return optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer,
-                T_max=self.config.training.num_epochs,
+                T_max=max(1, self.config.training.num_epochs - self._warmup_epochs()),
                 eta_min=self.config.training.learning_rate_scheduler.min_lr,
             )
         raise ValueError(f"Unknown scheduler type: {scheduler_type}")
@@ -500,13 +500,16 @@ class PDETrainer:
         component_names = ["residual", "boundary", "initial"]
         if self.config.training.adaptive_weights.strategy == "lrw":
             # Learning-rate weighting balances the gradient norm of each component.
+            # torch.autograd.grad leaves .grad untouched, so the total backward in
+            # _step() sees only its own gradient; components without a graph count as 0.
+            params = [p for p in self.model.parameters() if p.requires_grad]
             grad_norms = []
             for name in component_names:
-                self.optimizer.zero_grad()
-                losses[name].backward(retain_graph=True)
-                grad_norm = sum(
-                    p.grad.norm().item() ** 2 for p in self.model.parameters() if p.grad is not None
-                )
+                loss = losses[name]
+                grad_norm = 0.0
+                if loss.requires_grad:
+                    grads = torch.autograd.grad(loss, params, retain_graph=True, allow_unused=True)
+                    grad_norm = sum(g.norm().item() ** 2 for g in grads if g is not None)
                 grad_norms.append(torch.tensor(grad_norm**0.5, device=self.device))
             weights = self.adaptive_weights.update(gradients=torch.stack(grad_norms))
         else:
@@ -605,9 +608,10 @@ class PDETrainer:
             if step % resample_every == 0:
                 x_batch, t_batch = sample_fn(self.model, progress)
             losses = self._step(x_batch, t_batch)
+            loss_value = float(losses["total"].item())  # syncs MPS/CUDA before the clock stops
             clock += time.perf_counter() - start
             step += 1
-            loss_curve.append(float(losses["total"].item()))
+            loss_curve.append(loss_value)
             while pending and clock >= pending[0]:
                 pending.pop(0)
                 if on_checkpoint is not None:
@@ -840,7 +844,8 @@ class PDETrainer:
                         self.best_val_loss = val_loss
                         self.patience_counter = 0
                     else:
-                        self.patience_counter += 1
+                        # Patience is in epochs; validation runs every validation_frequency.
+                        self.patience_counter += self.validation_frequency
 
                     if self.patience_counter >= self.patience:
                         self.logger.info(
