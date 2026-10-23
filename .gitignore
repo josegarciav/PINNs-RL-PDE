@@ -20,7 +20,8 @@ pinn/
 .coverage
 htmlcov/
 
-# Training artifacts
+# Training artifacts (generated runs and benchmark outputs)
+runs/
 experiments/
 checkpoints/
 *.log
