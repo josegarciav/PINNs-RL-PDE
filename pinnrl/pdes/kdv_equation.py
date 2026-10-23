@@ -1,8 +1,9 @@
 # Korteweg-de Vries (KdV) equation
-# Application domains: Water waves, plasma physics, nonlinear optics
+# Application domains: Shallow-water waves, plasma physics, solitons
 # Complexity: Nonlinear, 3rd-order
 
-from typing import Any, Dict
+import math
+from typing import Any, Callable, Dict
 
 import torch
 
@@ -10,150 +11,61 @@ from .pde_base import PDEBase, PDEConfig
 
 
 class KdVEquation(PDEBase):
-    """
-    Implementation of the Korteweg-de Vries (KdV) Equation: ∂u/∂t + 6u∂u/∂x + ∂³u/∂x³ = 0
-    This equation describes shallow water waves and solitons.
+    """Korteweg-de Vries equation ``u_t + alpha u u_x + beta u_xxx = 0`` (1-D).
+
+    Parameters: ``alpha`` (nonlinearity, default 6), ``beta`` (dispersion,
+    default 1).
+
+    Initial condition and exact solution: ``soliton`` with ``speed`` c (default 1)
+    and optional ``position`` x0::
+
+        u = (3c / alpha) · sech²( ½ √(c / beta) · (x - x0 - c t) )
+
+    Substituting ``u = f(x - c t)`` and integrating twice shows this travels at
+    exactly ``c`` and vanishes far from ``x0``.
     """
 
     def __init__(self, config: PDEConfig, **kwargs):
-        """
-        Initialize the KdV equation.
-
-        :param config: PDEConfig instance containing all necessary parameters
-        :param kwargs: Additional keyword arguments
-        """
+        if config.dimension != 1:
+            raise ValueError("KdVEquation is 1-D only")
         super().__init__(config)
 
-    def _validate_parameters(self):
-        """Validate required parameters for KdV equation."""
-        super()._validate_parameters()
-        # KdV equation requires speed parameter
-        self.get_parameter("speed", default=1.0)
+    @property
+    def alpha(self):
+        """Nonlinear coefficient."""
+        return self.get_parameter("alpha", default=6.0)
+
+    @property
+    def beta(self):
+        """Dispersion coefficient."""
+        return self.get_parameter("beta", default=1.0)
 
     @property
     def speed(self):
-        """Soliton speed coefficient."""
-        return self.get_parameter("speed", default=1.0)
+        """Speed of the soliton in the initial condition."""
+        return float(self.config.initial_condition.get("speed", 1.0))
+
+    def _soliton(self, params: Dict[str, Any], x: torch.Tensor, t) -> torch.Tensor:
+        c = float(params.get("speed", 1.0))
+        x0 = params.get("position", 0.0)
+        width = 0.5 * math.sqrt(float(c) / float(self.beta))
+        return (3 * c / self.alpha) / torch.cosh(width * (x - x0 - c * t)) ** 2
 
     def compute_residual(
-        self,
-        model: torch.nn.Module,
-        x: torch.Tensor,
-        t: torch.Tensor,
+        self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
     ) -> torch.Tensor:
-        """
-        Compute the KdV equation residual.
-
-        :param model: Neural network model
-        :param x: Spatial coordinates
-        :param t: Time coordinates
-        :return: Residual tensor
-        """
-        # Ensure tensors require gradients
-        x = x.detach().requires_grad_(True)
-        t = t.detach().requires_grad_(True)
-
-        # Ensure model parameters require gradients
-        for param in model.parameters():
-            param.requires_grad_(True)
-
-        # Set model to training mode
-        model.train()
-
-        # Get derivatives
-        derivatives = self.compute_derivatives(
-            model,
-            x,
-            t,
-            spatial_derivatives=[1, 2, 3],  # Need first, second, and third derivatives
-            temporal_derivatives=[1],
+        """``u_t + alpha u u_x + beta u_xxx``."""
+        d = self.compute_derivatives(
+            model, x, t, temporal_derivatives=[1], spatial_derivatives=[1, 3]
         )
+        return d["dt"] + self.alpha * d["u"] * d["dx"] + self.beta * d["dx3"]
 
-        # Get the derivatives we need
-        u = model(torch.cat([x, t], dim=1))
-        u_t = derivatives["dt"]
+    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+        if params.get("type") == "soliton":
+            return lambda x, t: self._soliton(params, x, 0.0)
+        return super()._create_initial_condition(params)
 
-        if self.dimension == 1:
-            # Get spatial derivatives
-            u_x = derivatives["dx"]
-            u_xxx = derivatives["dx3"]
-
-            # Compute residual (∂u/∂t + 6u∂u/∂x + ∂³u/∂x³)
-            residual = u_t + 6 * u * u_x + u_xxx
-        else:
-            # For higher dimensions, compute derivatives for each dimension
-            residual = u_t
-            for dim in range(self.dimension):
-                dim_name = f"x{dim+1}"
-                u_x = derivatives[f"d{dim_name}"]
-                u_xxx = derivatives[f"d{dim_name*3}"]
-                residual += 6 * u * u_x + u_xxx
-
-        return residual
-
-    def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """
-        Compute exact analytical solution (soliton).
-
-        :param x: Spatial coordinates
-        :param t: Time coordinates
-        :return: Exact solution tensor
-        """
-        if not self.config.exact_solution:
-            return None
-
-        c = torch.tensor(self.speed, dtype=x.dtype, device=x.device)  # Convert speed to tensor
-
-        if self.dimension == 1:
-            return 2 * c * (1 / torch.cosh(torch.sqrt(c) * (x - c * t))) ** 2
-        else:
-            # For higher dimensions, use the sum of coordinates
-            x_sum = torch.sum(x, dim=1, keepdim=True)
-            return 2 * c * (1 / torch.cosh(torch.sqrt(c) * (x_sum - c * t))) ** 2
-
-    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
-        """
-        Create boundary condition function from parameters.
-
-        :param bc_type: Type of boundary condition
-        :param params: Parameters for the boundary condition
-        :return: Boundary condition function
-        """
-        if bc_type == "initial":
-            ic_type = params.get("type", "soliton")
-            if ic_type == "soliton":
-                c = torch.tensor(
-                    params.get("speed", self.speed),
-                    dtype=torch.float32,
-                    device=self.device,
-                )
-                if self.dimension == 1:
-                    return lambda x, t: 2 * c * (1 / torch.cosh(torch.sqrt(c) * x)) ** 2
-                else:
-                    return (
-                        lambda x, t: 2
-                        * c
-                        * (1 / torch.cosh(torch.sqrt(c) * torch.sum(x, dim=1, keepdim=True))) ** 2
-                    )
-            else:
-                raise ValueError(f"Unsupported initial condition type: {ic_type}")
-        else:
-            return super()._create_boundary_condition(bc_type, params)
-
-    def validate(self, model, num_points=1000):
-        """
-        Validate the model's solution against exact solution.
-
-        :param model: Neural network model
-        :param num_points: Number of validation points
-        :return: Dictionary of error metrics
-        """
-        x, t = self.generate_collocation_points(num_points)
-        u_pred = model(torch.cat([x, t], dim=1))
-        u_exact = self.exact_solution(x, t)
-        error = torch.abs(u_pred - u_exact)
-        return {
-            "l2_error": torch.mean(error**2).item(),
-            "max_error": torch.max(error).item(),
-            "mean_error": torch.mean(error).item(),
-        }
+    def _exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        if self.config.exact_solution.get("type") == "soliton":
+            return self._soliton(self.config.initial_condition, x, t)
+        return super()._exact_solution(x, t)

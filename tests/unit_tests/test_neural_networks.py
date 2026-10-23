@@ -486,7 +486,3 @@ class TestNeuralNetworks(unittest.TestCase):
             first_half_avg,
             "Loss not decreasing during training, possible instability",
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

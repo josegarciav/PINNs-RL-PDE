@@ -123,12 +123,3 @@ class AdaptiveLossWeights:
             return self.update_weights_rbw(losses)
         else:
             raise ValueError(f"Invalid combination of strategy ({self.strategy}) and inputs")
-
-    def get_weights(self):
-        """Return current weights."""
-        if self.weights is not None:
-            return self.weights
-        elif self.initial_weights is not None:
-            return self.initial_weights
-        else:
-            return torch.ones(3) / 3.0  # Default to equal weights for 3 components

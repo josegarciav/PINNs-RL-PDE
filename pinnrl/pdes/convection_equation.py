@@ -1,8 +1,8 @@
-# Convection equation
-# Application domains: Fluid dynamics, transport phenomena
+# Convection (linear advection) equation
+# Application domains: Transport of a passive scalar
 # Complexity: Linear, 1st-order
 
-from typing import Any, Dict
+from typing import Any, Callable, Dict, List
 
 import torch
 
@@ -10,128 +10,53 @@ from .pde_base import PDEBase, PDEConfig
 
 
 class ConvectionEquation(PDEBase):
-    """
-    Implementation of the Convection Equation: ∂u/∂t + v·∇u = 0
-    where v is the velocity vector and ∇ is the gradient operator.
+    """Linear advection ``u_t + v · ∇u = 0``.
+
+    Parameters: ``velocity`` (a number, or one entry per spatial axis).
+
+    Initial conditions: ``sine`` (alias ``sin``) — the plane wave
+    ``u0 = A sin(kπ Σ_d x_d)`` (``amplitude`` A, ``frequency`` k).
+
+    Exact solution: ``sine`` (alias ``sin``) — the initial profile transported
+    with the flow, ``u(x, t) = u0(x - v t)``.
     """
 
     def __init__(self, config: PDEConfig, **kwargs):
-        """
-        Initialize the Convection Equation.
-
-        :param config: PDEConfig instance containing all necessary parameters
-        :param kwargs: Additional keyword arguments
-        """
         super().__init__(config)
 
-    def _validate_parameters(self):
-        """Validate required parameters for convection equation."""
-        super()._validate_parameters()
-        # Convection equation requires velocity parameter
-        self.get_parameter("velocity", default=1.0)
-
     @property
-    def velocity(self):
-        """Velocity vector."""
+    def velocity(self) -> List[float]:
+        """Advection velocity, one entry per spatial axis."""
         velocity = self.get_parameter("velocity", default=1.0)
-        # Convert velocity to list if scalar
-        if isinstance(velocity, (int, float)):
+        if isinstance(velocity, (int, float)) or (
+            isinstance(velocity, torch.Tensor) and velocity.ndim == 0  # trainable scalar
+        ):
             return [velocity] * self.dimension
-        else:
-            return velocity
+        return list(velocity)
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
     ) -> torch.Tensor:
-        """
-        Compute the convection equation residual.
+        """``u_t + Σ_d v_d u_{x_d}``."""
+        x, t, u = self._prepare_inputs(model, x, t)
+        grad_u = self._grad(u, x)
+        convection = sum(v * grad_u[:, d : d + 1] for d, v in enumerate(self.velocity))
+        return self._grad(u, t) + convection
 
-        :param model: Neural network model
-        :param x: Spatial coordinates
-        :param t: Time coordinates
-        :return: Residual tensor
-        """
-        x = x.detach().requires_grad_(True)
-        t = t.detach().requires_grad_(True)
-        xt = torch.cat([x, t], dim=1)
+    def _plane_wave(self, x: torch.Tensor) -> torch.Tensor:
+        ic = self.config.initial_condition
+        a, k = ic.get("amplitude", 1.0), ic.get("frequency", 1.0)
+        return a * torch.sin(k * torch.pi * torch.sum(x, dim=1, keepdim=True))
 
-        # Compute derivatives
-        u = model(xt)
-        u_t = torch.autograd.grad(u, t, grad_outputs=torch.ones_like(u), create_graph=True)[0]
+    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+        if params.get("type") in ("sine", "sin"):
+            return lambda x, t: self._plane_wave(x)
+        return super()._create_initial_condition(params)
 
-        # Compute gradient based on dimension
-        if self.dimension == 1:
-            u_x = torch.autograd.grad(u, x, grad_outputs=torch.ones_like(u), create_graph=True)[0]
-            convection = self.velocity[0] * u_x
-        else:
-            # For higher dimensions, compute dot product of velocity and gradient
-            convection = torch.zeros_like(u)
-            for dim in range(self.dimension):
-                u_x = torch.autograd.grad(
-                    u,
-                    x[:, dim : dim + 1],
-                    grad_outputs=torch.ones_like(u),
-                    create_graph=True,
-                )[0]
-                convection += self.velocity[dim] * u_x
-
-        return u_t + convection
-
-    def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """
-        Compute exact analytical solution.
-
-        :param x: Spatial coordinates
-        :param t: Time coordinates
-        :return: Exact solution tensor
-        """
-        if self.dimension == 1:
-            return torch.sin(2 * torch.pi * (x - self.velocity[0] * t))
-        else:
-            # For higher dimensions, use product of sine waves
-            solution = torch.ones_like(x[:, 0:1])
-            for dim in range(self.dimension):
-                solution *= torch.sin(2 * torch.pi * (x[:, dim : dim + 1] - self.velocity[dim] * t))
-            return solution
-
-    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
-        """
-        Create boundary condition function from parameters.
-
-        :param bc_type: Type of boundary condition
-        :param params: Parameters for the boundary condition
-        :return: Boundary condition function
-        """
-        if bc_type == "initial":
-            ic_type = params.get("type", "sine")
-            if ic_type in ("sine", "sin"):
-                A = params.get("amplitude", 1.0)
-                k = params.get("frequency", 2.0)
-                if self.dimension == 1:
-                    return lambda x, t: A * torch.sin(k * torch.pi * x)
-                else:
-                    return lambda x, t: A * torch.sin(
-                        k * torch.pi * torch.sum(x, dim=1, keepdim=True)
-                    )
-            else:
-                raise ValueError(f"Unsupported initial condition type: {ic_type}")
-        else:
-            return super()._create_boundary_condition(bc_type, params)
-
-    def validate(self, model, num_points=1000):
-        """
-        Validate the model's solution against exact solution.
-
-        :param model: Neural network model
-        :param num_points: Number of validation points
-        :return: Dictionary of error metrics
-        """
-        x, t = self.generate_collocation_points(num_points)
-        u_pred = model(torch.cat([x, t], dim=1))
-        u_exact = self.exact_solution(x, t)
-        error = torch.abs(u_pred - u_exact)
-        return {
-            "l2_error": torch.mean(error**2).item(),
-            "max_error": torch.max(error).item(),
-            "mean_error": torch.mean(error).item(),
-        }
+    def _exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        if self.config.exact_solution.get("type") in ("sine", "sin") and (
+            self.config.initial_condition.get("type") in ("sine", "sin")
+        ):
+            shift = torch.cat([v * t for v in self.velocity], dim=1)
+            return self._plane_wave(x - shift)
+        return super()._exact_solution(x, t)

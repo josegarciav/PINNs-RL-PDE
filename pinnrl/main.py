@@ -1,12 +1,8 @@
 """Entry point for the PINNs-RL-PDE framework."""
 
 import argparse
-import os
 import sys
 import webbrowser
-
-# Ensure the project root is on sys.path so `src` is importable
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def run_dashboard(port=8050):
@@ -67,6 +63,11 @@ Examples:
         default=8050,
         help="Port to run the dashboard on (default: 8050)",
     )
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Do not open the dashboard in a web browser",
+    )
     return parser.parse_args()
 
 
@@ -78,7 +79,8 @@ def main():
     print("PINNs-RL-PDE Framework")
     print("=" * 50 + "\n")
 
-    webbrowser.open(f"http://127.0.0.1:{args.port}/")
+    if not args.no_browser:
+        webbrowser.open(f"http://127.0.0.1:{args.port}/")
     run_dashboard(args.port)
 
 

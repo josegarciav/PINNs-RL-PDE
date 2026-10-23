@@ -1,6 +1,5 @@
 """Dash web dashboard for monitoring and comparing PINN training runs."""
 
-import argparse
 import glob
 import json
 import os
@@ -17,16 +16,9 @@ import yaml
 from dash import dcc, html
 from dash.dependencies import Input, Output, State
 
+from pinnrl.config import DEFAULT_CONFIG_PATH
 from pinnrl.datasets import WELL_REGISTRY
-
-
-# Parse command line arguments for port
-def parse_args():
-    """Parse command-line arguments for the dashboard server."""
-    parser = argparse.ArgumentParser(description="PINNs-RL-PDE Training Monitor Dashboard")
-    parser.add_argument("--port", type=int, default=8050, help="Port to run the dashboard on")
-    return parser.parse_args()
-
+from pinnrl.pdes.registry import PDE_SPECS, get_pde_spec
 
 # Initialize the Dash app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
@@ -55,9 +47,7 @@ LABEL_STYLE = {"fontWeight": "bold", "marginBottom": "4px", "display": "block"}
 FIELD_STYLE = {"marginBottom": "12px"}
 
 # Load config.yaml defaults at startup for the training form
-_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config", "config.yaml")
-if not os.path.exists(_CONFIG_PATH):
-    _CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+_CONFIG_PATH = DEFAULT_CONFIG_PATH
 try:
     with open(_CONFIG_PATH, "r") as _f:
         _YAML_CONFIG = yaml.safe_load(_f)
@@ -68,19 +58,17 @@ _TRAINING_DEFAULTS = _YAML_CONFIG.get("training", {})
 _PDE_CONFIGS = _YAML_CONFIG.get("pde_configs", {})
 _ARCHITECTURES = list(_YAML_CONFIG.get("architectures", {}).keys())
 
-# Map PDE display names to config keys
-_PDE_OPTIONS = []
-for _key, _cfg in _PDE_CONFIGS.items():
-    if _key == "heat_2d":
-        continue  # skip 2D variant for now
-    _PDE_OPTIONS.append({"label": _cfg.get("name", _key), "value": _cfg.get("name", _key)})
+# Training runs are written here by pinnrl-train, which the dashboard launches
+# from its own working directory; the path is resolved against that directory.
+RESULTS_DIR = os.path.abspath(_YAML_CONFIG.get("paths", {}).get("results_dir", "runs"))
 
-# Map Well dataset key (config_key, e.g. "burgers") -> display PDE name from
-# _PDE_OPTIONS, so picking a dataset can drive the PDE dropdown.
-_PDE_KEY_TO_DISPLAY = {
-    _cfg.get("name", _k).lower().replace(" equation", "").replace("-", "_"): _cfg.get("name", _k)
-    for _k, _cfg in _PDE_CONFIGS.items()
-}
+# PDE dropdown: display names from the shared registry (2D variant hidden for now).
+_PDE_OPTIONS = [
+    {"label": spec.display_name, "value": spec.display_name}
+    for spec in PDE_SPECS
+    if spec.key in _PDE_CONFIGS and spec.key != "heat_2d"
+]
+_PDE_NAME_TO_KEY = {spec.display_name: spec.key for spec in PDE_SPECS}
 _DATASET_OPTIONS = [
     {
         "label": f"{_name} ({_entry.n_spatial_dims}D, {_entry.recommended_mode})",
@@ -248,7 +236,7 @@ app.layout = html.Div(
                                                                                     "value": "residual_based",
                                                                                 },
                                                                                 {
-                                                                                    "label": "RL Adaptive (DQN agent)",
+                                                                                    "label": "RL bandit (experimental)",
                                                                                     "value": "rl_adaptive",
                                                                                 },
                                                                             ],
@@ -1437,7 +1425,7 @@ app.layout = html.Div(
 def get_experiments():
     """Get list of all experiments with their details."""
     experiments = []
-    experiments_dir = "experiments"
+    experiments_dir = RESULTS_DIR
 
     if os.path.exists(experiments_dir):
         for exp_dir in os.listdir(experiments_dir):
@@ -1702,16 +1690,16 @@ def delete_experiment_folder(submit_n_clicks, experiment_path):
     if not submit_n_clicks or not experiment_path:
         return dash.no_update, dash.no_update
 
-    experiments_root = os.path.abspath("experiments")
+    experiments_root = RESULTS_DIR
     target = os.path.abspath(experiment_path)
-    # Refuse to delete anything outside the experiments/ directory.
+    # Refuse to delete anything outside the results directory.
     if (
         os.path.commonpath([experiments_root, target]) != experiments_root
         or target == experiments_root
     ):
         return (
             html.Span(
-                "Refused to delete: path is outside the experiments/ folder.",
+                f"Refused to delete: path is outside {RESULTS_DIR}.",
                 style={"color": "#d32f2f"},
             ),
             dash.no_update,
@@ -1942,12 +1930,6 @@ def update_graphs(experiment, _, loss_view):
 # ============================================================
 
 
-# PDE name -> config key mapping
-_PDE_NAME_TO_KEY = {}
-for _k, _c in _PDE_CONFIGS.items():
-    _PDE_NAME_TO_KEY[_c.get("name", _k)] = _k
-
-
 @app.callback(
     Output("train-arch-selector", "value"),
     Output("pde-info-box", "children"),
@@ -2035,12 +2017,7 @@ def populate_from_well_dataset(dataset_name, toggle_value):
     # picked — the data_only loss recipe makes the choice irrelevant.
     pde_value = dash.no_update
     if entry.default_pde_key:
-        display = next(
-            (cfg.get("name", k) for k, cfg in _PDE_CONFIGS.items() if k == entry.default_pde_key),
-            None,
-        )
-        if display:
-            pde_value = display
+        pde_value = get_pde_spec(entry.default_pde_key).display_name
 
     return info_children, pde_value, entry.recommended_mode
 
@@ -2117,12 +2094,8 @@ def launch_trainer(
     if not n_clicks:
         return ""
     try:
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        # Use the installed module path; the package was renamed src/ -> pinnrl/.
-        config_path = os.path.join(project_root, "pinnrl", "config", "config.yaml")
-        if not os.path.exists(config_path):
-            config_path = os.path.join(project_root, "config.yaml")
-        log_file = os.path.join(project_root, "trainer_launch.log")
+        os.makedirs(RESULTS_DIR, exist_ok=True)
+        log_file = os.path.join(RESULTS_DIR, "trainer_launch.log")
 
         use_rl = sampling_strategy == "rl_adaptive"
 
@@ -2149,7 +2122,7 @@ def launch_trainer(
             "--device",
             device or "cpu",
             "--config",
-            config_path,
+            _CONFIG_PATH,
         ]
         if use_rl:
             cmd.append("--rl")
@@ -2209,7 +2182,7 @@ def launch_trainer(
             cmd,
             stdout=log_fh,
             stderr=log_fh,
-            cwd=project_root,
+            cwd=os.getcwd(),
         )
 
         rl_str = " + RL" if use_rl else ""
@@ -2569,11 +2542,11 @@ def update_architecture_comparison(_):
     architectures = {}
 
     experiment_dirs = []
-    if os.path.exists("experiments"):
+    if os.path.exists(RESULTS_DIR):
         experiment_dirs.extend(
-            os.path.join("experiments", d)
-            for d in os.listdir("experiments")
-            if os.path.isdir(os.path.join("experiments", d))
+            os.path.join(RESULTS_DIR, d)
+            for d in os.listdir(RESULTS_DIR)
+            if os.path.isdir(os.path.join(RESULTS_DIR, d))
         )
 
     for exp_dir in experiment_dirs:
@@ -2670,11 +2643,11 @@ def update_pde_comparison(_):
     pdes = {}
 
     experiment_dirs = []
-    if os.path.exists("experiments"):
+    if os.path.exists(RESULTS_DIR):
         experiment_dirs.extend(
-            os.path.join("experiments", d)
-            for d in os.listdir("experiments")
-            if os.path.isdir(os.path.join("experiments", d))
+            os.path.join(RESULTS_DIR, d)
+            for d in os.listdir(RESULTS_DIR)
+            if os.path.isdir(os.path.join(RESULTS_DIR, d))
         )
 
     for exp_dir in experiment_dirs:
@@ -2853,82 +2826,6 @@ def update_collocation_plot(experiment):
         )
 
 
-def _infer_model_params(state_dict, architecture, input_dim, output_dim):
-    """Infer model architecture parameters from checkpoint state_dict shapes.
-
-    The saved config.yaml may not match the actual trained model weights,
-    so we inspect tensor shapes to reconstruct the correct configuration.
-    """
-    params = {}
-    keys = list(state_dict.keys())
-
-    if architecture == "fourier":
-        b_key = [k for k in keys if "fourier.B" in k]
-        if b_key:
-            params["mapping_size"] = state_dict[b_key[0]].shape[1]
-        layer_keys = sorted([k for k in keys if "layers" in k and "weight" in k])
-        if layer_keys:
-            params["hidden_dim"] = state_dict[layer_keys[0]].shape[0]
-            params["num_layers"] = len(layer_keys)
-            hidden_dims = [state_dict[lk].shape[0] for lk in layer_keys[:-1]]
-            if hidden_dims:
-                params["hidden_dims"] = hidden_dims
-
-    elif architecture == "resnet":
-        il_key = [k for k in keys if "input_layer.weight" in k]
-        if il_key:
-            params["hidden_dim"] = state_dict[il_key[0]].shape[0]
-        block_keys = {k.split("blocks.")[1].split(".")[0] for k in keys if "blocks." in k}
-        if block_keys:
-            params["num_blocks"] = len(block_keys)
-
-    elif architecture == "siren":
-        layer_keys = sorted([k for k in keys if "layers" in k and "weight" in k])
-        if layer_keys:
-            hidden_dims = [state_dict[lk].shape[0] for lk in layer_keys[:-1]]
-            if hidden_dims:
-                params["hidden_dims"] = hidden_dims
-                params["hidden_dim"] = hidden_dims[0]
-            params["num_layers"] = len(layer_keys)
-
-    elif architecture == "attention":
-        ip_key = [k for k in keys if "input_proj.weight" in k]
-        if ip_key:
-            params["hidden_dim"] = state_dict[ip_key[0]].shape[0]
-        attn_keys = {
-            k.split("attention_layers.")[1].split(".")[0] for k in keys if "attention_layers." in k
-        }
-        if attn_keys:
-            params["num_layers"] = len(attn_keys)
-
-    elif architecture == "autoencoder":
-        enc_keys = sorted([k for k in keys if "encoder" in k and "weight" in k])
-        if enc_keys:
-            hidden_dims = [state_dict[ek].shape[0] for ek in enc_keys]
-            if hidden_dims:
-                params["hidden_dims"] = hidden_dims[:-1]
-                params["latent_dim"] = hidden_dims[-1]
-
-    elif architecture == "fno":
-        lift_key = [k for k in keys if "lift.0.weight" in k]
-        if lift_key:
-            params["hidden_dim"] = state_dict[lift_key[0]].shape[0]
-        block_keys = {k.split("blocks.")[1].split(".")[0] for k in keys if "blocks." in k}
-        if block_keys:
-            params["num_blocks"] = len(block_keys)
-
-    elif architecture == "feedforward":
-        layer_keys = sorted([k for k in keys if "layers" in k and "weight" in k])
-        if layer_keys:
-            hidden_dims = [state_dict[lk].shape[0] for lk in layer_keys[:-1]]
-            if hidden_dims:
-                params["hidden_dims"] = hidden_dims
-                params["hidden_dim"] = hidden_dims[0]
-            params["num_layers"] = len(layer_keys)
-
-    return params
-
-
 @app.callback(
     [
         Output("exact-solution-3d", "figure"),
@@ -2947,132 +2844,22 @@ def update_solution_visualizations(experiment, time_point):
         )
 
     try:
-        import torch
+        from pinnrl.plots import plot_solution
+        from pinnrl.training.train import load_run
 
-        sys.path.append(".")
-        from pinnrl.neural_networks import PINNModel
-        from pinnrl.pdes.pde_base import PDEConfig
-        from pinnrl.utils.utils import plot_solution
-
-        model_path = os.path.join(experiment, "final_model.pt")
-        config_path = os.path.join(experiment, "config.yaml")
-
-        if not os.path.exists(model_path) or not os.path.exists(config_path):
-            missing = []
-            if not os.path.exists(model_path):
-                missing.append("final_model.pt")
-            if not os.path.exists(config_path):
-                missing.append("config.yaml")
+        missing = [
+            name
+            for name in ("final_model.pt", "config.yaml")
+            if not os.path.exists(os.path.join(experiment, name))
+        ]
+        if missing:
             msg = f"Missing: {', '.join(missing)}"
-            print(f"[Solution Viz] {msg} in {experiment}")
             return create_empty_3d_figure(msg), create_empty_3d_figure(msg)
-
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-
-        pde_type = config.get("pde_type", "unknown").lower()
-
-        pde_config_dict = config.get("pde_configs", {}).get(pde_type, {})
-        if not pde_config_dict:
-            msg = f"No configuration for PDE type: {pde_type}"
-            return create_empty_3d_figure(msg), create_empty_3d_figure(msg)
-
-        pde_config = PDEConfig(
-            name=pde_config_dict.get("name", pde_type),
-            dimension=pde_config_dict.get("dimension", 1),
-            domain=pde_config_dict.get("domain", [[0, 1]]),
-            time_domain=pde_config_dict.get("time_domain", [0, 1]),
-            initial_condition=pde_config_dict.get("initial_condition", {}),
-            boundary_conditions=pde_config_dict.get("boundary_conditions", {}),
-            parameters=pde_config_dict.get("parameters", {}),
-            exact_solution=pde_config_dict.get("exact_solution", {}),
-        )
-
-        # Create PDE instance
-        pde_classes = {
-            "heat": ("pinnrl.pdes.heat_equation", "HeatEquation"),
-            "wave": ("pinnrl.pdes.wave_equation", "WaveEquation"),
-            "burgers": ("pinnrl.pdes.burgers_equation", "BurgersEquation"),
-            "convection": ("pinnrl.pdes.convection_equation", "ConvectionEquation"),
-            "kdv": ("pinnrl.pdes.kdv_equation", "KdVEquation"),
-            "pendulum": ("pinnrl.pdes.pendulum_equation", "PendulumEquation"),
-        }
-
-        pde = None
-        for key, (module, cls_name) in pde_classes.items():
-            if key in pde_type:
-                mod = __import__(module, fromlist=[cls_name])
-                pde = getattr(mod, cls_name)(config=pde_config)
-                break
-
-        if pde is None:
-            if "allen" in pde_type and "cahn" in pde_type:
-                from pinnrl.pdes.allen_cahn import AllenCahnEquation
-
-                pde = AllenCahnEquation(config=pde_config)
-            elif "cahn" in pde_type and "hilliard" in pde_type:
-                from pinnrl.pdes.cahn_hilliard import CahnHilliardEquation
-
-                pde = CahnHilliardEquation(config=pde_config)
-            elif "black" in pde_type or "scholes" in pde_type:
-                from pinnrl.pdes.black_scholes import BlackScholesEquation
-
-                pde = BlackScholesEquation(config=pde_config)
-            else:
-                msg = f"Unsupported PDE type: {pde_type}"
-                return create_empty_3d_figure(msg), create_empty_3d_figure(msg)
-
-        # Load model — infer architecture from checkpoint state_dict
-        # because saved config.yaml may not match actual trained weights
-        device = torch.device("cpu")
-        from pinnrl.config import Config, ModelConfig
-
-        saved_model = config.get("model", {})
-        architecture = saved_model.get("architecture", "feedforward")
-        input_dim = saved_model.get("input_dim", 2 if pde_config.dimension == 1 else 3)
-        output_dim = saved_model.get("output_dim", 1)
 
         try:
-            state_dict = torch.load(model_path, map_location=device, weights_only=False)
-
-            # Infer model params from state_dict shapes
-            inferred = _infer_model_params(state_dict, architecture, input_dim, output_dim)
-
-            model_cfg = ModelConfig(
-                input_dim=input_dim,
-                output_dim=output_dim,
-                architecture=architecture,
-                hidden_dim=inferred.get("hidden_dim", saved_model.get("hidden_dim", 128)),
-                num_layers=inferred.get("num_layers", saved_model.get("num_layers", 4)),
-                activation=saved_model.get("activation", "tanh"),
-                dropout=saved_model.get("dropout", 0.0),
-                layer_norm=saved_model.get("layer_norm", False),
-            )
-            # Set architecture-specific params (inferred takes priority)
-            for key in [
-                "mapping_size",
-                "scale",
-                "omega_0",
-                "num_heads",
-                "num_blocks",
-                "latent_dim",
-                "hidden_dims",
-                "modes",
-                "periodic",
-            ]:
-                val = inferred.get(key, saved_model.get(key))
-                if val is not None:
-                    setattr(model_cfg, key, val)
-
-            cfg = Config.__new__(Config)
-            cfg.device = device
-            cfg.model = model_cfg
-
-            model = PINNModel(config=cfg, device=device)
-            model.load_state_dict(state_dict)
-            model.eval()
+            pde, model, _ = load_run(experiment)
         except Exception as e:
-            msg = f"Error loading model: {str(e)}"
+            msg = f"Error loading run: {e}"
             return create_empty_3d_figure(msg), create_empty_3d_figure(msg)
 
         try:
@@ -3172,31 +2959,3 @@ def generate_html_report(experiment_path, figures, metadata):
     </html>
     """
     return html_template
-
-
-# ============================================================
-# Main
-# ============================================================
-
-if __name__ == "__main__":
-    args = parse_args()
-    port = args.port
-
-    print(f"Starting PINNs-RL-PDE Training Monitor on port {port}")
-    print(f"Open http://127.0.0.1:{port}/ in your browser")
-
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            app.run(debug=False, port=port)
-            break
-        except Exception as e:
-            if "Address already in use" in str(e):
-                print(f"Port {port} is in use. Trying port {port+1}...")
-                port += 1
-                if attempt == max_retries - 1:
-                    print(f"Could not find available port after {max_retries} attempts.")
-                    print("Please close any running dashboards and try again.")
-            else:
-                print(f"Error starting dashboard: {e}")
-                break

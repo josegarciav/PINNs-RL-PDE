@@ -117,7 +117,7 @@ class TestPDEs(unittest.TestCase):
             parameters={"alpha": 0.01},
             boundary_conditions={
                 "dirichlet": {"type": "fixed", "value": 0.0},
-                "neumann": {"type": "fixed", "value": 0.0},
+                "neumann": {"value": 0.0},
                 "periodic": {},
             },
             initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 2.0},
@@ -149,7 +149,7 @@ class TestPDEs(unittest.TestCase):
             device=self.device,
         ).reshape(-1, 1)
         t_boundary = torch.zeros_like(x_boundary)
-        u_boundary = heat_eq._create_boundary_condition("initial", config.initial_condition)(
+        u_boundary = heat_eq._create_initial_condition(config.initial_condition)(
             x_boundary, t_boundary
         )
         self.assertEqual(u_boundary.shape, (2, 1))
@@ -171,7 +171,7 @@ class TestPDEs(unittest.TestCase):
             parameters={"alpha": 0.01},
             boundary_conditions={
                 "dirichlet": {"type": "fixed", "value": 0.0},
-                "neumann": {"type": "fixed", "value": 0.0},
+                "neumann": {"value": 0.0},
                 "periodic": {},
             },
             initial_condition={
@@ -223,7 +223,7 @@ class TestPDEs(unittest.TestCase):
             parameters={"c": 1.0},
             boundary_conditions={
                 "dirichlet": {"type": "fixed", "value": 0.0},
-                "neumann": {"type": "fixed", "value": 0.0},
+                "neumann": {"value": 0.0},
                 "periodic": {},
             },
             initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 2.0},
@@ -255,7 +255,7 @@ class TestPDEs(unittest.TestCase):
             device=self.device,
         ).reshape(-1, 1)
         t_boundary = torch.zeros_like(x_boundary)
-        u_boundary = wave_eq._create_boundary_condition("initial", config.initial_condition)(
+        u_boundary = wave_eq._create_initial_condition(config.initial_condition)(
             x_boundary, t_boundary
         )
         self.assertEqual(u_boundary.shape, (2, 1))
@@ -277,7 +277,7 @@ class TestPDEs(unittest.TestCase):
             parameters={"c": 1.0},
             boundary_conditions={
                 "dirichlet": {"type": "fixed", "value": 0.0},
-                "neumann": {"type": "fixed", "value": 0.0},
+                "neumann": {"value": 0.0},
                 "periodic": {},
             },
             initial_condition={
@@ -328,10 +328,9 @@ class TestPDEs(unittest.TestCase):
         boundary_conditions = {
             "dirichlet": {"value": 0.0},
             "neumann": {"value": 1.0},  # Delta at upper boundary
-            "initial": {"type": "call_option", "strike_price": strike},
         }
         initial_condition = {"type": "call_option", "strike_price": strike}
-        exact_solution = {"type": "call_option", "strike_price": strike}
+        exact_solution = {"type": "black_scholes"}
 
         config = PDEConfig(
             name="Black-Scholes Equation",
@@ -363,9 +362,7 @@ class TestPDEs(unittest.TestCase):
         # Test boundary conditions
         x_boundary = torch.tensor([domain[0][0], domain[0][1]], dtype=torch.float32).reshape(-1, 1)
         t_boundary = torch.zeros_like(x_boundary)
-        u_boundary = bs_eq._create_boundary_condition("initial", initial_condition)(
-            x_boundary, t_boundary
-        )
+        u_boundary = bs_eq._create_initial_condition(initial_condition)(x_boundary, t_boundary)
         self.assertEqual(u_boundary.shape, (2, 1))
 
         # Test 2D Black-Scholes equation (basket option)
@@ -391,11 +388,9 @@ class TestPDEs(unittest.TestCase):
         for i, (min_val, max_val) in enumerate(domain_2d):
             self.assertTrue(torch.all(x_2d[:, i] >= min_val) and torch.all(x_2d[:, i] <= max_val))
 
-        # Test 2D exact solution
-        u_exact_2d = bs_eq_2d.exact_solution(x_2d, t_2d)
-        self.assertEqual(u_exact_2d.shape, (100, 1))
-        self.assertTrue(torch.isfinite(u_exact_2d).all())
-        self.assertTrue(torch.all(u_exact_2d >= 0))  # Option price is non-negative
+        # Multi-asset options have no closed form here
+        with pytest.raises(NotImplementedError):
+            bs_eq_2d.exact_solution(x_2d, t_2d)
 
         # Test residual computation
         x_2d = x_2d.detach().requires_grad_(True)
@@ -405,25 +400,6 @@ class TestPDEs(unittest.TestCase):
         residual_2d = bs_eq_2d.compute_residual(self.model_2d, x_2d, t_2d)
         self.assertEqual(residual_2d.shape, (100, 1))
         self.assertTrue(torch.isfinite(residual_2d).all())
-
-    def test_boundary_conditions(self):
-        # Test boundary conditions
-        bc_dirichlet = self.heat_eq._create_boundary_condition("dirichlet", {"value": 0.0})
-        bc_neumann = self.heat_eq._create_boundary_condition("neumann", {"value": 0.0})
-        bc_periodic = self.heat_eq._create_boundary_condition("periodic", {})
-
-        # Test that boundary conditions are callable
-        self.assertTrue(callable(bc_dirichlet))
-        self.assertTrue(callable(bc_neumann))
-        self.assertTrue(callable(bc_periodic))
-
-        # Test boundary condition values
-        x = torch.tensor([[0.0]], device=self.device)
-        t = torch.tensor([[0.0]], device=self.device)
-
-        self.assertEqual(bc_dirichlet(x, t).shape, (1, 1))
-        self.assertEqual(bc_neumann(x, t).shape, (1, 1))
-        self.assertEqual(bc_periodic(x, t).shape, (1, 1))
 
     def test_exact_solution(self):
         # Test exact solution computation
@@ -500,9 +476,7 @@ class TestPDEs(unittest.TestCase):
         domain = [(-10.0, 10.0)]  # Changed to list of tuples
         time_domain = (0.0, 1.0)
         boundary_conditions = {
-            "left": {"type": "periodic"},
-            "right": {"type": "periodic"},
-            "initial": {"type": "soliton", "speed": 1.0},
+            "periodic": {},
         }
         initial_condition = {"type": "soliton", "speed": 1.0}
         exact_solution = {"type": "soliton", "speed": 1.0}
@@ -538,37 +512,23 @@ class TestPDEs(unittest.TestCase):
             [domain[0][0], domain[0][1]], dtype=torch.float32, device=self.device
         ).reshape(-1, 1)
         t_boundary = torch.zeros_like(x_boundary)
-        u_boundary = kdv._create_boundary_condition("initial", initial_condition)(
-            x_boundary, t_boundary
-        )
+        u_boundary = kdv._create_initial_condition(initial_condition)(x_boundary, t_boundary)
         assert u_boundary.shape == (2, 1)
 
-        # Test 2D KdV equation
-        domain_2d = [(-10, 10), (-10, 10)]
+        # KdV is a 1-D equation
         config_2d = PDEConfig(
             name="KdV Equation 2D",
-            domain=domain_2d,
+            domain=[(-10, 10), (-10, 10)],
             time_domain=time_domain,
-            parameters={"speed": 1.0},  # Soliton speed
+            parameters={},
             boundary_conditions=boundary_conditions,
             initial_condition=initial_condition,
             exact_solution=exact_solution,
             dimension=2,
             device=self.device,
         )
-        kdv_2d = KdVEquation(config=config_2d)
-
-        # Test 2D collocation points
-        x_2d, t_2d = kdv_2d.generate_collocation_points(100)
-        assert x_2d.shape == (100, 2)
-        assert t_2d.shape == (100, 1)
-        for i, (min_val, max_val) in enumerate(domain_2d):
-            assert torch.all(x_2d[:, i] >= min_val) and torch.all(x_2d[:, i] <= max_val)
-
-        # Test 2D exact solution
-        u_exact_2d = kdv_2d.exact_solution(x_2d, t_2d)
-        assert u_exact_2d.shape == (100, 1)
-        assert torch.all(u_exact_2d >= 0)  # Soliton is always positive
+        with pytest.raises(ValueError, match="1-D only"):
+            KdVEquation(config=config_2d)
 
     def test_burgers_equation(self):
         """Test the Burgers' equation implementation."""
@@ -579,12 +539,10 @@ class TestPDEs(unittest.TestCase):
             time_domain=(0.0, 1.0),
             parameters={"nu": 0.01},  # Kinematic viscosity
             boundary_conditions={
-                "left": {"type": "dirichlet", "value": 0.0},
-                "right": {"type": "dirichlet", "value": 0.0},
-                "initial": {"type": "tanh", "epsilon": 0.1},
+                "dirichlet": {"value": 0.0},
             },
-            initial_condition={"type": "tanh", "epsilon": 0.1},
-            exact_solution={"type": "tanh", "epsilon": 0.1},
+            initial_condition={"type": "sine", "amplitude": -1.0, "frequency": 1.0},
+            exact_solution={"type": "cole_hopf"},
             dimension=1,
             device=self.device,
         )
@@ -612,7 +570,7 @@ class TestPDEs(unittest.TestCase):
             device=self.device,
         ).reshape(-1, 1)
         t_boundary = torch.zeros_like(x_boundary)
-        u_boundary = burgers._create_boundary_condition("initial", config.initial_condition)(
+        u_boundary = burgers._create_initial_condition(config.initial_condition)(
             x_boundary, t_boundary
         )
         self.assertEqual(u_boundary.shape, (2, 1))
@@ -624,12 +582,10 @@ class TestPDEs(unittest.TestCase):
             time_domain=(0.0, 1.0),
             parameters={"nu": 0.01},  # Kinematic viscosity
             boundary_conditions={
-                "left": {"type": "dirichlet", "value": 0.0},
-                "right": {"type": "dirichlet", "value": 0.0},
-                "initial": {"type": "tanh", "epsilon": 0.1},
+                "dirichlet": {"value": 0.0},
             },
-            initial_condition={"type": "tanh", "epsilon": 0.1},
-            exact_solution={"type": "tanh", "epsilon": 0.1},
+            initial_condition={"type": "sine", "amplitude": -1.0, "frequency": 1.0},
+            exact_solution={},
             dimension=2,
             device=self.device,
         )
@@ -643,10 +599,12 @@ class TestPDEs(unittest.TestCase):
         for i, (min_val, max_val) in enumerate(config_2d.domain):
             self.assertTrue(torch.all(x_2d[:, i] >= min_val) and torch.all(x_2d[:, i] <= max_val))
 
-        # Test 2D exact solution
-        u_exact_2d = burgers_2d.exact_solution(x_2d, t_2d)
-        self.assertEqual(u_exact_2d.shape, (100, 1))
-        self.assertTrue(torch.isfinite(u_exact_2d).all())
+        # No 2-D closed form: exact_solution is None, the residual is defined
+        self.assertIsNone(burgers_2d.exact_solution(x_2d, t_2d))
+        model_2d = torch.nn.Sequential(
+            torch.nn.Linear(3, 8), torch.nn.Tanh(), torch.nn.Linear(8, 1)
+        ).to(self.device)
+        self.assertEqual(burgers_2d.compute_residual(model_2d, x_2d, t_2d).shape, (100, 1))
 
     def test_convection(self):
         """Test convection equation functionality."""
@@ -657,9 +615,7 @@ class TestPDEs(unittest.TestCase):
             time_domain=(0.0, 1.0),
             parameters={"velocity": 1.0},
             boundary_conditions={
-                "left": {"type": "dirichlet", "value": 0.0},
-                "right": {"type": "dirichlet", "value": 0.0},
-                "initial": {"type": "sine", "amplitude": 1.0, "frequency": 2.0},
+                "dirichlet": {"value": 0.0},
             },
             initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 2.0},
             exact_solution={"type": "sine", "amplitude": 1.0, "frequency": 2.0},
@@ -690,7 +646,7 @@ class TestPDEs(unittest.TestCase):
             device=self.device,
         ).reshape(-1, 1)
         t_boundary = torch.zeros_like(x_boundary)
-        u_boundary = convection_eq._create_boundary_condition("initial", config.initial_condition)(
+        u_boundary = convection_eq._create_initial_condition(config.initial_condition)(
             x_boundary, t_boundary
         )
         self.assertEqual(u_boundary.shape, (2, 1))
@@ -702,9 +658,7 @@ class TestPDEs(unittest.TestCase):
             time_domain=(0.0, 1.0),
             parameters={"velocity": [1.0, 1.0]},
             boundary_conditions={
-                "left": {"type": "dirichlet", "value": 0.0},
-                "right": {"type": "dirichlet", "value": 0.0},
-                "initial": {"type": "sine", "amplitude": 1.0, "frequency": 2.0},
+                "dirichlet": {"value": 0.0},
             },
             initial_condition={"type": "sine", "amplitude": 1.0, "frequency": 2.0},
             exact_solution={"type": "sine", "amplitude": 1.0, "frequency": 2.0},
@@ -735,9 +689,7 @@ class TestPDEs(unittest.TestCase):
             time_domain=(0.0, 1.0),
             parameters={"epsilon": 0.1},  # Interface width parameter
             boundary_conditions={
-                "left": {"type": "dirichlet", "value": -1.0},
-                "right": {"type": "dirichlet", "value": 1.0},
-                "initial": {"type": "tanh", "epsilon": 0.1},
+                "dirichlet": {"value": -1.0},
             },
             initial_condition={"type": "tanh", "epsilon": 0.1},
             exact_solution={"type": "tanh", "epsilon": 0.1},
@@ -771,7 +723,7 @@ class TestPDEs(unittest.TestCase):
             device=self.device,
         ).reshape(-1, 1)
         t_boundary = torch.zeros_like(x_boundary)
-        u_boundary = allen_cahn._create_boundary_condition("initial", config.initial_condition)(
+        u_boundary = allen_cahn._create_initial_condition(config.initial_condition)(
             x_boundary, t_boundary
         )
         self.assertEqual(u_boundary.shape, (2, 1))
@@ -792,9 +744,7 @@ class TestPDEs(unittest.TestCase):
             time_domain=(0.0, 1.0),
             parameters={"epsilon": 0.1},  # Interface width parameter
             boundary_conditions={
-                "left": {"type": "dirichlet", "value": -1.0},
-                "right": {"type": "dirichlet", "value": 1.0},
-                "initial": {"type": "tanh", "epsilon": 0.1},
+                "dirichlet": {"value": -1.0},
             },
             initial_condition={"type": "tanh", "epsilon": 0.1},
             exact_solution={"type": "tanh", "epsilon": 0.1},
@@ -851,9 +801,7 @@ class TestPDEs(unittest.TestCase):
             time_domain=(0.0, 1.0),
             parameters={"epsilon": 0.1},  # Interface width parameter
             boundary_conditions={
-                "left": {"type": "periodic"},
-                "right": {"type": "periodic"},
-                "initial": {"type": "tanh", "epsilon": 0.1},
+                "periodic": {},
             },
             initial_condition={"type": "tanh", "epsilon": 0.1},
             exact_solution={"type": "tanh", "epsilon": 0.1},
@@ -887,7 +835,7 @@ class TestPDEs(unittest.TestCase):
             device=self.device,
         ).reshape(-1, 1)
         t_boundary = torch.zeros_like(x_boundary)
-        u_boundary = cahn_hilliard._create_boundary_condition("initial", config.initial_condition)(
+        u_boundary = cahn_hilliard._create_initial_condition(config.initial_condition)(
             x_boundary, t_boundary
         )
         self.assertEqual(u_boundary.shape, (2, 1))
@@ -908,9 +856,7 @@ class TestPDEs(unittest.TestCase):
             time_domain=(0.0, 1.0),
             parameters={"epsilon": 0.1},  # Interface width parameter
             boundary_conditions={
-                "left": {"type": "periodic"},
-                "right": {"type": "periodic"},
-                "initial": {"type": "tanh", "epsilon": 0.1},
+                "periodic": {},
             },
             initial_condition={"type": "tanh", "epsilon": 0.1},
             exact_solution={"type": "tanh", "epsilon": 0.1},
@@ -974,17 +920,9 @@ class TestPDEs(unittest.TestCase):
             domain=[(0.0, 1.0)],
             time_domain=(0.0, 1.0),
             parameters={"g": 9.81, "L": 1.0},
-            boundary_conditions={"dirichlet": {"type": "fixed", "value": 0.0}},
-            initial_condition={
-                "type": "sine",
-                "amplitude": 1.0,
-                "frequency": 2.0,
-            },
-            exact_solution={
-                "type": "sine",
-                "amplitude": 1.0,
-                "frequency": 2.0,
-            },
+            boundary_conditions={"periodic": {}},
+            initial_condition={"type": "small_angle", "initial_angle": 0.3, "velocity": 0.0},
+            exact_solution={"type": "ode"},
             dimension=1,
         )
 
@@ -998,30 +936,13 @@ class TestPDEs(unittest.TestCase):
         assert pde.config.time_domain == (0.0, 1.0)
         assert pde.dimension == 1
 
-        # Test initial condition
         x = torch.linspace(0, 1, 100).reshape(-1, 1)
-        u0 = pde.compute_initial_condition(x)
-        assert u0.shape == (100, 1)
-        assert torch.allclose(
-            u0,
-            1.0 * torch.sin(2.0 * x),
-            atol=1e-6,
-        )
-
-        # Test boundary condition
         t = torch.ones_like(x)
-        u_bc = pde.compute_boundary_condition(x, t)
-        assert u_bc.shape == (100, 1)
-        assert torch.allclose(u_bc, torch.zeros_like(x), atol=1e-6)
 
-        # Test exact solution
+        # Test exact solution: the ODE trajectory, starting at the initial angle
         u_exact = pde.exact_solution(x, t)
         assert u_exact.shape == (100, 1)
-        assert torch.allclose(
-            u_exact,
-            1.0 * torch.sin(2.0 * (x + t)),
-            atol=1e-6,
-        )
+        assert torch.allclose(pde.exact_solution(x, torch.zeros_like(x)), torch.full_like(x, 0.3))
 
         # Test residual
         x = torch.linspace(0, 1, 100, requires_grad=True).reshape(-1, 1)
@@ -1055,19 +976,9 @@ class TestPDEs(unittest.TestCase):
         assert phase_space[0].shape == (100, 1)
         assert phase_space[1].shape == (100, 1)
 
-        # Test invalid initial condition
-        pde.config.initial_condition["type"] = "invalid"
-        with pytest.raises(ValueError):
-            pde.compute_initial_condition(x)
-
-        # Test invalid boundary condition
-        pde.config.boundary_conditions["dirichlet"]["type"] = "invalid"
-        with pytest.raises(ValueError):
-            pde.compute_boundary_condition(x, t)
-
         # Test invalid exact solution
         pde.config.exact_solution["type"] = "invalid"
-        with pytest.raises(ValueError):
+        with pytest.raises(NotImplementedError):
             pde.exact_solution(x, t)
 
         # Test invalid derivative order
@@ -1209,7 +1120,3 @@ class TestPDEs(unittest.TestCase):
             x_collocation_2d, t_collocation_2d = heat_eq_2d.generate_collocation_points(100)
             self.assertEqual(x_collocation_2d.shape, (100, 2))
             self.assertEqual(t_collocation_2d.shape, (100, 1))
-
-
-if __name__ == "__main__":
-    unittest.main()

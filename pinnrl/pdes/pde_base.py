@@ -1,22 +1,14 @@
 # Base class for PDE implementations
 # Provides common functionality for all PDEs
 
+import math
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
-
-# Conditional imports to avoid memory issues
-try:
-    import matplotlib.pyplot as plt
-
-    MATPLOTLIB_AVAILABLE = True
-except ImportError:
-    MATPLOTLIB_AVAILABLE = False
-    plt = None
 
 
 @dataclass
@@ -47,87 +39,35 @@ class PDEConfig:
     observation_data: Optional[Dict[str, Any]] = None
 
 
+_BOUNDARY_KINDS = ("dirichlet", "neumann", "periodic")
+
+
 class PDEBase:
+    """Base class for PDEs solved by PINNs.
+
+    A subclass provides the physics:
+
+    * :meth:`compute_residual` — the PDE operator applied to the network.
+    * :meth:`_create_initial_condition` — ``u(x, t0)`` for its IC types.
+    * :meth:`_exact_solution` — a closed-form solution, when one exists.
+    * ``time_order = 2`` for second-order-in-time PDEs; the initial loss then
+      also enforces ``u_t(x, t0) = initial_condition["velocity"]`` (default 0).
+
+    The base class owns everything else: derivatives, collocation sampling,
+    boundary conditions and the composite loss. ``boundary_conditions`` in the
+    config maps a kind to its options; every spatial axis gets the condition
+    on both faces:
+
+    * ``dirichlet``: ``{"value": v}`` or ``{"left": a, "right": b}`` (the lower /
+      upper face), or ``{"type": "exact"}`` to take values from the exact solution;
+    * ``neumann``: ``{"value": g}`` — ``du/dx_axis = g`` on both faces;
+    * ``periodic``: ``{}`` — ``u`` and ``du/dx_axis`` agree on opposite faces.
+
+    ``exact_solution: {}`` in the config means the problem has no closed-form
+    solution; :meth:`exact_solution` then returns ``None``.
     """
-    Base class for defining PDEs for Physics-Informed Neural Networks (PINNs).
-    Provides common functionality for all PDE implementations.
-    """
 
-    @staticmethod
-    def create(pde_type: str, config: Optional[PDEConfig] = None, **kwargs) -> "PDEBase":
-        """
-        Factory method to create PDE instances from type and parameters.
-
-        :param pde_type: Type of PDE to create (e.g., 'heat', 'wave', 'burgers')
-        :param config: Optional PDEConfig instance, if None one will be created from kwargs
-        :param kwargs: Parameters specific to the PDE type
-        :return: Instantiated PDE object
-        """
-        from importlib import import_module
-        from inspect import isclass
-
-        # Convert pde_type to class name format (e.g., 'heat' -> 'HeatEquation')
-        if "_" in pde_type:
-            # Handle names like 'heat_equation' -> 'HeatEquation'
-            pde_class_name = "".join(word.capitalize() for word in pde_type.split("_"))
-            if not pde_class_name.endswith("Equation"):
-                pde_class_name += "Equation"
-        else:
-            # Handle names like 'heat' -> 'HeatEquation'
-            pde_class_name = pde_type.capitalize() + "Equation"
-
-        # Try alternative class name formats if needed
-        alternative_class_names = [
-            pde_class_name,
-            pde_type.capitalize(),  # For cases like 'Pendulum' instead of 'PendulumEquation'
-            "".join(
-                word.capitalize() for word in pde_type.split("_")
-            ),  # CamelCase without 'Equation'
-        ]
-
-        # Try to import and instantiate the appropriate PDE class
-        for class_name in alternative_class_names:
-            try:
-                # Import from module, assuming module name is lowercase
-                module_path = f"pinnrl.pdes.{pde_type.lower().replace('equation', '')}"
-                if module_path.endswith("_"):
-                    module_path = module_path[:-1]
-
-                module = import_module(module_path)
-
-                # Get the PDE class
-                pde_class = getattr(module, class_name)
-
-                # Check if it's a proper class that inherits from PDEBase
-                if isclass(pde_class) and issubclass(pde_class, PDEBase):
-                    # If no config is provided, create one from kwargs
-                    if config is None:
-                        # Extract required parameters for PDEConfig
-                        config_params = {
-                            "name": kwargs.pop("name", f"{class_name}"),
-                            "domain": kwargs.pop("domain", [(0.0, 1.0)]),
-                            "time_domain": kwargs.pop("time_domain", (0.0, 1.0)),
-                            "parameters": kwargs.pop("parameters", {}),
-                            "boundary_conditions": kwargs.pop("boundary_conditions", {}),
-                            "initial_condition": kwargs.pop("initial_condition", {}),
-                            "exact_solution": kwargs.pop("exact_solution", {}),
-                            "dimension": kwargs.pop("dimension", 1),
-                            "input_dim": kwargs.pop("input_dim", None),
-                            "output_dim": kwargs.pop("output_dim", None),
-                            "architecture": kwargs.pop("architecture", None),
-                            "device": kwargs.pop("device", None),
-                            "training": kwargs.pop("training", None),
-                        }
-                        config = PDEConfig(**config_params)
-
-                    # Instantiate PDE with config and remaining kwargs
-                    return pde_class(config=config, **kwargs)
-            except (ImportError, AttributeError):
-                # Continue trying with other class names
-                continue
-
-        # If we get here, no valid PDE class was found
-        raise ValueError(f"Could not find PDE implementation for type: {pde_type}")
+    time_order = 1
 
     def __init__(self, config: PDEConfig, bandit_sampler=None):
         """
@@ -141,18 +81,13 @@ class PDEBase:
         self.domain = config.domain
         self.bandit_sampler = bandit_sampler
 
-        # Handle domain configuration in both old and new formats
-        if isinstance(self.domain, list):
-            if len(self.domain) > 0:
-                if isinstance(self.domain[0], (list, tuple)):
-                    # Convert any lists to tuples for consistency
-                    self.domain = [(float(d[0]), float(d[1])) for d in self.domain]
-                else:
-                    # Old format: [xmin, xmax] -> [(xmin, xmax)]
-                    self.domain = [(float(self.domain[0]), float(self.domain[1]))]
-        else:
-            # Default domain if none provided
+        # One (lo, hi) pair per spatial axis; a bare (lo, hi) means one axis.
+        if not self.domain:
             self.domain = [(0.0, 1.0)]
+        elif isinstance(self.domain[0], (list, tuple)):
+            self.domain = [(float(lo), float(hi)) for lo, hi in self.domain]
+        else:
+            self.domain = [(float(self.domain[0]), float(self.domain[1]))]
 
         # Update config with normalized domain format
         self.config.domain = self.domain
@@ -219,14 +154,11 @@ class PDEBase:
             getattr(config, "observation_data", None)
         )
 
-        # Setup boundary and initial conditions
-        self._setup_boundary_conditions()
-
-        # Setup validation points
-        self._setup_validation_points()
-
-        # For tracking point distribution
-        self.collocation_history = []
+        self.initial_condition = self._create_initial_condition(
+            dict(config.initial_condition or {})
+        )
+        self.boundary_conditions = self._parse_boundary_conditions(config.boundary_conditions or {})
+        self._fixed_points: Dict[Tuple[str, int], Any] = {}
 
         # Setup neural network parameters if not specified
         if self.config.input_dim is None:
@@ -234,15 +166,6 @@ class PDEBase:
 
         if self.config.output_dim is None:
             self.config.output_dim = 1  # Default to single output (u)
-
-        # Validate required parameters for this PDE type (call at the end)
-        # Temporarily disabled to debug import issues
-        # self._validate_parameters()
-
-    def _validate_parameters(self):
-        """Validate that required parameters are present. Override in subclasses."""
-        # Base implementation - subclasses should override with their specific requirements
-        pass
 
     def get_parameter(self, name: str, default=None, required: bool = False):
         """
@@ -291,21 +214,14 @@ class PDEBase:
         u_pred_obs = model(torch.cat([obs["x"], obs["t"]], dim=1))
         return self._apply_loss_fn(u_pred_obs - obs["u"])
 
-    def _loss_function_name(self) -> str:
+    def _training_option(self, name: str, default=None):
+        """Read ``name`` from ``config.training`` (a TrainingConfig, a dict, or absent)."""
         training = getattr(self.config, "training", None)
         if training is None:
-            return "mse"
+            return default
         if isinstance(training, dict):
-            return training.get("loss_function", "mse")
-        return getattr(training, "loss_function", "mse")
-
-    def _huber_delta(self) -> float:
-        training = getattr(self.config, "training", None)
-        if training is None:
-            return 1.0
-        if isinstance(training, dict):
-            return float(training.get("huber_delta", 1.0))
-        return float(getattr(training, "huber_delta", 1.0))
+            return training.get(name, default)
+        return getattr(training, name, default)
 
     def _apply_loss_fn(self, error: torch.Tensor) -> torch.Tensor:
         """Reduce a per-sample residual/error tensor into a scalar loss.
@@ -314,7 +230,7 @@ class PDEBase:
         Unknown names fall back to mse so existing test trajectories are
         preserved.
         """
-        name = self._loss_function_name()
+        name = self._training_option("loss_function", "mse")
         if name == "mae":
             return torch.mean(torch.abs(error))
         if name == "huber":
@@ -322,28 +238,9 @@ class PDEBase:
                 error,
                 torch.zeros_like(error),
                 reduction="mean",
-                delta=self._huber_delta(),
+                delta=float(self._training_option("huber_delta", 1.0)),
             )
         return torch.mean(error**2)
-
-    def _data_loss_weight(self, default: float = 1.0) -> float:
-        """Pull the ``data`` loss weight from training config, falling back to ``default``."""
-        try:
-            lw = self.config.training.loss_weights
-            if isinstance(lw, dict):
-                return float(lw.get("data", default))
-            return float(getattr(lw, "data", default))
-        except AttributeError:
-            return default
-
-    def _training_mode(self) -> str:
-        """Return the training mode from config, defaulting to ``forward``."""
-        training = getattr(self.config, "training", None)
-        if training is None:
-            return "forward"
-        if isinstance(training, dict):
-            return str(training.get("mode", "forward"))
-        return str(getattr(training, "mode", "forward"))
 
     def trainable_parameters_iter(self):
         """Iterator over registered trainable PDE parameters (for the optimizer)."""
@@ -460,6 +357,10 @@ class PDEBase:
         try:
             if saved_params is not None and self._true_parameters:
                 self._trainable_params = nn.ParameterDict()
+            if not self.has_exact_solution:
+                raise ValueError(
+                    f"{self.config.name}: synthetic observations need a configured exact_solution"
+                )
             with torch.no_grad():
                 u = self.exact_solution(x, t)
                 if noise_std and noise_std > 0:
@@ -472,108 +373,150 @@ class PDEBase:
         self.observation_data = {"x": x, "t": t, "u": u}
         return self.observation_data
 
-    def _setup_boundary_conditions(self):
-        """Set up boundary condition functions from configuration."""
-        self.boundary_conditions = {}
+    def _create_initial_condition(self, params: Dict[str, Any]) -> Callable:
+        """Return ``u0(x, t)`` for the generic IC types; subclasses add their own.
 
-        if hasattr(self.config, "boundary_conditions") and self.config.boundary_conditions:
-            for bc_type, params in self.config.boundary_conditions.items():
-                self.boundary_conditions[bc_type] = self._create_boundary_condition(bc_type, params)
+        Generic types (all functions of the first spatial coordinate ``x_1``):
 
-        # Set up initial condition as a boundary condition if not already defined
-        if "initial" not in self.boundary_conditions and hasattr(self.config, "initial_condition"):
-            self.boundary_conditions["initial"] = self._create_boundary_condition(
-                "initial", self.config.initial_condition
-            )
+        * ``fixed`` — ``value``;
+        * ``gaussian`` — ``exp(-(x_1 - mean)² / (2 std²))``;
+        * ``sine`` — ``amplitude · sin(frequency · π · x_1)``;
+        * ``tanh`` — ``tanh(x_1 / epsilon)``;
+        * ``random`` — a smooth, reproducible perturbation: ``amplitude`` times a
+          normalised sum of five cosine modes over the domain, with weights and
+          phases drawn from ``seed`` (default 0). Bounded by ``amplitude``.
 
-    def _setup_validation_points(self):
-        """Set up validation points for exact solution comparison."""
-        self.validation_points = None
+        An empty ``initial_condition`` returns ``None``: no initial-condition term.
 
-    def _create_boundary_condition(self, bc_type: str, params: Dict[str, Any]) -> callable:
+        Raises:
+            ValueError: For an unknown type.
         """
-        Create boundary condition function from parameters.
+        ic_type = params.get("type")
+        if not params:
+            return None
+        if ic_type == "tanh":
+            epsilon = float(params.get("epsilon", 0.1))
+            return lambda x, t: torch.tanh(x[:, 0:1] / epsilon)
+        if ic_type == "random":
+            rng = np.random.default_rng(params.get("seed", 0))
+            weights = rng.uniform(-1.0, 1.0, size=5)
+            phases = rng.uniform(0.0, 2 * np.pi, size=5)
+            amplitude = float(params.get("amplitude", 0.1)) / np.abs(weights).sum()
+            lo, hi = (float(b) for b in self.domain[0])
 
-        :param bc_type: Type of boundary condition
-        :param params: Parameters for the boundary condition
-        :return: Boundary condition function
-        """
-        # Map left/right to dirichlet for backward compatibility
-        if bc_type in ["left", "right"]:
-            bc_type = "dirichlet"
-
-        if bc_type == "dirichlet":
-            value = params.get("value", 0.0)
-            return lambda x, t: torch.full_like(x[:, 0:1], value)
-
-        elif bc_type == "neumann":
-            value = params.get("value", 0.0)
-            return lambda x, t: torch.full_like(x[:, 0:1], value)
-
-        elif bc_type == "periodic":
-            if self.dimension == 1:
-                return lambda x, t: torch.sin(2 * torch.pi * x[:, 0:1])
-            else:
-                return lambda x, t: torch.sin(2 * torch.pi * torch.sum(x, dim=1, keepdim=True))
-
-        elif bc_type == "initial":
-            # Handle different types of initial conditions
-            ic_type = params.get("type", "sine")
-
-            if ic_type == "sine":
-                amplitude = params.get("amplitude", 1.0)
-                frequency = params.get("frequency", 1.0)
-                return lambda x, t: amplitude * torch.sin(frequency * torch.pi * x[:, 0:1])
-
-            elif ic_type == "sin_exp_decay":
-                amplitude = params.get("amplitude", 1.0)
-                frequency = params.get("frequency", 1.0)
-                return lambda x, t: amplitude * torch.sin(frequency * torch.pi * x[:, 0:1])
-
-            elif ic_type == "tanh":
-                epsilon = params.get("epsilon", 0.1)
-                return lambda x, t: torch.tanh(x[:, 0:1] / epsilon)
-
-            elif ic_type == "gaussian":
-                mean = params.get("mean", 0.0)
-                std = params.get("std", 0.1)
-                return lambda x, t: torch.exp(-((x[:, 0:1] - mean) ** 2) / (2 * std**2))
-
-            elif ic_type == "fixed":
-                value = params.get("value", 0.0)
-                return lambda x, t: torch.full_like(x[:, 0:1], value)
-
-            elif ic_type == "random":
-                amplitude = params.get("amplitude", 0.1)
-                return lambda x, t: amplitude * (2 * torch.rand_like(x[:, 0:1]) - 1)
-
-            elif ic_type == "small_angle":
-                # For pendulum equation
-                initial_angle = params.get("initial_angle", 0.5)
-                return lambda x, t: torch.full_like(x[:, 0:1], initial_angle)
-
-            elif ic_type == "option":
-                # For Black-Scholes equation
-                strike = params.get("strike", 100.0)
-                option_type = params.get("option_type", "call")
-                if option_type == "call":
-                    return lambda x, t: torch.maximum(
-                        x[:, 0:1] - strike, torch.zeros_like(x[:, 0:1])
-                    )
-                else:  # put
-                    return lambda x, t: torch.maximum(
-                        strike - x[:, 0:1], torch.zeros_like(x[:, 0:1])
-                    )
-
-            else:
-                # Default to zero if type not recognized
-                print(
-                    f"Warning: Unrecognized initial condition type '{ic_type}'. Defaulting to zero."
+            def perturbation(x, t):
+                s = (x[:, 0:1] - lo) / (hi - lo)
+                return amplitude * sum(
+                    float(w) * torch.cos(2 * np.pi * (m + 1) * s + float(p))
+                    for m, (w, p) in enumerate(zip(weights, phases))
                 )
-                return lambda x, t: torch.zeros_like(x[:, 0:1])
-        else:
-            print(f"Warning: Unsupported boundary condition type '{bc_type}'. Defaulting to zero.")
-            return lambda x, t: torch.zeros_like(x[:, 0:1])
+
+            return perturbation
+        if ic_type == "fixed":
+            value = float(params.get("value", 0.0))
+            return lambda x, t: torch.full_like(x[:, 0:1], value)
+        if ic_type == "gaussian":
+            mean, std = float(params.get("mean", 0.0)), float(params.get("std", 0.1))
+            return lambda x, t: torch.exp(-((x[:, 0:1] - mean) ** 2) / (2 * std**2))
+        if ic_type == "sine":
+            a, k = float(params.get("amplitude", 1.0)), float(params.get("frequency", 1.0))
+            return lambda x, t: a * torch.sin(k * torch.pi * x[:, 0:1])
+        raise ValueError(f"{type(self).__name__}: unsupported initial condition type {ic_type!r}")
+
+    def _parse_boundary_conditions(self, config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        """Validate the ``boundary_conditions`` block (see the class docstring)."""
+        parsed = {}
+        for kind, options in config.items():
+            options = dict(options or {})
+            if kind not in _BOUNDARY_KINDS:
+                raise ValueError(
+                    f"Unknown boundary condition {kind!r}; expected one of {_BOUNDARY_KINDS}"
+                )
+            bc_type = options.get("type")
+            if kind == "dirichlet":
+                if bc_type not in (None, "fixed", "exact"):
+                    raise ValueError(f"Unknown dirichlet type {bc_type!r}; use 'fixed' or 'exact'")
+                if bc_type == "exact" and not self.config.exact_solution:
+                    raise ValueError("dirichlet type 'exact' needs a configured exact_solution")
+            elif kind == "neumann" and bc_type not in (None, "zero"):
+                raise ValueError(f"Unknown neumann type {bc_type!r}; use 'zero' or a 'value'")
+            parsed[kind] = options
+        return parsed
+
+    def _seeded_points(self, kind: str, n: int):
+        """Fixed, seeded points for the boundary and initial losses.
+
+        They are drawn once per instance, so the loss is deterministic across
+        calls (L-BFGS line searches need that).
+        """
+        key = (kind, n)
+        if key not in self._fixed_points:
+            gen = torch.Generator().manual_seed(0 if kind == "initial" else 1)
+            lo = torch.tensor([float(b[0]) for b in self.domain])
+            hi = torch.tensor([float(b[1]) for b in self.domain])
+            x = lo + (hi - lo) * torch.rand(n, self.dimension, generator=gen)
+            t0, t1 = float(self.time_domain[0]), float(self.time_domain[1])
+            if kind == "initial":
+                points = (x.to(self.device), torch.full((n, 1), t0, device=self.device))
+            else:
+                t = (t0 + (t1 - t0) * torch.rand(n, 1, generator=gen)).to(self.device)
+                points = []
+                for axis in range(self.dimension):
+                    x_lo, x_hi = x.clone(), x.clone()
+                    x_lo[:, axis], x_hi[:, axis] = lo[axis], hi[axis]
+                    points.append((axis, x_lo.to(self.device), x_hi.to(self.device), t))
+            self._fixed_points[key] = points
+        return self._fixed_points[key]
+
+    def _dirichlet_values(self, options, x_lo, x_hi, t):
+        """Target values on the lower and upper face for a dirichlet condition."""
+        if options.get("type") == "exact":
+            with torch.no_grad():
+                return self.exact_solution(x_lo, t), self.exact_solution(x_hi, t)
+        value = float(options.get("value", 0.0))
+        left = float(options.get("left", value))
+        right = float(options.get("right", value))
+        return torch.full_like(t, left), torch.full_like(t, right)
+
+    def _boundary_loss(self, model: torch.nn.Module) -> torch.Tensor:
+        """Mean loss over every configured condition on every face."""
+        if not self.boundary_conditions:
+            return torch.tensor(0.0, device=self.device)
+        n = int(self._training_option("num_boundary_points", 100))
+        needs_grad = "neumann" in self.boundary_conditions or "periodic" in self.boundary_conditions
+        terms = []
+        for axis, x_lo, x_hi, t in self._seeded_points("boundary", n):
+            x_lo = x_lo.clone().requires_grad_(needs_grad)
+            x_hi = x_hi.clone().requires_grad_(needs_grad)
+            u_lo = model(torch.cat([x_lo, t], dim=1))
+            u_hi = model(torch.cat([x_hi, t], dim=1))
+            if needs_grad:
+                du_lo = self._grad(u_lo, x_lo)[:, axis : axis + 1]
+                du_hi = self._grad(u_hi, x_hi)[:, axis : axis + 1]
+            for kind, options in self.boundary_conditions.items():
+                if kind == "dirichlet":
+                    g_lo, g_hi = self._dirichlet_values(options, x_lo.detach(), x_hi.detach(), t)
+                    terms += [u_lo - g_lo, u_hi - g_hi]
+                elif kind == "neumann":
+                    g = float(options.get("value", 0.0))
+                    terms += [du_lo - g, du_hi - g]
+                else:  # periodic
+                    terms += [u_lo - u_hi, du_lo - du_hi]
+        return torch.stack([self._apply_loss_fn(term) for term in terms]).mean()
+
+    def _initial_loss(self, model: torch.nn.Module) -> torch.Tensor:
+        """``u(x, t0) = u0(x)``, plus ``u_t(x, t0) = velocity`` when ``time_order == 2``."""
+        if self.initial_condition is None:
+            return torch.tensor(0.0, device=self.device)
+        n = int(self._training_option("num_initial_points", 100))
+        x, t = self._seeded_points("initial", n)
+        t = t.clone().requires_grad_(self.time_order == 2)
+        u = model(torch.cat([x, t], dim=1))
+        loss = self._apply_loss_fn(u - self.initial_condition(x, t.detach()))
+        if self.time_order == 2:
+            velocity = float(self.config.initial_condition.get("velocity", 0.0))
+            loss = loss + self._apply_loss_fn(self._grad(u, t) - velocity)
+        return loss
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
@@ -588,6 +531,34 @@ class PDEBase:
         """
         raise NotImplementedError("Subclasses must implement compute_residual")
 
+    @staticmethod
+    def _grad(f: torch.Tensor, wrt: torch.Tensor) -> torch.Tensor:
+        """Pointwise ``df/dwrt`` (shape of ``wrt``); zeros where ``f`` does not depend on it."""
+        g = torch.autograd.grad(
+            f, wrt, grad_outputs=torch.ones_like(f), create_graph=True, allow_unused=True
+        )[0]
+        return torch.zeros_like(wrt) if g is None else g
+
+    def laplacian(self, f: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+        """Sum of the pure second derivatives of ``f`` along each column of ``x``.
+
+        ``x`` must be the leaf tensor ``f`` was computed from (``requires_grad``).
+        Differentiating with respect to the whole tensor and then taking a column
+        is what makes this correct in more than one dimension; a column slice
+        ``x[:, d:d+1]`` is not part of the graph.
+        """
+        grad = self._grad(f, x)
+        lap = torch.zeros_like(f)
+        for d in range(x.shape[1]):
+            lap = lap + self._grad(grad[:, d : d + 1], x)[:, d : d + 1]
+        return lap
+
+    def _prepare_inputs(self, model, x: torch.Tensor, t: torch.Tensor):
+        """Fresh leaf copies of ``x`` and ``t`` that require grad, and ``u = model([x, t])``."""
+        x = x.detach().to(self.device).requires_grad_(True)
+        t = t.detach().to(self.device).requires_grad_(True)
+        return x, t, model(torch.cat([x, t], dim=1))
+
     def compute_derivatives(
         self,
         model: torch.nn.Module,
@@ -596,269 +567,94 @@ class PDEBase:
         temporal_derivatives: List[int] = None,
         spatial_derivatives: Set[int] = None,
     ) -> Dict[str, torch.Tensor]:
-        """
-        Compute derivatives of the solution with respect to time and space.
+        """Evaluate ``u = model([x, t])`` and the requested derivatives.
 
-        Args:
-            model: Neural network model
-            x: Spatial coordinates
-            t: Time coordinates
-            temporal_derivatives: List of temporal derivative orders to compute
-            spatial_derivatives: Set of spatial derivative orders to compute
+        Returns a dict with ``"u"`` and:
 
-        Returns:
-            Dictionary containing computed derivatives
+        * time: ``"dt"``, ``"dt2"``;
+        * space, 1-D: ``"dx"``, ``"dx2"``, ``"dx3"``, ``"dx4"``;
+        * space, n-D: pure derivatives per axis, ``"dx1"``, ``"dx1x1"``, ... ``"dx2x2"``;
+        * ``"laplacian"`` whenever order 2 is requested.
 
         Raises:
-            ValueError: If derivative order is invalid (>2 for temporal, >4 for spatial)
+            ValueError: For temporal orders above 2 or spatial orders above 4.
         """
-        # Validate derivative orders
-        if temporal_derivatives:
-            max_temporal_order = max(temporal_derivatives)
-            if max_temporal_order > 2:
-                raise ValueError(
-                    f"Temporal derivative order {max_temporal_order} is not supported. Maximum order is 2."
-                )
-
-        if spatial_derivatives:
-            max_spatial_order = max(spatial_derivatives)
-            if max_spatial_order > 4:
-                raise ValueError(
-                    f"Spatial derivative order {max_spatial_order} is not supported. Maximum order is 4."
-                )
-
-        # Ensure tensors require gradients and are on the correct device
-        x = x.detach().to(self.device).requires_grad_(True)
-        t = t.detach().to(self.device).requires_grad_(True)
-
-        # Ensure model parameters require gradients
-        if isinstance(model, torch.nn.Module):
-            for param in model.parameters():
-                param.requires_grad_(True)
-            # Set model to training mode
-            model.train()
-            # Forward pass through the model
-            inputs = torch.cat([x, t], dim=1)
-            u = model(inputs)
-        else:
-            # If model is a tensor (for testing), use it directly
-            u = model
-
-        # Ensure output requires gradients
-        u = u.to(self.device).requires_grad_(True)
-
-        derivatives = {}
-
-        # Compute temporal derivatives if requested
-        if temporal_derivatives:
-            u_t_prev = u
-            for i in sorted(temporal_derivatives):
-                if i == 0:
-                    continue  # Skip 0th order derivative
-
-                if i == 1:
-                    # First time derivative
-                    grad_outputs = torch.ones_like(u, device=self.device).requires_grad_(True)
-                    u_t = torch.autograd.grad(
-                        u,
-                        t,
-                        grad_outputs=grad_outputs,
-                        create_graph=True,
-                        allow_unused=True,
-                        retain_graph=True,
-                    )[0]
-                    if u_t is None:
-                        u_t = torch.zeros_like(u, device=self.device)
-                    derivatives["dt"] = u_t.requires_grad_(True)
-                    u_t_prev = u_t
-                else:
-                    # Higher-order time derivatives
-                    key = f"dt{i}"
-                    grad_outputs = torch.ones_like(u_t_prev, device=self.device).requires_grad_(
-                        True
-                    )
-                    u_t_higher = torch.autograd.grad(
-                        u_t_prev,
-                        t,
-                        grad_outputs=grad_outputs,
-                        create_graph=True,
-                        allow_unused=True,
-                        retain_graph=True,
-                    )[0]
-                    if u_t_higher is None:
-                        u_t_higher = torch.zeros_like(u, device=self.device)
-                    derivatives[key] = u_t_higher.requires_grad_(True)
-                    u_t_prev = u_t_higher
-
-        # Compute spatial derivatives if requested
-        if spatial_derivatives:
-            if self.dimension == 1:
-                u_x_prev = u
-                for i in sorted(spatial_derivatives):
-                    if i == 0:
-                        continue  # Skip 0th order derivative
-
-                    if i == 1:
-                        # First derivative
-                        grad_outputs = torch.ones_like(u, device=self.device).requires_grad_(True)
-                        u_x = torch.autograd.grad(
-                            u,
-                            x,
-                            grad_outputs=grad_outputs,
-                            create_graph=True,
-                            allow_unused=True,
-                            retain_graph=True,
-                        )[0]
-                        if u_x is None:
-                            u_x = torch.zeros_like(u, device=self.device)
-                        derivatives["dx"] = u_x.requires_grad_(True)
-                        u_x_prev = u_x
-                    else:
-                        # Higher-order derivatives
-                        key = f"dx{i}"
-                        grad_outputs = torch.ones_like(u_x_prev, device=self.device).requires_grad_(
-                            True
-                        )
-                        u_x_higher = torch.autograd.grad(
-                            u_x_prev,
-                            x,
-                            grad_outputs=grad_outputs,
-                            create_graph=True,
-                            allow_unused=True,
-                            retain_graph=True,
-                        )[0]
-                        if u_x_higher is None:
-                            u_x_higher = torch.zeros_like(u, device=self.device)
-                        derivatives[key] = u_x_higher.requires_grad_(True)
-                        u_x_prev = u_x_higher
-            else:
-                # Multi-dimensional case
-                for dim in range(self.dimension):
-                    u_x_prev = u
-                    dim_name = f"x{dim+1}" if self.dimension > 1 else "x"
-
-                    for order in sorted(spatial_derivatives):
-                        if order == 0:
-                            continue  # Skip 0th order derivative
-
-                        # Compute derivatives recursively for each dimension
-                        for i in range(1, order + 1):
-                            if i == 1:
-                                # First derivative
-                                grad_outputs = torch.ones_like(
-                                    u, device=self.device
-                                ).requires_grad_(True)
-                                u_x = torch.autograd.grad(
-                                    u,
-                                    x[:, dim : dim + 1],
-                                    grad_outputs=grad_outputs,
-                                    create_graph=True,
-                                    allow_unused=True,
-                                    retain_graph=True,
-                                )[0]
-                                if u_x is None:
-                                    u_x = torch.zeros_like(u, device=self.device)
-                                derivatives[f"d{dim_name}"] = u_x.requires_grad_(True)
-                                u_x_prev = u_x
-                            else:
-                                # Higher-order derivatives
-                                key = f"d{dim_name*i}"
-                                grad_outputs = torch.ones_like(
-                                    u_x_prev, device=self.device
-                                ).requires_grad_(True)
-                                u_x_higher = torch.autograd.grad(
-                                    u_x_prev,
-                                    x[:, dim : dim + 1],
-                                    grad_outputs=grad_outputs,
-                                    create_graph=True,
-                                    allow_unused=True,
-                                    retain_graph=True,
-                                )[0]
-                                if u_x_higher is None:
-                                    u_x_higher = torch.zeros_like(u, device=self.device)
-                                derivatives[key] = u_x_higher.requires_grad_(True)
-                                u_x_prev = u_x_higher
-
-        # Compute Laplacian (∇²u) for convenience
-        if spatial_derivatives and 2 in spatial_derivatives:
-            if self.dimension == 1:
-                # 1D Laplacian is just the second derivative
-                derivatives["laplacian"] = derivatives["dx2"]
-            else:
-                # Multi-dimensional Laplacian is the sum of second derivatives in each dimension
-                laplacian = torch.zeros_like(u, device=self.device)
-                for dim in range(self.dimension):
-                    dim_name = f"x{dim+1}" if self.dimension > 1 else "x"
-                    laplacian += derivatives[f"d{dim_name*2}"]
-                derivatives["laplacian"] = laplacian.requires_grad_(True)
-
-        return derivatives
-
-    def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """
-        Compute exact analytical solution. Must be implemented by subclasses.
-
-        :param x: Spatial coordinates
-        :param t: Time coordinates
-        :return: Exact solution tensor
-        """
-        raise NotImplementedError("Subclasses must implement exact_solution")
-
-    def _sample_uniform(self, num_points: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Grid-based uniform sampling with small jitter for domain coverage."""
-        if self.dimension == 1:
-            n_side = int(np.sqrt(num_points))
-            x = torch.linspace(
-                self.domain[0][0], self.domain[0][1], n_side, device=self.device
-            ).reshape(-1, 1)
-            t = torch.linspace(
-                self.time_domain[0], self.time_domain[1], n_side, device=self.device
-            ).reshape(-1, 1)
-
-            X, T = torch.meshgrid(x.squeeze(), t.squeeze(), indexing="ij")
-            x = X.reshape(-1, 1)
-            t = T.reshape(-1, 1)
-
-            # Small jitter to break grid alignment
-            x_noise = (self.domain[0][1] - self.domain[0][0]) * 0.01
-            t_noise = (self.time_domain[1] - self.time_domain[0]) * 0.01
-            x = x + torch.randn_like(x) * x_noise
-            t = t + torch.randn_like(t) * t_noise
-
-            x = torch.clamp(x, self.domain[0][0], self.domain[0][1])
-            t = torch.clamp(t, self.time_domain[0], self.time_domain[1])
-        else:
-            points_per_dim = max(2, int(num_points ** (1 / (self.dimension + 1))) + 1)
-            grid_points = []
-            for dim in range(self.dimension):
-                grid_points.append(
-                    torch.linspace(self.domain[dim][0], self.domain[dim][1], points_per_dim)
-                )
-            grid_points.append(
-                torch.linspace(self.time_domain[0], self.time_domain[1], points_per_dim)
+        temporal = sorted(set(temporal_derivatives or ()) - {0})
+        spatial = sorted(set(spatial_derivatives or ()) - {0})
+        if temporal and temporal[-1] > 2:
+            raise ValueError(
+                f"Temporal derivative order {temporal[-1]} is not supported. Maximum order is 2."
+            )
+        if spatial and spatial[-1] > 4:
+            raise ValueError(
+                f"Spatial derivative order {spatial[-1]} is not supported. Maximum order is 4."
             )
 
-            grid_tensors = torch.meshgrid(*grid_points, indexing="ij")
-            points = torch.stack([g.reshape(-1) for g in grid_tensors], dim=1)
+        x, t, u = self._prepare_inputs(model, x, t)
+        derivatives = {"u": u}
 
-            if len(points) > num_points:
-                indices = torch.randperm(len(points))[:num_points]
-                points = points[indices]
-            elif len(points) < num_points:
-                extra = torch.randint(0, len(points), (num_points - len(points),))
-                points = torch.cat([points, points[extra]], dim=0)
+        current = u
+        for order in range(1, (temporal[-1] if temporal else 0) + 1):
+            current = self._grad(current, t)
+            if order in temporal:
+                derivatives["dt" if order == 1 else f"dt{order}"] = current
 
-            points = points + torch.randn_like(points) * 0.01
-            for dim in range(self.dimension):
-                points[:, dim] = torch.clamp(
-                    points[:, dim], self.domain[dim][0], self.domain[dim][1]
+        for dim in range(self.dimension):
+            current = u
+            for order in range(1, (spatial[-1] if spatial else 0) + 1):
+                current = self._grad(current, x)[:, dim : dim + 1]
+                if order not in spatial:
+                    continue
+                if self.dimension == 1:
+                    key = "dx" if order == 1 else f"dx{order}"
+                else:
+                    key = "d" + f"x{dim + 1}" * order
+                derivatives[key] = current
+
+        if 2 in spatial:
+            if self.dimension == 1:
+                derivatives["laplacian"] = derivatives["dx2"]
+            else:
+                derivatives["laplacian"] = sum(
+                    derivatives["d" + f"x{d + 1}" * 2] for d in range(self.dimension)
                 )
-            points[:, -1] = torch.clamp(points[:, -1], self.time_domain[0], self.time_domain[1])
+        return derivatives
 
-            x = points[:, : self.dimension]
-            t = points[:, -1].reshape(-1, 1)
+    @property
+    def has_exact_solution(self) -> bool:
+        """Whether the config names a closed-form solution."""
+        return bool(self.config.exact_solution)
 
-        return x, t
+    def exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> Optional[torch.Tensor]:
+        """Closed-form ``u(x, t)``, or ``None`` when ``exact_solution`` is not configured."""
+        if not self.has_exact_solution:
+            return None
+        return self._exact_solution(x, t)
+
+    def _exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError(
+            f"{type(self).__name__} has no exact solution of type "
+            f"{self.config.exact_solution.get('type')!r}"
+        )
+
+    def _sample_uniform(self, num_points: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Exactly ``num_points`` points from a jittered space-time grid.
+
+        A regular grid with at least ``num_points`` nodes is built over all
+        ``dimension + 1`` axes, ``num_points`` nodes are drawn without
+        replacement, and each coordinate is jittered by 1% of its axis length
+        (then clipped to the domain) to break grid alignment.
+        """
+        bounds = list(self.domain) + [tuple(self.time_domain)]
+        lo = torch.tensor([float(b[0]) for b in bounds], device=self.device)
+        hi = torch.tensor([float(b[1]) for b in bounds], device=self.device)
+        per_axis = max(2, math.ceil(num_points ** (1.0 / len(bounds))))
+        axes = [torch.linspace(0.0, 1.0, per_axis, device=self.device)] * len(bounds)
+        grid = torch.stack([g.reshape(-1) for g in torch.meshgrid(*axes, indexing="ij")], dim=1)
+        unit = grid[torch.randperm(len(grid), device=self.device)[:num_points]]
+        unit = torch.clamp(unit + 0.01 * torch.randn_like(unit), 0.0, 1.0)
+        points = lo + (hi - lo) * unit
+        return points[:, : self.dimension], points[:, -1:]
 
     def _sample_stratified(self, num_points: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """Stratified random sampling (Latin Hypercube-style, pure PyTorch).
@@ -991,15 +787,12 @@ class PDEBase:
                         "use 'residual_based' for higher dimensions."
                     )
                 if self.bandit_sampler is None:
-                    from pinnrl.rl.bandit_sampler import ResidualBanditSampler
+                    from pinnrl.config import RLConfig
 
-                    self.bandit_sampler = ResidualBanditSampler(
-                        tuple(self.domain[0]), tuple(self.time_domain), device=self.device
-                    )
+                    self.bandit_sampler = RLConfig().build_sampler(self)
                 x, t = self.bandit_sampler.sample(
                     self, model, num_points, progress=kwargs.get("progress", 0.0)
                 )
-                self.collocation_history.append(torch.cat([x, t], dim=1).cpu().numpy())
         else:
             raise ValueError(f"Unknown sampling strategy: {strategy}")
 
@@ -1012,439 +805,76 @@ class PDEBase:
     def compute_loss(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
+        """Loss components and their weighted total.
+
+        Returns ``residual`` (at the collocation points ``x, t``), ``boundary``,
+        ``initial``, ``data`` (observations; zero without any) and ``total``.
+        ``training.mode`` selects the objective: ``forward`` uses the physics
+        terms, ``inverse`` and ``data_augmented`` add the data term, and
+        ``data_only`` keeps only the data term. Weights come from
+        ``training.loss_weights`` (``residual``/``pde``, ``boundary``,
+        ``initial``, ``data``); adaptive weighting is applied by the trainer.
         """
-        Compute all loss components for training.
-
-        :param model: Neural network model
-        :param x: Spatial coordinates
-        :param t: Time coordinates
-        :return: Dictionary of loss components
-        """
-        # Compute PDE residual
-        residual = self.compute_residual(model, x, t)
-        residual_loss = self._apply_loss_fn(residual)
-
-        # Compute boundary condition loss
-        if self.dimension == 1:
-            x_boundary = torch.tensor(
-                [self.domain[0][0], self.domain[0][1]],
-                dtype=torch.float32,
-                device=self.device,
-            ).reshape(-1, 1)
-        else:
-            x_boundary = []
-            for dim in range(self.dimension):
-                x_boundary.extend([self.domain[dim][0], self.domain[dim][1]])
-            x_boundary = torch.tensor(x_boundary, dtype=torch.float32, device=self.device).reshape(
-                -1, 1
-            )
-
-        t_boundary = torch.linspace(
-            self.time_domain[0],
-            self.time_domain[1],
-            100,
-            device=self.device,
-        ).reshape(-1, 1)
-
-        # Create boundary points by combining spatial and temporal coordinates
-        x_boundary = x_boundary.repeat_interleave(len(t_boundary), dim=0)
-        t_boundary = t_boundary.repeat(len(x_boundary) // len(t_boundary), 1)
-
-        # Compute boundary condition loss
-        boundary_loss = torch.tensor(0.0, device=self.device)
-        for bc_type, bc_func in self.boundary_conditions.items():
-            u_boundary = model(torch.cat([x_boundary, t_boundary], dim=1))
-            u_target = bc_func(x_boundary, t_boundary)
-            boundary_loss += self._apply_loss_fn(u_boundary - u_target)
-
-        # Compute initial condition loss
-        x_initial = torch.linspace(
-            self.domain[0][0], self.domain[0][1], 100, device=self.device
-        ).reshape(-1, 1)
-        t_initial = torch.zeros_like(x_initial, device=self.device)
-
-        u_initial = model(torch.cat([x_initial, t_initial], dim=1))
-
-        # Use existing boundary condition functions to handle initial conditions
-        if "initial" in self.boundary_conditions:
-            # If there's a specific initial condition function already created
-            u_target = self.boundary_conditions["initial"](x_initial, t_initial)
-        else:
-            # Handle sine wave case as default (for backward compatibility)
-            ic_type = self.config.initial_condition.get("type", "sine")
-            if (
-                ic_type == "sine"
-                and "amplitude" in self.config.initial_condition
-                and "frequency" in self.config.initial_condition
-            ):
-                u_target = self.config.initial_condition["amplitude"] * torch.sin(
-                    self.config.initial_condition["frequency"] * torch.pi * x_initial
-                )
-            else:
-                # For other types, create a temporary boundary condition function
-                temp_bc = self._create_boundary_condition("initial", self.config.initial_condition)
-                u_target = temp_bc(x_initial, t_initial)
-
-        initial_loss = self._apply_loss_fn(u_initial - u_target)
-
-        # Data-fitting loss for inverse problems (zero when no observations).
-        data_loss = self._compute_data_loss(model)
-
-        # Initialize smoothness loss
-        smoothness_loss = torch.tensor(0.0, device=self.device)
-
-        # Get smoothness weight from config if available
-        if hasattr(self.config.training, "loss_weights") and self.config.training.loss_weights:
-            smoothness_weight = self.config.training.loss_weights.get("smoothness", 0.0)
-        else:
-            smoothness_weight = 0.0
-
-        # Create dictionary of losses
         losses = {
-            "residual": residual_loss,
-            "boundary": boundary_loss,
-            "initial": initial_loss,
-            "smoothness": smoothness_loss,
-            "data": data_loss,
+            "residual": self._apply_loss_fn(self.compute_residual(model, x, t)),
+            "boundary": self._boundary_loss(model),
+            "initial": self._initial_loss(model),
+            "data": self._compute_data_loss(model),
         }
 
-        # Pull a data-loss weight even under adaptive weighting so the data
-        # term isn't accidentally dropped to zero in inverse mode.
-        data_weight = self._data_loss_weight(1.0)
-
-        # Mode controls which loss components contribute to the total.
-        # ``data_only`` zeros out the physics terms (pure regression on
-        # observed snapshots); ``data_augmented`` and ``inverse`` keep the
-        # physics AND ensure the data term is non-zero.
-        mode = self._training_mode()
-        residual_active = 0.0 if mode == "data_only" else 1.0
-        ic_bc_active = residual_active
-        if mode in ("inverse", "data_only", "data_augmented") and data_weight <= 0.0:
-            data_weight = 1.0
-
-        # Use adaptive weights if enabled
-        if (
-            self.config.training is not None
-            and hasattr(self.config.training, "adaptive_weights")
-            and self.config.training.adaptive_weights.enabled
-        ):
-            losses["total"] = (
-                residual_active * residual_loss
-                + ic_bc_active * boundary_loss
-                + ic_bc_active * initial_loss
-                + smoothness_weight * smoothness_loss
-                + data_weight * data_loss
-            )
+        weights = self._training_option("loss_weights") or {}
+        adaptive = self._training_option("adaptive_weights")
+        if adaptive is not None and getattr(adaptive, "enabled", False):
+            physics_weights = (1.0, 1.0, 1.0)  # the trainer re-weights with its own
         else:
-            # Use fixed weights from config (or defaults if training config is absent)
-            if (
-                self.config.training is not None
-                and hasattr(self.config.training, "loss_weights")
-                and self.config.training.loss_weights
-            ):
-                lw = self.config.training.loss_weights
-                residual_weight = lw.get("pde", lw.get("residual", 1.0))
-                boundary_weight = lw.get("boundary", 10.0)
-                initial_weight = lw.get("initial", 10.0)
-            else:
-                residual_weight, boundary_weight, initial_weight = 1.0, 10.0, 10.0
-
-            total_loss = (
-                residual_active * residual_weight * residual_loss
-                + ic_bc_active * boundary_weight * boundary_loss
-                + ic_bc_active * initial_weight * initial_loss
-                + smoothness_weight * smoothness_loss
-                + data_weight * data_loss
+            physics_weights = (
+                float(weights.get("pde", weights.get("residual", 1.0))),
+                float(weights.get("boundary", 10.0)),
+                float(weights.get("initial", 10.0)),
             )
-            losses["total"] = total_loss
-
+        losses["total"] = self.weighted_total(losses, *physics_weights)
         return losses
 
-    def build_model(self, override_config=None):  # pragma: no cover
+    def weighted_total(self, losses, w_residual, w_boundary, w_initial) -> torch.Tensor:
+        """Combine loss components under ``training.mode``.
+
+        ``data_only`` drops the physics terms; outside ``forward`` the data term
+        always counts (its weight is at least 1).
         """
-        Build a neural network model using the PDE-specific architecture settings
-        from the configuration.
-
-        :param override_config: Optional dictionary to override architecture parameters.
-        :return: Instantiated neural network model.
-        """
-        try:
-            # Import the PINNModel class.
-            from pinnrl.neural_networks import PINNModel
-
-            # Determine the current PDE type. Default to "wave" if not specified.
-            # Access configuration attributes safely since PDEConfig may not
-            # behave like a dictionary.
-            pde_type = getattr(self.config, "pde_type", "wave")
-            # Get the PDE-specific configuration dictionary if available
-            pde_conf = getattr(self.config, "pde_configs", {})
-            pde_conf = pde_conf.get(pde_type, {}) if isinstance(pde_conf, dict) else {}
-
-            # Build the base architecture configuration using PDE-specific input/output dimensions
-            # and the device from the class.
-            arch_config = {
-                "input_dim": pde_conf.get("input_dim", 2),
-                "output_dim": pde_conf.get("output_dim", 1),
-                "device": self.device,
-            }
-
-            # Get the architecture type specified for this PDE.
-            arch_type = pde_conf.get("architecture", None)
-            if arch_type is not None:
-                # Look up the detailed architecture settings in the global "architectures" section.
-                architectures_dict = getattr(self.config, "architectures", {})
-                if arch_type in architectures_dict:
-                    # Merge in the PDE-specific architecture details.
-                    arch_config.update(architectures_dict[arch_type])
-                else:
-                    # Fallback: if no detailed settings exist, simply store the architecture name.
-                    arch_config["architecture"] = arch_type
-
-            # Apply any user-specified override configuration.
-            if override_config:
-                arch_config.update(override_config)
-
-            # Instantiate and return the model.
-            return PINNModel(**arch_config)
-
-        except ImportError:
-            print("Could not import PINNModel. Make sure neural_networks module is available.")
-            return None
+        mode = self._training_option("mode", "forward")
+        physics = 0.0 if mode == "data_only" else 1.0
+        data_weight = float((self._training_option("loss_weights") or {}).get("data", 1.0))
+        if mode != "forward" and data_weight <= 0.0:
+            data_weight = 1.0
+        return (
+            physics
+            * (
+                w_residual * losses["residual"]
+                + w_boundary * losses["boundary"]
+                + w_initial * losses["initial"]
+            )
+            + data_weight * losses["data"]
+        )
 
     def validate(self, model: torch.nn.Module, num_points: int = 1000) -> Dict[str, float]:
-        """
-        Validate the model's solution against exact solution.
+        """Error of ``model`` against the exact solution on a jittered grid.
 
-        :param model: Neural network model
-        :param num_points: Number of validation points
-        :return: Dictionary of error metrics
+        Returns ``l2_error`` (relative L2, ``||u - u*|| / ||u*||``), ``mse``,
+        ``max_error`` and ``mean_error``.
+
+        Raises:
+            ValueError: If the PDE has no exact solution configured.
         """
+        if not self.has_exact_solution:
+            raise ValueError(f"{self.config.name} has no exact solution configured")
         x, t = self.generate_collocation_points(num_points)
-        u_pred = model(torch.cat([x, t], dim=1))
+        with torch.no_grad():
+            u_pred = model(torch.cat([x, t], dim=1))[:, 0:1]
         u_exact = self.exact_solution(x, t)
-        error = torch.abs(u_pred - u_exact)
+        error = u_pred - u_exact
         return {
-            "l2_error": torch.mean(error**2).item(),
-            "max_error": torch.max(error).item(),
-            "mean_error": torch.mean(error).item(),
+            "l2_error": (torch.linalg.norm(error) / torch.linalg.norm(u_exact)).item(),
+            "mse": torch.mean(error**2).item(),
+            "max_error": torch.max(torch.abs(error)).item(),
+            "mean_error": torch.mean(torch.abs(error)).item(),
         }
-
-    def plot_solution(
-        self,
-        model: torch.nn.Module,
-        num_points: int = 1000,
-        save_path: Optional[str] = None,
-    ):  # pragma: no cover
-        """
-        Plot the model's solution and exact solution.
-
-        :param model: Neural network model
-        :param num_points: Number of points for plotting
-        :param save_path: Optional path to save the plot
-        """
-        x, t = self.generate_collocation_points(num_points)
-        u_pred = model(torch.cat([x, t], dim=1))
-        u_exact = self.exact_solution(x, t)
-
-        plt.figure(figsize=(10, 6))
-        plt.scatter(x.cpu().numpy(), u_pred.detach().cpu().numpy(), label="Predicted", alpha=0.5)
-        plt.scatter(x.cpu().numpy(), u_exact.cpu().numpy(), label="Exact", alpha=0.5)
-        plt.xlabel("x")
-        plt.ylabel("u")
-        plt.title(f"{self.config.name} Solution")
-        plt.legend()
-
-        if save_path:
-            plt.savefig(save_path)
-        plt.close()
-
-    def save_state(self, path: str):
-        """
-        Save the PDE state to a file.
-
-        :param path: Path to save the state
-        """
-        state = {
-            "config": self.config,
-            "collocation_history": self.collocation_history,
-            "validation_points": self.validation_points,
-        }
-        torch.save(state, path)
-
-    def load_state(self, path: str):
-        """
-        Load the PDE state from a file.
-
-        :param path: Path to load the state from
-        """
-        # The pickled state holds dataclass instances (PDEConfig + nested configs)
-        # rather than tensors only, so opt out of torch>=2.6's weights_only mode.
-        # This file is produced by ``save_state`` on the same machine — same
-        # trust boundary as any other local artefact.
-        state = torch.load(path, weights_only=False)
-        self.config = state["config"]
-        self.collocation_history = state["collocation_history"]
-        self.validation_points = state["validation_points"]
-        self._setup_boundary_conditions()
-
-    def visualize_collocation_evolution(
-        self,
-        points_history=None,
-        epoch=None,
-        save_path: Optional[str] = None,
-        num_snapshots: int = 5,
-    ):  # pragma: no cover
-        """
-        Visualize the evolution of collocation points during training.
-
-        :param points_history: History of collocation points
-        :param epoch: Current epoch number
-        :param save_path: Path to save the visualization
-        :param num_snapshots: Number of snapshots to visualize
-        """
-        # Use provided points_history or class attribute
-        history = points_history if points_history is not None else self.collocation_history
-
-        if not history or len(history) < 2:
-            print("Not enough collocation history to visualize evolution")
-            return
-
-        import matplotlib
-
-        # Use 'Agg' backend if running in a non-main thread
-        if not matplotlib.is_interactive():
-            matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        from matplotlib.colors import LinearSegmentedColormap
-
-        # Create output directory if it doesn't exist
-        os.makedirs("visualizations", exist_ok=True)
-
-        # Create figure
-        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-        plt.suptitle(
-            (
-                f"Evolution of Collocation Points (Epoch {epoch})"
-                if epoch
-                else "Evolution of Collocation Points"
-            ),
-            fontsize=16,
-        )
-
-        # Define custom colormap for evolution
-        colors = ["#0d3b66", "#1b9aaa", "#ef476f", "#ffc43d"]
-        cmap = LinearSegmentedColormap.from_list("evolution_cmap", colors, N=len(history))
-
-        # Select snapshots to visualize
-        indices = np.linspace(0, len(history) - 1, num_snapshots).astype(int)
-
-        # First plot: Progression of points over time
-        ax = axes[0, 0]
-        for i, idx in enumerate(indices):
-            points = history[idx]
-            if self.dimension == 1:
-                x_pts = points[:, 0]
-                y_pts = points[:, 1]  # time dimension
-            else:
-                # For 2D problems, use the first two spatial dimensions
-                x_pts = points[:, 0]
-                y_pts = points[:, 1]
-
-            alpha = 0.3 + 0.7 * (i / (len(indices) - 1))  # Increasing alpha
-            size = 5 + 20 * (i / (len(indices) - 1))  # Increasing size
-            ax.scatter(
-                x_pts,
-                y_pts,
-                alpha=alpha,
-                s=size,
-                color=cmap(i / (len(indices) - 1)),
-                label=f"Snapshot {idx}",
-            )
-
-        ax.set_xlabel("x", fontsize=12)
-        ax.set_ylabel("t", fontsize=12)
-        ax.set_title("Progression of Points", fontsize=14)
-        ax.legend()
-        ax.grid(alpha=0.3)
-
-        # Second plot: Density evolution (first snapshot)
-        points = history[0]
-        self._plot_density_snapshot(axes[0, 1], points, "Initial Distribution", cmap="Blues")
-
-        # Third plot: Density evolution (middle snapshot)
-        mid_idx = len(history) // 2
-        points = history[mid_idx]
-        self._plot_density_snapshot(
-            axes[1, 0],
-            points,
-            f"Intermediate Distribution (Snapshot {mid_idx})",
-            cmap="Greens",
-        )
-        # Fourth plot: Density evolution (last snapshot)
-        points = history[-1]
-        self._plot_density_snapshot(axes[1, 1], points, "Final Distribution", cmap="Reds")
-
-        plt.tight_layout()
-        if save_path:
-            plt.savefig(save_path, dpi=300)
-        else:
-            save_name = (
-                f"collocation_evolution_epoch_{epoch}.png" if epoch else "collocation_evolution.png"
-            )
-            plt.savefig(f"visualizations/{save_name}", dpi=300)
-            # Also save as latest for real-time viewing
-            plt.savefig("visualizations/latest_collocation_evolution.png", dpi=300)
-        plt.close()
-
-    def _plot_density_snapshot(self, ax, points, title, cmap="viridis"):  # pragma: no cover
-        """Helper method to plot density snapshot with clearer visualization."""
-        if self.dimension == 1:
-            x_pts = points[:, 0]
-            y_pts = points[:, 1]  # time dimension
-        else:
-            # For 2D problems, use the first two spatial dimensions
-            x_pts = points[:, 0]
-            y_pts = points[:, 1]
-
-        # Define grid for density estimation
-        xmin, xmax = np.min(x_pts), np.max(x_pts)
-        ymin, ymax = np.min(y_pts), np.max(y_pts)
-
-        # Add small padding
-        x_padding = (xmax - xmin) * 0.05
-        y_padding = (ymax - ymin) * 0.05 if ymax > ymin else 0.05
-
-        xmin -= x_padding
-        xmax += x_padding
-        ymin -= y_padding
-        ymax += y_padding
-
-        # Create a simple 2D histogram
-        hist, xedges, yedges = np.histogram2d(
-            x_pts,
-            y_pts,
-            bins=(20, 20),  # Reduced number of bins for clearer visualization
-            range=[[xmin, xmax], [ymin, ymax]],
-        )
-
-        # Plot heatmap
-        im = ax.imshow(
-            hist.T,
-            origin="lower",
-            extent=[xmin, xmax, ymin, ymax],
-            aspect="auto",
-            cmap=cmap,
-            interpolation="nearest",  # Sharp transitions between density levels
-        )
-
-        # Add colorbar with simplified labels
-        cbar = plt.colorbar(im, ax=ax)
-        cbar.set_label("Number of Points", fontsize=10)
-
-        # Overlay scatter plot of actual points with increased visibility
-        ax.scatter(x_pts, y_pts, s=10, c="white", alpha=0.5, marker=".")
-
-        ax.set_xlabel("x", fontsize=12)
-        ax.set_ylabel("t", fontsize=12)
-        ax.set_title(title, fontsize=14)
-        ax.grid(True, alpha=0.3, linestyle="--")

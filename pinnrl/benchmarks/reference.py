@@ -1,9 +1,9 @@
 """High-accuracy reference solutions for PDEs without a closed form.
 
 The sampling study scores PINNs against these fields instead of the
-``exact_solution`` methods on the PDE classes, which only cover special
-cases (the Burgers ``cole_hopf`` branch is singular, the Allen-Cahn ``tanh``
-branch is stationary).
+``exact_solution`` methods on the PDE classes where those only cover special
+cases (the Allen-Cahn ``tanh`` branch is stationary). ``BurgersEquation``'s
+``cole_hopf`` solution is :func:`burgers_cole_hopf` from this module.
 
 * :func:`burgers_reference` — Cole-Hopf integral for the standard
   ``u0 = -sin(pi x)`` benchmark (Basdevant et al., 1986), evaluated with a
@@ -80,21 +80,45 @@ def burgers_reference(
     """
     x = np.linspace(-1.0, 1.0, nx)
     t = np.linspace(0.0, t_max, nt)
-    u = np.empty((nx, nt))
-    z = np.linspace(-z_max, z_max, n_quad)
-    for j, tj in enumerate(t):
-        u[:, j] = _burgers_cole_hopf(x, tj, nu, z)
+    u = burgers_cole_hopf(x[:, None], t[None, :], nu, n_quad=n_quad, z_max=z_max)
     return ReferenceSolution(x=x, t=t, u=u)
 
 
-def _burgers_cole_hopf(x: np.ndarray, t: float, nu: float, z: np.ndarray) -> np.ndarray:
-    """Cole-Hopf quotient at one time level for every ``x``."""
-    if t == 0.0:
-        return -np.sin(np.pi * x)
-    y = x[:, None] - np.sqrt(4.0 * nu * t) * z[None, :]
-    log_w = -np.cos(np.pi * y) / (2.0 * np.pi * nu) - z[None, :] ** 2
-    w = np.exp(log_w - log_w.max(axis=1, keepdims=True))
-    return -np.sum(np.sin(np.pi * y) * w, axis=1) / np.sum(w, axis=1)
+def burgers_cole_hopf(
+    x,
+    t,
+    nu: float,
+    amplitude: float = -1.0,
+    frequency: float = 1.0,
+    n_quad: int = 6001,
+    z_max: float = 15.0,
+    chunk: int = 512,
+) -> np.ndarray:
+    """Exact Burgers solution for ``u0 = amplitude * sin(frequency * pi * x)``.
+
+    Evaluates the Cole-Hopf quotient
+
+        u(x, t) = ∫ u0(y) φ0(y) e^(-z²) dz / ∫ φ0(y) e^(-z²) dz,   y = x - sqrt(4 nu t) z,
+
+    with ``φ0(y) = exp(amplitude cos(frequency pi y) / (2 nu frequency pi))``, by
+    the trapezoid rule on ``[-z_max, z_max]``. ``x`` and ``t`` broadcast against
+    each other; points with ``t = 0`` return ``u0``. Points are processed in
+    chunks so memory stays at ``chunk * n_quad`` floats.
+    """
+    x, t = np.broadcast_arrays(np.asarray(x, dtype=np.float64), np.asarray(t, dtype=np.float64))
+    shape = x.shape
+    x, t = x.ravel(), t.ravel()
+    k = frequency * np.pi
+    u = amplitude * np.sin(k * x)
+    z = np.linspace(-z_max, z_max, n_quad)
+    later = np.flatnonzero(t > 0)
+    for start in range(0, later.size, chunk):
+        idx = later[start : start + chunk]
+        y = x[idx, None] - np.sqrt(4.0 * nu * t[idx, None]) * z[None, :]
+        log_w = amplitude * np.cos(k * y) / (2.0 * nu * k) - z[None, :] ** 2
+        w = np.exp(log_w - log_w.max(axis=1, keepdims=True))
+        u[idx] = np.sum(amplitude * np.sin(k * y) * w, axis=1) / np.sum(w, axis=1)
+    return u.reshape(shape)
 
 
 def allen_cahn_reference(

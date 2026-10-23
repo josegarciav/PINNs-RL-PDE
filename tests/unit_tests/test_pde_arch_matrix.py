@@ -308,7 +308,3 @@ class TestPDEArchMatrix(unittest.TestCase):
 
     def test_pendulum_autoencoder(self):
         self._run_combo("pendulum", "autoencoder")
-
-
-if __name__ == "__main__":
-    unittest.main()

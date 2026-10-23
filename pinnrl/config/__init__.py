@@ -9,13 +9,26 @@ import yaml
 DEFAULT_CONFIG_PATH = str(Path(__file__).parent / "config.yaml")
 
 
+def resolve_device(name: str) -> torch.device:
+    """Return ``torch.device(name)`` if that backend is available, else CPU.
+
+    Only ``"cuda"`` and ``"mps"`` are probed; any other name resolves to CPU,
+    so a config written on one machine still runs on another.
+    """
+    if name == "cuda" and torch.cuda.is_available():
+        return torch.device("cuda")
+    if name == "mps" and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 @dataclass
 class LearningRateSchedulerConfig:
     """Learning rate scheduler settings.
 
     Attributes:
         type: Scheduler type (``"cosine"`` or ``"reduce_lr"``).
-        warmup_epochs: Number of linear-warmup epochs.
+        warmup_epochs: Epochs of linear LR warm-up before the scheduler starts.
         min_lr: Minimum learning rate.
         factor: Multiplicative factor for ``reduce_lr`` scheduler.
         patience: Epochs to wait before reducing LR.
@@ -64,6 +77,9 @@ class LBFGSConfig:
     tolerance_change: float = 1e-9
 
 
+_LBFGS_FIELDS = tuple(LBFGSConfig.__dataclass_fields__)
+
+
 @dataclass
 class AdaptiveWeightsConfig:
     """Configuration for adaptive loss weighting.
@@ -105,6 +121,7 @@ class TrainingConfig:
         collocation_distribution: Sampling distribution for collocation points.
         adaptive_weights: Adaptive loss weighting configuration.
         loss_weights: Static loss component weights.
+        validation_frequency: Epochs between validation, logging and run checkpoints.
     """
 
     num_epochs: int
@@ -126,6 +143,7 @@ class TrainingConfig:
     mode: str = "forward"  # "forward" | "inverse" | "data_only" | "data_augmented"
     loss_function: str = "mse"  # "mse" | "mae" | "huber"
     huber_delta: float = 1.0
+    validation_frequency: int = 10  # validate, log and checkpoint every N epochs
 
     def __post_init__(self):
         if self.loss_weights is None:
@@ -167,6 +185,67 @@ class TrainingConfig:
         if key == "optimizer_config":
             return self.optimizer_config
         return getattr(self, key, default)
+
+    @classmethod
+    def from_dict(cls, cfg: Dict[str, Any]) -> "TrainingConfig":
+        """Build from the ``training:`` block of ``config.yaml``.
+
+        This is the one place the YAML layout is translated into a
+        ``TrainingConfig``; both :class:`Config` and ``pinnrl-train`` use it.
+        Missing keys fall back to defaults. Numeric fields are coerced with
+        ``float()`` because YAML 1.1 reads ``1e-7`` (no decimal point) as a string.
+        """
+        optimizer_cfg = cfg.get("optimizer_config", {})
+        early_stopping = cfg.get("early_stopping", {})
+        reduce_lr = cfg.get("reduce_lr_params", {})
+        adaptive = cfg.get("adaptive_weights", {})
+        lbfgs = cfg.get("lbfgs", {})
+
+        loss_weights = cfg.get("loss_weights")
+        if loss_weights is not None and "pde" in loss_weights:
+            loss_weights = dict(loss_weights)
+            loss_weights["residual"] = loss_weights.pop("pde")
+
+        return cls(
+            num_epochs=cfg.get("num_epochs", 10000),
+            batch_size=cfg.get("batch_size", 128),
+            num_collocation_points=cfg.get("num_collocation_points", 1000),
+            num_boundary_points=cfg.get("num_boundary_points", 100),
+            num_initial_points=cfg.get("num_initial_points", 100),
+            learning_rate=float(
+                optimizer_cfg.get("learning_rate", cfg.get("learning_rate", 0.001))
+            ),
+            weight_decay=float(optimizer_cfg.get("weight_decay", cfg.get("weight_decay", 0.0001))),
+            gradient_clipping=float(cfg.get("gradient_clipping", 1.0)),
+            early_stopping=EarlyStoppingConfig(
+                enabled=early_stopping.get("enabled", True),
+                patience=early_stopping.get("patience", 100),
+                min_delta=float(early_stopping.get("min_delta", 1e-4)),
+            ),
+            learning_rate_scheduler=LearningRateSchedulerConfig(
+                type=cfg.get("scheduler_type", "cosine"),
+                warmup_epochs=cfg.get("warmup_epochs", 0),
+                min_lr=float(reduce_lr.get("min_lr", 1e-6)),
+                factor=float(reduce_lr.get("factor", 0.5)),
+                patience=reduce_lr.get("patience", 50),
+            ),
+            collocation_distribution=cfg.get("collocation_distribution", "uniform"),
+            adaptive_weights=AdaptiveWeightsConfig(
+                enabled=adaptive.get("enabled", False),
+                strategy=adaptive.get("strategy", "rbw"),
+                alpha=float(adaptive.get("alpha", 0.9)),
+                eps=float(adaptive.get("eps", 1e-5)),
+                initial_weights=adaptive.get("initial_weights"),
+            ),
+            loss_weights=loss_weights,
+            optimizer=cfg.get("optimizer", "adam"),
+            adam_lbfgs_switch_ratio=cfg.get("adam_lbfgs_switch_ratio", 0.7),
+            lbfgs=LBFGSConfig(**{k: v for k, v in lbfgs.items() if k in _LBFGS_FIELDS}),
+            mode=cfg.get("mode", "forward"),
+            loss_function=cfg.get("loss_function", "mse"),
+            huber_delta=float(cfg.get("huber_delta", 1.0)),
+            validation_frequency=int(cfg.get("validation_frequency", 10)),
+        )
 
 
 @dataclass
@@ -252,126 +331,106 @@ class ModelConfig:
         """Get the value for a given key, also to make it subscriptable."""
         return getattr(self, key)
 
+    @classmethod
+    def from_architecture(
+        cls,
+        architecture: str,
+        arch_cfg: Dict[str, Any],
+        input_dim: int,
+        output_dim: int,
+    ) -> "ModelConfig":
+        """Build from one entry of the ``architectures:`` block of ``config.yaml``.
 
-@dataclass
-class PDEConfig:
-    """PDE-specific parameters loaded from ``config.yaml``.
+        ``hidden_dim`` and ``num_layers`` default to the first width and the
+        length of ``hidden_dims`` when only the list is given. Architecture
+        extras (``omega_0``, ``modes``, ...) are copied when present.
+        """
+        hidden_dims = arch_cfg.get("hidden_dims")
+        model = cls(
+            input_dim=input_dim,
+            hidden_dim=arch_cfg.get("hidden_dim", hidden_dims[0] if hidden_dims else 128),
+            output_dim=output_dim,
+            num_layers=arch_cfg.get("num_layers", len(hidden_dims) if hidden_dims else 4),
+            activation=arch_cfg.get("activation", "tanh"),
+            fourier_features=architecture == "fourier",
+            fourier_scale=arch_cfg.get("scale", 1.0),
+            dropout=arch_cfg.get("dropout", 0.0),
+            layer_norm=arch_cfg.get("layer_norm", False),
+            architecture=architecture,
+        )
+        for key in _ARCHITECTURE_EXTRAS:
+            if key in arch_cfg:
+                setattr(model, key, arch_cfg[key])
+        return model
 
-    Attributes:
-        domain: Spatial domain bounds ``[min, max]`` or list of ``[min, max]`` per dimension.
-        t_domain: Time domain bounds ``[t_min, t_max]``.
-        initial_condition: Expression string for the initial condition.
-        boundary_conditions: Mapping of boundary names to expression strings.
-        diffusion_coefficient: Diffusion/viscosity coefficient.
-        source_term: Expression string for the source term.
-    """
 
-    domain: List[float]
-    t_domain: List[float]
-    initial_condition: str
-    boundary_conditions: Dict[str, str]
-    diffusion_coefficient: float
-    source_term: str
+_ARCHITECTURE_EXTRAS = (
+    "hidden_dims",
+    "mapping_size",
+    "scale",
+    "omega_0",
+    "num_heads",
+    "num_blocks",
+    "latent_dim",
+    "modes",
+)
 
 
 @dataclass
 class RLConfig:
-    """Reinforcement-learning agent hyper-parameters.
+    """The ``rl:`` block: the experimental residual-bandit sampler (``--rl``).
 
-    Attributes:
-        enabled: Whether RL-based adaptive sampling is active.
-        state_dim: Dimension of the RL state vector.
-        action_dim: Dimension of the RL action space.
-        hidden_dim: Hidden layer width of the DQN.
-        learning_rate: Optimizer learning rate for the DQN.
-        gamma: Discount factor.
-        epsilon_start: Initial exploration rate.
-        epsilon_end: Final exploration rate.
-        epsilon_decay: Multiplicative decay per step.
-        memory_size: Replay buffer capacity.
-        batch_size: Mini-batch size for DQN updates.
-        target_update: Steps between target-network syncs.
-        reward_weights: Component weights for the reward function.
+    Sampler fields left as ``None`` fall back to the defaults of
+    :class:`~pinnrl.rl.bandit_sampler.ResidualBanditSampler`, so those
+    defaults live in one place.
     """
 
-    enabled: bool
-    state_dim: int
-    action_dim: int
-    hidden_dim: int
-    learning_rate: float
-    gamma: float
-    epsilon_start: float
-    epsilon_end: float
-    epsilon_decay: float
-    memory_size: int
-    batch_size: int
-    target_update: int
-    reward_weights: Dict[str, float]
+    enabled: bool = False
+    n_x_cells: Optional[int] = None
+    n_t_cells: Optional[int] = None
+    policy_fraction: Optional[float] = None
+    temperature: Optional[float] = None
+    probe_cells: Optional[int] = None
+    probe_points: Optional[int] = None
+    probe_every: Optional[int] = None
 
+    @classmethod
+    def from_dict(cls, cfg: Dict[str, Any]) -> "RLConfig":
+        """Build from the ``rl:`` block of ``config.yaml``; unknown keys are ignored."""
+        return cls(**{k: v for k, v in cfg.items() if k in cls.__dataclass_fields__})
 
-@dataclass
-class EvaluationConfig:
-    """Evaluation and plotting settings.
+    def build_sampler(self, pde, device: Optional[torch.device] = None):
+        """Create the :class:`ResidualBanditSampler` these settings describe for ``pde``."""
+        from pinnrl.rl.bandit_sampler import ResidualBanditSampler
 
-    Attributes:
-        resolution: Grid resolution for evaluation plots.
-        num_test_points: Number of test points for error metrics.
-        metrics: List of metric names to compute.
-        save_plots: Whether to persist plots to disk.
-        plot_frequency: Epochs between plot snapshots.
-    """
-
-    resolution: int
-    num_test_points: int
-    metrics: List[str]
-    save_plots: bool
-    plot_frequency: int
-
-
-@dataclass
-class LoggingConfig:
-    """Logging and TensorBoard settings.
-
-    Attributes:
-        level: Python logging level string.
-        save_tensorboard: Whether to write TensorBoard logs.
-        log_frequency: Epochs between log entries.
-    """
-
-    level: str
-    save_tensorboard: bool
-    log_frequency: int
-
-
-@dataclass
-class PathsConfig:
-    """File-system paths for experiment outputs.
-
-    Attributes:
-        experiments_dir: Root directory for experiment results.
-        model_dir: Directory for saved model checkpoints.
-        log_dir: Directory for log files.
-        tensorboard_dir: Directory for TensorBoard event files.
-    """
-
-    experiments_dir: str
-    model_dir: str
-    log_dir: str
-    tensorboard_dir: str
+        overrides = {
+            name: getattr(self, name)
+            for name in self.__dataclass_fields__
+            if name != "enabled" and getattr(self, name) is not None
+        }
+        return ResidualBanditSampler(
+            tuple(pde.domain[0]),
+            tuple(pde.time_domain),
+            device=device or pde.device,
+            **overrides,
+        )
 
 
 class Config:
-    """Configuration for the PINNs-RL-PDE framework."""
+    """Configuration for the PINNs-RL-PDE framework.
+
+    Loads ``device``, ``model``, ``training`` and ``rl`` from ``config.yaml``.
+    The model block is taken from the architecture configured for
+    ``pde_type`` (falling back to the top-level ``model:`` block).
+    """
 
     def __init__(self, config_path=None):
         if config_path is None:
             config_path = DEFAULT_CONFIG_PATH
         self.config_path = config_path
         self.model = None
-        self.pde = None
         self.training = None
         self.rl = None
-        self.paths = None
         self.device = torch.device("cpu")  # Default to CPU, will be overridden by config
 
         # Load configuration if file exists
@@ -389,234 +448,30 @@ class Config:
 
     def _load_config(self):
         """Load configuration from YAML file."""
-        if not os.path.exists(self.config_path):
-            raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
-
-        # Load main configuration
         with open(self.config_path, "r") as f:
             config_dict = yaml.safe_load(f)
 
-        # Store the PDE type selected in config
         self.pde_type = config_dict.get("pde_type", "heat")
-
-        # Check if we need to load a PDE-specific configuration
-        pde_config = {}
-
-        if (
-            self.pde_type
-            and "pde_configs" in config_dict
-            and self.pde_type in config_dict["pde_configs"]
-        ):
-            # Extract PDE-specific configuration
-            pde_config = config_dict["pde_configs"][self.pde_type]
-
-            # Use it as the PDE configuration
-            config_dict["pde"] = pde_config
-
-        # Device configuration
-        self.device = self._get_device(config_dict.get("device", "mps"))
-
-        # Model configuration
-        # If input_dim and output_dim are specified in PDE config, use those values
-        # otherwise fall back to the general model config
+        pde_config = config_dict.get("pde_configs", {}).get(self.pde_type, {})
         model_config = config_dict.get("model", {})
 
-        # Get dimensions from PDE config if available
-        input_dim = pde_config.get("input_dim", model_config.get("input_dim", 2))
-        output_dim = pde_config.get("output_dim", model_config.get("output_dim", 1))
+        self.device = resolve_device(config_dict.get("device", "mps"))
 
-        # Get architecture from PDE config if available
         architecture = pde_config.get("architecture", model_config.get("architecture", "fourier"))
-
-        # Bug #1 fix: load architecture-specific config and inject into ModelConfig
-        arch_specific = config_dict.get("architectures", {}).get(architecture, {})
-
-        self.model = ModelConfig(
-            input_dim=input_dim,
-            hidden_dim=arch_specific.get("hidden_dim", model_config.get("hidden_dim", 128)),
-            output_dim=output_dim,
-            num_layers=arch_specific.get("num_layers", model_config.get("num_layers", 4)),
-            activation=arch_specific.get("activation", model_config.get("activation", "tanh")),
-            fourier_features=model_config.get("fourier_features", True),
-            fourier_scale=model_config.get("fourier_scale", 2.0),
-            dropout=arch_specific.get("dropout", model_config.get("dropout", 0.0)),
-            layer_norm=arch_specific.get("layer_norm", model_config.get("layer_norm", True)),
-            architecture=architecture,
+        arch_config = {**model_config, **config_dict.get("architectures", {}).get(architecture, {})}
+        self.model = ModelConfig.from_architecture(
+            architecture,
+            arch_config,
+            input_dim=pde_config.get("input_dim", model_config.get("input_dim", 2)),
+            output_dim=pde_config.get("output_dim", model_config.get("output_dim", 1)),
         )
 
-        # Inject architecture-specific params not in ModelConfig.__init__
-        if "hidden_dims" in arch_specific:
-            self.model.hidden_dims = arch_specific["hidden_dims"]
-        if "mapping_size" in arch_specific:
-            self.model.mapping_size = arch_specific["mapping_size"]
-        if "scale" in arch_specific:
-            self.model.scale = arch_specific["scale"]
-        if "omega_0" in arch_specific:
-            self.model.omega_0 = arch_specific["omega_0"]
-        if "num_heads" in arch_specific:
-            self.model.num_heads = arch_specific["num_heads"]
-        if "num_blocks" in arch_specific:
-            self.model.num_blocks = arch_specific["num_blocks"]
-        if "latent_dim" in arch_specific:
-            self.model.latent_dim = arch_specific["latent_dim"]
-        if "modes" in arch_specific:
-            self.model.modes = arch_specific["modes"]
+        self.training = TrainingConfig.from_dict(config_dict.get("training", {}))
 
-        # PDE configuration
-        pde_config = config_dict.get("pde", {})
-        self.pde = PDEConfig(
-            domain=pde_config.get("domain", [0.0, 1.0]),
-            t_domain=pde_config.get("time_domain", [0.0, 1.0]),
-            initial_condition=pde_config.get("initial_condition", "sin(pi*x)"),
-            boundary_conditions=pde_config.get(
-                "boundary_conditions", {"left": "0.0", "right": "0.0"}
-            ),
-            diffusion_coefficient=pde_config.get("diffusion_coefficient", 0.01),
-            source_term=pde_config.get("source_term", "0.0"),
-        )
-
-        # Store the complete PDE configuration for more advanced implementations
-        self.pde_full_config = pde_config
-
-        # Training configuration
-        training_config = config_dict.get("training", {})
-        early_stopping_config = training_config.get("early_stopping", {})
-        lr_scheduler_config = training_config.get("scheduler_type", "cosine")
-
-        # Learning rate scheduler params
-        if isinstance(lr_scheduler_config, dict):
-            # Handle full scheduler config object
-            scheduler_type = lr_scheduler_config.get("type", "cosine")
-        else:
-            # Handle string type
-            scheduler_type = lr_scheduler_config
-            lr_scheduler_config = {}
-
-        # Get specific scheduler params based on type
-        if scheduler_type == "reduce_lr":
-            lr_scheduler_config = training_config.get("reduce_lr_params", {})
-        else:  # cosine
-            lr_scheduler_config = training_config.get("cosine_params", {})
-
-        # Load adaptive weights configuration
-        adaptive_weights_config = training_config.get("adaptive_weights", {})
-
-        # Load L-BFGS optimizer configuration
-        lbfgs_config_dict = training_config.get("lbfgs", {})
-        lbfgs_cfg = LBFGSConfig(
-            history_size=lbfgs_config_dict.get("history_size", 50),
-            max_iter=lbfgs_config_dict.get("max_iter", 20),
-            line_search_fn=lbfgs_config_dict.get("line_search_fn", "strong_wolfe"),
-            tolerance_grad=lbfgs_config_dict.get("tolerance_grad", 1e-7),
-            tolerance_change=lbfgs_config_dict.get("tolerance_change", 1e-9),
-        )
-
-        # Bug #2 fix: read learning_rate/weight_decay from optimizer_config if nested
-        optimizer_cfg = training_config.get("optimizer_config", {})
-        learning_rate = optimizer_cfg.get(
-            "learning_rate", training_config.get("learning_rate", 0.001)
-        )
-        weight_decay = optimizer_cfg.get(
-            "weight_decay", training_config.get("weight_decay", 0.0001)
-        )
-
-        # Bug #12 fix: normalize loss_weights key "pde" -> "residual"
-        raw_loss_weights = training_config.get("loss_weights", None)
-        if raw_loss_weights is not None and "pde" in raw_loss_weights:
-            raw_loss_weights = dict(raw_loss_weights)
-            raw_loss_weights["residual"] = raw_loss_weights.pop("pde")
-
-        self.training = TrainingConfig(
-            num_epochs=training_config.get("num_epochs", 10000),
-            batch_size=training_config.get("batch_size", 128),
-            num_collocation_points=training_config.get("num_collocation_points", 1000),
-            num_boundary_points=training_config.get("num_boundary_points", 100),
-            num_initial_points=training_config.get("num_initial_points", 100),
-            learning_rate=learning_rate,
-            weight_decay=weight_decay,
-            gradient_clipping=training_config.get("gradient_clipping", 1.0),
-            early_stopping=EarlyStoppingConfig(
-                enabled=early_stopping_config.get("enabled", True),
-                patience=early_stopping_config.get("patience", 100),
-                min_delta=early_stopping_config.get("min_delta", 1e-4),
-            ),
-            learning_rate_scheduler=LearningRateSchedulerConfig(
-                type=lr_scheduler_config.get("type", "cosine"),
-                warmup_epochs=lr_scheduler_config.get("warmup_epochs", 100),
-                min_lr=lr_scheduler_config.get("min_lr", 1e-6),
-                factor=lr_scheduler_config.get("factor", 0.5),
-                patience=lr_scheduler_config.get("patience", 50),
-            ),
-            collocation_distribution=training_config.get("collocation_distribution", "uniform"),
-            adaptive_weights=AdaptiveWeightsConfig(
-                enabled=adaptive_weights_config.get("enabled", False),
-                strategy=adaptive_weights_config.get("strategy", "rbw"),
-                alpha=adaptive_weights_config.get("alpha", 0.9),
-                eps=adaptive_weights_config.get("eps", 1e-5),
-            ),
-            loss_weights=raw_loss_weights,
-            optimizer=training_config.get("optimizer", "adam"),
-            adam_lbfgs_switch_ratio=training_config.get("adam_lbfgs_switch_ratio", 0.7),
-            lbfgs=lbfgs_cfg,
-            mode=training_config.get("mode", "forward"),
-        )
-
-        # RL configuration
-        rl_config = config_dict.get("rl", {})
-        self.rl = RLConfig(
-            enabled=rl_config.get("enabled", False),
-            state_dim=rl_config.get("state_dim", 128),
-            action_dim=rl_config.get("action_dim", 100),
-            hidden_dim=rl_config.get("hidden_dim", 64),
-            learning_rate=rl_config.get("learning_rate", 0.0001),
-            gamma=rl_config.get("gamma", 0.99),
-            epsilon_start=rl_config.get("epsilon_start", 1.0),
-            epsilon_end=rl_config.get("epsilon_end", 0.01),
-            epsilon_decay=rl_config.get("epsilon_decay", 0.995),
-            memory_size=rl_config.get("memory_size", 10000),
-            batch_size=rl_config.get("batch_size", 64),
-            target_update=rl_config.get("target_update", 100),
-            reward_weights=rl_config.get(
-                "reward_weights",
-                {"residual": 1.0, "boundary": 1.0, "initial": 1.0, "exploration": 0.1},
-            ),
-        )
-
-        # Evaluation configuration
-        eval_config = config_dict.get("evaluation", {})
-        self.evaluation = EvaluationConfig(
-            resolution=eval_config.get("resolution", 100),
-            num_test_points=eval_config.get("num_test_points", 1000),
-            metrics=eval_config.get("metrics", ["l2_error", "h1_error", "max_error"]),
-            save_plots=eval_config.get("save_plots", True),
-            plot_frequency=eval_config.get("plot_frequency", 100),
-        )
-
-        # Logging configuration
-        logging_config = config_dict.get("logging", {})
-        self.logging = LoggingConfig(
-            level=logging_config.get("level", "INFO"),
-            save_tensorboard=logging_config.get("save_tensorboard", True),
-            log_frequency=logging_config.get("log_frequency", 100),
-        )
-
-        # Paths configuration
-        paths_config = config_dict.get("paths", {})
-        self.paths = PathsConfig(
-            experiments_dir=paths_config.get("experiments_dir", "experiments"),
-            model_dir=paths_config.get("model_dir", "models"),
-            log_dir=paths_config.get("log_dir", "logs"),
-            tensorboard_dir=paths_config.get("tensorboard_dir", "runs"),
-        )
+        self.rl = RLConfig.from_dict(config_dict.get("rl", {}))
 
     def _validate_config(self):
         """Validate configuration parameters."""
-        # Validate device
-        valid_devices = [torch.device("cuda"), torch.device("mps"), torch.device("cpu")]
-        if not any(str(self.device) == str(d) for d in valid_devices):
-            raise ValueError(f"Invalid device: {self.device}")
-
-        # Validate model configuration
         if self.model.input_dim <= 0:
             raise ValueError("input_dim must be positive")
         if self.model.hidden_dim <= 0:
@@ -628,167 +483,9 @@ class Config:
         if self.model.activation not in ["tanh", "relu", "gelu", "leaky_relu", "sigmoid"]:
             raise ValueError(f"Invalid activation: {self.model.activation}")
 
-        # Validate PDE configuration - adapted for new structure
-        # Check domain in different formats
-        if hasattr(self.pde, "domain"):
-            # For the traditional domain format [xmin, xmax]
-            if (
-                isinstance(self.pde.domain, list)
-                and len(self.pde.domain) == 2
-                and all(isinstance(x, (int, float)) for x in self.pde.domain)
-            ):
-                pass  # Valid format
-            # For the new domain format [[xmin, xmax]] or [[xmin, xmax], [ymin, ymax]]
-            elif (
-                isinstance(self.pde.domain, list)
-                and len(self.pde.domain) > 0
-                and all(isinstance(d, list) and len(d) == 2 for d in self.pde.domain)
-            ):
-                pass  # Valid format
-            else:
-                raise ValueError(
-                    "domain must be a list of two values or a list of tuples [min, max]"
-                )
-
-        if hasattr(self.pde, "t_domain") and len(self.pde.t_domain) != 2:
-            raise ValueError("t_domain must be a list of two values")
-
-        if hasattr(self.pde, "diffusion_coefficient") and self.pde.diffusion_coefficient <= 0:
-            raise ValueError("diffusion_coefficient must be positive")
-
-        # Validate training configuration
         if self.training.num_epochs <= 0:
             raise ValueError("num_epochs must be positive")
         if self.training.batch_size <= 0:
             raise ValueError("batch_size must be positive")
         if self.training.learning_rate <= 0:
             raise ValueError("learning_rate must be positive")
-
-        # Validate RL configuration if enabled
-        if self.rl.enabled:
-            if self.rl.state_dim <= 0:
-                raise ValueError("state_dim must be positive")
-            if self.rl.action_dim <= 0:
-                raise ValueError("action_dim must be positive")
-            if not 0 <= self.rl.gamma <= 1:
-                raise ValueError("gamma must be between 0 and 1")
-
-    def _get_device(self, device_str: str) -> torch.device:
-        """
-        Get the appropriate device based on availability.
-
-        Args:
-            device_str: Desired device string.
-
-        Returns:
-            Available device as ``torch.device``.
-        """
-        if device_str == "cuda" and torch.cuda.is_available():
-            return torch.device("cuda")
-        elif device_str == "mps" and torch.backends.mps.is_available():
-            return torch.device("mps")
-        return torch.device("cpu")
-
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert configuration to dictionary.
-
-        Returns:
-            Dictionary representation of configuration.
-        """
-        return {
-            "device": self.device,
-            "model": {
-                "input_dim": self.model.input_dim,
-                "hidden_dim": self.model.hidden_dim,
-                "output_dim": self.model.output_dim,
-                "num_layers": self.model.num_layers,
-                "activation": self.model.activation,
-                "fourier_features": self.model.fourier_features,
-                "fourier_scale": self.model.fourier_scale,
-                "dropout": self.model.dropout,
-                "layer_norm": self.model.layer_norm,
-                "architecture": self.model.architecture,
-            },
-            "pde": {
-                "domain": self.pde.domain,
-                "t_domain": self.pde.t_domain,
-                "initial_condition": self.pde.initial_condition,
-                "boundary_conditions": self.pde.boundary_conditions,
-                "diffusion_coefficient": self.pde.diffusion_coefficient,
-                "source_term": self.pde.source_term,
-            },
-            "training": {
-                "num_epochs": self.training.num_epochs,
-                "batch_size": self.training.batch_size,
-                "num_collocation_points": self.training.num_collocation_points,
-                "num_boundary_points": self.training.num_boundary_points,
-                "num_initial_points": self.training.num_initial_points,
-                "learning_rate": self.training.learning_rate,
-                "weight_decay": self.training.weight_decay,
-                "gradient_clipping": self.training.gradient_clipping,
-                "early_stopping": {
-                    "enabled": self.training.early_stopping.enabled,
-                    "patience": self.training.early_stopping.patience,
-                    "min_delta": self.training.early_stopping.min_delta,
-                },
-                "learning_rate_scheduler": {
-                    "type": self.training.learning_rate_scheduler.type,
-                    "warmup_epochs": self.training.learning_rate_scheduler.warmup_epochs,
-                    "min_lr": self.training.learning_rate_scheduler.min_lr,
-                    "factor": self.training.learning_rate_scheduler.factor,
-                    "patience": self.training.learning_rate_scheduler.patience,
-                },
-                "collocation_distribution": self.training.collocation_distribution,
-                "adaptive_weights": {
-                    "enabled": self.training.adaptive_weights.enabled,
-                    "strategy": self.training.adaptive_weights.strategy,
-                    "alpha": self.training.adaptive_weights.alpha,
-                    "eps": self.training.adaptive_weights.eps,
-                },
-                "loss_weights": self.training.loss_weights,
-                "optimizer": self.training.optimizer,
-                "adam_lbfgs_switch_ratio": self.training.adam_lbfgs_switch_ratio,
-                "lbfgs": {
-                    "history_size": self.training.lbfgs.history_size,
-                    "max_iter": self.training.lbfgs.max_iter,
-                    "line_search_fn": self.training.lbfgs.line_search_fn,
-                    "tolerance_grad": self.training.lbfgs.tolerance_grad,
-                    "tolerance_change": self.training.lbfgs.tolerance_change,
-                },
-                "mode": self.training.mode,
-            },
-            "rl": {
-                "enabled": self.rl.enabled,
-                "state_dim": self.rl.state_dim,
-                "action_dim": self.rl.action_dim,
-                "hidden_dim": self.rl.hidden_dim,
-                "learning_rate": self.rl.learning_rate,
-                "gamma": self.rl.gamma,
-                "epsilon_start": self.rl.epsilon_start,
-                "epsilon_end": self.rl.epsilon_end,
-                "epsilon_decay": self.rl.epsilon_decay,
-                "memory_size": self.rl.memory_size,
-                "batch_size": self.rl.batch_size,
-                "target_update": self.rl.target_update,
-                "reward_weights": self.rl.reward_weights,
-            },
-            "evaluation": {
-                "resolution": self.evaluation.resolution,
-                "num_test_points": self.evaluation.num_test_points,
-                "metrics": self.evaluation.metrics,
-                "save_plots": self.evaluation.save_plots,
-                "plot_frequency": self.evaluation.plot_frequency,
-            },
-            "logging": {
-                "level": self.logging.level,
-                "save_tensorboard": self.logging.save_tensorboard,
-                "log_frequency": self.logging.log_frequency,
-            },
-            "paths": {
-                "experiments_dir": self.paths.experiments_dir,
-                "model_dir": self.paths.model_dir,
-                "log_dir": self.paths.log_dir,
-                "tensorboard_dir": self.paths.tensorboard_dir,
-            },
-        }

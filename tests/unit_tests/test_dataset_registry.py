@@ -3,7 +3,7 @@
 import pytest
 
 from pinnrl.datasets import WELL_REGISTRY, get_entry, list_dataset_names
-from pinnrl.training.train import PDE_REGISTRY
+from pinnrl.pdes.registry import PDE_SPECS
 
 
 def test_registry_is_non_empty():
@@ -42,9 +42,9 @@ def test_matched_pde_keys_resolve_in_pde_registry(name):
         # Unmatched datasets must use ``data_only``.
         assert entry.recommended_mode == "data_only"
         return
-    valid_keys = {meta[2] for meta in PDE_REGISTRY.values()}
+    valid_keys = {spec.key for spec in PDE_SPECS}
     assert (
         entry.default_pde_key in valid_keys
-    ), f"{name}.default_pde_key={entry.default_pde_key!r} not in PDE_REGISTRY"
+    ), f"{name}.default_pde_key={entry.default_pde_key!r} not in PDE_SPECS"
     # Matched entries should default to data_augmented.
     assert entry.recommended_mode == "data_augmented"
