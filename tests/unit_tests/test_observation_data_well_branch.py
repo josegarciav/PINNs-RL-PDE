@@ -140,3 +140,29 @@ def test_a_well_run_trains_on_the_window_its_data_covers(monkeypatch, tmp_path):
     assert pde.time_domain == (T0, T0 + DT * (DEFAULT_LOADED_STEPS_3D - 1))
     t = pde.observation_data["t"]
     assert pde.time_domain[0] <= float(t.min()) and float(t.max()) <= pde.time_domain[1]
+
+
+def test_load_run_restores_the_window_a_well_run_trained_on(monkeypatch, tmp_path):
+    """Regression: the snapshot kept time_domain None, and load_run (which loads no data) used [0, 1]."""
+    import yaml
+
+    from pinnrl.config import DEFAULT_CONFIG_PATH
+    from pinnrl.training.train import build_config_dict, load_run, run_training
+
+    _install_fake_well_module(monkeypatch, n_traj=1, n_steps=9, shape=(4, 4), n_fields=11)
+    monkeypatch.setenv("PINNRL_WELL_CACHE", str(tmp_path / "cache"))
+    with open(DEFAULT_CONFIG_PATH) as f:
+        raw = yaml.safe_load(f)
+    dataset = {"name": "active_matter", "n_steps": 9, "n_points": 10_000}
+    config = build_config_dict(raw, "heat", "feedforward", epochs=2, dataset=dataset)
+    config["paths"]["results_dir"] = str(tmp_path / "runs")
+    config["training"].update(
+        num_collocation_points=64, batch_size=32, num_boundary_points=16, num_initial_points=16
+    )
+    run_training(config, torch.device("cpu"))
+    assert config["pde"]["time_domain"] is None  # the caller's dict is left alone
+
+    (run_dir,) = (tmp_path / "runs").iterdir()
+    pde, _, snapshot = load_run(run_dir)
+    assert snapshot["pde"]["time_domain"] == [T0, T0 + 8 * DT]  # the observations' range
+    assert pde.time_domain == (T0, T0 + 8 * DT)

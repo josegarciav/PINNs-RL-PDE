@@ -229,7 +229,8 @@ def load_run(run_dir, device=None):
     through the same builders as :func:`run_training`, so the result matches
     what was trained. The PDE is the forward problem at the configured (true)
     parameters, so its exact solution is the reference even for inverse runs;
-    observation data is not reloaded.
+    observation data is not reloaded (a Well run's snapshot records the time
+    window its observations covered).
 
     Args:
         run_dir: Run folder written by :func:`run_training`.
@@ -314,7 +315,8 @@ def run_training(config_dict, device):
     # The config snapshot is what load_run() rebuilds the run from. Everything
     # else in the run dir (.running, metadata.json, weights, plots) is the
     # trainer's job.
-    with open(experiment_dir / "config.yaml", "w") as f:
+    snapshot_path = experiment_dir / "config.yaml"
+    with open(snapshot_path, "w") as f:
         yaml.dump(config_dict, f)
 
     print(f"Experiment: {experiment_name}")
@@ -323,6 +325,13 @@ def run_training(config_dict, device):
     try:
         # Create PDE
         pde = create_pde(config_dict, device)
+        if config_dict["pde"].get("time_domain") is None:
+            # The window came from the observations (a Well run): record it, since
+            # load_run() rebuilds the PDE without loading them.
+            snapshot = {**config_dict, "pde": {**config_dict["pde"]}}
+            snapshot["pde"]["time_domain"] = [float(t) for t in pde.time_domain]
+            with open(snapshot_path, "w") as f:
+                yaml.dump(snapshot, f)
 
         model, config_obj = build_model(config_dict, device)
 
