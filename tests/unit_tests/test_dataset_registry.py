@@ -1,8 +1,11 @@
 """Smoke tests for the Well dataset registry."""
 
+import os
+
 import pytest
 
 from pinnrl.datasets import WELL_REGISTRY, get_entry, list_dataset_names
+from pinnrl.datasets.registry import DEFAULT_LOADED_STEPS, DEFAULT_LOADED_STEPS_3D
 from pinnrl.pdes.registry import PDE_SPECS
 
 
@@ -50,23 +53,54 @@ def test_matched_pde_keys_resolve_in_pde_registry(name):
     assert entry.recommended_mode == "data_augmented"
 
 
-# Measured from each dataset's first training file on the HF mirror
-# (dimensions/time, dimensions/<axis>, t{0,1,2}_fields); see registry.py.
-@pytest.mark.parametrize(
-    "name, domain, t_end, channels",
-    [
-        ("active_matter", ((0.0, 10.0), (0.0, 10.0)), 20.0, 11),
-        ("rayleigh_benard", ((0.0, 4.0), (0.0, 1.0)), 49.75, 4),
-        ("gray_scott_reaction_diffusion", ((-1.0, 1.0), (-1.0, 1.0)), 10000.0, 2),
-        ("rayleigh_taylor_instability", ((0.0, 1.0),) * 3, 118.004, 4),
-        ("viscoelastic_instability", ((0.0, 6.2831855), (-1.0, 1.0)), 19.0, 8),
-    ],
-)
-def test_registry_matches_the_dataset_files(name, domain, t_end, channels):
+@pytest.mark.parametrize("name", list(WELL_REGISTRY))
+def test_entry_grid_and_time_invariants(name):
     entry = WELL_REGISTRY[name]
-    assert entry.domain == domain
-    assert entry.time_domain[1] == pytest.approx(t_end, rel=1e-4)
-    assert entry.default_output_dim == channels
+    assert len(entry.fields) > 0 and len(set(entry.fields)) == len(entry.fields)
+    assert all(lo < hi for lo, hi in entry.domain)
+    assert entry.dt > 0 and entry.n_steps >= 2
+    assert entry.time_domain == (0.0, entry.dt * (entry.n_steps - 1))
+    assert 1 <= entry.default_loaded_steps <= DEFAULT_LOADED_STEPS
+    for n in (1, 2, 7, entry.n_steps, entry.n_steps + 5, None):
+        steps = min(entry.default_loaded_steps if n is None else n, entry.n_steps)
+        assert entry.loaded_steps(n) == steps
+        assert entry.loaded_time_domain(n) == pytest.approx((0.0, entry.dt * (steps - 1)))
+
+
+def test_3d_entries_read_a_short_window_by_default():
+    for entry in WELL_REGISTRY.values():
+        expected = DEFAULT_LOADED_STEPS_3D if entry.n_spatial_dims == 3 else DEFAULT_LOADED_STEPS
+        assert entry.default_loaded_steps == expected, entry.name
+
+
+def test_loaded_steps_rejects_nonpositive_counts():
+    with pytest.raises(ValueError, match="at least 1"):
+        WELL_REGISTRY["active_matter"].loaded_steps(0)
+
+
+@pytest.mark.skipif(
+    not os.environ.get("PINNRL_NETWORK_TESTS"),
+    reason="reads every dataset from the Hugging Face mirror; set PINNRL_NETWORK_TESTS=1",
+)
+@pytest.mark.parametrize("name", list(WELL_REGISTRY))
+def test_registry_matches_the_hugging_face_files(name):
+    """Network: the entry agrees with the dataset's metadata and its first two steps."""
+    import numpy as np
+
+    from pinnrl.datasets.well_loader import _load_well_dataset
+
+    entry = WELL_REGISTRY[name]
+    dataset = _load_well_dataset(name, "train", None, n_steps=2)
+    meta = dataset.metadata
+    assert meta.n_spatial_dims == entry.n_spatial_dims
+    assert meta.n_fields == len(entry.fields)
+    assert meta.n_steps_per_trajectory[0] == entry.n_steps
+    sample = dataset[0]
+    grid = sample["space_grid"].numpy().reshape(-1, entry.n_spatial_dims)
+    assert np.allclose(grid.min(axis=0), [lo for lo, _ in entry.domain], rtol=1e-4, atol=1e-6)
+    assert np.allclose(grid.max(axis=0), [hi for _, hi in entry.domain], rtol=1e-4, atol=1e-6)
+    times = np.concatenate([sample["input_time_grid"], sample["output_time_grid"]])
+    assert np.diff(times)[0] == pytest.approx(entry.dt, rel=1e-4)
 
 
 def test_loaded_window_follows_the_step_cap():
@@ -89,3 +123,17 @@ def test_dataset_defaults_set_the_pde_window():
     assert config["pde"]["domain"] == [[0.0, 4.0], [0.0, 1.0]]
     assert config["pde"]["time_domain"] == [0.0, 1.0]  # 4 steps of dt = 0.25
     assert config["pde"]["observation_data"]["n_steps"] == 5
+
+
+def test_3d_dataset_window_matches_what_the_loader_reads():
+    import yaml
+
+    from pinnrl.config import DEFAULT_CONFIG_PATH
+    from pinnrl.training.train import build_config_dict
+
+    with open(DEFAULT_CONFIG_PATH) as f:
+        raw = yaml.safe_load(f)
+    config = build_config_dict(raw, "heat", "feedforward", dataset={"name": "MHD_64"})
+    assert config["pde"]["time_domain"] == pytest.approx(
+        [0.0, 0.01 * (DEFAULT_LOADED_STEPS_3D - 1)]
+    )

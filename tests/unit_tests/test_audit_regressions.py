@@ -96,35 +96,119 @@ def test_build_config_dict_does_not_mutate_its_input():
     assert (raw["training"]["num_epochs"], raw["rl"]["enabled"]) == before
 
 
+def test_build_config_dict_shares_no_nested_state():
+    """Regression: the pde and model blocks aliased the input's nested dicts and lists."""
+    import copy
+
+    import yaml
+
+    from pinnrl.training.train import build_config_dict
+
+    raw = _yaml()
+    snapshot = copy.deepcopy(raw)
+    a = build_config_dict(raw, "heat", "fourier")
+    b = build_config_dict(raw, "heat", "fourier")
+    a["pde"]["parameters"]["alpha"] = 123
+    a["model"]["hidden_dims"].append(7)
+    assert raw == snapshot
+    assert b["pde"]["parameters"] == snapshot["pde_configs"]["heat"]["parameters"]
+    assert b["model"]["hidden_dims"] == snapshot["architectures"]["fourier"]["hidden_dims"]
+    # Nor inside one config, so the run's config.yaml snapshot has no YAML aliases.
+    assert a["pde_configs"] == snapshot["pde_configs"]
+    assert a["architectures"] == snapshot["architectures"]
+    assert "&id" not in yaml.dump(a)
+
+
 # ── 5. the dashboard moves to the next port when one is taken ──────────
 
 
-def test_dashboard_skips_a_busy_port(monkeypatch):
+def _busy_ports(n):
+    """``n`` consecutive listening sockets on 127.0.0.1, as ``(first_port, sockets)``."""
     import socket
 
-    import pinnrl.dashboard
+    for _ in range(20):
+        socks = [socket.socket()]
+        try:
+            socks[0].bind(("127.0.0.1", 0))
+            base = socks[0].getsockname()[1]
+            for k in range(1, n):
+                socks.append(socket.socket())
+                socks[-1].bind(("127.0.0.1", base + k))
+            for sock in socks:
+                sock.listen()
+            return base, socks
+        except OSError:
+            for sock in socks:
+                sock.close()
+    pytest.skip(f"no run of {n} free ports")
+
+
+def _serve_nothing(monkeypatch):
+    """Make ``serve_forever`` return at once and record the servers it was called on."""
+    from werkzeug.serving import BaseWSGIServer
+
+    served = []
+    monkeypatch.setattr(BaseWSGIServer, "serve_forever", lambda self, *a, **kw: served.append(self))
+    return served
+
+
+def test_dashboard_binds_the_next_port_and_opens_the_browser_on_it(monkeypatch):
+    """Regression: the browser opened before anything listened, on a port only probed as free."""
+    import socket
+
     from pinnrl import main
 
-    with socket.socket() as busy:
-        busy.bind(("127.0.0.1", 0))
-        busy.listen()
-        port = busy.getsockname()[1]
-        served, opened = [], []
-        monkeypatch.setattr(pinnrl.dashboard.app, "run", lambda **kw: served.append(kw["port"]))
-        monkeypatch.setattr(main.webbrowser, "open", opened.append)
+    def listening(url):
+        with socket.socket() as probe:
+            return probe.connect_ex(("127.0.0.1", int(url.rstrip("/").rsplit(":", 1)[1]))) == 0
+
+    served, opened = _serve_nothing(monkeypatch), []
+    monkeypatch.setattr(main.webbrowser, "open", lambda url: opened.append((url, listening(url))))
+    port, socks = _busy_ports(1)
+    try:
         main.run_dashboard(port, open_browser=True)
-    assert served and served[0] != port
-    assert opened == [f"http://127.0.0.1:{served[0]}/"]  # the browser goes to the real port
+    finally:
+        for sock in socks:
+            sock.close()
+    bound = served[0].server_port
+    assert bound != port and served[0].host == "127.0.0.1"
+    assert opened == [(f"http://127.0.0.1:{bound}/", True)]  # the server was already listening
 
 
 def test_dashboard_gives_up_after_three_busy_ports(monkeypatch):
     from pinnrl import main
 
-    monkeypatch.setattr(
-        main, "find_free_port", lambda port: (_ for _ in ()).throw(RuntimeError("busy"))
+    served = _serve_nothing(monkeypatch)
+    port, socks = _busy_ports(3)
+    try:
+        with pytest.raises(SystemExit):
+            main.run_dashboard(port)
+    finally:
+        for sock in socks:
+            sock.close()
+    assert served == []
+
+
+def test_dashboard_launch_passes_the_dataset_steps(monkeypatch, tmp_path):
+    import inspect
+
+    import pinnrl.dashboard as dashboard
+
+    launched = []
+    monkeypatch.setattr(dashboard, "RESULTS_DIR", str(tmp_path))
+    monkeypatch.setattr(dashboard.subprocess, "Popen", lambda cmd, **kw: launched.append(cmd))
+    args = dict.fromkeys(inspect.signature(dashboard.launch_trainer).parameters)
+    args.update(
+        n_clicks=1,
+        pde_name="Heat Equation",
+        arch="feedforward",
+        dataset_toggle=["well"],
+        dataset_name="MHD_64",
+        dataset_steps=4,
     )
-    with pytest.raises(SystemExit):
-        main.run_dashboard(8050)
+    dashboard.launch_trainer(**args)
+    cmd = launched[0]
+    assert cmd[cmd.index("--dataset-steps") + 1] == "4"
 
 
 # ── 6. run directory names round-trip ─────────────────────────────────
@@ -166,13 +250,17 @@ def test_dashboard_names_runs_correctly():
 # ── 7. loss breakdown x positions ─────────────────────────────────────
 
 
-def test_loss_curve_epochs():
+def test_loss_curve_epochs_match_when_the_trainer_validates():
     from pinnrl.plots import loss_curve_epochs
 
-    history = {"train_loss": [1.0] * 100, "residual_loss": [1.0] * 100, "val_loss": [1.0] * 10}
-    epochs, val = loss_curve_epochs(history, validation_frequency=10)
-    assert epochs == list(range(1, 101))  # every per-epoch component gets all 100 points
-    assert val == [1, 11, 21, 31, 41, 51, 61, 71, 81, 91]  # validated at 0-based 0, 10, 20, ...
+    trainer = _trainer()
+    trainer.early_stopping_enabled = False
+    trainer.validation_frequency = 10
+    trainer.train(num_epochs=25, batch_size=32, num_points=32)
+    epochs, val = loss_curve_epochs(trainer.history, trainer.validation_frequency)
+    assert epochs == list(range(1, 26))
+    assert len(trainer.history["residual_loss"]) == 25
+    assert val == [1, 11, 21]  # validated after 1-based epochs 1, 11 and 21
 
 
 # ── 8. the history plot draws losses only, at their own epochs ────────
@@ -214,10 +302,10 @@ def test_fourier_hidden_layers_match_hidden_dims(widths):
 # ── 10. train(num_epochs=...) re-plans the schedule; L-BFGS phase is full batch ──
 
 
-def _trainer(optimizer="adam", scheduler="cosine"):
+def _trainer(optimizer="adam", scheduler="cosine", adaptive=False):
     from tests.unit_tests.test_trainer import _make_config, _make_trainer
 
-    config = _make_config(scheduler_type=scheduler)
+    config = _make_config(scheduler_type=scheduler, adaptive_weights_enabled=adaptive)
     config.training.optimizer = optimizer
     config.training.num_epochs = 100
     return _make_trainer(config=config)
@@ -247,6 +335,46 @@ def test_lbfgs_phase_uses_the_full_batch():
     trainer.train(num_epochs=4, batch_size=16, num_points=64)
     # 0.7 * 4 -> switch after epoch 2: two Adam epochs of 4 mini-batches, then full batches
     assert sizes == [16] * 8 + [64, 64]
+
+
+def test_each_train_call_restarts_the_learning_rate_schedule():
+    """Regression: a second train() ran on past the old schedule, or rebuilt it from the decayed LR."""
+    trainer = _trainer()
+    trainer.early_stopping_enabled = False
+    lr = trainer.history["learning_rate"]
+    trainer.train(num_epochs=4, batch_size=32, num_points=32)
+    trainer.train(num_epochs=4, batch_size=32, num_points=32)
+    assert lr[4:] == pytest.approx(lr[:4])
+    trainer.train(num_epochs=6, batch_size=32, num_points=32)
+    min_lr = trainer.config.training.learning_rate_scheduler.min_lr
+    assert lr[8] > 100 * min_lr
+    assert lr[-1] == pytest.approx(min_lr, rel=1e-6)
+
+
+# ── 11. adaptive loss weights are recorded once per epoch ─────────────
+
+
+def test_loss_weights_are_recorded_once_per_epoch(monkeypatch, tmp_path):
+    """Regression: one weight vector per optimizer step was drawn at per-epoch positions."""
+    from pinnrl import plots
+
+    trainer = _trainer(adaptive=True)
+    trainer.train(num_epochs=5, batch_size=16, num_points=64)  # 4 steps per epoch
+    assert len(trainer.history["loss_weights"]) == len(trainer.history["train_loss"]) == 5
+    written = []
+    monkeypatch.setattr(plots, "_write_plotly", lambda fig, path: written.append(fig))
+    plots.plot_training_history(trainer, save_path=str(tmp_path / "h.png"))
+    weight_traces = [trace for trace in written[0].data if trace.name.endswith("_weight")]
+    assert len(weight_traces) == 3
+    for trace in weight_traces:
+        assert list(trace.x) == [1, 2, 3, 4, 5] and len(trace.y) == 5
+
+
+def test_lbfgs_epochs_record_no_loss_weights():
+    trainer = _trainer(optimizer="adam_lbfgs", adaptive=True)
+    trainer.train(num_epochs=10, batch_size=16, num_points=64)
+    assert trainer._switch_epoch == 7
+    assert len(trainer.history["loss_weights"]) == 7  # the Adam epochs only
 
 
 def test_1d_solution_view_is_a_surface_even_with_a_time_slider():

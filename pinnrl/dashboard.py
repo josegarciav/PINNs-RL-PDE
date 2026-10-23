@@ -432,6 +432,25 @@ app.layout = html.Div(
                                                                                     ],
                                                                                     style=FIELD_STYLE,
                                                                                 ),
+                                                                                html.Div(
+                                                                                    [
+                                                                                        html.Label(
+                                                                                            "Time steps:",
+                                                                                            style=LABEL_STYLE,
+                                                                                        ),
+                                                                                        dcc.Input(
+                                                                                            id="train-dataset-steps",
+                                                                                            type="number",
+                                                                                            placeholder="dataset default",
+                                                                                            min=1,
+                                                                                            step=1,
+                                                                                            style={
+                                                                                                "width": "100%"
+                                                                                            },
+                                                                                        ),
+                                                                                    ],
+                                                                                    style=FIELD_STYLE,
+                                                                                ),
                                                                             ],
                                                                         ),
                                                                     ],
@@ -1958,6 +1977,7 @@ def populate_from_well_dataset(dataset_name, toggle_value):
     info_children = [
         html.Strong(entry.name),
         html.Span(f"  ·  {entry.n_spatial_dims}D  ·  fields: {len(entry.fields)}"),
+        html.Span(f"  ·  reads {entry.loaded_steps()} of {entry.n_steps} steps by default"),
         html.Br(),
         html.Span(entry.description),
         html.Br(),
@@ -2014,6 +2034,7 @@ def populate_from_well_dataset(dataset_name, toggle_value):
     State("train-dataset-base", "value"),
     State("train-dataset-traj", "value"),
     State("train-dataset-points", "value"),
+    State("train-dataset-steps", "value"),
     prevent_initial_call=True,
 )
 def launch_trainer(
@@ -2048,6 +2069,7 @@ def launch_trainer(
     dataset_base,
     dataset_traj,
     dataset_points,
+    dataset_steps=None,
 ):
     """Launch a headless training subprocess with the selected parameters."""
     if not n_clicks:
@@ -2133,6 +2155,8 @@ def launch_trainer(
                 cmd += ["--dataset-traj", str(int(dataset_traj))]
             if dataset_points:
                 cmd += ["--dataset-points", str(int(dataset_points))]
+            if dataset_steps:
+                cmd += ["--dataset-steps", str(int(dataset_steps))]
             if dataset_source == "local" and dataset_base:
                 cmd += ["--dataset-base", str(dataset_base)]
 

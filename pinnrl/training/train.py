@@ -112,8 +112,10 @@ def build_config_dict(
 
     spec = get_pde_spec(pde_name)
     pde_name, pde_key = spec.display_name, spec.key
-    pde_config = yaml_config.get("pde_configs", {}).get(pde_key, {})
-    arch_config = yaml_config.get("architectures", {}).get(arch_type, {})
+    # Copies, so the new pde/model blocks share no lists or dicts with the
+    # input or with the pde_configs/architectures blocks they came from.
+    pde_config = copy.deepcopy(yaml_config.get("pde_configs", {}).get(pde_key, {}))
+    arch_config = copy.deepcopy(yaml_config.get("architectures", {}).get(arch_type, {}))
 
     if epochs is not None:
         config["training"]["num_epochs"] = epochs
@@ -434,7 +436,7 @@ def main():
         "--dataset-steps",
         type=int,
         default=None,
-        help="Time steps read per trajectory (default: up to 101, the_well's rollout cap)",
+        help="Time steps read per trajectory (default: the dataset's; 101, or 11 for 3-D)",
     )
     parser.add_argument(
         "--dataset-base",

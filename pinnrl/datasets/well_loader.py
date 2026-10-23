@@ -8,9 +8,9 @@ bridge those two shapes:
 * :func:`resolve_path` returns the user-supplied local download dir, or the
   Hugging Face mirror when none is given.
 * :func:`load_well_slice` instantiates ``the_well.data.WellDataset`` (lazily —
-  the dependency is optional) with its default arguments, flattens a few of
-  its samples, keeps ``n_points`` random spatio-temporal locations, and
-  returns ready-to-use CPU/GPU tensors.
+  the dependency is optional) in full-trajectory mode, draws ``n_points``
+  random spatio-temporal locations from a few of its trajectories, reads only
+  those, and returns ready-to-use CPU/GPU tensors.
 
 Loaded slices are cached as ``.npz`` under ``~/.cache/pinnrl/well/`` (or
 ``$PINNRL_WELL_CACHE``) so repeat training runs (and CI smoke tests) do not
@@ -93,69 +93,47 @@ def _cache_file(
     n_traj: int,
     n_points: int,
     seed: int,
-    base: str | None = None,
-    n_steps: int | None = None,
+    base: str | None,
+    n_steps: int,
 ) -> Path:
     tag = _base_tag(base)
-    steps = "all" if n_steps is None else str(n_steps)
     return (
         _cache_dir()
-        / f"{name}__{split}__t{n_traj}_p{n_points}_s{seed}_n{steps}__{tag}__{_CACHE_FORMAT}.npz"
+        / f"{name}__{split}__t{n_traj}_p{n_points}_s{seed}_n{n_steps}__{tag}__{_CACHE_FORMAT}.npz"
     )
 
 
-def _load_well_dataset(name: str, split: str, base: str | None, n_steps: int | None = None):
+def _load_well_dataset(name: str, split: str, base: str | None, n_steps: int):
     """Import ``the_well`` lazily and open ``name`` in full-trajectory mode.
 
     Each sample is then one whole trajectory from ``t0``: ``input_fields`` holds
     the first step and ``output_fields`` the rest, with ``input_time_grid`` /
-    ``output_time_grid`` and ``space_grid`` giving the coordinates. ``n_steps``
-    caps the number of steps read: ``the_well`` loads the first step plus up to
-    ``max_rollout_steps`` more (default 100), so ``n_steps`` maps to
-    ``max_rollout_steps = n_steps - 1``.
+    ``output_time_grid`` and ``space_grid`` giving the coordinates. ``the_well``
+    loads the first step plus up to ``max_rollout_steps`` more, so reading
+    ``n_steps`` steps maps to ``max_rollout_steps = n_steps - 1``.
     """
     try:
         from the_well.data import WellDataset  # type: ignore
     except ImportError as exc:  # pragma: no cover - exercised only without extra
         raise TheWellNotInstalledError() from exc
 
-    kwargs = {"full_trajectory_mode": True}
-    if n_steps is not None:
-        if int(n_steps) < 1:
-            raise ValueError(f"n_steps must be at least 1, got {n_steps}")
-        kwargs["max_rollout_steps"] = int(n_steps) - 1
     return WellDataset(
         well_base_path=resolve_path(base),
         well_dataset_name=name,
         well_split_name=split,
-        **kwargs,
+        full_trajectory_mode=True,
+        max_rollout_steps=int(n_steps) - 1,
     )
 
 
-def _flatten_trajectory(
-    fields: np.ndarray,
-    spatial_axes: dict[str, np.ndarray],
-    times: np.ndarray,
-) -> dict[str, np.ndarray]:
-    """Flatten ``(n_steps, *spatial, n_fields)`` into ``(N, ...)`` arrays.
+def _extract_arrays(sample: Any, n_spatial_dims: int) -> dict[str, Any]:
+    """Collect one full-trajectory ``WellDataset`` sample without copying its fields.
 
-    ``spatial_axes`` is an ordered dict mapping axis name -> 1D coordinate
-    array (length matches the corresponding spatial dim of ``fields``).
-    """
-    grids = np.meshgrid(times, *spatial_axes.values(), indexing="ij")
-    t_flat = grids[0].reshape(-1, 1).astype(np.float32)
-    x_flat = np.stack([g.reshape(-1) for g in grids[1:]], axis=-1).astype(np.float32)
-    u_flat = fields.reshape(-1, fields.shape[-1]).astype(np.float32)
-    return {"x": x_flat, "t": t_flat, "u": u_flat}
-
-
-def _extract_arrays(sample: Any, n_spatial_dims: int) -> dict[str, np.ndarray]:
-    """Turn one full-trajectory ``WellDataset`` sample into numpy arrays.
-
-    Fields are ``input_fields`` followed by ``output_fields`` along time
-    (``(n_steps, *spatial, n_fields)``), times are ``input_time_grid`` followed
-    by ``output_time_grid``, and the coordinate of spatial axis ``d`` is read
-    from ``space_grid[..., d]`` along that axis.
+    Returns ``{"segments", "times", "axes"}``: ``segments`` are ``input_fields``
+    and ``output_fields`` as stored (``(steps, *spatial, n_fields)`` each, in
+    time order), ``times`` is ``input_time_grid`` followed by
+    ``output_time_grid``, and ``axes[d]`` is the coordinate of spatial axis
+    ``d``, read from ``space_grid[..., d]`` along that axis.
 
     Raises:
         KeyError: If the sample lacks fields or grids (``return_grid`` must be on).
@@ -177,36 +155,70 @@ def _extract_arrays(sample: Any, n_spatial_dims: int) -> dict[str, np.ndarray]:
             "open the dataset with full_trajectory_mode=True and return_grid=True"
         )
 
-    steps = [_as_np(sample["input_fields"])]
+    segments = [_as_np(sample["input_fields"])]
     times = [_as_np(sample["input_time_grid"]).reshape(-1)]
     if "output_fields" in sample:
-        steps.append(_as_np(sample["output_fields"]))
+        segments.append(_as_np(sample["output_fields"]))
         times.append(_as_np(sample["output_time_grid"]).reshape(-1))
-    fields = np.concatenate(steps, axis=0).astype(np.float32)
     times = np.concatenate(times).astype(np.float32)
-    if fields.ndim != n_spatial_dims + 2:
-        raise ValueError(
-            f"Expected fields with {n_spatial_dims + 2} dims "
-            f"(n_steps, {'x ' * n_spatial_dims}n_fields), got shape {fields.shape}"
-        )
-    if times.size != fields.shape[0]:
-        raise ValueError(f"{times.size} time stamps for {fields.shape[0]} field steps")
+    shape = segments[0].shape[1:]
+    for seg in segments:
+        if seg.ndim != n_spatial_dims + 2:
+            raise ValueError(
+                f"Expected fields with {n_spatial_dims + 2} dims "
+                f"(n_steps, {'x ' * n_spatial_dims}n_fields), got shape {seg.shape}"
+            )
+        if seg.shape[1:] != shape:
+            raise ValueError(f"output_fields {seg.shape} do not match input_fields {shape}")
+    n_steps = sum(len(seg) for seg in segments)
+    if times.size != n_steps:
+        raise ValueError(f"{times.size} time stamps for {n_steps} field steps")
 
     space_grid = _as_np(sample["space_grid"])
-    if space_grid.shape != (*fields.shape[1:-1], n_spatial_dims):
+    if space_grid.shape != (*shape[:-1], n_spatial_dims):
         raise ValueError(
-            f"space_grid shape {space_grid.shape} does not match fields {fields.shape}"
+            f"space_grid shape {space_grid.shape} does not match fields {(n_steps, *shape)}"
         )
-    spatial_axes: dict[str, np.ndarray] = {}
-    for d, axis in enumerate(("x", "y", "z")[:n_spatial_dims]):
+    axes = []
+    for d in range(n_spatial_dims):
         index = tuple(slice(None) if i == d else 0 for i in range(n_spatial_dims))
-        spatial_axes[axis] = space_grid[index + (d,)].astype(np.float32)
+        axes.append(space_grid[index + (d,)].astype(np.float32))
 
-    return {
-        "fields": fields,
-        "times": times,
-        **{f"axis_{k}": v for k, v in spatial_axes.items()},
-    }
+    return {"segments": segments, "times": times, "axes": axes}
+
+
+def _n_nodes(traj: dict[str, Any]) -> int:
+    """Space-time nodes in one trajectory from :func:`_extract_arrays`."""
+    return traj["times"].size * int(np.prod(traj["segments"][0].shape[1:-1]))
+
+
+def _gather(trajectories: list[dict[str, Any]], flat: np.ndarray) -> dict[str, np.ndarray]:
+    """Read the ``(x, t, u)`` of flat indices into the stacked trajectories.
+
+    Index ``k`` counts trajectory by trajectory, each in C order over
+    ``(time, *spatial)`` — the order of a flattened ``(n_steps, *spatial,
+    n_fields)`` array. Only the selected nodes are read.
+    """
+    offsets = np.concatenate([[0], np.cumsum([_n_nodes(traj) for traj in trajectories])])
+    which = np.searchsorted(offsets, flat, side="right") - 1
+    n_dims = len(trajectories[0]["axes"])
+    n_fields = trajectories[0]["segments"][0].shape[-1]
+    x = np.empty((flat.size, n_dims), dtype=np.float32)
+    t = np.empty((flat.size, 1), dtype=np.float32)
+    u = np.empty((flat.size, n_fields), dtype=np.float32)
+    for i, traj in enumerate(trajectories):
+        rows = np.flatnonzero(which == i)
+        grid = (traj["times"].size, *traj["segments"][0].shape[1:-1])
+        step, *nodes = np.unravel_index(flat[rows] - offsets[i], grid)
+        t[rows, 0] = traj["times"][step]
+        for d, node in enumerate(nodes):
+            x[rows, d] = traj["axes"][d][node]
+        start = 0
+        for seg in traj["segments"]:
+            hit = (step >= start) & (step < start + len(seg))
+            u[rows[hit]] = seg[(step[hit] - start, *(node[hit] for node in nodes))]
+            start += len(seg)
+    return {"x": x, "t": t, "u": u}
 
 
 def load_well_slice(
@@ -236,9 +248,11 @@ def load_well_slice(
         use_cache: When True, reuse / write a flattened ``.npz`` under
             the cache dir (``~/.cache/pinnrl/well/`` or ``$PINNRL_WELL_CACHE``).
             Set False to force a fresh load.
-        n_steps: Cap on the number of time steps read per trajectory (memory
-            grows with it); ``None`` keeps ``the_well``'s default of at most 101
-            (the first step plus a 100-step rollout).
+        n_steps: Time steps read per trajectory, from its start; ``None``
+            uses the entry's ``default_loaded_steps`` (101, ``the_well``'s
+            rollout cap; 11 for 3-D datasets). Memory grows with it: the
+            ``n_traj`` trajectories are held as ``the_well`` returns them,
+            but only the ``n_points`` selected nodes are copied out.
 
     Returns:
         ``{"x": (N, d_space), "t": (N, 1), "u": (N, d_fields)}`` on ``device``.
@@ -247,11 +261,13 @@ def load_well_slice(
         KeyError: If ``name`` is not registered.
         TheWellNotInstalledError: If the optional ``the_well`` package is missing.
         RuntimeError: If the split is empty.
+        ValueError: If ``n_steps`` is below 1.
     """
     entry = get_entry(name)
+    n_steps = entry.loaded_steps(n_steps)
     rng = np.random.default_rng(seed)
 
-    cache_path = _cache_file(name, split, n_traj, n_points, seed, base=base, n_steps=n_steps)
+    cache_path = _cache_file(name, split, n_traj, n_points, seed, base, n_steps)
     if use_cache and cache_path.exists():
         _LOGGER.info("Loading cached Well slice from %s", cache_path)
         with np.load(cache_path) as data:
@@ -268,21 +284,17 @@ def load_well_slice(
     take = min(n_traj, n_available)
     traj_indices = rng.choice(n_available, size=take, replace=False)
 
-    parts = []
-    for idx in traj_indices:
-        sample = dataset[int(idx)]
-        arrays = _extract_arrays(sample, entry.n_spatial_dims)
-        spatial = {k.removeprefix("axis_"): v for k, v in arrays.items() if k.startswith("axis_")}
-        parts.append(_flatten_trajectory(arrays["fields"], spatial, arrays["times"]))
-
-    x = np.concatenate([p["x"] for p in parts], axis=0)
-    t = np.concatenate([p["t"] for p in parts], axis=0)
-    u = np.concatenate([p["u"] for p in parts], axis=0)
-
-    n_total = x.shape[0]
+    trajectories = [
+        _extract_arrays(dataset[int(idx)], entry.n_spatial_dims) for idx in traj_indices
+    ]
+    n_total = sum(_n_nodes(traj) for traj in trajectories)
+    # Draw the flat indices first (O(n_points) memory), then read only those nodes.
     if n_points < n_total:
-        sel = rng.choice(n_total, size=n_points, replace=False)
-        x, t, u = x[sel], t[sel], u[sel]
+        flat = rng.choice(n_total, size=n_points, replace=False)
+    else:
+        flat = np.arange(n_total)
+    sampled = _gather(trajectories, flat)
+    x, t, u = sampled["x"], sampled["t"], sampled["u"]
 
     if use_cache:
         cache_path.parent.mkdir(parents=True, exist_ok=True)

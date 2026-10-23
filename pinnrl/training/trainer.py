@@ -147,8 +147,9 @@ class PDETrainer:
             "boundary_loss": [],
             "initial_loss": [],
             "learning_rate": [],
-            "loss_weights": [],  # Track weight evolution
+            "loss_weights": [],  # adaptive weights at the end of each epoch that updated them
         }
+        self._latest_loss_weights = None  # set by every adaptive step, recorded per epoch
 
         es_cfg = config.training.early_stopping
         self.early_stopping_enabled = es_cfg.enabled
@@ -469,8 +470,14 @@ class PDETrainer:
         self._plan_epochs(self._num_epochs)
 
     def _plan_epochs(self, num_epochs: int) -> None:
-        """Size the LR schedule and the Adam -> L-BFGS switch for a ``num_epochs`` run."""
+        """Size the LR schedule and the Adam -> L-BFGS switch for a ``num_epochs`` run.
+
+        The run starts from ``training.learning_rate``, not from wherever the
+        previous run's schedule left the optimizer.
+        """
         self._num_epochs = num_epochs
+        for group in self.optimizer.param_groups:
+            group["lr"] = group["initial_lr"] = self.config.training.learning_rate
         if self._optimizer_type == "adam_lbfgs":
             ratio = getattr(self.config.training, "adam_lbfgs_switch_ratio", 0.7)
             self._switch_epoch = max(1, int(num_epochs * ratio))
@@ -562,13 +569,12 @@ class PDETrainer:
             {name: float(weights[i]) for i, name in enumerate(component_names) if i < len(weights)},
         )
 
-        # Store weights for visualization/tracking
+        # train() records the last weights of each epoch, so loss_weights lines
+        # up with the other per-epoch series.
         if isinstance(weights, torch.Tensor):
-            weights_np = weights.detach().cpu().numpy()
+            self._latest_loss_weights = weights.detach().cpu().numpy()
         else:
-            weights_np = np.array(weights)
-
-        self.history["loss_weights"].append(weights_np)
+            self._latest_loss_weights = np.array(weights)
 
     def _step(self, x_batch, t_batch):
         """One optimizer step on a batch; returns the loss components.
@@ -678,6 +684,11 @@ class PDETrainer:
         logs, checks early stopping (patience counted in epochs) and, with
         ``experiment_dir``, saves history, metadata and the live snapshot.
 
+        Each call is planned as its own run: the learning rate restarts at
+        ``training.learning_rate`` and the schedule and the Adam -> L-BFGS
+        switch are sized to ``num_epochs``. Weights, optimizer moments and
+        history carry over from earlier calls.
+
         Args:
             num_epochs: Defaults to ``config.training.num_epochs``.
             batch_size: Defaults to ``config.training.batch_size``; capped at
@@ -698,8 +709,9 @@ class PDETrainer:
         num_points = training_cfg.num_collocation_points if num_points is None else num_points
         if num_points < batch_size:
             batch_size = num_points
-        if num_epochs != self._num_epochs:
-            self._plan_epochs(num_epochs)  # cosine T_max and the L-BFGS switch follow the run
+        # Each call is its own run: the LR restarts and cosine T_max and the
+        # L-BFGS switch follow num_epochs. Weights and optimizer moments carry over.
+        self._plan_epochs(num_epochs)
         self.model.train()
         if hasattr(self.model, "architecture_name"):
             architecture_name = self.model.architecture_name
@@ -825,12 +837,17 @@ class PDETrainer:
             self._apply_warmup(epoch)
             epoch_losses = []
             epoch_points = []  # Store all points for this epoch
+            self._latest_loss_weights = None
 
             for _ in range(max(1, num_points // batch_size)):
                 x_batch, t_batch = self._sample_batch(batch_size, epoch / max(1, num_epochs))
                 epoch_points.append(torch.cat([x_batch, t_batch], dim=1).detach().cpu().numpy())
                 losses = self._step(x_batch, t_batch)
                 epoch_losses.append(float(losses["total"].item()))
+            # L-BFGS epochs do not weight adaptively and record nothing; they
+            # come after the Adam epochs, so the recorded epochs stay a prefix.
+            if self._latest_loss_weights is not None:
+                self.history["loss_weights"].append(self._latest_loss_weights)
             if pbar is not None:
                 pbar.set_postfix(
                     loss=f"{epoch_losses[-1]:.3e}",

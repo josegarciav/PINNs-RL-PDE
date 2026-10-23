@@ -25,6 +25,9 @@ from dataclasses import dataclass
 # ``the_well`` reads the first step plus a ``max_rollout_steps``-step rollout
 # (default 100), so a full-trajectory sample holds at most this many steps.
 DEFAULT_LOADED_STEPS = 101
+# A 3-D step is tens of MB (128^3 nodes x 4 float32 channels is 34 MB for
+# rayleigh_taylor_instability), so 3-D datasets read a short window by default.
+DEFAULT_LOADED_STEPS_3D = 11
 
 
 @dataclass(frozen=True)
@@ -45,6 +48,8 @@ class WellEntry:
             governed by that PDE, else ``None``.
         recommended_mode: ``data_augmented`` if ``default_pde_key`` is set,
             else ``data_only``.
+        default_loaded_steps: Steps :func:`load_well_slice` reads per
+            trajectory when the caller passes no ``n_steps``.
     """
 
     name: str
@@ -56,6 +61,7 @@ class WellEntry:
     default_architecture: str
     default_pde_key: str | None = None
     recommended_mode: str = "data_only"
+    default_loaded_steps: int = DEFAULT_LOADED_STEPS
 
     def __post_init__(self) -> None:  # pragma: no cover - dataclass guard
         if self.n_spatial_dims not in (2, 3):
@@ -92,10 +98,21 @@ class WellEntry:
         """``(0, t_end)`` of a whole trajectory."""
         return (0.0, self.dt * (self.n_steps - 1))
 
+    def loaded_steps(self, n_steps: int | None = None) -> int:
+        """Steps :func:`load_well_slice` reads per trajectory for ``n_steps``.
+
+        Raises:
+            ValueError: If ``n_steps`` is below 1.
+        """
+        if n_steps is None:
+            n_steps = self.default_loaded_steps
+        if int(n_steps) < 1:
+            raise ValueError(f"n_steps must be at least 1, got {n_steps}")
+        return min(self.n_steps, int(n_steps))
+
     def loaded_time_domain(self, n_steps: int | None = None) -> tuple[float, float]:
         """``(0, t_end)`` of the window :func:`load_well_slice` reads with ``n_steps``."""
-        steps = min(self.n_steps, DEFAULT_LOADED_STEPS if n_steps is None else int(n_steps))
-        return (0.0, self.dt * (steps - 1))
+        return (0.0, self.dt * (self.loaded_steps(n_steps) - 1))
 
 
 def _components(name: str, axes: str, rank: int) -> tuple[str, ...]:
@@ -148,6 +165,7 @@ WELL_REGISTRY: dict[str, WellEntry] = {
             dt=118.004 / 118,
             n_steps=119,
             default_architecture="feedforward",
+            default_loaded_steps=DEFAULT_LOADED_STEPS_3D,
         ),
         WellEntry(
             name="turbulent_radiative_layer_2D",
@@ -170,6 +188,7 @@ WELL_REGISTRY: dict[str, WellEntry] = {
             dt=0.01,
             n_steps=100,
             default_architecture="feedforward",
+            default_loaded_steps=DEFAULT_LOADED_STEPS_3D,
         ),
         WellEntry(
             name="gray_scott_reaction_diffusion",

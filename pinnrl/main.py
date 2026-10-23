@@ -1,28 +1,44 @@
 """Entry point of ``pinnrl-dashboard``: open a browser tab and serve the Dash dashboard."""
 
 import argparse
-import socket
+import contextlib
+import io
 import sys
 import webbrowser
 
+HOST = "127.0.0.1"
 
-def find_free_port(port: int, attempts: int = 3) -> int:
-    """Return the first of ``port, port + 1, ...`` (``attempts`` tries) free on 127.0.0.1.
 
-    Probing with a socket is needed because the server cannot report it: on a
-    busy port werkzeug calls ``sys.exit(1)`` instead of raising.
+def bind_server(wsgi_app, port: int, attempts: int = 3):
+    """Bind a werkzeug server for ``wsgi_app`` on the first free port from ``port``.
+
+    The real server is bound, not a probe socket, so the port cannot be taken
+    between the check and serving, and the check uses the server's own socket
+    options (werkzeug sets ``SO_REUSEADDR``, so a port in ``TIME_WAIT`` counts
+    as free).
+
+    Args:
+        wsgi_app: The WSGI application to serve (``app.server`` for Dash).
+        port: Preferred port; ``port + 1, ...`` are tried next.
+        attempts: How many ports to try.
+
+    Returns:
+        A bound, listening ``werkzeug.serving.BaseWSGIServer``; call
+        ``serve_forever()`` on it.
 
     Raises:
         RuntimeError: If every candidate port is taken.
     """
+    from werkzeug.serving import make_server
+
     for candidate in range(port, port + attempts):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        # On a bind error werkzeug prints advice to stderr and calls sys.exit(1).
+        with contextlib.redirect_stderr(io.StringIO()):
             try:
-                sock.bind(("127.0.0.1", candidate))
-            except OSError:
-                print(f"Port {candidate} is in use.")
-                continue
-        return candidate
+                return make_server(HOST, candidate, wsgi_app, threaded=True)
+            except (OSError, SystemExit):
+                pass
+        print(f"Port {candidate} is in use.")
     raise RuntimeError(f"No free port in {port}-{port + attempts - 1}")
 
 
@@ -31,7 +47,7 @@ def run_dashboard(port=8050, open_browser=False):
 
     Args:
         port: Preferred port; up to two higher ports are tried if it is taken.
-        open_browser: Open the dashboard in a web browser once the port is known.
+        open_browser: Open the dashboard in a web browser once the server is listening.
     """
     try:
         from pinnrl.dashboard import app
@@ -40,17 +56,23 @@ def run_dashboard(port=8050, open_browser=False):
         print("Make sure all dependencies are installed (dash, plotly, etc.)")
         sys.exit(1)
     try:
-        port = find_free_port(port)
+        server = bind_server(app.server, port)
     except RuntimeError as e:
         print(f"{e}. Please close any running dashboards and try again.")
         sys.exit(1)
 
-    url = f"http://127.0.0.1:{port}/"
-    print(f"\nStarting PINNs-RL-PDE Dashboard on port {port}")
+    url = f"http://{HOST}:{server.server_port}/"
+    print(f"\nStarting PINNs-RL-PDE Dashboard on port {server.server_port}")
     print(f"Open {url} in your browser")
     if open_browser:
         webbrowser.open(url)
-    app.run(debug=False, port=port)
+    app.enable_dev_tools(debug=False)  # what app.run() sets up before serving
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
 
 
 def parse_args():

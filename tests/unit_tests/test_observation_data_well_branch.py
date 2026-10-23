@@ -16,7 +16,7 @@ from tests.unit_tests.test_well_loader import _install_fake_well_module
 
 def _install_fake_well(monkeypatch):
     """One 3-step trajectory on a 3x3 grid with a single field (real sample format)."""
-    _install_fake_well_module(monkeypatch, n_traj=1, n_steps=3, hw=3, n_fields=1)
+    _install_fake_well_module(monkeypatch, n_traj=1, n_steps=3, shape=(3, 3), n_fields=1)
 
 
 def _training_cfg(mode="data_only"):
