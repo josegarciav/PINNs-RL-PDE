@@ -139,15 +139,22 @@ def test_trainer_init_no_early_stopping():
     assert trainer.patience == 100
 
 
-def test_trainer_init_with_rl_agent():
-    """PDETrainer stores rl_agent attribute."""
+def test_trainer_init_with_bandit_sampler():
+    """A bandit sampler switches the trainer to adaptive sampling and is attached to the PDE."""
 
-    class FakeAgent:
+    class FakeSampler:
         pass
 
-    agent = FakeAgent()
-    trainer = _make_trainer(rl_agent=agent)
-    assert trainer.rl_agent is agent
+    sampler = FakeSampler()
+    trainer = _make_trainer(bandit_sampler=sampler)
+    assert trainer.use_rl is True
+    assert trainer.pde.bandit_sampler is sampler
+
+
+def test_trainer_without_bandit_sampler_uses_config_distribution():
+    """Without a sampler the trainer keeps the configured collocation distribution."""
+    trainer = _make_trainer()
+    assert trainer.use_rl is False
 
 
 # ── Optimizer & scheduler tests ──────────────────────────────────────────

@@ -29,7 +29,7 @@ from pinnrl.config import (
 )
 from pinnrl.neural_networks import PINNModel
 from pinnrl.pdes.pde_base import PDEConfig
-from pinnrl.rl.rl_agent import RLAgent
+from pinnrl.rl.bandit_sampler import ResidualBanditSampler
 from pinnrl.training.trainer import PDETrainer
 
 # PDE name -> (module, class, config key)
@@ -341,23 +341,20 @@ def run_training(config_dict, device):
         # Create model
         model = PINNModel(config=config_obj, device=device).to(device)
 
-        # Create RL agent if enabled
-        rl_agent = None
+        # Experimental RL bandit sampler (1-D PDEs) when --rl / rl.enabled is set
+        bandit_sampler = None
         if rl_enabled:
             rl_cfg = config_dict["rl"]
-            rl_agent = RLAgent(
-                state_dim=rl_cfg["state_dim"],
-                action_dim=rl_cfg["action_dim"],
-                hidden_dim=rl_cfg["hidden_dim"],
-                learning_rate=rl_cfg["learning_rate"],
-                gamma=rl_cfg["gamma"],
-                epsilon_start=rl_cfg["epsilon_start"],
-                epsilon_end=rl_cfg["epsilon_end"],
-                epsilon_decay=rl_cfg["epsilon_decay"],
-                memory_size=rl_cfg["memory_size"],
-                batch_size=rl_cfg["batch_size"],
-                target_update=rl_cfg["target_update"],
-                reward_weights=rl_cfg["reward_weights"],
+            bandit_sampler = ResidualBanditSampler(
+                tuple(pde.domain[0]),
+                tuple(pde.time_domain),
+                n_x_cells=rl_cfg.get("n_x_cells", 16),
+                n_t_cells=rl_cfg.get("n_t_cells", 8),
+                policy_fraction=rl_cfg.get("policy_fraction", 0.5),
+                temperature=rl_cfg.get("temperature", 0.5),
+                probe_cells=rl_cfg.get("probe_cells", 32),
+                probe_points=rl_cfg.get("probe_points", 8),
+                probe_every=rl_cfg.get("probe_every", 10),
                 device=device,
             )
 
@@ -368,7 +365,7 @@ def run_training(config_dict, device):
             optimizer_config=training_cfg["optimizer_config"],
             config=config_obj,
             device=device,
-            rl_agent=rl_agent,
+            bandit_sampler=bandit_sampler,
             validation_frequency=training_cfg["validation_frequency"],
             early_stopping_config=training_cfg["early_stopping"],
         )
@@ -424,7 +421,11 @@ def main():
         "--boundary-points", type=int, default=None, help="Override boundary points"
     )
     parser.add_argument("--initial-points", type=int, default=None, help="Override initial points")
-    parser.add_argument("--rl", action="store_true", help="Enable RL adaptive sampling")
+    parser.add_argument(
+        "--rl",
+        action="store_true",
+        help="Enable the experimental RL bandit collocation sampler (1-D PDEs)",
+    )
     parser.add_argument(
         "--collocation-distribution",
         choices=["uniform", "stratified", "residual_based"],

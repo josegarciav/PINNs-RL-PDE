@@ -1,15 +1,14 @@
-"""``pinnrl-benchmark`` CLI: classical FDM baseline + sampling-strategy comparison.
+"""``pinnrl-benchmark`` CLI: classical FDM baseline + equal-compute sampling study.
 
 Two subcommands:
 
 * ``pinnrl-benchmark fdm --pde {heat,wave}`` — solve with the bundled NumPy
-  FDM solver and print L2 / max error against the analytical solution.
-* ``pinnrl-benchmark sampling --pde {heat,wave} --strategies ...`` — train
-  a small PINN under each requested sampling strategy and print one row per
-  strategy with L2 error, final loss, and wall time.
-
-Both subcommands accept ``--csv PATH`` to dump a machine-readable copy of
-the same rows alongside the human-readable table.
+  FDM solver and print L2 / max error against the analytical solution
+  (``--csv PATH`` writes the row to a file).
+* ``pinnrl-benchmark sampling`` — the multi-seed, equal-wall-clock sampling
+  study of :mod:`pinnrl.benchmarks.sampling_study` on Burgers and
+  Allen-Cahn; prints the per-strategy summary and writes ``runs.csv``,
+  ``summary.csv``, ``curves.json`` and ``settings.json`` to ``--out``.
 """
 
 from __future__ import annotations
@@ -18,13 +17,15 @@ import argparse
 import csv
 import sys
 from pathlib import Path
-from typing import Iterable, List, Sequence
+from typing import Iterable, Sequence
 
 from pinnrl.benchmarks.fdm import FDMResult, solve_heat_1d, solve_wave_1d
-from pinnrl.benchmarks.sampling import (
-    SUPPORTED_STRATEGIES,
-    SamplingResult,
-    run_sampling_benchmark,
+from pinnrl.benchmarks.sampling_study import (
+    STUDY_PDES,
+    STUDY_STRATEGIES,
+    StudySettings,
+    run_sampling_study,
+    write_study_outputs,
 )
 
 
@@ -88,40 +89,44 @@ def _fdm_command(args: argparse.Namespace) -> int:
 
 
 def _sampling_command(args: argparse.Namespace) -> int:
-    strategies: List[str] = args.strategies or list(SUPPORTED_STRATEGIES)
-    unknown = [s for s in strategies if s not in SUPPORTED_STRATEGIES]
-    if unknown:
-        print(
-            f"Unknown strategies: {unknown}. Supported: {SUPPORTED_STRATEGIES}",
-            file=sys.stderr,
-        )
-        return 2
-
-    results: List[SamplingResult] = run_sampling_benchmark(
-        pde_name=args.pde,
-        strategies=strategies,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        learning_rate=args.lr,
-        seed=args.seed,
+    settings = StudySettings(
+        time_budget_s=args.time_budget,
+        n_collocation=args.n_collocation,
+        resample_every=args.resample_every,
     )
 
-    headers = ["pde", "strategy", "epochs", "l2_error", "max_error", "final_loss", "wall_time_s"]
+    def report(run) -> None:
+        print(
+            f"{run.pde:<10} {run.strategy:<9} seed={run.seed:<3} "
+            f"rel_l2={run.rel_l2:.4e} steps={run.steps}",
+            file=sys.stderr,
+        )
+
+    runs = run_sampling_study(
+        pdes=args.pdes,
+        strategies=args.strategies,
+        seeds=range(args.seeds),
+        settings=settings,
+        workers=args.workers,
+        on_result=report,
+    )
+    summaries = write_study_outputs(Path(args.out), runs, settings)
+    headers = ["pde", "strategy", "n", "median_rel_l2", "iqr", "median_steps", "wins", "p"]
     rows = [
         [
-            args.pde,
-            r.strategy,
-            str(r.epochs),
-            f"{r.l2_error:.6e}",
-            f"{r.max_error:.6e}",
-            f"{r.final_loss:.6e}",
-            f"{r.wall_time_s:.4f}",
+            s.pde,
+            s.strategy,
+            str(s.n),
+            f"{s.median_rel_l2:.3e}",
+            f"[{s.q25_rel_l2:.2e}, {s.q75_rel_l2:.2e}]",
+            f"{s.median_steps:.0f}",
+            "-" if s.strategy == "uniform" else f"{s.wins_vs_uniform}/{s.n}",
+            "-" if s.strategy == "uniform" else f"{s.p_vs_uniform:.3f}",
         ]
-        for r in results
+        for s in summaries
     ]
     _print_table(headers, rows)
-    if args.csv:
-        _write_csv(Path(args.csv), headers, rows)
+    print(f"\nWrote {args.out}", file=sys.stderr)
     return 0
 
 
@@ -131,8 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="pinnrl-benchmark",
         description=(
             "Run pinnrl reference benchmarks: FDM baselines for heat / wave, "
-            "and PINN sampling-strategy comparisons (uniform vs stratified vs "
-            "residual-based vs RL-adaptive)."
+            "and the equal-compute sampling study (uniform vs RAD vs RL bandit)."
         ),
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -152,21 +156,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     smp = sub.add_parser(
         "sampling",
-        help="Train a small PINN under each strategy and report L2 errors.",
+        help="Equal-wall-clock, multi-seed comparison of collocation samplers.",
     )
-    smp.add_argument("--pde", choices=("heat", "wave"), required=True)
+    smp.add_argument("--pdes", nargs="+", choices=STUDY_PDES, default=list(STUDY_PDES))
     smp.add_argument(
-        "--strategies",
-        nargs="+",
-        choices=SUPPORTED_STRATEGIES,
-        default=None,
-        help=f"Subset of {SUPPORTED_STRATEGIES}. Defaults to all four.",
+        "--strategies", nargs="+", choices=STUDY_STRATEGIES, default=list(STUDY_STRATEGIES)
     )
-    smp.add_argument("--epochs", type=int, default=200)
-    smp.add_argument("--batch-size", type=int, default=256)
-    smp.add_argument("--lr", type=float, default=5e-3)
-    smp.add_argument("--seed", type=int, default=0)
-    smp.add_argument("--csv", default=None, help="Optional path to write CSV output.")
+    smp.add_argument("--seeds", type=int, default=10, help="Number of seeds (0..N-1).")
+    smp.add_argument("--time-budget", type=float, default=120.0, help="Training seconds per run.")
+    smp.add_argument("--n-collocation", type=int, default=1000)
+    smp.add_argument("--resample-every", type=int, default=100)
+    smp.add_argument("--workers", type=int, default=1, help="Parallel worker processes.")
+    smp.add_argument("--out", default="runs/sampling_study", help="Output directory.")
     smp.set_defaults(func=_sampling_command)
 
     return parser

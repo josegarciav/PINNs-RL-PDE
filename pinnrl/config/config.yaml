@@ -306,7 +306,7 @@ training:
   num_collocation_points: 5000 #better coverage
   num_boundary_points: 5000  #better boundary enforcement
   num_initial_points: 5000  #better initial condition representation
-  collocation_distribution: "uniform"  # Options: "uniform", "stratified", "residual_based", "adaptive" (RL agent)
+  collocation_distribution: "uniform"  # Options: "uniform", "stratified", "residual_based" (RAD), "adaptive" (RL bandit, experimental)
   adaptive_weights:
     enabled: false # Whether to use adaptive weights for loss terms
     strategy: "rbw"  # Options: "lrw" (Learning Rate Weighting) or "rbw" (Relative Error Weighting)
@@ -357,23 +357,16 @@ training:
 
 # Reinforcement Learning Configuration
 rl:
+  # Experimental residual-bandit collocation sampler (``--rl``; 1-D PDEs).
+  # A DQN with gamma=0 learns which (x, t) cells carry high residual.
   enabled: false
-  state_dim: 2  # (x, t)
-  action_dim: 1  # Sampling probability
-  hidden_dim: 512
-  learning_rate: 0.001
-  gamma: 0.99
-  epsilon_start: 1.0
-  epsilon_end: 0.01
-  epsilon_decay: 0.995
-  memory_size: 10000
-  batch_size: 124
-  target_update: 100
-  reward_weights:
-    residual: 1.0
-    boundary: 1.0
-    initial: 1.0
-    exploration: 0.1
+  n_x_cells: 16
+  n_t_cells: 8
+  policy_fraction: 0.5  # share of points from the learned policy; rest uniform
+  temperature: 0.5      # softmax temperature on Q-values
+  probe_cells: 32       # cells probed per update
+  probe_points: 8       # residual evaluations per probed cell
+  probe_every: 10       # update the bandit every N batches
 
 # Evaluation Configuration
 evaluation:

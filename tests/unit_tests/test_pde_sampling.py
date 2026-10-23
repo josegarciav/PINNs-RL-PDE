@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from pinnrl.pdes.heat_equation import HeatEquation
-from pinnrl.rl.rl_agent import CollocationRLAgent, RLAgent
+from pinnrl.rl.bandit_sampler import ResidualBanditSampler
 from tests.unit_tests.test_utils import create_pde_from_config
 
 
@@ -33,12 +33,6 @@ class TestPDESampling(unittest.TestCase):
             self.wave_eq_2d = create_pde_from_config("wave", self.device, dimension=2)
         except (FileNotFoundError, KeyError, ValueError):
             self.wave_eq_2d = None
-
-        # Create RL agents for adaptive sampling
-        self.rl_agent = RLAgent(state_dim=3, action_dim=1, hidden_dim=32, device=self.device)
-        self.coll_rl_agent = CollocationRLAgent(
-            state_dim=3, action_dim=1, hidden_dim=32, device=self.device
-        )
 
     def _assert_bounds(self, x, t, pde):
         """Helper to assert points are within PDE domain bounds."""
@@ -156,116 +150,51 @@ class TestPDESampling(unittest.TestCase):
         self.assertEqual(t.shape, (num_points, 1))
         self._assert_bounds(x, t, self.heat_eq_2d)
 
-    # ── RL adaptive sampling ──────────────────────────────────────────
+    # ── RL bandit (adaptive) sampling ─────────────────────────────────
 
-    def test_adaptive_sampling_with_rl_agent(self):
-        """Test adaptive sampling with RL agent."""
+    def test_adaptive_sampling_with_model(self):
+        """Adaptive sampling builds a bandit sampler lazily and stays in bounds."""
         num_points = 100
+        model = self._make_dummy_model(2)
 
-        self.heat_eq_1d.rl_agent = self.rl_agent
-        self.heat_eq_2d.rl_agent = self.rl_agent
-
-        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
+        x, t = self.heat_eq_1d.generate_collocation_points(
+            num_points, strategy="adaptive", model=model, progress=0.5
+        )
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
         self._assert_bounds(x, t, self.heat_eq_1d)
-
-        x, t = self.heat_eq_2d.generate_collocation_points(num_points, strategy="adaptive")
-        self.assertEqual(x.shape, (num_points, 2))
-        self.assertEqual(t.shape, (num_points, 1))
-        self._assert_bounds(x, t, self.heat_eq_2d)
+        self.assertIsInstance(self.heat_eq_1d.bandit_sampler, ResidualBanditSampler)
+        self.assertGreater(len(self.heat_eq_1d.bandit_sampler.agent.memory), 0)
 
     def test_adaptive_sampling_fallback(self):
-        """Adaptive sampling falls back to uniform when no RL agent is set."""
+        """Adaptive sampling falls back to uniform when no model is given."""
         num_points = 100
-        self.heat_eq_1d.rl_agent = None
-
         x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
         self.assertEqual(x.shape, (num_points, 1))
         self.assertEqual(t.shape, (num_points, 1))
         self._assert_bounds(x, t, self.heat_eq_1d)
+        self.assertIsNone(self.heat_eq_1d.bandit_sampler)
 
-    def test_adaptive_sampling_exploration(self):
-        """Test adaptive sampling exploration behavior with mock RL agent."""
-        num_points = 100
-
-        class MockCollocationRLAgent:
-            def __init__(self, device, domain_range):
-                self.device = device
-                self.epsilon = 0.5
-                self.domain_range = domain_range
-
-            def get_action(self, state):
-                x_coords = state[:, 0]
-                x_min, x_max = self.domain_range
-                x_mid = (x_min + x_max) / 2.0
-                x_half = (x_max - x_min) / 2.0
-                probs = 1.0 - torch.abs(x_coords - x_mid) / x_half
-                return probs.unsqueeze(1)
-
-            def select_action(self, state):
-                return self.get_action(state)
-
-            def update_epsilon(self, epoch):
-                self.epsilon = max(0.1, self.epsilon * 0.95)
-
-        x_min, x_max = self.heat_eq_1d.domain[0]
-        t_min, t_max = self.heat_eq_1d.time_domain
-        x_mid = (x_min + x_max) / 2.0
-        x_span = x_max - x_min
-        mock_agent = MockCollocationRLAgent(self.device, domain_range=(x_min, x_max))
-        self.heat_eq_1d.rl_agent = mock_agent
-
-        x, t = self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
-
-        self.assertEqual(x.shape, (num_points, 1))
-        self.assertEqual(t.shape, (num_points, 1))
-        self.assertTrue(torch.all(x >= x_min) and torch.all(x <= x_max))
-        self.assertTrue(torch.all(t >= t_min) and torch.all(t <= t_max))
-
-        # Central 20% of domain should have >20% of points due to agent bias
-        central_lo = x_mid - 0.1 * x_span
-        central_hi = x_mid + 0.1 * x_span
-        central_count = ((x > central_lo) & (x < central_hi)).sum().item()
-        self.assertGreater(
-            central_count / num_points,
-            0.2,
-            "Adaptive sampling should concentrate points in high-value regions",
-        )
-
-        # Run multiple epochs — epsilon should decrease
-        for i in range(5):
-            self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
-            self.assertLessEqual(
-                mock_agent.epsilon,
-                0.5 * (0.95**i),
-                "Agent's epsilon should decrease over time",
-            )
-
-        self.assertGreaterEqual(len(self.heat_eq_1d.collocation_history), 5)
-
-        # Test 2D adaptive with mock agent
-        mock_agent_2d = MockCollocationRLAgent(self.device, domain_range=self.heat_eq_2d.domain[0])
-        self.heat_eq_2d.rl_agent = mock_agent_2d
-        x_2d, t_2d = self.heat_eq_2d.generate_collocation_points(num_points, strategy="adaptive")
-        self.assertEqual(x_2d.shape, (num_points, 2))
-        self.assertEqual(t_2d.shape, (num_points, 1))
+    def test_adaptive_sampling_rejects_2d(self):
+        """The bandit sampler is 1-D only and says so."""
+        model = self._make_dummy_model(3)
+        with self.assertRaisesRegex(ValueError, "1-D PDEs only"):
+            self.heat_eq_2d.generate_collocation_points(100, strategy="adaptive", model=model)
 
     # ── Collocation history ───────────────────────────────────────────
 
     def test_collocation_history(self):
-        """Test that collocation history is maintained correctly with RL agent."""
+        """Adaptive sampling records each batch in the collocation history."""
         num_points = 100
-        rl_agent_1d = RLAgent(state_dim=2, action_dim=1, hidden_dim=32, device=self.device)
-        self.heat_eq_1d.rl_agent = rl_agent_1d
-
+        model = self._make_dummy_model(2)
         for _ in range(3):
-            self.heat_eq_1d.generate_collocation_points(num_points, strategy="adaptive")
+            self.heat_eq_1d.generate_collocation_points(
+                num_points, strategy="adaptive", model=model
+            )
 
         self.assertEqual(len(self.heat_eq_1d.collocation_history), 3)
         for h in self.heat_eq_1d.collocation_history:
-            self.assertEqual(h.shape[0], num_points)
-            self.assertEqual(h.shape[1], 2)  # 1D spatial + time
+            self.assertEqual(h.shape, (num_points, 2))  # 1D spatial + time
 
     # ── General / edge cases ──────────────────────────────────────────
 

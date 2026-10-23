@@ -15,7 +15,6 @@ from pinnrl.pdes.kdv_equation import KdVEquation
 from pinnrl.pdes.pde_base import PDEConfig
 from pinnrl.pdes.pendulum_equation import PendulumEquation
 from pinnrl.pdes.wave_equation import WaveEquation
-from pinnrl.rl.rl_agent import RLAgent
 from tests.unit_tests.test_utils import create_pde_from_config
 
 
@@ -107,9 +106,6 @@ class TestPDEs(unittest.TestCase):
         # Ensure model parameters require gradients
         for param in self.model_2d.parameters():
             param.requires_grad_(True)
-
-        # Initialize RL agent for adaptive sampling tests
-        self.rl_agent = RLAgent(state_dim=2, action_dim=1, hidden_dim=32, device=self.device)
 
     def test_heat_equation(self):
         """Test the Heat equation implementation."""
@@ -436,7 +432,7 @@ class TestPDEs(unittest.TestCase):
         self.assertTrue(torch.isfinite(exact_sol).all())
 
     def test_adaptive_sampling(self):
-        """Test adaptive sampling with RL agent for all PDEs."""
+        """Adaptive sampling without a model falls back to uniform for every PDE."""
         num_points = 100
 
         # Test 1D Heat Equation
@@ -476,30 +472,6 @@ class TestPDEs(unittest.TestCase):
         self.assertTrue(torch.all(x >= 0) and torch.all(x <= 1))
         self.assertTrue(torch.all(t >= 0) and torch.all(t <= 1))
 
-        # Test RL agent state and action only if rl_agent is available
-        # Create a heat equation with RL agent for this test
-        config_rl = PDEConfig(
-            name="Heat Equation",
-            domain=[(0.0, 1.0)],
-            time_domain=(0.0, 1.0),
-            parameters={"alpha": 0.01},
-            boundary_conditions=self.heat_eq.config.boundary_conditions,
-            initial_condition=self.heat_eq.config.initial_condition,
-            exact_solution=self.heat_eq.config.exact_solution,
-            dimension=1,
-            device=self.device,
-        )
-        heat_eq_with_rl = HeatEquation(config=config_rl)
-
-        # Set RL agent for the heat equation
-        heat_eq_with_rl.rl_agent = self.rl_agent
-
-        # Now test with the RL agent
-        state = torch.randn(1, 2).to(self.device)  # Random (x, t) state
-        action = heat_eq_with_rl.rl_agent.select_action(state)
-        self.assertEqual(action.shape, (1, 1))  # Single action value
-        self.assertTrue(0 <= action.item() <= 1)  # Action should be probability
-
     def test_validation(self):
         # Test validation metrics
         metrics = self.heat_eq.validate(self.model, num_points=100)
@@ -521,14 +493,6 @@ class TestPDEs(unittest.TestCase):
         self.assertEqual(len(config.time_domain), 2)
         self.assertIn("type", config.initial_condition)
         self.assertIn("alpha", config.parameters)
-
-    def test_rl_agent_integration(self):
-        # Test RL agent state and action
-        state = torch.randn(1, 2).to(self.device)  # Random (x, t) state
-        action = self.rl_agent.select_action(state)
-
-        self.assertEqual(action.shape, (1, 1))  # Single action value
-        self.assertTrue(0 <= action.item() <= 1)  # Action should be probability
 
     def test_kdv_equation(self):
         """Test the Korteweg-de Vries (KdV) equation implementation."""

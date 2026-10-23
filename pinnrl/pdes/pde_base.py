@@ -129,16 +129,17 @@ class PDEBase:
         # If we get here, no valid PDE class was found
         raise ValueError(f"Could not find PDE implementation for type: {pde_type}")
 
-    def __init__(self, config: PDEConfig, rl_agent=None):
+    def __init__(self, config: PDEConfig, bandit_sampler=None):
         """
         Initialize PDE with given configuration.
 
         :param config: Configuration dataclass
-        :param rl_agent: Optional RL agent for adaptive sampling
+        :param bandit_sampler: Optional :class:`ResidualBanditSampler` for the
+            ``adaptive`` strategy; built lazily with defaults when omitted
         """
         self.config = config
         self.domain = config.domain
-        self.rl_agent = rl_agent  # Store RL agent
+        self.bandit_sampler = bandit_sampler
 
         # Handle domain configuration in both old and new formats
         if isinstance(self.domain, list):
@@ -893,20 +894,33 @@ class PDEBase:
         return x, t
 
     def _sample_residual_based(
-        self, num_points: int, model: Optional[torch.nn.Module] = None
+        self,
+        num_points: int,
+        model: Optional[torch.nn.Module] = None,
+        k: float = 1.0,
+        c: float = 0.0,
+        pool_factor: int = 4,
+        replacement: bool = True,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Residual-Adaptive Refinement (RAR) sampling.
+        """Residual-based adaptive distribution (RAD) sampling.
 
-        1. Generate a large candidate pool via uniform sampling.
-        2. If a model is provided, compute PDE residuals and oversample regions
-           with high residual magnitude.
+        Draws ``num_points`` from a uniform candidate pool with probability
+
+            p(x) ∝ |r(x)|^k / mean(|r|^k) + c
+
+        (Wu et al., 2023). ``k`` sharpens the focus on high residuals and
+        ``c`` mixes back a uniform floor; the defaults ``k=1, c=0`` are
+        plain residual-proportional sampling.
+
+        1. Generate a candidate pool ``pool_factor`` times larger than needed.
+        2. If a model is provided, compute PDE residuals and sample the pool
+           according to ``p``.
         3. If no model is available (first epoch), fall back to uniform.
         """
         if model is None:
             return self._sample_uniform(num_points)
 
-        # Generate a candidate pool 4x larger than needed
-        pool_size = num_points * 4
+        pool_size = num_points * pool_factor
         x_pool, t_pool = self._sample_uniform(pool_size)
 
         # Compute PDE residual at each candidate point
@@ -924,11 +938,13 @@ class PDEBase:
 
         # Convert residual magnitudes to sampling probabilities
         # Add small epsilon so zero-residual regions still have a chance
-        probs = residual_mag + 1e-8
+        weights = residual_mag**k
+        probs = weights / weights.mean() + c + 1e-8
         probs = probs / probs.sum()
 
         # Sample points weighted by residual magnitude
-        selected = torch.multinomial(probs, num_points, replacement=True)
+        replacement = replacement or num_points > len(probs)
+        selected = torch.multinomial(probs, num_points, replacement=replacement)
         x = x_pool[selected].detach()
         t = t_pool[selected].detach()
 
@@ -945,7 +961,8 @@ class PDEBase:
             - 'uniform': grid-based with small jitter
             - 'stratified': Latin Hypercube-style stratified random (pure PyTorch)
             - 'residual_based': resample where PDE residual is highest (requires model kwarg)
-            - 'adaptive': RL agent-driven sampling (requires self.rl_agent)
+            - 'adaptive': residual-bandit sampler (experimental, 1-D only; needs the
+              ``model`` kwarg, optional ``progress`` in [0, 1])
         :return: Tuple of spatial and temporal points
         """
         if strategy == "uniform":
@@ -956,124 +973,33 @@ class PDEBase:
 
         elif strategy == "residual_based":
             model = kwargs.get("model", None)
-            x, t = self._sample_residual_based(num_points, model)
+            rad_kwargs = {
+                key: kwargs[key]
+                for key in ("k", "c", "pool_factor", "replacement")
+                if key in kwargs
+            }
+            x, t = self._sample_residual_based(num_points, model, **rad_kwargs)
 
         elif strategy == "adaptive":
-            # Use RL agent for adaptive sampling if available
-            if self.rl_agent is not None:
-                # Use the adaptive sampling from RL agent
-                grid_size = min(100, max(10, int(np.sqrt(num_points))))
-
-                # Create a grid of points for the RL agent to sample from
-                if self.dimension == 1:
-                    x_grid = torch.linspace(
-                        self.domain[0][0],
-                        self.domain[0][1],
-                        grid_size,
-                        device=self.device,
-                    )
-                    t_grid = torch.linspace(
-                        self.time_domain[0],
-                        self.time_domain[1],
-                        grid_size,
-                        device=self.device,
-                    )
-                    X, T = torch.meshgrid(x_grid, t_grid, indexing="ij")
-                    points = torch.stack([X.flatten(), T.flatten()], dim=1)
-                else:
-                    # Generate multi-dimensional grid
-                    grid_points = []
-                    for dim in range(self.dimension):
-                        grid_points.append(
-                            torch.linspace(
-                                self.domain[dim][0],
-                                self.domain[dim][1],
-                                grid_size,
-                                device=self.device,
-                            )
-                        )
-                    grid_points.append(
-                        torch.linspace(
-                            self.time_domain[0],
-                            self.time_domain[1],
-                            grid_size,
-                            device=self.device,
-                        )
-                    )
-
-                    grid_tensors = torch.meshgrid(*grid_points, indexing="ij")
-                    points = torch.stack([g.flatten() for g in grid_tensors], dim=1)
-
-                # Get sampling probabilities from RL agent
-                with torch.no_grad():
-                    probs = self.rl_agent.select_action(points)
-                    probs = torch.abs(probs)  # Ensure positive probabilities
-                    probs = probs / torch.sum(probs)  # Normalize
-
-                # Sample points based on probabilities
-                selected_indices = torch.multinomial(
-                    probs.flatten(), min(num_points, len(points)), replacement=True
-                )
-                selected_points = points[selected_indices]
-
-                # If we have fewer points than requested (rare case), add more with replacement
-                if len(selected_points) < num_points:
-                    additional_indices = torch.randint(
-                        0,
-                        len(selected_points),
-                        (num_points - len(selected_points),),
-                        device=self.device,
-                    )
-                    additional_points = selected_points[additional_indices]
-                    selected_points = torch.cat([selected_points, additional_points], dim=0)
-
-                # Add some small noise to avoid exact grid points
-                noise_scale = min(
-                    0.01,
-                    min(
-                        [
-                            (self.domain[d][1] - self.domain[d][0]) / grid_size
-                            for d in range(self.dimension)
-                        ]
-                    ),
-                    (self.time_domain[1] - self.time_domain[0]) / grid_size,
-                )
-                noise = torch.randn_like(selected_points) * noise_scale
-                selected_points = selected_points + noise
-
-                # Clip to domain bounds
-                for dim in range(self.dimension):
-                    selected_points[:, dim] = torch.clamp(
-                        selected_points[:, dim],
-                        self.domain[dim][0],
-                        self.domain[dim][1],
-                    )
-                selected_points[:, -1] = torch.clamp(
-                    selected_points[:, -1],
-                    self.time_domain[0],
-                    self.time_domain[1],
-                )
-
-                # Split into spatial and temporal coordinates
-                if self.dimension == 1:
-                    x = selected_points[:, 0].reshape(-1, 1)
-                else:
-                    x = selected_points[:, : self.dimension]
-                t = selected_points[:, -1].reshape(-1, 1)
-
-                # Store points for visualization
-                self.collocation_history.append(selected_points.cpu().numpy())
-
-                # Reward the RL agent based on the diversity of selected points
-                if len(self.collocation_history) > 1:
-                    prev_points = torch.tensor(self.collocation_history[-2], device=self.device)
-                    torch.mean(torch.min(torch.cdist(selected_points, prev_points), dim=1)[0])
-                    self.rl_agent.update_epsilon(
-                        len(self.collocation_history)
-                    )  # Update exploration rate
+            model = kwargs.get("model", None)
+            if model is None:
+                x, t = self._sample_uniform(num_points)
             else:
-                # Fallback to uniform sampling if no RL agent
-                return self.generate_collocation_points(num_points, strategy="uniform")
+                if self.dimension != 1:
+                    raise ValueError(
+                        "The 'adaptive' (RL bandit) sampler supports 1-D PDEs only; "
+                        "use 'residual_based' for higher dimensions."
+                    )
+                if self.bandit_sampler is None:
+                    from pinnrl.rl.bandit_sampler import ResidualBanditSampler
+
+                    self.bandit_sampler = ResidualBanditSampler(
+                        tuple(self.domain[0]), tuple(self.time_domain), device=self.device
+                    )
+                x, t = self.bandit_sampler.sample(
+                    self, model, num_points, progress=kwargs.get("progress", 0.0)
+                )
+                self.collocation_history.append(torch.cat([x, t], dim=1).cpu().numpy())
         else:
             raise ValueError(f"Unknown sampling strategy: {strategy}")
 
@@ -1360,43 +1286,6 @@ class PDEBase:
         self.collocation_history = state["collocation_history"]
         self.validation_points = state["validation_points"]
         self._setup_boundary_conditions()
-
-    def update_sampling_strategy(self, x: torch.Tensor, t: torch.Tensor, residual: torch.Tensor):
-        """
-        Update the RL agent's sampling strategy based on the residual.
-
-        :param x: Spatial coordinates
-        :param t: Time coordinates
-        :param residual: PDE residual at these points
-        """
-        # Compute reward based on residual magnitude
-        reward = torch.mean(torch.abs(residual))
-
-        # Update RL agent
-        state = torch.cat([x, t], dim=1)
-        self.rl_agent.update(state, reward)
-
-    def visualize_sampling_strategy(self, num_points: int = 1000):
-        """
-        Visualize the current sampling strategy.
-
-        :param num_points: Number of points to generate for visualization
-        :return: Tuple of (x, t) coordinates and their acceptance probabilities
-        """
-        x = torch.rand((num_points, self.dimension), device=self.device)
-        t = torch.rand((num_points, 1), device=self.device)
-
-        # Scale to domain
-        x = self._scale_to_domain(x, self.domain)
-        t = self._scale_to_domain(t, self.time_domain)
-
-        # Get RL agent's actions for all points
-        states = torch.cat([x, t], dim=1)
-        actions = torch.zeros(num_points, device=self.device)
-        for i in range(num_points):
-            actions[i] = self.rl_agent.select_action(states[i : i + 1])
-
-        return x, t, actions
 
     def visualize_collocation_evolution(
         self,

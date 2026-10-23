@@ -145,6 +145,9 @@ class AllenCahnEquation(PDEBase):
                     return lambda x, t: torch.tanh(
                         torch.sum(x, dim=1, keepdim=True) / (2 * self.epsilon)
                     )
+            elif ic_type == "x2_cos":
+                # Standard benchmark IC u0 = x² cos(pi x); equals -1 at x = ±1.
+                return lambda x, t: x[:, 0:1] ** 2 * torch.cos(torch.pi * x[:, 0:1])
             else:
                 raise ValueError(f"Unsupported initial condition type: {ic_type}")
         else:

@@ -34,7 +34,7 @@ class PDETrainer:
         optimizer_config: Dict,
         config: "Config",
         device: Optional[torch.device] = None,
-        rl_agent=None,
+        bandit_sampler=None,
         viz_frequency=10,
         validation_frequency=10,
         early_stopping_config=None,
@@ -48,7 +48,9 @@ class PDETrainer:
             optimizer_config: Optimizer configuration.
             config: Full configuration object.
             device: Device to train on.
-            rl_agent: Reinforcement Learning agent.
+            bandit_sampler: Optional ``ResidualBanditSampler``. When given (or when
+                ``collocation_distribution`` is ``"adaptive"``) collocation points
+                come from the experimental RL bandit sampler.
             viz_frequency: Frequency of visualization.
             validation_frequency: Frequency of validation checks.
             early_stopping_config: Early stopping configuration.
@@ -91,7 +93,12 @@ class PDETrainer:
         self.best_val_loss = float("inf")
         self.patience_counter = 0
 
-        self.rl_agent = rl_agent
+        self.use_rl = (
+            bandit_sampler is not None
+            or getattr(config.training, "collocation_distribution", None) == "adaptive"
+        )
+        if bandit_sampler is not None:
+            pde.bandit_sampler = bandit_sampler
         self.viz_frequency = viz_frequency
 
         # Initialize adaptive weights handler if enabled
@@ -516,7 +523,7 @@ class PDETrainer:
                     "num_points": num_points,
                     "validation_frequency": self.validation_frequency,
                 },
-                "rl_enabled": self.rl_agent is not None,
+                "rl_enabled": self.use_rl,
                 "optimizer": getattr(self, "_optimizer_type", "adam"),
                 "mode": getattr(self.config.training, "mode", "forward"),
                 "trainable_parameters": list(trainable_pde_params.keys()),
@@ -544,16 +551,15 @@ class PDETrainer:
             # Training loop with progress bar
             pbar = tqdm(range(num_points // batch_size), desc=f"Epoch {epoch+1}/{num_epochs}")
             for _ in pbar:
-                # Generate batch of collocation points
-                # Use adaptive sampling if RL agent is available
+                # Generate batch of collocation points; adaptive samplers need the model
                 sampling_strategy = (
-                    "adaptive"
-                    if self.rl_agent is not None
-                    else self.config.training.collocation_distribution
+                    "adaptive" if self.use_rl else self.config.training.collocation_distribution
                 )
                 sampling_kwargs = {}
-                if sampling_strategy == "residual_based":
+                if sampling_strategy in ("residual_based", "adaptive"):
                     sampling_kwargs["model"] = self.model
+                if sampling_strategy == "adaptive":
+                    sampling_kwargs["progress"] = epoch / max(1, num_epochs)
                 x_batch, t_batch = self.pde.generate_collocation_points(
                     batch_size, strategy=sampling_strategy, **sampling_kwargs
                 )
@@ -885,7 +891,7 @@ class PDETrainer:
                     "num_points": num_points,
                     "validation_frequency": self.validation_frequency,
                 },
-                "rl_enabled": self.rl_agent is not None,
+                "rl_enabled": self.use_rl,
                 "start_time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
                 "end_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 # PDE information
