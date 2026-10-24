@@ -9,7 +9,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.4.0] — 2026-10-23
+## [0.4.0] — 2026-10-24
 
 A correctness release. A physics audit, a code review and a clean-install release gate found bugs that changed results in earlier versions. **Results from 0.3.x on 2-D PDEs, the RL sampler, wave, KdV, Allen–Cahn, Cahn–Hilliard, Black–Scholes and pendulum should be recomputed.**
 

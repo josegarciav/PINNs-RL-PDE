@@ -75,4 +75,4 @@ Only after the Tier 2 estimators beat their classical baselines.
 
 1. **P02** (sampling at equal compute). B01/B06 are done. Still to run: B02 (more PDEs), B03 (the RAD k, c grid), B04 (resampling frequency, which B01 suggests matters most) and B08 (point-count scaling).
 2. **P07 → P08** (identification baseline, then identifiability and conditioning). These are the entry point of the inverse-modelling core. They need the v0.5 conditioning module (Fisher information, sensitivity SVD).
-3. **P06** (JOSS), once v0.4.0 is on PyPI and P01/P02 are drafted.
+3. **P06** (JOSS), once P01/P02 are drafted (v0.4.0 is on PyPI).

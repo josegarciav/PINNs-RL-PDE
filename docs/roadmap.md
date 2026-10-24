@@ -2,7 +2,7 @@
 
 Package features, in the order the [research program](research.md) needs them. Each item has a done-criterion and names the experiments (`experiments/BACKLOG.md`) or papers (`experiments/PAPERS.md`) it serves. Within a release, items are worked top to bottom.
 
-## v0.4: clean, verified, documented (releasing)
+## v0.4: clean, verified, documented (released 2026-10-24)
 
 - [x] Physics audit: every exact solution satisfies its PDE, IC and BC; real Dirichlet, Neumann and periodic BCs; correct 2-D derivatives. *Done: `test_physics_consistency.py` is green.*
 - [x] One training loop (`PDETrainer.train` / `train_steps`), one PDE registry, one entry point per action.
@@ -10,10 +10,10 @@ Package features, in the order the [research program](research.md) needs them. E
 - [x] Numerical reference solutions. *Done: Burgers reproduces Basdevant et al. (1986), $u_x(0, 1.6037/\pi) = -152.00516$ for $\nu = 0.01/\pi$; the Allen–Cahn solution is grid-converged.*
 - [x] B01/B06 sampling benchmark, 10 seeds at equal steps and equal evaluations. *Done: [Benchmarks](benchmarks.md), `experiments/B01_sampling_equal_compute/`.*
 - [x] Docs rewritten and audited against the code; ruff with docstring linting; strict docs build.
-- [ ] Bug batch from the documentation audit (Well loader coordinates, LRW zero-gradient weighting, network defaults, dashboard plots). *Done when: each fix has a failing-without-it test.*
-- [ ] Release. *Done when: CI and `scripts/verify_release.sh` are green, and v0.4.0 is on PyPI via trusted publishing.*
+- [x] Bug batch from the documentation audit (Well loader coordinates, LRW zero-gradient weighting, network defaults, dashboard plots). *Done: each fix has a test that fails without it (`test_audit_regressions.py`, `test_well_loader.py`).*
+- [x] Release. *Done: CI and `scripts/verify_release.sh` are green, and v0.4.0 is on PyPI via trusted publishing.*
 
-## v0.5: the inverse-modelling core (next)
+## v0.5: the inverse-modelling core (now)
 
 The goal is to estimate unknown physics with known validity conditions and calibrated uncertainty. Diagnostics come before UQ methods, because an unidentifiable or ill-conditioned problem has no meaningful error bar.
 

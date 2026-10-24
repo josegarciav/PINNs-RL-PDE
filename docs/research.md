@@ -40,4 +40,4 @@ How the tiers depend on each other:
 
 1. **P02**, sampling at equal compute. The first result, B01/B06, is in [Benchmarks](benchmarks.md).
 2. **P07 → P08**, identification baseline, then identifiability and conditioning. This is the entry point of the inverse-modelling core and depends on the conditioning tools in the v0.5 [roadmap](roadmap.md).
-3. **P06**, the software paper, once v0.4.0 is released.
+3. **P06**, the software paper, once P01 and P02 are drafted (v0.4.0 is on PyPI).
