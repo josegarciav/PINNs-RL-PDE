@@ -9,3 +9,7 @@ Conditioning and identifiability diagnostics for identified parameters (`pinnrl.
 ::: analysis.sensitivity.closed_form_bound
 
 ::: analysis.sensitivity.FisherSummary
+
+::: analysis.surrogate.surrogate_sensitivities
+
+::: analysis.surrogate.SurrogateSensitivity

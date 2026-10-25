@@ -12,5 +12,13 @@ from pinnrl.analysis.sensitivity import (
     exact_sensitivities,
     fisher_information,
 )
+from pinnrl.analysis.surrogate import SurrogateSensitivity, surrogate_sensitivities
 
-__all__ = ["FisherSummary", "closed_form_bound", "exact_sensitivities", "fisher_information"]
+__all__ = [
+    "FisherSummary",
+    "SurrogateSensitivity",
+    "closed_form_bound",
+    "exact_sensitivities",
+    "fisher_information",
+    "surrogate_sensitivities",
+]
