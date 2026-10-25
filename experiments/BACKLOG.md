@@ -129,7 +129,7 @@ The shortest path to results you can trust and publish:
 | F01 | P0 | Heat α recovery baseline | Accuracy of α vs noise and number of observations. | noise ∈ {0, 0.01, 0.05, 0.1} × N_obs ∈ {20, 50, 200, 1000}, 10 seeds, vs the Cramér–Rao bound. Relative error of α. See `F01_heat_alpha_recovery/`. | done |
 | F02 | P1 | Joint KdV (α, β) | Are two parameters jointly identifiable? | Recovery error and correlation of the estimates across seeds. | todo |
 | F03 | P1 | Burgers ν near the shock | Recovery of ν at ν = 0.01/π. | Same noise grid as F01. | todo |
-| F04 | P1 | Initial-guess sensitivity | Does the estimate depend on the starting guess? | 10 initial guesses spanning 0.1–10× the true value. | todo |
+| F04 | P1 | Initial-guess sensitivity | Does the estimate depend on the starting guess? | 10 initial guesses spanning 0.1–10× the true value, 10 seeds, heat α. See `F04_initial_guess/`. | done |
 | F05 | P1 | Fixed sensors | Plant-like data: a few fixed probe locations, densely sampled in time. | 2–8 fixed x positions vs random scatter at an equal data count. | todo |
 | F06 | P1 | Uncertainty and coverage | Are ensemble confidence intervals for α calibrated? | 10-member ensembles over 50 synthetic datasets. Empirical coverage of the 90% CI. | todo |
 | F07 | P2 | Profile likelihood | Practical identifiability via profile likelihood. | Fix α on a grid, retrain, plot the loss profile. Flat profile means not identifiable. | todo |
