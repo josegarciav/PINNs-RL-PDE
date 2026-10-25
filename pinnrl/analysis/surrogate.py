@@ -229,25 +229,29 @@ def _sensitivities(
 
 
 def _damped_solve(hvp, b, damping, max_iter, tol, name=""):
-    """Solve ``(H + lam I) x = b`` by CG, raising ``lam`` tenfold whenever negative curvature appears."""
+    """Solve ``(H + lam I) x = b`` with MINRES, which accepts an indefinite ``H``.
+
+    The Hessian of a trained network is rarely positive definite along every
+    direction (the network is not an exact minimum), so conjugate gradient
+    would break down; MINRES minimizes the residual over the same Krylov space
+    and tolerates negative curvature. The damping is raised tenfold and the
+    solve restarted only if the iteration produces non-finite values.
+    """
     lam = damping
     for _attempt in range(7):
-        x, n, resid, indefinite = _conjugate_gradient(
-            lambda v, lam=lam: hvp(v, lam), b, max_iter, tol, name
-        )
-        if not indefinite:
-            return x, n, resid, lam
-        lam *= 10.0
-    return x, n, resid, lam
+        try:
+            x, n, resid = _minres(lambda v, lam=lam: hvp(v, lam), b, max_iter, tol)
+        except ValueError:
+            lam *= 10.0
+            continue
+        return x, n, resid, lam
+    raise ValueError(f"the sensitivity solve for parameter {name!r} did not converge")
 
 
-def _conjugate_gradient(apply, b, max_iter, tol, name=""):
-    """Solve ``A x = b`` for symmetric positive-definite ``A`` given as a function.
+def _minres(apply, b, max_iter, tol):
+    """MINRES for a symmetric (possibly indefinite) operator; returns ``(x, iterations, rel. residual)``.
 
-    Returns ``(x, iterations, relative residual, indefinite)``. A zero
-    right-hand side returns ``x = 0`` at once. Non-positive or non-finite
-    curvature stops the iteration and flags ``indefinite``; the caller then
-    raises the damping.
+    The recurrence follows Choi, Paige & Saunders (2011), Algorithm MINRES.
 
     Raises:
         ValueError: If the iteration produces non-finite values.
@@ -255,25 +259,42 @@ def _conjugate_gradient(apply, b, max_iter, tol, name=""):
     b_norm = float(b.norm())
     x = torch.zeros_like(b)
     if b_norm == 0.0:
-        return x, 0, 0.0, False
-    r = b.clone()
-    p = r.clone()
-    rs = r @ r
+        return x, 0, 0.0
+    v_prev = torch.zeros_like(b)
+    v = b / b_norm
+    beta = b_norm
+    phi_bar = b_norm
+    delta1, eps = 0.0, 0.0
+    c_prev, s_prev = -1.0, 0.0
+    d_prev = torch.zeros_like(b)
+    d_prev2 = torch.zeros_like(b)
     n = 0
     for n in range(1, max_iter + 1):  # noqa: B007
-        Ap = apply(p)
-        curvature = p @ Ap
-        if not torch.isfinite(curvature) or curvature <= 0:
-            return x, n, float(rs.sqrt()) / b_norm, True
-        alpha = rs / curvature
-        x = x + alpha * p
-        r = r - alpha * Ap
-        rs_new = r @ r
-        if not torch.isfinite(rs_new):
-            raise ValueError(f"conjugate gradient diverged for parameter {name!r}")
-        if float(rs_new.sqrt()) / b_norm < tol:
-            rs = rs_new
+        p = apply(v)
+        alpha = float(v @ p)
+        p = p - alpha * v - beta * v_prev
+        beta_new = float(p.norm())
+        if not (math.isfinite(alpha) and math.isfinite(beta_new)):
+            raise ValueError("MINRES produced non-finite values")
+        # Previous rotation applied to the new column of the tridiagonal matrix.
+        delta2 = c_prev * delta1 + s_prev * alpha
+        gamma_bar = s_prev * delta1 - c_prev * alpha
+        eps_new = s_prev * beta_new
+        delta1_new = -c_prev * beta_new
+        # New rotation annihilating beta_new.
+        gamma = math.hypot(gamma_bar, beta_new)
+        if gamma == 0.0:
             break
-        p = r + (rs_new / rs) * p
-        rs = rs_new
-    return x, n, float(rs.sqrt()) / b_norm, False
+        c, s = gamma_bar / gamma, beta_new / gamma
+        tau = c * phi_bar
+        phi_bar = s * phi_bar
+        d = (v - delta2 * d_prev - eps * d_prev2) / gamma
+        x = x + tau * d
+        d_prev2, d_prev = d_prev, d
+        eps, delta1 = eps_new, delta1_new
+        c_prev, s_prev = c, s
+        if beta_new == 0.0 or abs(phi_bar) / b_norm < tol:
+            break
+        v_prev, v = v, p / beta_new
+        beta = beta_new
+    return x, n, abs(phi_bar) / b_norm

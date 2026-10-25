@@ -114,3 +114,17 @@ def test_parameter_the_loss_ignores_gives_zero(trained_heat):
         assert J.cg_iterations == [0]
     finally:
         del pde.parameters["unused"]
+
+
+def test_minres_solves_an_indefinite_system():
+    from pinnrl.analysis.surrogate import _minres
+
+    torch.manual_seed(3)
+    A = torch.randn(40, 40, dtype=torch.float64)
+    A = (A + A.T) / 2  # symmetric, with eigenvalues of both signs
+    b = torch.randn(40, dtype=torch.float64)
+    x, n, resid = _minres(lambda v: A @ v, b, 200, 1e-10)
+    assert resid < 1e-8
+    assert torch.allclose(x, torch.linalg.solve(A, b), atol=1e-6)
+    x0, n0, r0 = _minres(lambda v: A @ v, torch.zeros_like(b), 200, 1e-10)
+    assert n0 == 0 and r0 == 0.0 and x0.abs().max() == 0
