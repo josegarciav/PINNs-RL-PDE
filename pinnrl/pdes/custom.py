@@ -345,15 +345,18 @@ class CustomPDE(PDEBase):
         architecture: str | None = None,
         config_path: str | None = None,
         device: torch.device | str | None = None,
+        model: Mapping[str, Any] | None = None,
         **training: Any,
     ):
         """A :class:`~pinnrl.training.trainer.PDETrainer` for this problem with packaged defaults.
 
         ``architecture`` names an entry of the ``architectures:`` block of
-        ``config.yaml`` (``config_path`` for your own file). ``training``
-        overrides keys of the ``training:`` block (``num_epochs``,
-        ``batch_size``, ``num_collocation_points``, ``learning_rate``,
-        ``weight_decay``, ``mode``, ``loss_weights``, ...).
+        ``config.yaml`` (``config_path`` for your own file); ``model``
+        overrides keys of that entry (``hidden_dims``, ``activation``,
+        ``layer_norm``, ``scale``, ...). ``training`` overrides keys of the
+        ``training:`` block (``num_epochs``, ``batch_size``,
+        ``num_collocation_points``, ``learning_rate``, ``weight_decay``,
+        ``mode``, ``loss_weights``, ...).
         """
         from pinnrl.config import DEFAULT_CONFIG_PATH, Config, ModelConfig, TrainingConfig
         from pinnrl.neural_networks import PINNModel
@@ -378,7 +381,7 @@ class CustomPDE(PDEBase):
         config.training = TrainingConfig.from_dict(training_cfg)
         config.model = ModelConfig.from_architecture(
             architecture,
-            defaults.get("architectures", {}).get(architecture, {}),
+            {**defaults.get("architectures", {}).get(architecture, {}), **dict(model or {})},
             input_dim=self.config.input_dim,
             output_dim=self.config.output_dim,
         )

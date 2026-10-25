@@ -39,4 +39,5 @@ When an experiment shows that a feature works, move the reusable code into
 |---|---|---|
 | `A03_pinn_vs_numerical/` | A03 | Early standalone notebooks (pure PyTorch, no `pinnrl` imports) comparing PINNs with numerical solvers for heat (1-D/2-D), Allen–Cahn and KdV. Formerly `pinnrl/numerical_solvers/`. |
 | `B01_sampling_equal_compute/` | B01, B06 | Uniform vs stratified vs RAD vs RL bandit at equal steps and equal residual evaluations, 10 seeds, Burgers and Allen–Cahn. README with results and conclusions, `plot.py` for the figure. |
+| `F01_heat_alpha_recovery/` | F01 | Recovery of the heat diffusivity α from noisy observations: 4 noise levels × 4 observation counts × 10 seeds, against the Cramér–Rao bound. README with results, `run.py`, `plot.py`. |
 | `B07_quasi_random_sampling/` | B07 | Visual comparison of uniform, LHS and Halton point sets. Formerly `notebooks/sampling_techniques.ipynb`. |

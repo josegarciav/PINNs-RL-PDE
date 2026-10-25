@@ -38,7 +38,7 @@ The shortest path to results you can trust and publish:
 2. **A05** seed-variance baseline (sets the seed count for everything else)
 3. **I01** profiling (tells you what a budget costs)
 4. **A02** PDE × architecture baseline matrix
-5. **B01** main sampling benchmark (in progress) and **B06** budget fairness
+5. ~~**B01** main sampling benchmark and **B06** budget fairness~~ — done: `B01_sampling_equal_compute/`
 6. **D01** optimizer baseline
 7. **H01**, **H03** the known failure modes the sampling paper must address
 8. **K32** verified reference solvers, then the inverse-modelling baselines: **F01** with **K01**, **K11**
@@ -66,12 +66,12 @@ The shortest path to results you can trust and publish:
 
 | ID | P | Experiment | Question | Setup and metric | Status |
 |---|---|---|---|---|---|
-| B01 | P0 | Main sampling benchmark | Uniform vs stratified vs RAD vs RL bandit at equal budget. | `pinnrl-benchmark sampling` on Burgers and Allen–Cahn (`x2_cos`), 10 seeds, 15k steps each (equal training points), plus a uniform-every-100-steps control. Rel. L2 vs `benchmarks.reference`. See `B01_sampling_equal_compute/`. | in progress |
+| B01 | P0 | Main sampling benchmark | Uniform vs stratified vs RAD vs RL bandit at equal budget. | `pinnrl-benchmark sampling` on Burgers and Allen–Cahn (`x2_cos`), 10 seeds, 15k steps each (equal training points), plus a uniform-every-100-steps control. Rel. L2 vs `benchmarks.reference`. See `B01_sampling_equal_compute/`. | done |
 | B02 | P1 | All 1-D PDEs | Does B01's ranking hold on heat, wave, convection, KdV and Cahn–Hilliard? | Same protocol as B01 on each PDE. Rank table and critical-difference diagram. | todo |
 | B03 | P1 | RAD `k`, `c` grid | Which RAD hyperparameters work, and are they PDE-dependent? | k ∈ {0, 0.5, 1, 2, 4} × c ∈ {0, 0.5, 1, 2} (the Wu et al. 2023 grid) on Burgers and Allen–Cahn. Heatmap of rel. L2. | todo |
 | B04 | P1 | Resampling frequency | How often should points be resampled? | Every batch vs every 10/100 epochs vs a fixed set, for uniform and RAD. Error vs resampling interval. | todo |
 | B05 | P1 | RAD candidate-pool size | Accuracy vs cost of `pool_factor`. | pool_factor ∈ {2, 4, 8, 16}, charged to the budget. Pareto front of error vs evaluations. | todo |
-| B06 | P0 | Budget fairness | Do adaptive methods still win when their extra residual evaluations count against the budget? | From the B01 run: compare at equal steps and at equal total residual evaluations (overhead counted, from per-checkpoint accounting). Report both rankings. | in progress (with B01) |
+| B06 | P0 | Budget fairness | Do adaptive methods still win when their extra residual evaluations count against the budget? | From the B01 run: compare at equal steps and at equal total residual evaluations (overhead counted, from per-checkpoint accounting). Report both rankings. | done (with B01) |
 | B07 | P2 | Quasi-random sequences | Do Sobol/Halton beat LHS and jittered grids? | Bring `scipy.stats.qmc` from `sampling_techniques.ipynb` into a sampler. Compare on heat and Burgers. | todo |
 | B08 | P2 | Collocation-count scaling | Error vs number of points for each strategy. | N ∈ {500, 1k, 2k, 5k, 10k, 50k}. Log–log efficiency curves; read off accuracy per point. | todo |
 | B09 | P2 | Causal weighting vs RAD | Does respecting causality (Wang et al. 2022) matter more than residual focus? | Causal residual weighting vs RAD vs both, on Allen–Cahn and KdV. | todo |
@@ -126,7 +126,7 @@ The shortest path to results you can trust and publish:
 
 | ID | P | Experiment | Question | Setup and metric | Status |
 |---|---|---|---|---|---|
-| F01 | P0 | Heat α recovery baseline | Accuracy of α vs noise and number of observations. | noise ∈ {0, 0.01, 0.05, 0.1} × N_obs ∈ {20, 50, 200, 1000}. Relative error of α. | todo |
+| F01 | P0 | Heat α recovery baseline | Accuracy of α vs noise and number of observations. | noise ∈ {0, 0.01, 0.05, 0.1} × N_obs ∈ {20, 50, 200, 1000}, 10 seeds, vs the Cramér–Rao bound. Relative error of α. See `F01_heat_alpha_recovery/`. | done |
 | F02 | P1 | Joint KdV (α, β) | Are two parameters jointly identifiable? | Recovery error and correlation of the estimates across seeds. | todo |
 | F03 | P1 | Burgers ν near the shock | Recovery of ν at ν = 0.01/π. | Same noise grid as F01. | todo |
 | F04 | P1 | Initial-guess sensitivity | Does the estimate depend on the starting guess? | 10 initial guesses spanning 0.1–10× the true value. | todo |

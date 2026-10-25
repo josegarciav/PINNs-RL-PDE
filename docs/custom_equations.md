@@ -22,7 +22,7 @@ trainer.train(progress=False)
 print(f"relative L2 error: {pde.validate(trainer.model)['l2_error']:.2e}")
 ```
 
-The residual is the left-hand side of `expression = 0`. `build_trainer` returns a `PDETrainer` with the packaged defaults (`config.yaml`) for the named architecture, and keyword arguments override keys of the `training` block (`num_epochs`, `batch_size`, `num_collocation_points`, `num_boundary_points`, `num_initial_points`, `learning_rate`, `weight_decay`, `optimizer`, `loss_weights`, `mode`, ...). You can equally build a `PINNModel` and `PDETrainer` yourself, as in [Getting started](getting_started.md#python-api).
+The residual is the left-hand side of `expression = 0`. `build_trainer` returns a `PDETrainer` with the packaged defaults (`config.yaml`) for the named architecture, and keyword arguments override keys of the `training` block (`num_epochs`, `batch_size`, `num_collocation_points`, `num_boundary_points`, `num_initial_points`, `learning_rate`, `weight_decay`, `optimizer`, `loss_weights`, `mode`, ...); `model={"hidden_dims": [64, 64, 64, 64], "layer_norm": False}` overrides the architecture block. You can equally build a `PINNModel` and `PDETrainer` yourself, as in [Getting started](getting_started.md#python-api).
 
 ## Notation
 

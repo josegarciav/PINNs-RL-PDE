@@ -260,3 +260,14 @@ def test_cli_config_round_trips_a_yaml_spec(tmp_path):
     pde = create_pde(cfg, torch.device("cpu"))
     assert isinstance(pde, CustomPDE) and "r" in pde._trainable_params
     assert math.isclose(pde.time_domain[1], 4.0)
+
+
+def test_build_trainer_model_overrides_the_architecture_block():
+    pde = CustomPDE("u_t - u_xx", domain={"x": (0, 1), "t": (0, 1)}, initial_condition="sin(pi*x)")
+    trainer = pde.build_trainer(
+        "feedforward", model={"hidden_dims": [16, 16], "layer_norm": False}, num_epochs=1
+    )
+    assert trainer.config.model.hidden_dims == [16, 16]
+    assert trainer.config.model.num_layers == 2
+    assert trainer.config.model.layer_norm is False
+    assert sum(p.numel() for p in trainer.model.parameters()) < 1000

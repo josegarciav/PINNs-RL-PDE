@@ -56,3 +56,31 @@ Errors are medians over 10 seeds; "6/10" counts the seeds on which the sampler b
 - **Recommendation:** use `uniform` (or `stratified`) by default. Use `residual_based` (RAD) when the solution has sharp features, and measure it against uniform at equal budget. Treat `--rl` as experimental.
 
 The full write-up, with IQRs, the same-cadence control and the follow-ups it motivates (optimizer settling, resampling frequency, Allen–Cahn failure modes), is in [`experiments/B01_sampling_equal_compute`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B01_sampling_equal_compute).
+
+## Identification baseline (experiment F01)
+
+```bash
+python experiments/F01_heat_alpha_recovery/run.py --seeds 10 --steps 5000 --workers 4
+```
+
+The diffusivity of the 1-D heat equation ($\alpha = 0.1$, started at 0.5) is identified from 20 to 1,000 noisy observations of the exact solution, for noise standard deviations from 0 to 0.1, on 10 seeds. The `heat` entry of the [catalogue](custom_equations.md#the-catalogue) is used with `alpha` trainable; a 4 × 64 MLP trains for 5,000 Adam steps with loss weights residual / BC / IC / data = 1 / 10 / 10 / 10.
+
+![F01](assets/benchmarks/f01_heat_alpha.png)
+
+| Noise σ | $N_{\text{obs}}$ = 20 | 50 | 200 | 1000 |
+|---|---|---|---|---|
+| 0 | 0.017 | 0.019 | 0.020 | 0.015 |
+| 0.01 | 0.027 | 0.016 | 0.019 | 0.017 |
+| 0.05 | 0.041 | 0.033 | 0.021 | 0.020 |
+| 0.1 | 0.054 | 0.055 | 0.024 | 0.025 |
+
+Median relative error of $\hat\alpha$ over 10 seeds.
+
+**What this says:**
+
+- **A 2 % floor that data cannot lower.** With clean or lightly noisy data every seed lands at $\hat\alpha \approx 0.098$ whatever the number of observations. The Cramér–Rao bound for 1,000 points is 0.2 %, so the floor is the surrogate's own forward error (2–3 % in $u$), absorbed by the parameter.
+- **Above the floor, near-efficient.** For σ ≥ 0.05 the spread of $\hat\alpha$ across seeds matches the Cramér–Rao bound from the same points to within about 20 %, so the Fisher information predicts how many sensors a target accuracy needs.
+- **Few noisy points bias low.** At 20 points the bias grows with noise (−3 %, −5 %, −9 %): the physics loss prefers a smoother, slower-diffusing field when the fixed data weight ignores the noise level.
+- **Field error does not predict parameter error.** The relative L2 error of $u$ is 2–4 % in every cell while the median error of α spans 1.5–5.5 % and single seeds reach 22 %.
+
+The full write-up, with IQRs, the spread against the bound per cell, and the follow-ups (the floor after optimizer settling, K01 Fisher information, K39 likelihood weighting), is in [`experiments/F01_heat_alpha_recovery`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F01_heat_alpha_recovery).
