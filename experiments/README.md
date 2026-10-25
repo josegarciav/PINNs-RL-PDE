@@ -41,4 +41,5 @@ When an experiment shows that a feature works, move the reusable code into
 | `B01_sampling_equal_compute/` | B01, B06 | Uniform vs stratified vs RAD vs RL bandit at equal steps and equal residual evaluations, 10 seeds, Burgers and Allen–Cahn. README with results and conclusions, `plot.py` for the figure. |
 | `F01_heat_alpha_recovery/` | F01 | Recovery of the heat diffusivity α from noisy observations: 4 noise levels × 4 observation counts × 10 seeds, against the Cramér–Rao bound. README with results, `run.py`, `plot.py`. |
 | `F04_initial_guess/` | F04 | Ten initial guesses from 0.1× to 10× the true heat diffusivity, 10 seeds: the estimate depends on the data, not on the start. README with results, `run.py`, `plot.py`. |
+| `F05_fixed_sensors/` | F05 | One to eight fixed probes read densely in time vs random scatter at 200 points, against each layout's Cramér–Rao bound: one mid-domain probe beats the scatter. README with results, `run.py`, `plot.py`. |
 | `B07_quasi_random_sampling/` | B07 | Visual comparison of uniform, LHS and Halton point sets. Formerly `notebooks/sampling_techniques.ipynb`. |
