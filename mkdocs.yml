@@ -88,3 +88,4 @@ nav:
     - RL sampler: api/rl.md
     - Plots: api/plots.md
     - Benchmarks: api/benchmarks.md
+    - Analysis: api/analysis.md

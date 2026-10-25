@@ -196,6 +196,15 @@ CATALOG: dict[str, dict[str, Any]] = {
         boundary_conditions={"dirichlet": {"value": 0.0}},
         exact_solution="c/2/cosh(sqrt(c)/2*(x - c*t))^2",
     ),
+    "kdv_two_parameter": dict(
+        name="KdV (two parameters)",
+        equations="u_t + alpha*u*u_x + beta*u_xxx",
+        domain={"x": (-15, 15), "t": (0, 2)},
+        parameters={"alpha": 6.0, "beta": 1.0},
+        initial_condition="3/alpha/cosh(sqrt(1/beta)/2*x)^2",
+        boundary_conditions={"dirichlet": {"value": 0.0}},
+        exact_solution="3/alpha/cosh(sqrt(1/beta)/2*(x - t))^2",
+    ),
     "beam": dict(
         name="Euler-Bernoulli beam",
         equations="w_tt + EI*w_xxxx",

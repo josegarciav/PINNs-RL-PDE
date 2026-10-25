@@ -94,6 +94,8 @@ Pass `time_order=2` with a callable that is second order in time; for text it is
 
 Any parameter can be identified: list it in `trainable_parameters` with an initial guess, attach observations (`observation_data={"x": ..., "t": ..., "u": ...}` or `{"path": "obs.npz"}`), and train in `mode="inverse"` (`build_trainer` selects it when there are trainable parameters). Without observations and with an exact solution, `generate_synthetic_observations` creates noisy ones. See [Inverse problems](inverse_problems.md).
 
+The optimizer takes the same absolute step for a PDE parameter as for a weight, so a small positive parameter such as a viscosity of $10^{-3}$ is better identified through its logarithm: write `exp(log_nu)` in the residual and list `log_nu` as trainable. The step becomes relative and the viscosity stays positive. With a closed-form solution, `pinnrl.analysis.closed_form_bound(pde, ["alpha"], x, t, sigma)` gives the Cramér–Rao bound on the parameter from observations at `(x, t)` with noise `sigma`, the floor any unbiased estimate can reach.
+
 <!-- doctest: skip -->
 ```python
 pde = CustomPDE(
@@ -245,7 +247,7 @@ pde = CustomPDE("V_t - 0.5*sigma^2*S^2*V_SS - r*S*V_S + r*V", domain={"S": (1, 2
 
 ## The catalogue
 
-`pinnrl.pdes.catalog.CATALOG` holds forty-one such specifications: parabolic (heat in 1-D to 5-D, with a source, advection–diffusion, Fisher–KPP, Allen–Cahn, Cahn–Hilliard, Burgers, porous medium, Black–Scholes), hyperbolic (wave in 1-D and 2-D, telegraph, convection, Klein–Gordon, sine–Gordon), dispersive (KdV, the Euler–Bernoulli beam, Schrödinger as a real system), steady (Poisson in 2-D and 4-D, Helmholtz, a convection–diffusion boundary layer, Bratu), ODEs (logistic, damped oscillator, pendulum, Lotka–Volterra, Van der Pol, Lorenz, SIR, a CSTR), systems (Gray–Scott, Brusselator, linear shallow water, Stokes) and a three-state Hamilton–Jacobi–Bellman equation.
+`pinnrl.pdes.catalog.CATALOG` holds forty-two such specifications: parabolic (heat in 1-D to 5-D, with a source, advection–diffusion, Fisher–KPP, Allen–Cahn, Cahn–Hilliard, Burgers, porous medium, Black–Scholes), hyperbolic (wave in 1-D and 2-D, telegraph, convection, Klein–Gordon, sine–Gordon), dispersive (KdV with one or two coefficients, the Euler–Bernoulli beam, Schrödinger as a real system), steady (Poisson in 2-D and 4-D, Helmholtz, a convection–diffusion boundary layer, Bratu), ODEs (logistic, damped oscillator, pendulum, Lotka–Volterra, Van der Pol, Lorenz, SIR, a CSTR), systems (Gray–Scott, Brusselator, linear shallow water, Stokes) and a three-state Hamilton–Jacobi–Bellman equation.
 
 ```python
 from pinnrl.pdes.catalog import CATALOG, from_catalog

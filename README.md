@@ -13,7 +13,7 @@
 
 A PINN represents the solution of a PDE as a neural network, trained to satisfy the equation, its boundary and initial conditions, and any measured data. `pinnrl` provides:
 
-- **Your own equations:** `CustomPDE("u_t + u*u_x - nu*u_xx", domain={"x": (-1, 1), "t": (0, 1)}, parameters={"nu": 0.01})` turns a residual written as text (or a Python function) into a trainable problem: PDEs, ODEs, steady problems and systems in any number of dimensions, with identifiable parameters. A catalogue of 41 ready equations comes with it.
+- **Your own equations:** `CustomPDE("u_t + u*u_x - nu*u_xx", domain={"x": (-1, 1), "t": (0, 1)}, parameters={"nu": 0.01})` turns a residual written as text (or a Python function) into a trainable problem: PDEs, ODEs, steady problems and systems in any number of dimensions, with identifiable parameters. A catalogue of 42 ready equations comes with it.
 - **10 shipped PDE configurations:** heat (1-D, 2-D), wave, Burgers, convection, KdV, Allen–Cahn, Cahn–Hilliard, Black–Scholes and a damped pendulum. Each exact solution is checked by the test suite against its PDE, initial condition and boundary conditions.
 - **7 architectures:** MLP, ResNet, Fourier features, SIREN, FNO-style, attention and autoencoder.
 - **Collocation sampling:** uniform, stratified, residual-based adaptive (RAD), and an experimental reinforcement-learning bandit.
