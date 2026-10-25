@@ -12,6 +12,7 @@ The program establishes those conditions on problems with known answers before a
 
 ## How it is organized
 
+- **Theory:** the [theory pages](theory/index.md) state the conditions (well-posedness, identifiability, calibration, stability) that the inverse-modelling modules rely on.
 - **Papers:** [`experiments/PAPERS.md`](https://github.com/josegarciav/PINNs-RL-PDE/blob/main/experiments/PAPERS.md) is the paper backlog: 27 papers in four tiers, each with its question, contribution, prerequisite papers, target venues and status.
 - **Experiments:** [`experiments/BACKLOG.md`](https://github.com/josegarciav/PINNs-RL-PDE/blob/main/experiments/BACKLOG.md) lists the 150 experiments behind them, tracks A–K. Track K holds the 50 conditioning, stability and UQ baselines for Tier 1. Each one runs in its own `experiments/<ID>_<slug>/` folder with its question, setup, result and conclusion.
 - **Rules for every result:**

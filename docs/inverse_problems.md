@@ -81,4 +81,4 @@ Provide an `.npz` file with arrays `x` of shape `(N, d)`, `t` of shape `(N, 1)` 
 
 - **The data must excite the parameter.** Diffusivity can't be recovered from a steady state, because it leaves no signature there. Observations must cover the regime where the parameter acts.
 - **Balance the data weight.** If it's too small, the parameter barely moves from its initial guess. If it's too large, the network fits the noise and the physics stops constraining it. The example above (256 collocation points, 200 observations, noise 0.005) uses 50; 10–100 is a reasonable range to search.
-- **Check identifiability before trusting a number.** Several parameters, or a parameter field, may not be uniquely determined by the sensors you have. Studying this systematically is part of the [research program](research.md).
+- **Check identifiability before trusting a number.** Several parameters, or a parameter field, may not be uniquely determined by the sensors you have. The [theory pages](theory/identifiability.md) state the conditions, and `pinnrl.analysis` computes the Fisher bound when a closed form exists.
