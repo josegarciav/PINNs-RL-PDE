@@ -42,4 +42,9 @@ When an experiment shows that a feature works, move the reusable code into
 | `F01_heat_alpha_recovery/` | F01 | Recovery of the heat diffusivity α from noisy observations: 4 noise levels × 4 observation counts × 10 seeds, against the Cramér–Rao bound. README with results, `run.py`, `plot.py`. |
 | `F04_initial_guess/` | F04 | Ten initial guesses from 0.1× to 10× the true heat diffusivity, 10 seeds: the estimate depends on the data, not on the start. README with results, `run.py`, `plot.py`. |
 | `F05_fixed_sensors/` | F05 | One to eight fixed probes read densely in time vs random scatter at 200 points, against each layout's Cramér–Rao bound: one mid-domain probe beats the scatter. README with results, `run.py`, `plot.py`. |
+| `F02_kdv_joint/` | F02 | Joint identification of the two KdV coefficients against the 2 × 2 Cramér–Rao bound, plus a follow-up on the wrong minimum the fit converges to. `run.py`, `run_followup.py`, `plot.py`. |
+| `F03_burgers_nu/` | F03 | Burgers viscosity near the shock, identified as log ν, against a finite-difference bound from the Cole–Hopf reference. `run.py`, `plot.py`. |
+| `F07_profile_likelihood/` | F07 | Profile likelihood of the heat diffusivity: the data misfit at fixed α on a grid, against the Fisher parabola. `run.py`. |
+| `K01_fisher_information/` | K01 | Fisher information from the trained surrogate (implicit-function theorem, MINRES) checked against closed forms (heat, KdV) and a numerical reference (Burgers). README with results, `run.py`. |
+| `K03_training_conditioning/` | K03 | Loss-Hessian and tangent-kernel spectra across eight operators and two architectures, against the final error. `run.py`. |
 | `B07_quasi_random_sampling/` | B07 | Visual comparison of uniform, LHS and Halton point sets. Formerly `notebooks/sampling_techniques.ipynb`. |

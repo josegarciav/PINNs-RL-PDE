@@ -208,7 +208,7 @@ The theory behind trusting an estimate of unknown physics, as 50 baseline experi
 
 | ID | P | Experiment | Question | Setup and metric | Status |
 |---|---|---|---|---|---|
-| K01 | P0 | Fisher information and identifiability | Which parameter combinations do the sensors determine? | $J$ by autograd, $F$, its singular values, $\kappa(F)$ and sloppy directions, for heat α, KdV (α, β) and Burgers ν. | todo |
+| K01 | P0 | Fisher information and identifiability | Which parameter combinations do the sensors determine? | $J$ by the implicit-function theorem on the trained surrogate (`pinnrl.analysis.surrogate_sensitivities`), $F$, $\kappa(F)$ and correlations, for heat α, KdV (α, β) and Burgers ν, checked against closed forms and a numerical reference. See `K01_fisher_information/`. | done |
 | K02 | P1 | Sensor layout vs conditioning | How do sensor count and placement change $\kappa(F)$? | A grid of sensor sets on K01's problems; $\kappa(F)$ and the parameter error against the number of sensors. Feeds J09. | todo |
 | K11 | P0 | Structural identifiability | Which parameters can never be separated, whatever the noise? | Symbolic analysis (sympy) of scaling symmetries and modal reductions: pendulum (g, L, b), KdV (α vs amplitude), heat (α from boundary flux). Expected rank deficiencies, checked against K01. | todo |
 | K12 | P1 | Profile likelihood vs Fisher regions | When does the Gaussian (Fisher) approximation of confidence regions fail? | Profile likelihood vs $F^{-1}$ ellipses on nonlinear problems (Burgers ν, pendulum); coverage of each. Links F07. | todo |

@@ -116,4 +116,4 @@ print(f"relative L2 error: {metrics['l2_error']:.2e}")
 ## Next
 
 - [Concepts](concepts.md) explains the loss, sampling and architecture choices behind these settings.
-- The [tutorial notebooks](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/notebooks) walk through a first PINN, an architecture comparison, the RL sampler, The Well, and inverse problems.
+- The [tutorial notebooks](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/notebooks) walk through a first PINN, an architecture comparison, the RL sampler, The Well, and inverse problems; notebooks 06 and 07 review the identification-baseline and conditioning experiments from their raw results.
