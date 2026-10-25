@@ -506,8 +506,9 @@ class PDEBase:
     def _dirichlet_values(self, options, x_lo, x_hi, t):
         """Target values on the lower and upper face for a dirichlet condition."""
         if options.get("type") == "exact":
-            with torch.no_grad():
-                return self.exact_solution(x_lo, t), self.exact_solution(x_hi, t)
+            # No ``no_grad`` here: the targets may depend on trainable parameters,
+            # and that dependence belongs in the loss (and in its Hessian).
+            return self.exact_solution(x_lo, t), self.exact_solution(x_hi, t)
         value = float(options.get("value", 0.0))
         left = float(options.get("left", value))
         right = float(options.get("right", value))

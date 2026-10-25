@@ -61,7 +61,7 @@ def test_two_parameters_give_a_symmetric_bound_with_correlation():
     assert torch.allclose(summary.covariance, torch.linalg.inv(F), rtol=1e-6)
 
 
-def test_parameter_absent_from_the_solution_has_zero_sensitivity():
+def test_parameter_absent_from_the_solution_has_zero_sensitivity():  # noqa: D103
     pde = CustomPDE(
         "u_t - alpha*u_xx + beta*u",
         domain={"x": (0, 1), "t": (0, 1)},
@@ -87,3 +87,47 @@ def test_without_closed_form_raises():
     pde = from_catalog("burgers")
     with pytest.raises(ValueError, match="exact_solution"):
         exact_sensitivities(pde, ["nu"], X, T)
+
+
+def test_unidentifiable_parameter_reports_infinite_bound():
+    pde = CustomPDE(
+        "u_t - alpha*u_xx + beta*u",
+        domain={"x": (0, 1), "t": (0, 1)},
+        parameters={"alpha": 0.1, "beta": 0.0},
+        exact_solution="exp(-alpha*pi^2*t)*sin(pi*x)",
+    )
+    summary = closed_form_bound(pde, ["alpha", "beta"], X, T, 0.1)
+    assert summary.identifiable.tolist() == [True, False]
+    assert math.isinf(summary.std[1]) and math.isfinite(summary.std[0])
+    assert math.isinf(summary.relative_std({"alpha": 0.1, "beta": 1.0})["beta"])
+    assert math.isnan(summary.correlation[0, 1])
+
+
+def test_unknown_parameter_name_raises():
+    pde = from_catalog("heat")
+    with pytest.raises(ValueError, match="not parameters"):
+        exact_sensitivities(pde, ["alhpa"], X, T)
+
+
+def test_per_field_and_per_entry_noise_shapes():
+    J = torch.randn(10, 2, 1, dtype=torch.float64)
+    per_field = torch.tensor([0.1, 0.5])
+    a = fisher_information(J, per_field, ["a"]).information
+    manual = (J[:, 0, 0] ** 2).sum() / 0.1**2 + (J[:, 1, 0] ** 2).sum() / 0.5**2
+    assert a.item() == pytest.approx(manual.item(), rel=1e-5)
+    per_entry = per_field.expand(10, 2)
+    assert fisher_information(J, per_entry, ["a"]).information.item() == pytest.approx(a.item())
+    with pytest.raises(ValueError, match="sigma must"):
+        fisher_information(J, torch.ones(3), ["a"])
+
+
+def test_nonsmooth_functions_differentiate():
+    pde = CustomPDE(
+        "u_t",
+        domain={"x": (-1, 1), "t": (0, 1)},
+        parameters={"c": 0.3},
+        exact_solution="abs(x - c*t) + heaviside(x - c*t)",
+    )
+    J = exact_sensitivities(pde, ["c"], X, T)[:, 0, 0]
+    expected = -T[:, 0] * torch.sign(X[:, 0] - 0.3 * T[:, 0])
+    assert torch.allclose(J, expected, atol=1e-6)

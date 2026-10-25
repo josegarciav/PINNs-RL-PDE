@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- Exact Dirichlet targets (`dirichlet: {type: exact}`) are no longer evaluated under `no_grad`, so a trainable parameter that appears in the closed form receives its boundary-term gradient.
+
 ### Added
 - **User-defined equations.** `pinnrl.CustomPDE` builds a trainable problem from its residual written as text (`"u_t + u*u_x - nu*u_xx"`, parsed by SymPy, every derivative by autograd) or as a Python callable over a `Fields` accessor (`f.u_xx`, `f.laplacian("u")`). It covers scalar PDEs, ODEs (a domain with only `t`), steady problems (no `t`), systems (one equation per field, `(N, k)` residuals), second order in time with `initial_velocity`, expression-valued initial and exact solutions, and identifiable parameters. `pde.build_trainer(arch, **training)` returns a `PDETrainer` with the packaged defaults; `pinnrl-train --pde-file spec.yaml` trains from a YAML specification, and the run snapshot rebuilds it in `load_run`. `sympy` becomes a dependency.
 - **A catalogue of 42 equations** (`pinnrl.pdes.catalog`, `from_catalog("kdv_soliton")`): heat in 1-D to 5-D, wave, telegraph, Klein–Gordon, sine–Gordon, KdV, a beam, Schrödinger, Poisson in 2-D and 4-D, Helmholtz, Bratu, Burgers, Fisher–KPP, Allen–Cahn, Cahn–Hilliard, porous medium, Black–Scholes, a 3-state HJB equation, the logistic, oscillator, pendulum, Van der Pol, Lotka–Volterra, Lorenz, SIR and CSTR ODEs, a two-parameter KdV, Gray–Scott, Brusselator, shallow water and Stokes. Every closed-form solution in it is verified to zero its residual by `test_catalog.py`.

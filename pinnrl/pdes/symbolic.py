@@ -78,7 +78,13 @@ TORCH_FUNCTIONS.update(
     {
         "Min": lambda *a: _reduce_pairwise(torch.minimum, a),
         "Max": lambda *a: _reduce_pairwise(torch.maximum, a),
-        "Heaviside": lambda x, h0=0.5: torch.heaviside(x, torch.full_like(x, float(h0))),
+        # Written with ``where`` rather than ``torch.heaviside`` so autograd accepts it
+        # (the derivative is 0 almost everywhere; the delta at 0 is dropped).
+        "Heaviside": lambda x, h0=0.5: torch.where(
+            x > 0,
+            torch.ones_like(x),
+            torch.where(x < 0, torch.zeros_like(x), torch.full_like(x, float(h0))),
+        ),
     }
 )
 #: Spellings accepted in expressions for the functions above.

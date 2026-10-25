@@ -16,11 +16,14 @@ closed form; see ``test_analysis_surrogate.py``.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
 import torch
+from torch import nn
 from torch.func import functional_call, jvp
 
 
@@ -58,101 +61,157 @@ def surrogate_sensitivities(
 ) -> SurrogateSensitivity:
     """``du/dtheta`` at ``(x, t)`` from the trained surrogate, by the implicit-function theorem.
 
+    Pass the same ``pde`` the model was trained with: the Hessian is taken of
+    that object's physics loss (its loss weights, boundary and initial point
+    counts, loss function and device), at the current values of its
+    parameters. Parameters that are not registered as trainable are made
+    trainable for the duration of the call, so a forward-trained problem works
+    as it is.
+
     Args:
-        pde: The problem; ``parameters`` must be registered as trainable on it
-            so the loss is differentiable with respect to them.
-        model: The trained network (a minimum of the physics loss for the
-            parameters' current values).
+        pde: The problem the model was trained on.
+        model: The trained network, a minimum of the physics loss for the
+            parameters' current values.
         parameters: Names of the PDE parameters to differentiate with respect to.
         x: Spatial coordinates of the observation points, ``(N, d)``.
-        t: Time, ``(N, 1)``; ``None`` for a steady problem.
+        t: Time, ``(N, 1)``; ``None`` for a steady problem (the network then
+            receives ``t = 0``, as the trainer does).
         n_collocation: Collocation points on which the Hessian is evaluated.
         damping: Tikhonov damping ``lambda`` added to ``H_ww`` (the Hessian of
             a trained network is singular along flat directions).
         cg_iterations: Maximum conjugate-gradient iterations per parameter.
         cg_tol: Relative residual at which the solve stops.
-        seed: Seed of the collocation sample.
+        seed: Seed of the collocation sample (drawn in a forked RNG, so the
+            caller's random state is untouched).
 
     Raises:
-        ValueError: If a parameter is not trainable on ``pde``.
+        ValueError: If a name is not a parameter of ``pde``, or a solve diverges.
     """
-    trainable = getattr(pde, "_trainable_params", {})
-    missing = [p for p in parameters if p not in trainable]
-    if missing:
-        raise ValueError(
-            f"{missing} must be in trainable_parameters so the loss depends on them as tensors"
-        )
+    unknown = [p for p in parameters if p not in getattr(pde, "parameters", {})]
+    if unknown:
+        raise ValueError(f"{unknown} are not parameters of {pde.config.name}")
+    device = next(model.parameters()).device
     was_training = model.training
     model.eval()
-    weights = [p for p in model.parameters() if p.requires_grad]
-    thetas = [trainable[name] for name in parameters]
+    try:
+        with _temporarily_trainable(pde, parameters) as thetas:
+            result = _sensitivities(
+                pde,
+                model,
+                parameters,
+                thetas,
+                x,
+                t,
+                device,
+                n_collocation,
+                damping,
+                cg_iterations,
+                cg_tol,
+                seed,
+            )
+    finally:
+        if was_training:
+            model.train()
+    return result
 
-    torch.manual_seed(seed)
-    xc, tc = pde.generate_collocation_points(n_collocation)
-    losses = pde.compute_loss(model, xc.to(pde.device), tc.to(pde.device))
+
+@contextmanager
+def _temporarily_trainable(pde, parameters):
+    """Register ``parameters`` as trainable on ``pde`` for the block, at their current values."""
+    registry: nn.ParameterDict = pde._trainable_params
+    added = []
+    for name in parameters:
+        if name not in registry:
+            value = float(pde.parameters[name])
+            registry[name] = nn.Parameter(torch.tensor(value, device=pde.device))
+            added.append(name)
+    try:
+        yield [registry[name] for name in parameters]
+    finally:
+        for name in added:
+            del registry[name]
+
+
+def _sensitivities(
+    pde,
+    model,
+    parameters,
+    thetas,
+    x,
+    t,
+    device,
+    n_collocation,
+    damping,
+    cg_iterations,
+    cg_tol,
+    seed,
+):
+    weights = [p for p in model.parameters() if p.requires_grad]
+    names = [n for n, p in model.named_parameters() if p.requires_grad]
+    shapes = [w.shape for w in weights]
+
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(seed)
+        xc, tc = pde.generate_collocation_points(n_collocation)
+    losses = pde.compute_loss(model, xc.to(device), tc.to(device))
     lw = pde._training_option("loss_weights") or {}
     physics = (
         float(lw.get("pde", lw.get("residual", 1.0))) * losses["residual"]
         + float(lw.get("boundary", 10.0)) * losses["boundary"]
         + float(lw.get("initial", 10.0)) * losses["initial"]
     )
-    grads = torch.autograd.grad(physics, weights + thetas, create_graph=True)
-    g_w, g_theta = grads[: len(weights)], grads[len(weights) :]
-    flat_g = torch.cat([g.reshape(-1) for g in g_w])
+    grads = torch.autograd.grad(physics, weights + thetas, create_graph=True, allow_unused=True)
 
-    def hvp(v: torch.Tensor) -> torch.Tensor:
-        dot = flat_g @ v
-        hv = torch.autograd.grad(dot, weights, retain_graph=True, allow_unused=True)
-        return (
-            torch.cat(
-                [
-                    (h if h is not None else torch.zeros_like(w)).reshape(-1)
-                    for h, w in zip(hv, weights, strict=True)
-                ]
-            )
-            + damping * v
+    def flatten(grads_or_none):
+        return torch.cat(
+            [
+                (g if g is not None else torch.zeros_like(w)).reshape(-1)
+                for g, w in zip(grads_or_none, weights, strict=True)
+            ]
         )
 
-    names = [n for n, p in model.named_parameters() if p.requires_grad]
-    shapes = [w.shape for w in weights]
+    flat_g = flatten(grads[: len(weights)])
+    g_theta = grads[len(weights) :]
+
+    def hvp(v: torch.Tensor) -> torch.Tensor:
+        hv = torch.autograd.grad(flat_g @ v, weights, retain_graph=True, allow_unused=True)
+        return flatten(hv) + damping * v
 
     def unflatten(v: torch.Tensor) -> dict[str, torch.Tensor]:
         out, i = {}, 0
         for name, shape in zip(names, shapes, strict=True):
-            n = int(torch.tensor(shape).prod()) if len(shape) else 1
-            out[name] = v[i : i + n].reshape(shape)
-            i += n
+            size = math.prod(shape)
+            out[name] = v[i : i + size].reshape(shape)
+            i += size
         return out
 
-    inputs = x if t is None else torch.cat([x, t], dim=1)
-    inputs = inputs.to(pde.device)
+    if t is None:
+        t = torch.zeros(x.shape[0], 1, dtype=x.dtype)
+    inputs = torch.cat([x, t], dim=1).to(device)
     base = {n: p.detach() for n, p in model.named_parameters()}
     buffers = dict(model.named_buffers())
 
     def forward(params: dict[str, torch.Tensor]) -> torch.Tensor:
         return functional_call(model, ({**base, **params}, buffers), (inputs,))
 
+    with torch.no_grad():
+        out_dim = model(inputs).shape[1]
     columns, iters, resids = [], [], []
-    for g_t in g_theta:
-        # H_wtheta: the gradient of dL/dtheta with respect to the weights.
-        b = torch.autograd.grad(g_t, weights, retain_graph=True, allow_unused=True)
-        b = torch.cat(
-            [
-                (h if h is not None else torch.zeros_like(w)).reshape(-1)
-                for h, w in zip(b, weights, strict=True)
-            ]
-        )
-        dw, n_iter, resid = _conjugate_gradient(hvp, -b, cg_iterations, cg_tol)
+    for name, g_t in zip(parameters, g_theta, strict=True):
+        if g_t is None or not g_t.requires_grad:
+            # The loss does not depend on this parameter: no sensitivity.
+            columns.append(torch.zeros(inputs.shape[0], out_dim, device=device))
+            iters.append(0)
+            resids.append(0.0)
+            continue
+        b = flatten(torch.autograd.grad(g_t, weights, retain_graph=True, allow_unused=True))
+        dw, n_iter, resid = _conjugate_gradient(hvp, -b, cg_iterations, cg_tol, name)
         iters.append(n_iter)
         resids.append(resid)
-        tangent = unflatten(dw.detach())
-        _, du = jvp(forward, (base,), (tangent,))
+        _, du = jvp(forward, (base,), (unflatten(dw.detach()),))
         columns.append(du.reshape(inputs.shape[0], -1))
-    if was_training:
-        model.train()
-    jac = torch.stack(columns, dim=-1)
     return SurrogateSensitivity(
-        jacobian=jac,
+        jacobian=torch.stack(columns, dim=-1),
         parameters=tuple(parameters),
         cg_iterations=iters,
         cg_residuals=resids,
@@ -160,20 +219,36 @@ def surrogate_sensitivities(
     )
 
 
-def _conjugate_gradient(apply, b, max_iter, tol):
-    """Solve ``A x = b`` for symmetric positive-definite ``A`` given as a function."""
+def _conjugate_gradient(apply, b, max_iter, tol, name=""):
+    """Solve ``A x = b`` for symmetric positive-definite ``A`` given as a function.
+
+    Returns ``(x, iterations, relative residual)``. A zero right-hand side
+    returns ``x = 0`` at once; a non-positive or non-finite curvature stops the
+    iteration with the last iterate, since the damped Hessian is then not
+    positive definite along that direction.
+
+    Raises:
+        ValueError: If the iteration produces non-finite values.
+    """
+    b_norm = float(b.norm())
     x = torch.zeros_like(b)
+    if b_norm == 0.0:
+        return x, 0, 0.0
     r = b.clone()
     p = r.clone()
     rs = r @ r
-    b_norm = float(b.norm()) or 1.0
     n = 0
     for n in range(1, max_iter + 1):  # noqa: B007
         Ap = apply(p)
-        alpha = rs / (p @ Ap)
+        curvature = p @ Ap
+        if not torch.isfinite(curvature) or curvature <= 0:
+            break
+        alpha = rs / curvature
         x = x + alpha * p
         r = r - alpha * Ap
         rs_new = r @ r
+        if not torch.isfinite(rs_new):
+            raise ValueError(f"conjugate gradient diverged for parameter {name!r}")
         if float(rs_new.sqrt()) / b_norm < tol:
             rs = rs_new
             break
