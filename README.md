@@ -13,7 +13,8 @@
 
 A PINN represents the solution of a PDE as a neural network, trained to satisfy the equation, its boundary and initial conditions, and any measured data. `pinnrl` provides:
 
-- **10 PDE configurations:** heat (1-D, 2-D), wave, Burgers, convection, KdV, Allen–Cahn, Cahn–Hilliard, Black–Scholes and a damped pendulum. Each exact solution is checked by the test suite against its PDE, initial condition and boundary conditions.
+- **Your own equations:** `CustomPDE("u_t + u*u_x - nu*u_xx", domain={"x": (-1, 1), "t": (0, 1)}, parameters={"nu": 0.01})` turns a residual written as text (or a Python function) into a trainable problem: PDEs, ODEs, steady problems and systems in any number of dimensions, with identifiable parameters. A catalogue of 41 ready equations comes with it.
+- **10 shipped PDE configurations:** heat (1-D, 2-D), wave, Burgers, convection, KdV, Allen–Cahn, Cahn–Hilliard, Black–Scholes and a damped pendulum. Each exact solution is checked by the test suite against its PDE, initial condition and boundary conditions.
 - **7 architectures:** MLP, ResNet, Fourier features, SIREN, FNO-style, attention and autoencoder.
 - **Collocation sampling:** uniform, stratified, residual-based adaptive (RAD), and an experimental reinforcement-learning bandit.
 - **Inverse problems:** identify PDE parameters from noisy observations.
@@ -34,9 +35,22 @@ pinnrl-train --pde burgers --arch fourier --epochs 2000                         
 pinnrl-train --pde heat --arch fourier --mode inverse --identify alpha --initial-guess alpha=0.5
 pinnrl-dashboard                                                                 # http://127.0.0.1:8050/
 pinnrl-benchmark sampling --seeds 10                                             # uniform, stratified, RAD, RL bandit
+pinnrl-train --pde-file my_equation.yaml --arch fourier                           # your own equation, from YAML
 ```
 
-The Python API is the same pieces: a `PDEConfig` and PDE class, a `PINNModel`, and `PDETrainer`. See [Getting started](https://josegarciav.github.io/PINNs-RL-PDE/getting_started/).
+```python
+from pinnrl import CustomPDE
+
+pde = CustomPDE("u_t - alpha*u_xx", domain={"x": (0, 1), "t": (0, 1)}, parameters={"alpha": 0.1},
+                initial_condition="sin(pi*x)", boundary_conditions={"dirichlet": {"value": 0.0}},
+                exact_solution="exp(-alpha*pi^2*t)*sin(pi*x)")
+trainer = pde.build_trainer("fourier", num_epochs=150, num_collocation_points=1024, batch_size=1024,
+                            learning_rate=2e-3, early_stopping={"enabled": False})
+trainer.train(progress=False)
+print(pde.validate(trainer.model)["l2_error"])
+```
+
+The Python API is the same pieces the CLI uses: a PDE (`CustomPDE`, or a `PDEConfig` with a shipped class), a `PINNModel` and `PDETrainer`. See [Custom equations](https://josegarciav.github.io/PINNs-RL-PDE/custom_equations/) and [Getting started](https://josegarciav.github.io/PINNs-RL-PDE/getting_started/).
 
 ## When a PINN is the right tool
 

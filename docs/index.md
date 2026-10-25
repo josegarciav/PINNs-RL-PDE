@@ -6,7 +6,8 @@ A physics-informed neural network (PINN) represents the solution `u(x, t)` of a 
 
 `pinnrl` packages that workflow:
 
-- ten PDE configurations: heat (1-D and 2-D), wave, Burgers, convection, KdV, Allen–Cahn, Cahn–Hilliard, Black–Scholes and a damped pendulum. Each exact solution is checked against its PDE, initial condition and boundary conditions by the test suite.
+- your own equations, written as text: `CustomPDE("u_t + u*u_x - nu*u_xx", ...)` for PDEs, ODEs, steady problems and systems ([Custom equations](custom_equations.md));
+- ten shipped PDE configurations: heat (1-D and 2-D), wave, Burgers, convection, KdV, Allen–Cahn, Cahn–Hilliard, Black–Scholes and a damped pendulum. Each exact solution is checked against its PDE, initial condition and boundary conditions by the test suite.
 - seven network architectures;
 - adaptive collocation sampling;
 - adaptive loss weighting;

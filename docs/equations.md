@@ -35,4 +35,6 @@ The Allen–Cahn and Cahn–Hilliard defaults start from their stationary kinks,
 
 ## Adding a PDE
 
-Subclass `PDEBase`, implement `compute_residual` (and `_exact_solution` if one exists), then add one `PDESpec` line to `pinnrl/pdes/registry.py` and a block to `config.yaml`. The new PDE then appears in the CLI and the dashboard. Add its exact-solution check to `test_physics_consistency.py`.
+Write it: `CustomPDE("u_t + u*u_x - nu*u_xx", domain={"x": (-1, 1), "t": (0, 1)}, parameters={"nu": 0.01})` builds a trainable problem from the residual, for scalar PDEs, ODEs, steady problems and systems, in Python or as a YAML file for `pinnrl-train --pde-file`. See [Custom equations](custom_equations.md).
+
+To ship one with the package, subclass `PDEBase`, implement `compute_residual` (and `_exact_solution` if one exists), then add one `PDESpec` line to `pinnrl/pdes/registry.py` and a block to `config.yaml`. The new PDE then appears in the CLI and the dashboard. Add its exact-solution check to `test_physics_consistency.py`.

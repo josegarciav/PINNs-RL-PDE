@@ -1,6 +1,18 @@
 # PDEs
 
-Every PDE is registered once in `pdes.registry`, and both the CLI and the dashboard read it from there.
+Every shipped PDE is registered once in `pdes.registry`, and both the CLI and the dashboard read it from there. User-defined equations go through `CustomPDE` (see [Custom equations](../custom_equations.md)).
+
+::: pdes.custom.CustomPDE
+
+::: pdes.custom.Fields
+
+::: pdes.symbolic.compile_expression
+
+::: pdes.symbolic.CompiledExpression
+
+::: pdes.catalog.from_catalog
+
+::: pdes.catalog.CATALOG
 
 ::: pdes.registry.create_pde
 

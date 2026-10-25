@@ -5,6 +5,7 @@ from .black_scholes import BlackScholesEquation
 from .burgers_equation import BurgersEquation
 from .cahn_hilliard import CahnHilliardEquation
 from .convection_equation import ConvectionEquation
+from .custom import CustomPDE, Fields
 from .heat_equation import HeatEquation
 from .kdv_equation import KdVEquation
 from .pde_base import PDEBase, PDEConfig
@@ -18,6 +19,8 @@ __all__ = [
     "BurgersEquation",
     "CahnHilliardEquation",
     "ConvectionEquation",
+    "CustomPDE",
+    "Fields",
     "HeatEquation",
     "KdVEquation",
     "PDEBase",

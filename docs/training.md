@@ -10,7 +10,7 @@ Unset options come from the packaged `config.yaml`: its `training` block, the ch
 
 | Group | Flags |
 |---|---|
-| Problem | `--pde` (key or display name), `--arch` (`feedforward`, `resnet`, `fourier`, `siren`, `fno`, `attention`, `autoencoder`), `--config`, `--device` (`cpu`, `mps`, `cuda`; falls back to CPU) |
+| Problem | `--pde` (key or display name) or `--pde-file` (your own equation as YAML, see [Custom equations](custom_equations.md)), `--arch` (`feedforward`, `resnet`, `fourier`, `siren`, `fno`, `attention`, `autoencoder`), `--config`, `--device` (`cpu`, `mps`, `cuda`; falls back to CPU) |
 | Budget | `--epochs`, `--batch-size`, `--collocation-points`, `--boundary-points`, `--initial-points`, `--lr` |
 | Sampling | `--collocation-distribution` (`uniform`, `stratified`, `residual_based`); `--rl` for the experimental bandit sampler (1-D) |
 | Optimizer | `--optimizer` (`adam`, `lbfgs`, `adam_lbfgs`), `--lr-scheduler` (`cosine`, `reduce_lr`), `--weight-decay`, `--gradient-clipping`, `--early-stopping` (`on`, `off`) |

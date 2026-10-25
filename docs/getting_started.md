@@ -46,7 +46,21 @@ The dashboard lets you configure and launch runs, watch the solution and residua
 
 ## Python API
 
-The same pieces the CLI uses. This trains a small network on the 1-D heat equation and scores it against the exact solution:
+The shortest route is your equation as text. `CustomPDE` builds the problem and `build_trainer` a trainer with the packaged defaults:
+
+```python
+from pinnrl import CustomPDE
+
+pde = CustomPDE("u_t - alpha*u_xx", domain={"x": (0, 1), "t": (0, 1)}, parameters={"alpha": 0.1},
+                initial_condition="sin(2*pi*x)", boundary_conditions={"periodic": {}},
+                exact_solution="exp(-4*alpha*pi^2*t)*sin(2*pi*x)")
+trainer = pde.build_trainer("fourier", num_epochs=150, num_collocation_points=1024, batch_size=1024,
+                            learning_rate=2e-3, early_stopping={"enabled": False})
+trainer.train(progress=False)
+print(f"relative L2 error: {pde.validate(trainer.model)['l2_error']:.2e}")
+```
+
+See [Custom equations](custom_equations.md) for systems, ODEs, callables and the YAML form. The same pieces, spelled out with a shipped PDE class, a `PINNModel` and a `PDETrainer`:
 
 ```python
 import torch

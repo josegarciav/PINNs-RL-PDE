@@ -11,4 +11,13 @@ except PackageNotFoundError:  # running from a source tree that is not installed
 # Libraries log to their own logger and leave handler setup to the application.
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["__version__"]
+__all__ = ["CustomPDE", "Fields", "__version__"]
+
+
+def __getattr__(name):
+    """Lazy top-level access to the user-defined-equation API (keeps ``import pinnrl`` light)."""
+    if name in ("CustomPDE", "Fields"):
+        from pinnrl.pdes import custom
+
+        return getattr(custom, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

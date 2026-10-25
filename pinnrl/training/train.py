@@ -27,6 +27,7 @@ from pinnrl.config import (
     resolve_device,
 )
 from pinnrl.neural_networks import PINNModel
+from pinnrl.pdes.custom import CustomPDE
 from pinnrl.pdes.pde_base import PDEConfig
 from pinnrl.pdes.registry import PDE_SPECS, get_pde_spec
 from pinnrl.training.trainer import PDETrainer
@@ -91,12 +92,18 @@ def build_config_dict(
     use_rl=False,
     epochs=None,
     dataset=None,
+    custom=None,
 ):
     """Build a full config dict from yaml base + overrides.
 
     Args:
         yaml_config: Parsed ``config.yaml``.
-        pde_name: PDE key or display name (resolved through the registry).
+        pde_name: PDE key or display name (resolved through the registry);
+            ignored when ``custom`` is given.
+        custom: A user-defined equation spec (the dict form of
+            :class:`~pinnrl.pdes.custom.CustomPDE`, e.g. a parsed
+            ``--pde-file``). The PDE block is built from it and kept under
+            ``pde.custom`` so :func:`create_pde` and :func:`load_run` rebuild it.
         arch_type: Architecture key from the ``architectures:`` block.
         use_rl: Enable the experimental RL bandit sampler.
         epochs: Optional override of ``training.num_epochs``.
@@ -112,11 +119,27 @@ def build_config_dict(
     """
     config = copy.deepcopy(yaml_config)
 
-    spec = get_pde_spec(pde_name)
-    pde_name, pde_key = spec.display_name, spec.key
-    # Copies, so the new pde/model blocks share no lists or dicts with the
-    # input or with the pde_configs/architectures blocks they came from.
-    pde_config = copy.deepcopy(yaml_config.get("pde_configs", {}).get(pde_key, {}))
+    if custom is not None:
+        pde = CustomPDE.from_dict(custom)
+        pde_name, pde_key = pde.config.name, "custom"
+        pde_config = {  # plain lists: the run snapshot must stay yaml.safe_load-able
+            "domain": [list(axis) for axis in pde.config.domain],
+            "time_domain": list(pde.config.time_domain),
+            "parameters": dict(pde.config.parameters),
+            "boundary_conditions": pde.config.boundary_conditions,
+            "initial_condition": pde.config.initial_condition,
+            "exact_solution": pde.config.exact_solution,
+            "dimension": pde.config.dimension,
+            "input_dim": pde.config.input_dim,
+            "output_dim": pde.config.output_dim,
+            "custom": pde.to_dict(),
+        }
+    else:
+        spec = get_pde_spec(pde_name)
+        pde_name, pde_key = spec.display_name, spec.key
+        # Copies, so the new pde/model blocks share no lists or dicts with the
+        # input or with the pde_configs/architectures blocks they came from.
+        pde_config = copy.deepcopy(yaml_config.get("pde_configs", {}).get(pde_key, {}))
     arch_config = copy.deepcopy(yaml_config.get("architectures", {}).get(arch_type, {}))
 
     if epochs is not None:
@@ -137,6 +160,8 @@ def build_config_dict(
         "output_dim": pde_config.get("output_dim", 1),
         "architecture": arch_type,
     }
+    if "custom" in pde_config:
+        config["pde"]["custom"] = pde_config["custom"]
 
     hidden_dim = arch_config.get("hidden_dim", 128)
     if "hidden_dims" in arch_config:
@@ -166,10 +191,20 @@ def create_pde(config_dict, device):
     synthetic noisy observations are generated (``inverse.obs_points``,
     ``obs_noise``, ``obs_seed``; defaults 200, 0.01, 0).
     """
-    pde_cls = get_pde_spec(config_dict["pde"]["name"]).cls
-
     training_cfg = config_dict["training"]
     pde_cfg = config_dict["pde"]
+
+    if pde_cfg.get("custom"):
+        pde = CustomPDE.from_dict(
+            pde_cfg["custom"],
+            device=device,
+            training=TrainingConfig.from_dict(training_cfg),
+            trainable_parameters=list(pde_cfg.get("trainable_parameters", []) or []),
+            parameter_initial_guesses=dict(pde_cfg.get("parameter_initial_guesses", {}) or {}),
+            observation_data=pde_cfg.get("observation_data"),
+        )
+        return _attach_synthetic_observations(pde, config_dict)
+    pde_cls = get_pde_spec(pde_cfg["name"]).cls
 
     pde_config = PDEConfig(
         name=pde_cfg["name"],
@@ -187,14 +222,14 @@ def create_pde(config_dict, device):
         observation_data=pde_cfg.get("observation_data"),
     )
 
-    pde = pde_cls(config=pde_config)
+    return _attach_synthetic_observations(pde_cls(config=pde_config), config_dict)
 
-    # If the user requested inverse mode without supplying real observations,
-    # generate synthetic noisy observations from the analytical solution so the
-    # data-fitting loss has something to anchor the parameter recovery to.
-    mode = training_cfg.get("mode", "forward")
+
+def _attach_synthetic_observations(pde, config_dict):
+    """Inverse mode without observations: generate noisy ones from the exact solution."""
+    mode = config_dict["training"].get("mode", "forward")
     inverse_cfg = config_dict.get("inverse", {})
-    if mode == "inverse" and pde.observation_data is None and pde_config.trainable_parameters:
+    if mode == "inverse" and pde.observation_data is None and pde.config.trainable_parameters:
         n_obs = int(inverse_cfg.get("obs_points", 200))
         noise = float(inverse_cfg.get("obs_noise", 0.01))
         seed = int(inverse_cfg.get("obs_seed", 0))
@@ -381,8 +416,17 @@ def main():
     parser = argparse.ArgumentParser(description="Train a PINN model")
     parser.add_argument(
         "--pde",
-        required=True,
+        default=None,
         help="PDE config key or display name (e.g. 'heat' or 'Heat Equation')",
+    )
+    parser.add_argument(
+        "--pde-file",
+        default=None,
+        help=(
+            "YAML file defining your own equation(s): 'equations', 'domain', 'fields', "
+            "'parameters', 'initial_condition', 'boundary_conditions', 'exact_solution' "
+            "(see the Custom equations guide). Replaces --pde."
+        ),
     )
     parser.add_argument("--arch", required=True, help="Architecture (e.g. 'fourier')")
     parser.add_argument("--epochs", type=int, default=None, help="Override number of epochs")
@@ -535,12 +579,19 @@ def main():
     parser.add_argument("--device", default=None, help="Device (cpu, mps, cuda)")
     args = parser.parse_args()
 
-    try:
-        get_pde_spec(args.pde)
-    except KeyError:
-        print(f"Unknown PDE: {args.pde}")
-        print(f"Available: {', '.join(spec.key for spec in PDE_SPECS)}")
-        sys.exit(1)
+    custom_spec = None
+    if args.pde_file:
+        with open(args.pde_file) as f:
+            custom_spec = yaml.safe_load(f) or {}
+    elif args.pde is None:
+        parser.error("one of --pde or --pde-file is required")
+    else:
+        try:
+            get_pde_spec(args.pde)
+        except KeyError:
+            print(f"Unknown PDE: {args.pde}")
+            print(f"Available: {', '.join(spec.key for spec in PDE_SPECS)}")
+            sys.exit(1)
 
     with open(args.config) as f:
         yaml_config = yaml.safe_load(f)
@@ -607,7 +658,13 @@ def main():
             "mode": args.mode,
         }
     config_dict = build_config_dict(
-        yaml_config, args.pde, args.arch, args.rl, args.epochs, dataset=dataset_block
+        yaml_config,
+        args.pde,
+        args.arch,
+        args.rl,
+        args.epochs,
+        dataset=dataset_block,
+        custom=custom_spec,
     )
     config_dict["device"] = str(device)
 

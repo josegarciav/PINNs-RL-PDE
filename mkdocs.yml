@@ -70,6 +70,7 @@ nav:
   - Concepts: concepts.md
   - Equations: equations.md
   - Guides:
+    - Custom equations: custom_equations.md
     - Training: training.md
     - Inverse problems: inverse_problems.md
     - Datasets (The Well): datasets.md

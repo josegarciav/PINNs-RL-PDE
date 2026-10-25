@@ -787,7 +787,8 @@ class PDEBase:
             residuals = self.compute_residual(model, x_pool, t_pool)
             if isinstance(residuals, tuple):
                 residuals = residuals[0]
-            residual_mag = torch.abs(residuals.detach()).reshape(-1)
+            # One magnitude per point: the norm over the equations of a system.
+            residual_mag = residuals.detach().reshape(x_pool.shape[0], -1).norm(dim=1)
         except Exception:
             return self._sample_uniform(num_points)
 
@@ -945,9 +946,10 @@ class PDEBase:
         if not self.has_exact_solution:
             raise ValueError(f"{self.config.name} has no exact solution configured")
         x, t = self.generate_collocation_points(num_points)
-        with torch.no_grad():
-            u_pred = model(torch.cat([x, t], dim=1))[:, 0:1]
         u_exact = self.exact_solution(x, t)
+        with torch.no_grad():
+            # Every component the exact solution provides (one for scalar PDEs).
+            u_pred = model(torch.cat([x, t], dim=1))[:, : u_exact.shape[1]]
         error = u_pred - u_exact
         return {
             "l2_error": (torch.linalg.norm(error) / torch.linalg.norm(u_exact)).item(),

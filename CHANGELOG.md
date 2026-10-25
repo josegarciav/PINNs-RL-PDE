@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **User-defined equations.** `pinnrl.CustomPDE` builds a trainable problem from its residual written as text (`"u_t + u*u_x - nu*u_xx"`, parsed by SymPy, every derivative by autograd) or as a Python callable over a `Fields` accessor (`f.u_xx`, `f.laplacian("u")`). It covers scalar PDEs, ODEs (a domain with only `t`), steady problems (no `t`), systems (one equation per field, `(N, k)` residuals), second order in time with `initial_velocity`, expression-valued initial and exact solutions, and identifiable parameters. `pde.build_trainer(arch, **training)` returns a `PDETrainer` with the packaged defaults; `pinnrl-train --pde-file spec.yaml` trains from a YAML specification, and the run snapshot rebuilds it in `load_run`. `sympy` becomes a dependency.
+- **A catalogue of 41 equations** (`pinnrl.pdes.catalog`, `from_catalog("kdv_soliton")`): heat in 1-D to 5-D, wave, telegraph, Klein–Gordon, sine–Gordon, KdV, a beam, Schrödinger, Poisson in 2-D and 4-D, Helmholtz, Bratu, Burgers, Fisher–KPP, Allen–Cahn, Cahn–Hilliard, porous medium, Black–Scholes, a 3-state HJB equation, the logistic, oscillator, pendulum, Van der Pol, Lotka–Volterra, Lorenz, SIR and CSTR ODEs, Gray–Scott, Brusselator, shallow water and Stokes. Every closed-form solution in it is verified to zero its residual by `test_catalog.py`.
+- Residual-based sampling uses the norm over the equations of a system, and `validate` compares every component the exact solution provides.
+
 ## [0.4.0] — 2026-10-24
 
 A correctness release. A physics audit, a code review and a clean-install release gate found bugs that changed results in earlier versions. **Results from 0.3.x on 2-D PDEs, the RL sampler, wave, KdV, Allen–Cahn, Cahn–Hilliard, Black–Scholes and pendulum should be recomputed.**
