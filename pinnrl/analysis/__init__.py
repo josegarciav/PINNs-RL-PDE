@@ -12,13 +12,23 @@ from pinnrl.analysis.sensitivity import (
     exact_sensitivities,
     fisher_information,
 )
+from pinnrl.analysis.spectrum import (
+    HessianSpectrum,
+    KernelSpectrum,
+    loss_hessian_spectrum,
+    tangent_kernel_spectrum,
+)
 from pinnrl.analysis.surrogate import SurrogateSensitivity, surrogate_sensitivities
 
 __all__ = [
     "FisherSummary",
+    "HessianSpectrum",
+    "KernelSpectrum",
     "SurrogateSensitivity",
     "closed_form_bound",
     "exact_sensitivities",
     "fisher_information",
+    "loss_hessian_spectrum",
     "surrogate_sensitivities",
+    "tangent_kernel_spectrum",
 ]
