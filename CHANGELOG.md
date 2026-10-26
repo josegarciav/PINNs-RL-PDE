@@ -10,6 +10,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- The sampling study's default resampling interval (`StudySettings.resample_every`, `pinnrl-benchmark sampling --resample-every`) is 10 steps instead of 100, following B04.
 - Exact Dirichlet targets (`dirichlet: {type: exact}`) are no longer evaluated under `no_grad`, so a trainable parameter that appears in the closed form receives its boundary-term gradient.
 
 ### Added

@@ -72,7 +72,8 @@ class StudySettings:
         num_steps: Optimizer steps per run (the equal training budget).
         n_collocation: Collocation points per step.
         resample_every: Steps between resampling for ``uniform_periodic``,
-            ``rad`` and ``rl_bandit``.
+            ``rad`` and ``rl_bandit`` (10 by default: B04 found RAD best at 10
+            and the error on Burgers three times worse at 1,000).
         learning_rate: Adam learning rate (constant).
         hidden_dims: Widths of the tanh MLP.
         n_checkpoints: Evaluations along the run; ``num_steps / n_checkpoints``
@@ -84,7 +85,7 @@ class StudySettings:
 
     num_steps: int = 15_000
     n_collocation: int = 1000
-    resample_every: int = 100
+    resample_every: int = 10
     learning_rate: float = 1e-3
     hidden_dims: tuple[int, ...] = (64, 64, 64, 64)
     n_checkpoints: int = 50

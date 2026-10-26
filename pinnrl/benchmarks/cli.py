@@ -169,7 +169,7 @@ def build_parser() -> argparse.ArgumentParser:
     smp.add_argument("--steps", type=int, default=15_000, help="Optimizer steps per run.")
     smp.add_argument("--checkpoints", type=int, default=50, help="Evaluations along each run.")
     smp.add_argument("--n-collocation", type=int, default=1000)
-    smp.add_argument("--resample-every", type=int, default=100)
+    smp.add_argument("--resample-every", type=int, default=10)
     smp.add_argument("--workers", type=int, default=1, help="Parallel worker processes.")
     smp.add_argument("--out", default="runs/sampling_study", help="Output directory.")
     smp.set_defaults(func=_sampling_command)
