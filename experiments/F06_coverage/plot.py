@@ -34,15 +34,14 @@ plt.rcParams.update(
         "text.color": INK,
     }
 )
-fig, axes = plt.subplots(
-    1, 2, figsize=(14, 5.4), dpi=220, facecolor=SURFACE, gridspec_kw={"width_ratios": [2.2, 1]}
-)
-for ax in axes:
+fig = plt.figure(figsize=(14, 5.4), dpi=220, facecolor=SURFACE)
+gs = fig.add_gridspec(1, 3, width_ratios=[2.4, 0.8, 0.8])
+ax_iv, ax_cov, ax_w = (fig.add_subplot(gs[0, i]) for i in range(3))
+for ax in (ax_iv, ax_cov, ax_w):
     ax.set_facecolor(SURFACE)
     ax.grid(True, color=GRID, linewidth=0.8)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
-ax_iv, ax_bar = axes
 n = len(rows)
 order = np.argsort([float(r["alpha_member0"]) for r in rows])
 for k, (key, label, color) in enumerate(METHODS):
@@ -78,29 +77,20 @@ ax_iv.set_title(
 ax_iv.legend(frameon=False, fontsize=8.5, ncol=3, loc="upper left")
 
 keys = [m[0] for m in METHODS]
-cov = [summary[k]["coverage"] for k in keys]
-width = [summary[k]["mean_width"] / 0.1 for k in keys]
+colors = [m[2] for m in METHODS]
+names = ["ensemble", "Laplace", "Fisher", "swarm"]
 x = np.arange(len(keys))
-ax_bar.bar(x - 0.2, cov, 0.38, color=[m[2] for m in METHODS], label="coverage of the truth")
-ax_bar.axhline(0.9, color=INK, linewidth=1, linestyle="--")
-ax_bar.text(-0.45, 0.915, "nominal 90 %", fontsize=8.5, color=INK2)
-ax2 = ax_bar.twinx()
-ax2.bar(
-    x + 0.2,
-    width,
-    0.38,
-    color=[m[2] for m in METHODS],
-    alpha=0.45,
-    hatch="//",
-    label="mean width / α",
-)
-ax2.set_ylabel("mean relative width of the interval")
-ax_bar.set_xticks(x, ["ensemble", "Laplace", "Fisher", "swarm"], fontsize=9)
-ax_bar.set_ylim(0, 1.05)
-ax_bar.set_ylabel("empirical coverage")
-ax_bar.set_title("Coverage (solid) and width (hatched)", loc="left", fontsize=12, pad=10)
-for side in ("top",):
-    ax2.spines[side].set_visible(False)
+ax_cov.bar(x, [summary[k]["coverage"] for k in keys], 0.7, color=colors)
+ax_cov.axhline(0.9, color=INK, linewidth=1, linestyle="--")
+ax_cov.text(-0.4, 0.915, "nominal 90 %", fontsize=8.5, color=INK2)
+ax_cov.set_xticks(x, names, fontsize=9)
+ax_cov.set_ylim(0, 1.05)
+ax_cov.set_ylabel("empirical coverage")
+ax_cov.set_title("Coverage", loc="left", fontsize=12, pad=10)
+ax_w.bar(x, [summary[k]["mean_width"] / 0.1 for k in keys], 0.7, color=colors)
+ax_w.set_xticks(x, names, fontsize=9)
+ax_w.set_ylabel("mean width of the interval / α")
+ax_w.set_title("Width", loc="left", fontsize=12, pad=10)
 fig.suptitle(
     "F06 / K10: are the intervals for the identified heat diffusivity calibrated?",
     x=0.01,
