@@ -12,4 +12,5 @@ Reference documentation for the `pinnrl` package, generated from the source docs
 | [RL sampler](rl.md) | The experimental residual-bandit collocation sampler and its DQN |
 | [Plots](plots.md) | Solution, training-history and collocation plots |
 | [Benchmarks](benchmarks.md) | Numerical reference solutions and the equal-compute sampling study |
-| [Analysis](analysis.md) | Sensitivities, Fisher information and the Cramér–Rao bound for identified parameters |
+| [Analysis](analysis.md) | Sensitivities, Fisher information and the Cramér–Rao bound for identified parameters; Hessian and tangent-kernel spectra; disturbance tools |
+| [Uncertainty](uq.md) | Laplace posteriors, swarm sampling of the region of equivalence, ensembles and calibration metrics |

@@ -6,6 +6,13 @@ bound. Later layers (sensitivities of a numerical reference or of the trained
 surrogate, profile likelihood, loss-Hessian spectra) are checked against it.
 """
 
+from pinnrl.analysis.disturbance import (
+    StabilityRatio,
+    field_response,
+    linear_response,
+    perturb_observations,
+    stability_ratio,
+)
 from pinnrl.analysis.sensitivity import (
     FisherSummary,
     closed_form_bound,
@@ -22,6 +29,11 @@ from pinnrl.analysis.surrogate import SurrogateSensitivity, surrogate_sensitivit
 
 __all__ = [
     "FisherSummary",
+    "StabilityRatio",
+    "field_response",
+    "linear_response",
+    "perturb_observations",
+    "stability_ratio",
     "HessianSpectrum",
     "KernelSpectrum",
     "SurrogateSensitivity",
