@@ -103,7 +103,7 @@ def laplace_posterior(
     summary = fisher_information(sens.jacobian, sigma, parameters)
     values = pde.get_trainable_parameter_values()
     mean = torch.tensor(
-        [values.get(n, float(pde.get_parameter(n))) for n in parameters], dtype=torch.float64
+        [values.get(n, _scalar(pde.get_parameter(n))) for n in parameters], dtype=torch.float64
     )
     return LaplacePosterior(
         parameters=tuple(parameters),
@@ -112,6 +112,10 @@ def laplace_posterior(
         std=summary.std,
         correlation=summary.correlation,
     )
+
+
+def _scalar(value) -> float:
+    return float(value.detach()) if isinstance(value, torch.Tensor) else float(value)
 
 
 __all__ = ["LaplacePosterior", "laplace_posterior", "likelihood_weights"]

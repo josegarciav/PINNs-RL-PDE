@@ -78,8 +78,10 @@ def second_order_stable(omega: float, phi: float) -> bool:
 def sample_equivalence_region(
     misfit: Callable[[np.ndarray], np.ndarray],
     bounds: Sequence[tuple[float, float]],
-    tolerance: float,
+    tolerance: float | None = None,
     *,
+    sigma: float | None = None,
+    level: float = 0.9,
     n_particles: int = 40,
     n_iterations: int = 100,
     seed: int = 0,
@@ -94,7 +96,15 @@ def sample_equivalence_region(
             about ``N (1 + epsilon)``; see :func:`misfit_tolerance`.
         bounds: ``(low, high)`` per parameter: the prior range, which the
             swarm explores and particles are reflected into.
-        tolerance: Accept positions with misfit at or below it.
+        tolerance: Accept positions with misfit at or below it. When ``None``,
+            the likelihood-ratio region is used instead: positions within
+            ``sigma^2 chi2_p(level)`` of the best misfit found, which for
+            Gaussian noise is the asymptotic ``level`` confidence region and
+            is directly comparable with the Fisher ellipse at that level.
+        sigma: Noise standard deviation, needed when ``tolerance`` is ``None``
+            and the misfit is a plain sum of squares (use ``1`` if the misfit
+            is already divided by ``sigma^2``).
+        level: Confidence level of the likelihood-ratio region.
         n_particles: Swarm size.
         n_iterations: Iterations; every evaluation is a candidate sample.
         seed: Seed of the initial positions and of the per-particle parameters.
@@ -154,6 +164,10 @@ def sample_equivalence_region(
             break
     P = np.concatenate(positions)
     M = np.concatenate(misfits)
+    if tolerance is None:
+        if sigma is None:
+            raise ValueError("give a tolerance, or sigma for the likelihood-ratio region")
+        tolerance = global_f + sigma**2 * chi2_quantile(p, level)
     return SwarmSample(
         positions=P,
         misfits=M,
@@ -165,6 +179,21 @@ def sample_equivalence_region(
     )
 
 
+_CHI2 = {  # quantiles of chi-square with p degrees of freedom
+    0.9: {1: 2.706, 2: 4.605, 3: 6.251, 4: 7.779, 5: 9.236},
+    0.95: {1: 3.841, 2: 5.991, 3: 7.815, 4: 9.488, 5: 11.070},
+    0.99: {1: 6.635, 2: 9.210, 3: 11.345, 4: 13.277, 5: 15.086},
+}
+
+
+def chi2_quantile(p: int, level: float = 0.9) -> float:
+    """Quantile of the chi-square distribution with ``p`` degrees of freedom (``p <= 5``)."""
+    try:
+        return _CHI2[level][p]
+    except KeyError as exc:
+        raise ValueError(f"chi2 quantile tabulated for levels {list(_CHI2)} and p <= 5") from exc
+
+
 def misfit_tolerance(n_observations: int, sigma: float, epsilon: float = 0.1) -> float:
     """Tolerance on the squared misfit ``sum (y - u)^2`` for Gaussian noise.
 
@@ -174,4 +203,10 @@ def misfit_tolerance(n_observations: int, sigma: float, epsilon: float = 0.1) ->
     return (1 + epsilon) * n_observations * sigma**2
 
 
-__all__ = ["SwarmSample", "misfit_tolerance", "sample_equivalence_region", "second_order_stable"]
+__all__ = [
+    "SwarmSample",
+    "chi2_quantile",
+    "misfit_tolerance",
+    "sample_equivalence_region",
+    "second_order_stable",
+]

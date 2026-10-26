@@ -34,6 +34,7 @@ from pinnrl.uq.metrics import (
 )
 from pinnrl.uq.swarm import (
     SwarmSample,
+    chi2_quantile,
     misfit_tolerance,
     sample_equivalence_region,
     second_order_stable,
@@ -84,6 +85,7 @@ __all__ = [
     "EnsembleSummary",
     "LaplacePosterior",
     "SwarmSample",
+    "chi2_quantile",
     "coverage",
     "crps_gaussian",
     "crps_samples",

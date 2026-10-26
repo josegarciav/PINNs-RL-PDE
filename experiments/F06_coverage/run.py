@@ -89,11 +89,10 @@ def _reset(module):
 
 def physics_intervals(dataset):
     """Closed-form Fisher std and the swarm region of the exact misfit for one data set."""
-    import torch
 
     from pinnrl.analysis import closed_form_bound
     from pinnrl.pdes.catalog import from_catalog
-    from pinnrl.uq import misfit_tolerance, sample_equivalence_region
+    from pinnrl.uq import sample_equivalence_region
 
     pde = from_catalog("heat")
     obs = pde.generate_synthetic_observations(n_points=N_OBS, noise_std=NOISE, seed=dataset)
@@ -107,7 +106,8 @@ def physics_intervals(dataset):
     out = sample_equivalence_region(
         misfit,
         [(0.02, 0.5)],
-        misfit_tolerance(N_OBS, NOISE, 0.1),
+        None,
+        sigma=NOISE,
         n_particles=30,
         n_iterations=80,
         seed=dataset,

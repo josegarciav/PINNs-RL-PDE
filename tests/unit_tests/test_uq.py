@@ -16,7 +16,6 @@ from pinnrl.uq import (
     laplace_posterior,
     likelihood_weights,
     mean_width,
-    misfit_tolerance,
     sample_equivalence_region,
     sample_interval,
     second_order_stable,
@@ -58,12 +57,11 @@ def test_swarm_samples_a_banana_region():
         pred = theta[:, :1] * (1 - np.exp(-theta[:, 1:2] * xs[None, :]))
         return ((pred - y[None, :]) ** 2).sum(axis=1) / sigma**2
 
-    tol = misfit_tolerance(xs.size, 1.0, epsilon=0.25)  # misfit is already in sigma units
     out = sample_equivalence_region(
-        misfit, [(5, 40), (0.02, 0.3)], tol, n_particles=40, n_iterations=150, seed=0
+        misfit, [(5, 40), (0.02, 0.3)], None, sigma=1.0, n_particles=40, n_iterations=150, seed=0
     )
     assert out.accepted.sum() > 100
-    assert out.best_misfit < tol
+    assert out.best_misfit < out.tolerance
     lo, hi = out.interval(0.9)
     assert lo[0] < true[0] < hi[0] and lo[1] < true[1] < hi[1]
     assert out.dispersion[0] == 1.0 and out.positions.shape[1] == 2

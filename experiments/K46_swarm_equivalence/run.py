@@ -33,7 +33,7 @@ HERE = Path(__file__).parent
 def heat_case(seed):
     from pinnrl.analysis import closed_form_bound
     from pinnrl.pdes.catalog import from_catalog
-    from pinnrl.uq import misfit_tolerance, sample_equivalence_region
+    from pinnrl.uq import sample_equivalence_region
 
     pde = from_catalog("heat")
     obs = pde.generate_synthetic_observations(n_points=200, noise_std=0.05, seed=seed)
@@ -48,7 +48,8 @@ def heat_case(seed):
     out = sample_equivalence_region(
         misfit,
         [(0.02, 0.5)],
-        misfit_tolerance(200, 0.05, 0.1),
+        None,
+        sigma=0.05,
         n_particles=30,
         n_iterations=100,
         seed=seed,
@@ -59,7 +60,7 @@ def heat_case(seed):
 def kdv_case(seed):
     from pinnrl.analysis import closed_form_bound
     from pinnrl.pdes.catalog import from_catalog
-    from pinnrl.uq import misfit_tolerance, sample_equivalence_region
+    from pinnrl.uq import sample_equivalence_region
 
     pde = from_catalog("kdv_two_parameter")
     obs = pde.generate_synthetic_observations(n_points=200, noise_std=0.01, seed=seed)
@@ -74,7 +75,8 @@ def kdv_case(seed):
     out = sample_equivalence_region(
         misfit,
         [(2, 12), (0.3, 3)],
-        misfit_tolerance(200, 0.01, 0.1),
+        None,
+        sigma=0.01,
         n_particles=40,
         n_iterations=150,
         seed=seed,
@@ -84,7 +86,7 @@ def kdv_case(seed):
 
 def saturation_case(seed):
     from pinnrl.analysis import fisher_information
-    from pinnrl.uq import misfit_tolerance, sample_equivalence_region
+    from pinnrl.uq import sample_equivalence_region
 
     xs = np.linspace(1, 30, 40)
     true = np.array([20.0, 0.1])
@@ -101,7 +103,8 @@ def saturation_case(seed):
     out = sample_equivalence_region(
         misfit,
         [(5, 40), (0.02, 0.3)],
-        misfit_tolerance(xs.size, sigma, 0.1),
+        None,
+        sigma=sigma,
         n_particles=40,
         n_iterations=150,
         seed=seed,
@@ -112,10 +115,14 @@ def saturation_case(seed):
 def summarize(problem, seed, out, truth, bound):
     s = out.samples
     cov = bound.covariance.numpy()
-    d = s - truth[None, :]
+    # The Fisher ellipse is centred on the best fit, as a Laplace interval would be.
+    d = s - out.best[None, :]
     mahal = np.einsum("ij,jk,ik->i", d, np.linalg.inv(cov), d)
     chi2_90 = {1: 2.706, 2: 4.605}[truth.size]
     iv = out.interval(0.9)
+    fisher_half = (
+        np.sqrt(chi2_90 * np.diag(cov)) if truth.size == 1 else 1.645 * np.sqrt(np.diag(cov))
+    )
     rec = {
         "problem": problem,
         "seed": seed,
@@ -132,6 +139,7 @@ def summarize(problem, seed, out, truth, bound):
         "fisher_std": bound.std.tolist(),
         "truth_in_interval": bool(np.all((iv[0] <= truth) & (truth <= iv[1]))),
         "fraction_inside_fisher_90": float(np.mean(mahal <= chi2_90)),
+        "width_ratio_swarm_over_fisher": ((iv[1] - iv[0]) / (2 * fisher_half)).tolist(),
         "sample_std": s.std(axis=0).tolist(),
     }
     if truth.size == 2:
