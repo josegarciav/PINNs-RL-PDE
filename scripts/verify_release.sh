@@ -6,6 +6,8 @@
 # Usage: scripts/verify_release.sh [python-version]   (default 3.12; REF=HEAD)
 #   SKIP_NOTEBOOKS=all             skip executing the tutorial notebooks
 #   SKIP_NOTEBOOKS="04_x.ipynb ..." skip only the named notebooks (e.g. ones that need network)
+#   The review notebooks (06, 07, 08) read experiments/*/results, which are gitignored and
+#   absent from the archive the gate builds, so they are skipped unless SKIP_NOTEBOOKS is set.
 #   KEEP_NOTEBOOKS=dir             copy the executed notebooks to dir (outputs from the shipped wheel)
 set -euo pipefail
 
@@ -81,9 +83,11 @@ else
   export JUPYTER_PATH="$WORK/venv/share/jupyter" JUPYTER_DATA_DIR="$WORK/jupyter-data"
   "$BIN/python" -m ipykernel install --prefix "$WORK/venv" --name pinnrl-gate >/dev/null
   mkdir -p "$WORK/nb" && cp "$WORK"/src/notebooks/*.ipynb "$WORK/nb/"
+  REVIEW_NOTEBOOKS="06_identification_baseline.ipynb 07_conditioning.ipynb 08_stability_and_uncertainty.ipynb"
+  SKIP="${SKIP_NOTEBOOKS-$REVIEW_NOTEBOOKS}"
   for nb in "$WORK"/nb/*.ipynb; do
     name=$(basename "$nb")
-    if [[ " ${SKIP_NOTEBOOKS:-} " == *" $name "* ]]; then echo "skip  $name"; continue; fi
+    if [[ " $SKIP " == *" $name "* ]]; then echo "skip  $name (review notebook: needs experiments/*/results)"; continue; fi
     check "nb-${name%.ipynb}" bash -c "cd '$WORK/nb' && '$BIN/jupyter' nbconvert --to notebook --execute \
       --ExecutePreprocessor.kernel_name=pinnrl-gate --ExecutePreprocessor.timeout=3600 \
       --output-dir '$WORK/nb-out' '$name'"
