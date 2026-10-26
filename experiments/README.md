@@ -47,4 +47,10 @@ When an experiment shows that a feature works, move the reusable code into
 | `F07_profile_likelihood/` | F07 | Profile likelihood of the heat diffusivity: the data misfit at fixed α on a grid, against the Fisher parabola. `run.py`. |
 | `K01_fisher_information/` | K01 | Fisher information from the trained surrogate (implicit-function theorem, MINRES) checked against closed forms (heat, KdV) and a numerical reference (Burgers). README with results, `run.py`. |
 | `K03_training_conditioning/` | K03 | Loss-Hessian and tangent-kernel spectra across eight operators and two architectures, against the final error. `run.py`. |
+| `K05_data_disturbance/` | K05 | Bias, delay, noise, dropout, outliers and single-probe faults on the identified heat diffusivity, paired, against the linear response. `run.py`, `plot.py`. |
+| `K06_problem_disturbance/` | K06 | Initial, boundary and parameter perturbations of heat and wave: the trained field's response against the exact one. `run.py`, `plot.py`. |
+| `K07_stability_constants/` | K07 | Error vs residual on an independent sample across ten equations and five budgets. `run.py`, `plot.py`. |
+| `F06_coverage/` | F06, K10 | Coverage, width and CRPS of ensemble, Laplace, Fisher and swarm intervals over synthetic data sets. `run.py`. |
+| `K39_likelihood_weighting/` | K39 | The data weight from the noise model vs fixed weights. `run.py`. |
+| `K46_swarm_equivalence/` | K46 | Swarm sampling of the region of equivalence on closed-form misfits vs the Fisher ellipse. `run.py`. |
 | `B07_quasi_random_sampling/` | B07 | Visual comparison of uniform, LHS and Halton point sets. Formerly `notebooks/sampling_techniques.ipynb`. |

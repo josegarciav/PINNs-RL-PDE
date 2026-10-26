@@ -236,7 +236,7 @@ The theory behind trusting an estimate of unknown physics, as 50 baseline experi
 
 | ID | P | Experiment | Question | Setup and metric | Status |
 |---|---|---|---|---|---|
-| K05 | P0 | Data-disturbance response | How far does the estimate move under sensor noise, bias, dropout and delay? | Perturbation sweeps; empirical δθ vs the linear prediction $F^{-1}J^\top\Sigma^{-1}\delta y$ from K01. | todo |
+| K05 | P0 | Data-disturbance response | How far does the estimate move under sensor noise, bias, dropout and delay? | Perturbation sweeps (noise, bias, delay, dropout, outliers, single-probe faults); paired shifts vs the linear prediction, matched to 20 %. See `K05_data_disturbance/`. | done |
 | K25 | P1 | Sensor bias | How does a systematic offset bias θ, and can the residual detect it? | Constant and drifting offsets on one or all sensors; bias in θ and the change in final residual. | todo |
 | K26 | P1 | Missing data | Random vs block (sensor-failure) gaps. | Missing-at-random vs whole-sensor loss vs time gaps at matched data counts; θ error and $\kappa(F)$. | todo |
 | K27 | P1 | Timing errors | Sensitivity to timestamp misalignment and delay. | Constant delays and jitter on observation times; θ bias against delay/timescale ratio. | todo |
@@ -249,8 +249,8 @@ The theory behind trusting an estimate of unknown physics, as 50 baseline experi
 
 | ID | P | Experiment | Question | Setup and metric | Status |
 |---|---|---|---|---|---|
-| K06 | P1 | Problem-disturbance stability | Does the learned solution respect the PDE's own stability? | Perturb IC, BC and parameters; compare the PINN's response with the reference solver's (amplification ratios). | todo |
-| K07 | P1 | Empirical stability constants | How does the training residual translate into solution error? | Ratio of error to residual across PDEs and runs; compare with conditional-stability bounds (error ≤ C · (residual + quadrature error)). | todo |
+| K06 | P1 | Problem-disturbance stability | Does the learned solution respect the PDE's own stability? | IC, BC and parameter perturbations of heat and wave vs the exact response: amplification 0.7–1.2 above the surrogate's field error, noise below it. See `K06_problem_disturbance/`. | done |
+| K07 | P1 | Empirical stability constants | How does the training residual translate into solution error? | Error vs residual on an independent sample across 10 equations and 5 budgets: C ≈ 1 for the linear evolution equations, equation-dependent otherwise, and the beam's error is set by its boundary terms. See `K07_stability_constants/`. | done |
 | K32 | P0 | Verified reference solvers | Do the classical references converge at their theoretical order? | Grid-refinement studies of the FDM, method-of-lines and Cole–Hopf references; observed order vs theory, von Neumann/CFL limits. Links A04. | todo |
 | K33 | P1 | Consistency vs convergence | When does a small residual not mean a small error? | Residual and error as points and steps grow; the PINN analogue of Lax equivalence; counterexamples (Allen–Cahn, convection). | todo |
 | K34 | P1 | Structure preservation | Does the PINN respect energy laws? | Heat $L^2$ decay, wave energy conservation, Allen–Cahn free-energy monotonicity, Cahn–Hilliard mass conservation; size of violations vs error. | todo |
