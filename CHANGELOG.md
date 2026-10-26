@@ -7,7 +7,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [0.5.0] — 2026-10-26
 
 ### Changed
 - The sampling study's default resampling interval (`StudySettings.resample_every`, `pinnrl-benchmark sampling --resample-every`) is 10 steps instead of 100, following B04.

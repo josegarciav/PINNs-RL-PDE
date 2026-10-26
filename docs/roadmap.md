@@ -13,7 +13,7 @@ Package features, in the order the [research program](research.md) needs them. E
 - [x] Bug batch from the documentation audit (Well loader coordinates, LRW zero-gradient weighting, network defaults, dashboard plots). *Done: each fix has a test that fails without it (`test_audit_regressions.py`, `test_well_loader.py`).*
 - [x] Release. *Done: CI and `scripts/verify_release.sh` are green, and v0.4.0 is on PyPI via trusted publishing.*
 
-## v0.5: the inverse-modelling core (now)
+## v0.5: the inverse-modelling core (released 2026-10-26)
 
 The goal is to estimate unknown physics with known validity conditions and calibrated uncertainty. Diagnostics come before UQ methods, because an unidentifiable or ill-conditioned problem has no meaningful error bar.
 
@@ -25,7 +25,7 @@ The goal is to estimate unknown physics with known validity conditions and calib
 5. ~~**`pinnrl.uq`: calibrated uncertainty.**~~ A likelihood-based data term (σ sets the weight and the misfit tolerance); deep ensembles with a dispersion diagnostic; a Laplace approximation that reuses the Hessian machinery of `pinnrl.analysis`; the **region of equivalence** as the primary output, sampled by a cloud particle swarm over the parameters on a parametric surrogate $u_w(x, t; \theta)$, with intervals, percentiles and CDFs by counting ([theory](theory/equivalence_regions.md)); coverage, width and CRPS metrics. *Done: `pinnrl.uq`; F06/K10 (the Laplace width is exact for the random error, the 2 % bias costs coverage, ensembles over seeds cover 13 %, the physics region 90 %), K39 (the noise-model weight is worse than the tuned one because the surrogate's error is systematic) and K46 (the swarm confirms the ellipse at these noise levels and under-samples its edges) are in `experiments/`. A reference posterior (K42/K47) and the parametric surrogate (K45) remain.*
 6. ~~**Sampling follow-ups for P02.**~~ B02 (more PDEs), B03 (the RAD k, c grid), B04 (resampling frequency), B08 (point-count scaling). *Done: no sampler beats uniform significantly on smooth problems; the resampling cadence changes the Burgers error threefold and the study default moves to 10 steps; good RAD settings lie on c ≈ k/2 and a zero floor with a sharp exponent fails; the error scales as N^−1/3 on Burgers and not at all on Allen–Cahn. P02 can be drafted.*
 
-## v0.6: richer unknowns and inputs
+## v0.6: richer unknowns and inputs (now)
 
 - **Field-valued unknowns:** a learnable coefficient field $\alpha(x, t)$ or closure $f(u)$, with positivity and monotonicity constraints. *Done when: $\alpha(x)$ is recovered on heat (F09, P14).*
 - **Coupled multi-field systems** (`output_dim > 1`) with per-field BCs and loss weights. *Done when: a two-field reaction–diffusion test passes.*

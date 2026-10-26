@@ -53,8 +53,8 @@ for ax, (pde, title) in zip(axes, PDES, strict=False):
     )
     ratio = grid / control
     im = ax.imshow(np.log2(ratio), cmap="RdBu_r", vmin=-2, vmax=2, origin="lower")
-    for i, k in enumerate(KS):
-        for j, c in enumerate(CS):
+    for i in range(len(KS)):
+        for j in range(len(CS)):
             ax.text(
                 j,
                 i,

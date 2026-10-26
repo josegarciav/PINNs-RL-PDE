@@ -93,7 +93,8 @@ ax_traj.set_ylabel("ν estimate / true ν")
 ax_traj.set_title(
     f"Trajectory from 5× the truth, {TRAJ_N_OBS} observations", loc="left", fontsize=12, pad=10
 )
-ax_traj.set_yscale("log"); ax_traj.set_ylim(0.8, 8)
+ax_traj.set_yscale("log")
+ax_traj.set_ylim(0.8, 8)
 
 fig.suptitle(
     f"F03: Burgers viscosity ν = 0.01/π identified from noisy observations ({steps} Adam steps, 4×64 MLP)",
