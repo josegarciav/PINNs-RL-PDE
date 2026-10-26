@@ -67,9 +67,9 @@ The shortest path to results you can trust and publish:
 | ID | P | Experiment | Question | Setup and metric | Status |
 |---|---|---|---|---|---|
 | B01 | P0 | Main sampling benchmark | Uniform vs stratified vs RAD vs RL bandit at equal budget. | `pinnrl-benchmark sampling` on Burgers and Allen–Cahn (`x2_cos`), 10 seeds, 15k steps each (equal training points), plus a uniform-every-100-steps control. Rel. L2 vs `benchmarks.reference`. See `B01_sampling_equal_compute/`. | done |
-| B02 | P1 | All 1-D PDEs | Does B01's ranking hold on heat, wave, convection, KdV and Cahn–Hilliard? | Same protocol as B01 on each PDE. Rank table and critical-difference diagram. | todo |
+| B02 | P1 | All 1-D PDEs | Does B01's ranking hold on heat, wave, convection, KdV and Cahn–Hilliard? | Same protocol on heat, convection, wave and the KdV soliton (closed forms), 5 seeds: no sampler differs significantly from uniform on smooth problems. Cahn–Hilliard needs a reference. See `B02_more_pdes/`. | done |
 | B03 | P1 | RAD `k`, `c` grid | Which RAD hyperparameters work, and are they PDE-dependent? | k ∈ {0, 0.5, 1, 2, 4} × c ∈ {0, 0.5, 1, 2} (the Wu et al. 2023 grid) on Burgers and Allen–Cahn. Heatmap of rel. L2. | todo |
-| B04 | P1 | Resampling frequency | How often should points be resampled? | Every batch vs every 10/100 epochs vs a fixed set, for uniform and RAD. Error vs resampling interval. | todo |
+| B04 | P1 | Resampling frequency | How often should points be resampled? | Every 1/10/100/1000 steps or never, uniform and RAD, Burgers and Allen–Cahn: cadence is the main effect on Burgers (3×); RAD's best cadence is 10. See `B04_resampling_frequency/`. | done |
 | B05 | P1 | RAD candidate-pool size | Accuracy vs cost of `pool_factor`. | pool_factor ∈ {2, 4, 8, 16}, charged to the budget. Pareto front of error vs evaluations. | todo |
 | B06 | P0 | Budget fairness | Do adaptive methods still win when their extra residual evaluations count against the budget? | From the B01 run: compare at equal steps and at equal total residual evaluations (overhead counted, from per-checkpoint accounting). Report both rankings. | done (with B01) |
 | B07 | P2 | Quasi-random sequences | Do Sobol/Halton beat LHS and jittered grids? | Bring `scipy.stats.qmc` from `sampling_techniques.ipynb` into a sampler. Compare on heat and Burgers. | todo |

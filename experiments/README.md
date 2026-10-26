@@ -53,4 +53,8 @@ When an experiment shows that a feature works, move the reusable code into
 | `F06_coverage/` | F06, K10 | Coverage, width and CRPS of ensemble, Laplace, Fisher and swarm intervals over synthetic data sets. `run.py`. |
 | `K39_likelihood_weighting/` | K39 | The data weight from the noise model vs fixed weights. `run.py`. |
 | `K46_swarm_equivalence/` | K46 | Swarm sampling of the region of equivalence on closed-form misfits vs the Fisher ellipse. `run.py`. |
+| `B02_more_pdes/` | B02 | The B01 samplers on heat, convection, wave and the KdV soliton. `run.py`, `plot.py`. |
+| `B03_rad_grid/` | B03 | The RAD (k, c) grid on Burgers and Allen–Cahn. `run.py`. |
+| `B04_resampling_frequency/` | B04 | Error vs resampling interval for uniform and RAD. `run.py`, `plot.py`. |
+| `B08_point_count/` | B08 | Error vs collocation count for uniform and RAD. `run.py`. |
 | `B07_quasi_random_sampling/` | B07 | Visual comparison of uniform, LHS and Halton point sets. Formerly `notebooks/sampling_techniques.ipynb`. |
