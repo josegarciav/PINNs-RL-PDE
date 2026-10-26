@@ -125,3 +125,15 @@ def test_summaries_at_equal_steps_and_equal_evals(tmp_path):
         ("evals", "rad"),
     }
     assert (tmp_path / "curves.json").exists() and (tmp_path / "settings.json").exists()
+
+
+def test_catalogue_entries_join_the_study():
+    from pinnrl.benchmarks.sampling_study import StudySettings, build_reference, run_study_case
+
+    ref = build_reference("heat", nx=33, nt=9)
+    assert ref.u.shape == (33, 9) and abs(ref.u[16, 0] - 1.0) < 1e-5  # sin(pi/2) at t = 0
+    settings = StudySettings(num_steps=20, n_checkpoints=2, resample_every=10, n_collocation=64)
+    run = run_study_case("heat", "rad", 0, settings, ref)
+    assert run.steps == 20 and run.rel_l2 > 0
+    with pytest.raises(ValueError, match="Unknown pde"):
+        build_reference("lorenz")

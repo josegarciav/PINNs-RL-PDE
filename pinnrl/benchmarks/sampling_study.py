@@ -191,11 +191,68 @@ _REFERENCES: dict[str, Callable[[], ReferenceSolution]] = {
 }
 
 
-def build_reference(pde_name: str) -> ReferenceSolution:
-    """Compute the numerical reference for a study PDE."""
-    if pde_name not in _REFERENCES:
-        raise ValueError(f"Unknown pde {pde_name!r}. Supported: {STUDY_PDES}")
-    return _REFERENCES[pde_name]()
+def _catalogue_entry(pde_name: str):
+    """A one-dimensional, time-dependent catalogue entry with a closed form, or ``None``."""
+    from pinnrl.pdes.catalog import CATALOG, from_catalog
+
+    if pde_name not in CATALOG:
+        return None
+    pde = from_catalog(pde_name)
+    if not (
+        pde.has_exact_solution
+        and pde.time_dependent
+        and pde.dimension == 1
+        and len(pde.fields) == 1
+    ):
+        raise ValueError(
+            f"Unknown pde {pde_name!r} for the study: a catalogue entry needs a closed form, one "
+            "spatial coordinate, time and one field to join it"
+        )
+    return pde
+
+
+def _build_pde(pde_name: str, device: torch.device) -> PDEBase:
+    if pde_name in _PDE_BUILDERS:
+        return _PDE_BUILDERS[pde_name](device)
+    from pinnrl.pdes.catalog import from_catalog
+
+    if _catalogue_entry(pde_name) is None:
+        raise ValueError(
+            f"Unknown pde {pde_name!r}. Supported: {STUDY_PDES} or a catalogue entry with a closed form"
+        )
+    return from_catalog(pde_name, device=device)
+
+
+def _check_pde(pde_name: str) -> None:
+    if pde_name not in _PDE_BUILDERS and _catalogue_entry(pde_name) is None:
+        raise ValueError(
+            f"Unknown pde {pde_name!r}. Supported: {STUDY_PDES} or a catalogue entry with a closed form"
+        )
+
+
+def build_reference(pde_name: str, nx: int = 256, nt: int = 101) -> ReferenceSolution:
+    """The numerical reference for a study PDE, or the closed form of a catalogue entry on a grid."""
+    if pde_name in _REFERENCES:
+        return _REFERENCES[pde_name]()
+    pde = _catalogue_entry(pde_name)
+    if pde is None:
+        raise ValueError(
+            f"Unknown pde {pde_name!r}. Supported: {STUDY_PDES} or a catalogue entry with a closed form"
+        )
+    (x_lo, x_hi), (t_lo, t_hi) = pde.domain[0], pde.time_domain
+    x = np.linspace(x_lo, x_hi, nx)
+    t = np.linspace(t_lo, t_hi, nt)
+    xx, tt = np.meshgrid(x, t, indexing="ij")
+    with torch.no_grad():
+        u = (
+            pde.exact_solution(
+                torch.tensor(xx.reshape(-1, 1), dtype=torch.float32),
+                torch.tensor(tt.reshape(-1, 1), dtype=torch.float32),
+            )[:, 0]
+            .numpy()
+            .reshape(nx, nt)
+        )
+    return ReferenceSolution(x=x, t=t, u=u)
 
 
 def _build_trainer(pde: PDEBase, settings: StudySettings, device: torch.device) -> PDETrainer:
@@ -294,8 +351,7 @@ def run_study_case(
     device: torch.device | None = None,
 ) -> StudyRun:
     """Train one PINN for ``settings.num_steps`` steps under one sampler."""
-    if pde_name not in _PDE_BUILDERS:
-        raise ValueError(f"Unknown pde {pde_name!r}. Supported: {STUDY_PDES}")
+    _check_pde(pde_name)
     if strategy not in STUDY_STRATEGIES:
         raise ValueError(f"Unknown strategy {strategy!r}. Supported: {STUDY_STRATEGIES}")
     chunk = settings.chunk
@@ -309,7 +365,7 @@ def run_study_case(
 
     torch.manual_seed(seed)
     np.random.seed(seed)
-    pde = _PDE_BUILDERS[pde_name](device)
+    pde = _build_pde(pde_name, device)
     trainer = _build_trainer(pde, settings, device)
     torch.manual_seed(seed + 10_000)  # sampling stream, independent of the init
 
@@ -372,8 +428,7 @@ def run_sampling_study(
     """
     settings = settings or StudySettings()
     for name in pdes:
-        if name not in _PDE_BUILDERS:
-            raise ValueError(f"Unknown pde {name!r}. Supported: {STUDY_PDES}")
+        _check_pde(name)
     for name in strategies:
         if name not in STUDY_STRATEGIES:
             raise ValueError(f"Unknown strategy {name!r}. Supported: {STUDY_STRATEGIES}")
