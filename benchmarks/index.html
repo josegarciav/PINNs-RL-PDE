@@ -1,0 +1,1999 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Physics-informed neural networks for forward and inverse PDE problems, evaluated against numerical references">
+      
+      
+      
+        <link rel="canonical" href="https://josegarciav.github.io/PINNs-RL-PDE/benchmarks/">
+      
+      
+        <link rel="prev" href="../dashboard/">
+      
+      
+        <link rel="next" href="../applications/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Benchmarks - pinnrl</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#benchmarks" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="pinnrl" class="md-header__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            pinnrl
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Benchmarks
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../getting_started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../concepts/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Concepts
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../equations/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Equations
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../theory/" class="md-tabs__link">
+          
+  
+  
+  Theory
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../custom_equations/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../applications/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Applications
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../research/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Research program
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+  API reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="pinnrl" class="md-nav__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    pinnrl
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Theory
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/well_posedness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Well-posedness and stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/identifiability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identifiability and conditioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/bayesian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Bayesian view and uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/numerical_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The numerical-analysis bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/equivalence_regions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equivalence regions and swarm sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../custom_equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Custom equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inverse_problems/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverse problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets (The Well)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#classical-baselines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classical baselines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference solutions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-study-experiments-b01-and-b06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling study (experiments B01 and B06)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#identification-baseline-experiment-f01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identification baseline (experiment F01)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conditioning-diagnostics-experiment-k01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditioning diagnostics (experiment K01)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#training-conditioning-experiment-k03" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training conditioning (experiment K03)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#disturbance-and-stability-experiments-k05k07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disturbance and stability (experiments K05–K07)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calibrated-uncertainty-experiments-f06-k10-k39-k46" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calibrated uncertainty (experiments F06, K10, K39, K46)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-follow-ups-experiments-b02-b03-b04-b08" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling follow-ups (experiments B02, B03, B04, B08)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../applications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Applications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research program
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/neural_networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neural networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/pdes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDEs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/rl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL sampler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/plots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/uq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#classical-baselines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classical baselines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference solutions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-study-experiments-b01-and-b06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling study (experiments B01 and B06)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#identification-baseline-experiment-f01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identification baseline (experiment F01)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conditioning-diagnostics-experiment-k01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditioning diagnostics (experiment K01)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#training-conditioning-experiment-k03" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training conditioning (experiment K03)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#disturbance-and-stability-experiments-k05k07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disturbance and stability (experiments K05–K07)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calibrated-uncertainty-experiments-f06-k10-k39-k46" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calibrated uncertainty (experiments F06, K10, K39, K46)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-follow-ups-experiments-b02-b03-b04-b08" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling follow-ups (experiments B02, B03, B04, B08)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="benchmarks">Benchmarks<a class="headerlink" href="#benchmarks" title="Permanent link">&para;</a></h1>
+<p><code>pinnrl-benchmark</code> has two parts: classical baselines, so PINN accuracy has a reference point, and a multi-seed study that compares collocation samplers fairly. Every number below can be reproduced with the commands shown.</p>
+<h2 id="classical-baselines">Classical baselines<a class="headerlink" href="#classical-baselines" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pinnrl-benchmark<span class="w"> </span>fdm<span class="w"> </span>--pde<span class="w"> </span>heat<span class="w">     </span><span class="c1"># explicit finite differences, periodic 1-D heat</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pinnrl-benchmark<span class="w"> </span>fdm<span class="w"> </span>--pde<span class="w"> </span>wave<span class="w">     </span><span class="c1"># leap-frog, periodic 1-D travelling wave</span>
+</code></pre></div>
+<p>Both report the relative L2 error at the final time against the analytical solution, plus the maximum error and the wall time. On the default heat problem (<span class="arithmatex">\(\alpha = 0.1\)</span>, <span class="arithmatex">\(u_0 = \sin 2\pi x\)</span>, 101 points), the explicit scheme reaches a relative L2 error of about <span class="arithmatex">\(7 \times 10^{-4}\)</span> in about 30 ms. The convergence is second order: doubling the points at a fixed diffusion number cuts the error about four-fold. That's the bar a PINN is measured against on forward problems.</p>
+<h2 id="reference-solutions">Reference solutions<a class="headerlink" href="#reference-solutions" title="Permanent link">&para;</a></h2>
+<p>When there is no closed form, PINNs are scored against high-accuracy numerical references (<code>pinnrl.benchmarks.reference</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Reference</th>
+<th>Method</th>
+<th>Verification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>burgers_reference</code></td>
+<td>Cole–Hopf integral evaluated by a log-sum-exp trapezoid rule</td>
+<td>Reproduces Basdevant et al. (1986): <span class="arithmatex">\(u_x(0, 1.6037/\pi) = -152.00516\)</span> for <span class="arithmatex">\(\nu = 0.01/\pi\)</span>; agrees with a fine finite-difference solve to <span class="arithmatex">\(7 \times 10^{-5}\)</span></td>
+</tr>
+<tr>
+<td><code>allen_cahn_reference</code></td>
+<td>Second-order finite differences plus adaptive Runge–Kutta (method of lines) on a grid 8× finer than the output</td>
+<td>Grid-converged: doubling the solver grid changes the field by less than <span class="arithmatex">\(10^{-5}\)</span> (relative)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sampling-study-experiments-b01-and-b06">Sampling study (experiments B01 and B06)<a class="headerlink" href="#sampling-study-experiments-b01-and-b06" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pinnrl-benchmark<span class="w"> </span>sampling<span class="w"> </span>--seeds<span class="w"> </span><span class="m">10</span><span class="w"> </span>--steps<span class="w"> </span><span class="m">15000</span><span class="w"> </span>--checkpoints<span class="w"> </span><span class="m">50</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">4</span>
+</code></pre></div>
+<p><strong>Setup:</strong>
+- The Burgers (<span class="arithmatex">\(\nu = 0.01/\pi\)</span>) and Allen–Cahn (<span class="arithmatex">\(u_t = 0.001\,u_{xx} + 5(u - u^3)\)</span>, <span class="arithmatex">\(u_0 = x^2\cos\pi x\)</span>) benchmarks.
+- A tanh MLP (4 × 64) trained for 15,000 Adam steps on 1,000 points, with 10 paired seeds (identical initial weights across samplers).
+- Five samplers:
+  - uniform and stratified, with fresh points every step;
+  - uniform refreshed every 100 steps, a control for how often points change;
+  - RAD (k = 1, c = 1) and the RL bandit, also every 100 steps.
+- Each run records the relative L2 error and the residual evaluations spent, including the sampler's own (RAD +20 %, bandit +0.3 %). Samplers are compared at equal steps (B01) and at equal total evaluations (B06).</p>
+<p><img alt="B01 sampling study" src="../assets/benchmarks/b01_sampling.png" /></p>
+<table>
+<thead>
+<tr>
+<th>PDE</th>
+<th>Sampler</th>
+<th>Rel. L2, equal steps</th>
+<th>vs uniform (paired)</th>
+<th>Rel. L2, equal evaluations</th>
+<th>vs uniform</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Burgers</td>
+<td>uniform</td>
+<td>0.055</td>
+<td>–</td>
+<td>0.055</td>
+<td>–</td>
+</tr>
+<tr>
+<td></td>
+<td>stratified</td>
+<td>0.038</td>
+<td>6/10, p = 0.63</td>
+<td>0.038</td>
+<td>6/10, p = 0.63</td>
+</tr>
+<tr>
+<td></td>
+<td>RAD</td>
+<td>0.136</td>
+<td>3/10, p = 0.11</td>
+<td>0.090</td>
+<td>2/10, p = 0.06</td>
+</tr>
+<tr>
+<td></td>
+<td>RL bandit</td>
+<td>0.117</td>
+<td>1/10, p = 0.06</td>
+<td>0.105</td>
+<td>2/10, <strong>p = 0.01 (worse)</strong></td>
+</tr>
+<tr>
+<td>Allen–Cahn</td>
+<td>uniform</td>
+<td>0.568</td>
+<td>–</td>
+<td>0.568</td>
+<td>–</td>
+</tr>
+<tr>
+<td></td>
+<td>RAD</td>
+<td>0.533</td>
+<td><strong>10/10, p = 0.002</strong></td>
+<td>0.547</td>
+<td><strong>10/10, p = 0.002</strong></td>
+</tr>
+<tr>
+<td></td>
+<td>RL bandit</td>
+<td>0.520</td>
+<td><strong>10/10, p = 0.002</strong></td>
+<td>0.518</td>
+<td><strong>10/10, p = 0.002</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Errors are medians over 10 seeds; "6/10" counts the seeds on which the sampler beat uniform; p is from a Wilcoxon signed-rank test.</p>
+<p><strong>What this says:</strong></p>
+<ul>
+<li><strong>Burgers.</strong> No sampler is significantly better than uniform. Seed-to-seed variation (6×) and optimizer noise (the error moves 1.7× between checkpoints at a constant learning rate) swamp any sampling effect. Charged its probe cost, the bandit is significantly worse.</li>
+<li><strong>Allen–Cahn.</strong> Adaptive samplers win on every seed and the bandit gets there with about 40 % fewer evaluations early on. But every method stays stuck near the wrong solution (relative error above 0.5).</li>
+<li><strong>Recommendation:</strong> use <code>uniform</code> (or <code>stratified</code>) by default. Use <code>residual_based</code> (RAD) when the solution has sharp features, and measure it against uniform at equal budget. Treat <code>--rl</code> as experimental.</li>
+</ul>
+<p>The full write-up, with IQRs, the same-cadence control and the follow-ups it motivates (optimizer settling, resampling frequency, Allen–Cahn failure modes), is in <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B01_sampling_equal_compute"><code>experiments/B01_sampling_equal_compute</code></a>.</p>
+<h2 id="identification-baseline-experiment-f01">Identification baseline (experiment F01)<a class="headerlink" href="#identification-baseline-experiment-f01" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python<span class="w"> </span>experiments/F01_heat_alpha_recovery/run.py<span class="w"> </span>--seeds<span class="w"> </span><span class="m">10</span><span class="w"> </span>--steps<span class="w"> </span><span class="m">5000</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">4</span>
+</code></pre></div>
+<p>The diffusivity of the 1-D heat equation (<span class="arithmatex">\(\alpha = 0.1\)</span>, started at 0.5) is identified from 20 to 1,000 noisy observations of the exact solution, for noise standard deviations from 0 to 0.1, on 10 seeds. The <code>heat</code> entry of the <a href="../custom_equations/#the-catalogue">catalogue</a> is used with <code>alpha</code> trainable; a 4 × 64 MLP trains for 5,000 Adam steps with loss weights residual / BC / IC / data = 1 / 10 / 10 / 10.</p>
+<p><img alt="F01" src="../assets/benchmarks/f01_heat_alpha.png" /></p>
+<table>
+<thead>
+<tr>
+<th>Noise σ</th>
+<th><span class="arithmatex">\(N_{\text{obs}}\)</span> = 20</th>
+<th>50</th>
+<th>200</th>
+<th>1000</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>0.017</td>
+<td>0.019</td>
+<td>0.020</td>
+<td>0.015</td>
+</tr>
+<tr>
+<td>0.01</td>
+<td>0.027</td>
+<td>0.016</td>
+<td>0.019</td>
+<td>0.017</td>
+</tr>
+<tr>
+<td>0.05</td>
+<td>0.041</td>
+<td>0.033</td>
+<td>0.021</td>
+<td>0.020</td>
+</tr>
+<tr>
+<td>0.1</td>
+<td>0.054</td>
+<td>0.055</td>
+<td>0.024</td>
+<td>0.025</td>
+</tr>
+</tbody>
+</table>
+<p>Median relative error of <span class="arithmatex">\(\hat\alpha\)</span> over 10 seeds.</p>
+<p><strong>What this says:</strong></p>
+<ul>
+<li><strong>A 2 % floor that data cannot lower.</strong> With clean or lightly noisy data every seed lands at <span class="arithmatex">\(\hat\alpha \approx 0.098\)</span> whatever the number of observations. The Cramér–Rao bound for 1,000 points is 0.2 %, so the floor is the surrogate's own forward error (2–3 % in <span class="arithmatex">\(u\)</span>), absorbed by the parameter.</li>
+<li><strong>Above the floor, near-efficient.</strong> For σ ≥ 0.05 the spread of <span class="arithmatex">\(\hat\alpha\)</span> across seeds matches the Cramér–Rao bound from the same points to within about 20 %, so the Fisher information predicts how many sensors a target accuracy needs.</li>
+<li><strong>Few noisy points bias low.</strong> At 20 points the bias grows with noise (−3 %, −5 %, −9 %): the physics loss prefers a smoother, slower-diffusing field when the fixed data weight ignores the noise level.</li>
+<li><strong>Field error does not predict parameter error.</strong> The relative L2 error of <span class="arithmatex">\(u\)</span> is 2–4 % in every cell while the median error of α spans 1.5–5.5 % and single seeds reach 22 %.</li>
+</ul>
+<p>The full write-up, with IQRs, the spread against the bound per cell, and the follow-ups (the floor after optimizer settling, K01 Fisher information, K39 likelihood weighting), is in <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F01_heat_alpha_recovery"><code>experiments/F01_heat_alpha_recovery</code></a>.</p>
+<p><strong>Initial guess (experiment F04).</strong> Ten starting values from 0.1× to 10× the truth, on one data set per seed (200 observations, noise 0.05). For a fixed data set the ten starts land within 0.3 % of each other, six times less than the spread across seeds; the two seeds that end 5–7 % low do so for every start. Starts far above the truth settle in 700–900 steps, sooner than starts near it. The estimate is a function of the data, not of the guess. Write-up: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F04_initial_guess"><code>experiments/F04_initial_guess</code></a>.</p>
+<p><strong>Fixed sensors (experiment F05).</strong> Plant-like data: 1, 2, 4 or 8 probes at fixed positions read at regular times, against random scatter, all with 200 observations. One probe at mid-domain has the lowest Cramér–Rao bound (1.2 % at noise 0.05 against 1.7 % for scatter) and the PINN delivers it (median error 1.1 % against 1.9 %), because the information about α sits at mid-domain and late times. Spreading the same readings over 8 positions raises the bound and the measured spread alike. Dense time series also halve the low-noise bias. Write-up: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F05_fixed_sensors"><code>experiments/F05_fixed_sensors</code></a>.</p>
+<h2 id="conditioning-diagnostics-experiment-k01">Conditioning diagnostics (experiment K01)<a class="headerlink" href="#conditioning-diagnostics-experiment-k01" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>python<span class="w"> </span>experiments/K01_fisher_information/run.py<span class="w"> </span>--seeds<span class="w"> </span><span class="m">3</span>
+</code></pre></div>
+<p><code>pinnrl.analysis.surrogate_sensitivities</code> computes <span class="arithmatex">\(\partial u / \partial\theta\)</span> from a trained network by the implicit-function theorem (matrix-free Hessian blocks, a MINRES solve), and <code>fisher_information</code> turns it into the Cramér–Rao bound. K01 checks this against the exact layer: on heat and the two-parameter KdV soliton the bounds, the α–β correlation and the condition number agree to 1–4 % (Jacobians to 2–6 %). On Burgers at <span class="arithmatex">\(\nu = 0.01/\pi\)</span> the network smooths the shock and its bound is 2–25× too optimistic. The surrogate's Fisher information is trusted only where its forward error is small compared with the feature the parameter acts on, and the field error is reported next to it. Write-up: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K01_fisher_information"><code>experiments/K01_fisher_information</code></a>; the live demo is in <code>notebooks/07_conditioning.ipynb</code>.</p>
+<p><strong>Two parameters, and a shock (experiments F02, F03).</strong> For the KdV soliton with two coefficients the bound says 200 clean points determine (α, β) to 0.6 % and 1.4 %; the PINN returns them 18 % and 25 % low on every seed, and a run started at the truth drifts to the same point: the minimum of the PINN loss is not at the truth, because the network cannot zero the third-derivative residual of the true soliton. A tenfold data weight halves the bias. For the Burgers viscosity at ν = 0.01/π the network resolves a shock several times wider than the real one and reports a viscosity 2.5–5× too large, still falling at 10,000 steps. The surrogate floor therefore orders as heat 2 %, KdV soliton 20 %, Burgers shock 150 %, and above it the spread across seeds still follows the bound. Write-ups: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F02_kdv_joint"><code>experiments/F02_kdv_joint</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F03_burgers_nu"><code>experiments/F03_burgers_nu</code></a>.</p>
+<p><strong>Profile likelihood (experiment F07).</strong> With α fixed on a grid and the network retrained, the misfit of the exact solution reproduces the Fisher parabola to 2 %, while the PINN's data misfit is 2.5–12× flatter: the network deviates from the PDE instead of reproducing the wrong solution. Profile likelihood with a PINN needs hard physics or the full weighted loss. Write-up: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F07_profile_likelihood"><code>experiments/F07_profile_likelihood</code></a>.</p>
+<h2 id="training-conditioning-experiment-k03">Training conditioning (experiment K03)<a class="headerlink" href="#training-conditioning-experiment-k03" title="Permanent link">&para;</a></h2>
+<p>Across eight operators and two architectures after 3,000 steps, the architecture sets the conditioning, not the operator order: a tanh MLP's residual tangent kernel has a condition number near <span class="arithmatex">\(10^8\)</span> for every problem, Fourier features bring it down by three to five orders but make the residual kernel's trace <span class="arithmatex">\(10^3\)</span>–<span class="arithmatex">\(4 \times 10^3\)</span> times the boundary kernel's on wave-type and fourth-order problems (the gradient pathology), and no run is at a minimum (every Hessian has a negative Ritz value whose size tracks the final loss). Write-up: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K03_training_conditioning"><code>experiments/K03_training_conditioning</code></a>; the tools are <code>pinnrl.analysis.loss_hessian_spectrum</code> and <code>tangent_kernel_spectrum</code>.</p>
+<h2 id="disturbance-and-stability-experiments-k05k07">Disturbance and stability (experiments K05–K07)<a class="headerlink" href="#disturbance-and-stability-experiments-k05k07" title="Permanent link">&para;</a></h2>
+<p><strong>Data disturbances (K05).</strong> For the identified heat diffusivity, a sensor bias or a timestamp delay shifts the estimate by the linear prediction <span class="arithmatex">\(F^{-1}J^\top\delta y\)</span> to within 20 %, with negligible scatter across seeds; a bias of the noise level moves α by 18 % and nothing in the residual flags it. Dropout of 75 % of the points or of a whole probe costs information, not accuracy. Outliers break the squared-error data term and raise the residual 10–25×, which makes the residual a detector for them. <strong>Problem perturbations (K06).</strong> A trained field responds to a change of initial data, boundary data or a coefficient as the exact solution does (amplification 0.7–1.2) when the change exceeds the surrogate's own field error, and not at all below it: the field error is the resolution of a trained surrogate. <strong>Stability constants (K07).</strong> On an independent sample the error falls in proportion to the residual with a constant near 1 for heat, convection, wave, Klein–Gordon and heat in 2-D, and an equation-dependent constant otherwise; for the beam the error stalls while the residual falls, because the boundary and initial mismatches are the binding terms. Write-ups: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K05_data_disturbance"><code>K05_data_disturbance</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K06_problem_disturbance"><code>K06_problem_disturbance</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K07_stability_constants"><code>K07_stability_constants</code></a>; the tools are <code>pinnrl.analysis.perturb_observations</code>, <code>linear_response</code> and <code>stability_ratio</code>.</p>
+<h2 id="calibrated-uncertainty-experiments-f06-k10-k39-k46">Calibrated uncertainty (experiments F06, K10, K39, K46)<a class="headerlink" href="#calibrated-uncertainty-experiments-f06-k10-k39-k46" title="Permanent link">&para;</a></h2>
+<p>Over 30 synthetic data sets, the interval the Laplace posterior gives for the identified heat diffusivity (the surrogate's Fisher information, <code>pinnrl.uq.laplace_posterior</code>) has a standard deviation equal to the spread of the estimate across data sets to three digits, and covers the truth 77 % of the time instead of 90 % only because every estimate is 2 % low (the surrogate floor). An ensemble over initializations covers 13 %: it measures the initialization noise, a quarter of the data noise. The likelihood-ratio region of the exact misfit sampled by the swarm covers 90 %. Setting the data weight from the Gaussian noise model makes the estimate worse (bias up to −21 % at low weights), because the residual of a trained PINN is a systematic approximation error, not noise; the balance weight is set by the surrogate's floor relative to the noise. On closed-form misfits the swarm's region coincides with the Fisher ellipse at these noise levels and under-samples its edges, which K47 addresses. Write-ups: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F06_coverage"><code>F06_coverage</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K39_likelihood_weighting"><code>K39_likelihood_weighting</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K46_swarm_equivalence"><code>K46_swarm_equivalence</code></a>.</p>
+<h2 id="sampling-follow-ups-experiments-b02-b03-b04-b08">Sampling follow-ups (experiments B02, B03, B04, B08)<a class="headerlink" href="#sampling-follow-ups-experiments-b02-b03-b04-b08" title="Permanent link">&para;</a></h2>
+<p>On heat, convection, wave and the KdV soliton no sampler differs significantly from fresh uniform points (errors 0.2–2.5 %, 5 paired seeds); RAD has the best median on three of the four and narrows the spread (B02). On Burgers the resampling cadence changes the error threefold, more than any choice of sampler at a fixed cadence, and RAD's best cadence is every 10 steps, which is now the study's default (B04). Good RAD settings on Burgers lie on <span class="arithmatex">\(c \approx k/2\)</span>, and a zero uniform floor with a sharp exponent is three times worse than uniform; on Allen–Cahn every setting is equally and modestly better than uniform (B03). The error falls as about <span class="arithmatex">\(N^{-1/3}\)</span> in the number of collocation points on Burgers, for uniform and RAD alike, and not at all on Allen–Cahn, while cost is linear in <span class="arithmatex">\(N\)</span> (B08). Write-ups: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B02_more_pdes"><code>B02_more_pdes</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B03_rad_grid"><code>B03_rad_grid</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B04_resampling_frequency"><code>B04_resampling_frequency</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B08_point_count"><code>B08_point_count</code></a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
