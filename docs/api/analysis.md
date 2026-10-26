@@ -21,3 +21,13 @@ Conditioning and identifiability diagnostics for identified parameters (`pinnrl.
 ::: analysis.spectrum.tangent_kernel_spectrum
 
 ::: analysis.spectrum.KernelSpectrum
+
+::: analysis.disturbance.perturb_observations
+
+::: analysis.disturbance.linear_response
+
+::: analysis.disturbance.stability_ratio
+
+::: analysis.disturbance.StabilityRatio
+
+::: analysis.disturbance.field_response

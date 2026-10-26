@@ -75,6 +75,7 @@ nav:
     - Identifiability and conditioning: theory/identifiability.md
     - The Bayesian view and uncertainty: theory/bayesian.md
     - The numerical-analysis bridge: theory/numerical_analysis.md
+    - Equivalence regions and swarm sampling: theory/equivalence_regions.md
   - Guides:
     - Custom equations: custom_equations.md
     - Training: training.md
