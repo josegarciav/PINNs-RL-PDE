@@ -127,12 +127,12 @@ The shortest path to results you can trust and publish:
 | ID | P | Experiment | Question | Setup and metric | Status |
 |---|---|---|---|---|---|
 | F01 | P0 | Heat α recovery baseline | Accuracy of α vs noise and number of observations. | noise ∈ {0, 0.01, 0.05, 0.1} × N_obs ∈ {20, 50, 200, 1000}, 10 seeds, vs the Cramér–Rao bound. Relative error of α. See `F01_heat_alpha_recovery/`. | done |
-| F02 | P1 | Joint KdV (α, β) | Are two parameters jointly identifiable? | Recovery error and correlation of the estimates across seeds. | todo |
-| F03 | P1 | Burgers ν near the shock | Recovery of ν at ν = 0.01/π. | Same noise grid as F01. | todo |
+| F02 | P1 | Joint KdV (α, β) | Are two parameters jointly identifiable? | Recovery error and correlation across seeds vs the 2 × 2 Cramér–Rao bound, plus a follow-up (truth start, long training, data weight). The surrogate's optimum sits 20 % off. See `F02_kdv_joint/`. | done (rerun after D01/D02, K39) |
+| F03 | P1 | Burgers ν near the shock | Recovery of ν at ν = 0.01/π. | Same noise grid as F01, log ν identified, bound from the Cole–Hopf reference. ν overestimated 2.5–5× by the unresolved shock. See `F03_burgers_nu/`. | done (rerun after shock resolution) |
 | F04 | P1 | Initial-guess sensitivity | Does the estimate depend on the starting guess? | 10 initial guesses spanning 0.1–10× the true value, 10 seeds, heat α. See `F04_initial_guess/`. | done |
 | F05 | P1 | Fixed sensors | Plant-like data: a few fixed probe locations, densely sampled in time. | 1–8 fixed x positions vs random scatter at 200 points, 3 noise levels, 10 seeds, vs the layout's Cramér–Rao bound. See `F05_fixed_sensors/`. | done |
 | F06 | P1 | Uncertainty and coverage | Are ensemble confidence intervals for α calibrated? | 10-member ensembles over 50 synthetic datasets. Empirical coverage of the 90% CI. | todo |
-| F07 | P2 | Profile likelihood | Practical identifiability via profile likelihood. | Fix α on a grid, retrain, plot the loss profile. Flat profile means not identifiable. | todo |
+| F07 | P2 | Profile likelihood | Practical identifiability via profile likelihood. | Fix α on a grid, retrain; data-misfit profile vs the exact-solution profile and the Fisher parabola. The exact profile reproduces F; the PINN profile is 2.5–12× flatter. See `F07_profile_likelihood/`. | done |
 | F08 | P2 | Model-form error | What does a parameter estimate absorb when the model is wrong? | Fit a heat model with unknown α to Burgers data. Bias, and the residual structure. | todo |
 | F09 | P2 | Time-varying parameter | Can a drifting α(t), fouling-like, be recovered? | Small network for α(t). Synthetic linear and step drifts. | todo |
 | F10 | P2 | Classical baseline | PINN inverse vs least squares around an FDM forward model. | `scipy.optimize` + `benchmarks/fdm.py`. Accuracy and time. | todo |
@@ -222,7 +222,7 @@ The theory behind trusting an estimate of unknown physics, as 50 baseline experi
 
 | ID | P | Experiment | Question | Setup and metric | Status |
 |---|---|---|---|---|---|
-| K03 | P1 | Training conditioning | Is PINN training ill-conditioned by the differential operator? | Loss-Hessian / NTK spectra (Lanczos) across PDEs and architectures; condition number vs final error. | todo |
+| K03 | P1 | Training conditioning | Is PINN training ill-conditioned by the differential operator? | Loss-Hessian (Lanczos) and tangent-kernel spectra across 8 operators × 2 architectures. Architecture dominates operator order at 3k steps. See `K03_training_conditioning/`. | done |
 | K04 | P2 | Preconditioning | Do second-order or preconditioned optimizers fix K03's ill-conditioning? | L-BFGS, Gauss–Newton and NysNewton-CG vs Adam on the worst K03 cases, at equal budget. Links D10. | todo |
 | K18 | P1 | Conditioning vs PDE order | How does κ grow with derivative order? | Hessian condition number for 2nd (heat), 3rd (KdV) and 4th (Cahn–Hilliard) order at matched networks; fitted growth law. | todo |
 | K19 | P1 | Conditioning vs sharpness | How does κ scale with frequency or interface width? | Heat frequency k, Burgers ν and Allen–Cahn ε sweeps; κ and error against the parameter (log–log slope). | todo |
