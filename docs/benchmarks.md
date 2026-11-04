@@ -164,3 +164,16 @@ The F09 fields in a cosine basis: the Fisher spectrum of the modes from the refe
 - With an exact forward model, 200 observations at noise 0.01 determine all eight modes of either field to 0.001–0.006, with no null space: F09's collapse of the bump is the surrogate's limit, not the data's.
 - A 6-mode basis recovers the same (biased) field as the network, with coefficients reproducible across seeds to three digits: the PINN's optimum in the field sits 10–50 Fisher standard deviations from the truth. Forward accuracy, not the representation, is the bottleneck of field identification.
 - The reference solver serves the swarm as a forward model (1,440 solves a minute); the swarm under-samples the region at 0.2–0.7 of the Fisher half-widths, and a 4-mode truncation is model-form error that the fit absorbs.
+
+## Optimizers and the floor (experiments D01, D02)
+
+Adam, L-BFGS and Adam→L-BFGS at matched wall-clock time on heat, Burgers and Allen–Cahn, and the heat-diffusivity floor cell of F01 without the packaged regularization. Details in `experiments/D01_optimizer_baseline/README.md`.
+
+- **The 2 % floor of F01–F09 was the packaged weight decay and gradient clipping of the network**, not the surrogate: with both off, Adam identifies $\alpha$ to 0.4 % with a 0.23 % field error, and an L-BFGS finish halves that again (0.2 %, 0.1 %). Every inverse experiment is being reread with the clean configuration (F01 `--clean`).
+- L-BFGS reaches $2 \times 10^{-4}$ on heat in 120 s against Adam's $10^{-3}$, is 2–3 times better on Burgers, and halves Allen–Cahn's error where Adam makes no progress. The switch point hardly matters when both phases work; an early switch on Burgers diverged in 3 of 6 runs, so the trainer needs a step safeguard before `adam_lbfgs` becomes a default.
+
+## The swarm as a posterior sample (experiment K47)
+
+Every position a cloud swarm evaluates, weighted by its likelihood, against the exact posterior on heat $\alpha$ and the damped pendulum. Details in `experiments/K47_swarm_posterior/README.md`.
+
+- The weighted swarm is centred on the posterior mean (within 0.05 standard deviations) but 0.5–0.7 as wide, with 80–87 % coverage at the 90 % level: importance weights cannot recover tails the swarm never visits. The accepted (likelihood-ratio) set is wider and covers 90–100 %; widened by K46's factor it is the usable interval. For a density, use a sampler, with the parametric surrogate (K45) as its cheap forward model.

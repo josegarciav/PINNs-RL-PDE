@@ -46,6 +46,11 @@ When an experiment shows that a feature works, move the reusable code into
 | `F03_burgers_nu/` | F03 | Burgers viscosity near the shock, identified as log ν, against a finite-difference bound from the Cole–Hopf reference. `run.py`, `plot.py`. |
 | `F07_profile_likelihood/` | F07 | Profile likelihood of the heat diffusivity: the data misfit at fixed α on a grid, against the Fisher parabola. `run.py`. |
 | `F09_field_unknowns/` | F09 | Recovery of a drifting α(t) (linear, step) and a coefficient field α(x) (bump, two layers) on heat with `UnknownFunction`, against the best constant. README with results, `run.py`, `plot.py`. |
+| `D01_optimizer_baseline/` | D01, D02 | Adam vs L-BFGS vs Adam→L-BFGS at matched wall-clock on heat, Burgers and Allen–Cahn, the switch point, and the F01 floor cell without regularization. README with results, `run.py`. |
+| `F11_change_point/` | F11 | The time of a jump in α(t) as a trainable parameter vs F09's network (first pass under the default training). README, `run.py`. |
+| `K47_swarm_posterior/` | K47 | The swarm's weighted and accepted positions against the exact posterior on heat α and the pendulum. README with results, `run.py`. |
+| `K45_parametric_surrogate/` | K45 | A network with the parameters as inputs over the prior range vs per-value training, and as the swarm's forward model. `run.py` (results pending). |
+| `J01_evaporator_reference/` | J01, J02 | The falling-film evaporator reference simulator (steady, dynamic, grid convergence, scenarios) and its PINN forward solve. `run.py`, `plot.py` (results pending). |
 | `K48_reduced_bases/` | K48 | The F09 fields in a cosine basis: Fisher spectrum of the modes from the reference solver, the swarm over the coefficients, and a 6-mode basis vs a network as the unknown. README with results, `run.py`, `plot.py`. |
 | `K08_dimension_scaling/` | K08 | Heat and convection in d = 1–5: error, residual, stability constant, quadrature gap and cost vs dimension at matched total and matched per-axis points. README with results, `run.py`, `plot.py`. |
 | `K02_sensor_layout/` | K02 | Sensor count, placement and kind vs the Fisher information of the layout (heat α, KdV α–β) with `sensor_jacobian`, plus α identified from 1–8 probes against each layout's bound. README with results, `run.py`, `plot.py`. |
