@@ -28,6 +28,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 import yaml
 from torch import nn
@@ -235,6 +236,15 @@ class CustomPDE(PDEBase):
             time of each point. Boundary values (``dirichlet`` ``value`` /
             ``left`` / ``right``, ``neumann`` ``value``) may also be
             expressions in the coordinates, parameters and inputs.
+        parametric: ``{parameter: (lo, hi)}``: parameters the network takes
+            as extra inputs, sampled uniformly over the range with the
+            collocation points, so one training gives a surrogate
+            ``u(x, t; theta)`` over the whole prior range (a parametric
+            surrogate, K45). They are used in the expressions like
+            coordinates; boundary conditions are not applied on their faces.
+            :meth:`surrogate_misfit` evaluates the data misfit of the trained
+            surrogate for a batch of parameter values, the forward model a
+            swarm or a sampler needs.
         sensors: Observation operators (see :mod:`pinnrl.pdes.sensors`):
             :class:`~pinnrl.pdes.sensors.PointSensor`,
             :class:`~pinnrl.pdes.sensors.BoundarySensor`,
@@ -291,6 +301,7 @@ class CustomPDE(PDEBase):
         scales: Mapping[str, float | Sequence[float]] | None = None,
         inputs: Mapping[str, Any] | None = None,
         sensors: Sequence[Sensor | Mapping[str, Any]] | None = None,
+        parametric: Mapping[str, Sequence[float]] | None = None,
         observation_data: Mapping[str, Any] | None = None,
         training: Any = None,
         device: torch.device | str | None = None,
@@ -303,6 +314,14 @@ class CustomPDE(PDEBase):
         if not self.fields:
             raise ValueError("fields must name at least one network output")
         domain = {str(k): (float(v[0]), float(v[1])) for k, v in domain.items()}
+        self.parametric = tuple(str(k) for k in (parametric or {}))
+        for pname, rng in dict(parametric or {}).items():
+            if pname in domain or pname in (parameters or {}):
+                raise ValueError(f"parametric {pname!r} is already a coordinate or a parameter")
+            domain[str(pname)] = (float(rng[0]), float(rng[1]))
+        if "t" in domain and self.parametric:  # keep time last in the network input
+            domain["t"] = domain.pop("t")
+        self._n_physical = len([k for k in domain if k != "t"]) - len(self.parametric)
         self.spatial_coordinates = tuple(k for k in domain if k != "t")
         self.time_dependent = "t" in domain
         self.is_ode = not self.spatial_coordinates
@@ -354,7 +373,11 @@ class CustomPDE(PDEBase):
         ]
         self._spec = {
             "equations": equations if not callable(equations) else None,
-            "domain": {k: list(v) for k, v in domain.items() if k != _DUMMY_COORDINATE},
+            "domain": {
+                k: list(v)
+                for k, v in domain.items()
+                if k != _DUMMY_COORDINATE and k not in self.parametric
+            },
             "fields": list(self.fields),
             "parameters": dict(self.parameters),
             "initial_condition": None if callable(initial_condition) else initial_condition,
@@ -366,6 +389,7 @@ class CustomPDE(PDEBase):
             "architecture": architecture,
             "unknown_functions": {k: v.to_spec() for k, v in self.unknown_functions.items()},
             "field_weights": dict(field_weights or {}),
+            "parametric": {k: list(domain[k]) for k in self.parametric},
             "inputs": {k: v.to_spec() for k, v in self.inputs.items()},
             "sensors": [],  # filled by to_dict, so records written after construction are kept
         }
@@ -841,6 +865,8 @@ class CustomPDE(PDEBase):
         )
         terms = []
         for axis, x_lo, x_hi, t in self._seeded_points("boundary", n):
+            if axis >= self._n_physical:  # no conditions on the faces of a parametric axis
+                continue
             x_lo = x_lo.clone().requires_grad_(needs_grad)
             x_hi = x_hi.clone().requires_grad_(needs_grad)
             u_lo = model(torch.cat([x_lo, t], dim=1))
@@ -895,6 +921,37 @@ class CustomPDE(PDEBase):
         if not self.has_exact_solution:
             return None
         return self._exact_solution(x, t)
+
+    def surrogate_misfit(
+        self,
+        model: torch.nn.Module,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        y: torch.Tensor,
+        thetas: Any,
+        field: int = 0,
+    ) -> torch.Tensor:
+        """Sum of squared residuals of the parametric surrogate against data, per parameter value.
+
+        ``x`` ``(N, d)`` holds the physical coordinates of the observations,
+        ``t`` ``(N, 1)`` their times and ``y`` ``(N, 1)`` their values;
+        ``thetas`` is ``(M, p)`` over the parametric axes in their declared
+        order. Returns ``(M,)``, the vectorized misfit a swarm consumes.
+        """
+        if not self.parametric:
+            raise ValueError("surrogate_misfit needs a problem with parametric axes")
+        thetas_t = torch.as_tensor(
+            np.asarray(thetas, dtype=np.float64), dtype=x.dtype, device=self.device
+        )
+        thetas_t = thetas_t.reshape(-1, len(self.parametric))
+        m, n = thetas_t.shape[0], x.shape[0]
+        xx = x.to(self.device).reshape(n, -1).repeat(m, 1)
+        tt = t.to(self.device).reshape(n, 1).repeat(m, 1)
+        th = thetas_t.repeat_interleave(n, dim=0)
+        with torch.no_grad():
+            pred = model(torch.cat([xx, th, tt], dim=1))[:, field : field + 1]
+        err = (pred - y.to(self.device).reshape(n, 1).repeat(m, 1)) ** 2
+        return err.reshape(m, n).sum(dim=1)
 
     def normalization_bounds(self) -> list[list[float]]:
         """One ``[lo, hi]`` per network input (the spatial axes, then time), from the domain."""
