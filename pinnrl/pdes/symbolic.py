@@ -27,7 +27,8 @@ import sympy
 import torch
 from sympy.parsing.sympy_parser import convert_xor, parse_expr, standard_transformations
 
-_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# An identifier never starts right after a digit or a dot: the ``e`` of ``1e-4`` is an exponent.
+_IDENTIFIER = re.compile(r"(?<![0-9.])[A-Za-z_][A-Za-z0-9_]*")
 
 
 def _reduce_pairwise(op, args):

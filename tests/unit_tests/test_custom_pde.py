@@ -271,3 +271,11 @@ def test_build_trainer_model_overrides_the_architecture_block():
     assert trainer.config.model.num_layers == 2
     assert trainer.config.model.layer_norm is False
     assert sum(p.numel() for p in trainer.model.parameters()) < 1000
+
+
+def test_scientific_notation_is_a_number_not_an_identifier():
+    c = compile_expression("u_t - 1e-4*u_xx + 2.5E3*u", ["u"], ["x", "t"])
+    assert c.parameters == ()
+    ones = torch.ones(3, 1)
+    out = c({"u": ones, "u_t": 0 * ones, "u_xx": ones}, ones)
+    assert torch.allclose(out, torch.full_like(ones, -1e-4 + 2.5e3))

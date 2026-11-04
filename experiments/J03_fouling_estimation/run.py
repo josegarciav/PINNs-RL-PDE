@@ -83,9 +83,12 @@ def run_cell(job):
         from pinnrl import CustomPDE
 
         pde_dict["inputs"].pop("R_f")
-        pde_dict["parameters"]["R_f"] = R_END / 2  # the true mean, used only to fill observations
-        pde_dict["trainable_parameters"] = ["R_f"]
-        pde_dict["parameter_initial_guesses"] = {"R_f": 1e-4}
+        # R_f is of order 1e-4; Adam's absolute steps need a parameter of order one, so the
+        # scalar is identified as rf with R_f = 1e-4 * rf (the F01 note on small parameters).
+        pde_dict["equations"] = [e.replace("R_f", "(0.0001*rf)") for e in pde_dict["equations"]]
+        pde_dict["parameters"]["rf"] = R_END / 2 / 1e-4  # the true mean, only to fill observations
+        pde_dict["trainable_parameters"] = ["rf"]
+        pde_dict["parameter_initial_guesses"] = {"rf": 1.0}
         pde_dict["initial_condition"] = None
         pde = CustomPDE.from_dict(pde_dict)
         ss = ev.steady_state(201, t=0.0)
@@ -139,7 +142,7 @@ def run_cell(job):
         with torch.no_grad():
             rf = pde.unknown_functions["R_f"]({"t": grid}).ravel().numpy()
     else:
-        rf = np.full(121, pde.get_trainable_parameter_values()["R_f"])
+        rf = np.full(121, 1e-4 * pde.get_trainable_parameter_values()["rf"])
     truth = truth_rf(grid.ravel().numpy())
     zz, tt = np.meshgrid(ref.z, ref.t, indexing="ij")
     with torch.no_grad():
