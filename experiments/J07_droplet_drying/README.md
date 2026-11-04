@@ -1,4 +1,4 @@
-# J07: a drying droplet and its drying-rate closure (first pass)
+# J07: a drying droplet and its drying-rate closure
 
 ## Question
 
@@ -45,4 +45,36 @@ The weighted misfit of the least-squares fits: 341–361 with the right form (40
 3. **The classical fit with the right form is at the noise floor, and the wrong form is detectable.** Least squares on the ODE recovers $n$ and $X_{cr}$ to 1 % in 0.2 s; the linear form lands 5.5 % off with a misfit 16 times the right one, so misspecification shows in the residual. Between a parametric fit that is right, a parametric fit that is visibly wrong, and a free function that collapses, the twin's claim to identify closures is not yet made on this model.
 4. **What to change (J07b).** Two-stage training (fit the record with $f$ frozen at the wet-surface value, then release $f$ with the physics weight raised); a basis parametrization of $f$ (K48's cosine or Legendre modes, whose constant mode is explicit and whose other modes cannot vanish silently); a pointwise start for $f$ from the smoothed record ($f = -\dot X m_s / (h_m A \Delta\rho)$, the equation-discovery estimate), with the PINN refining it; and the sensor weight set by the noise model (K39) rather than by a sweep.
 
-**Consequences for the backlog:** J07b (the closure, second pass) with the four changes above; H04 (time-marching) gets the droplet as a test case next to the pendulum and SIR of K09; J08 (stickiness) waits for a working closure; the EKF control (J05) applies to the parametric form only, which is the comparison's point.
+**Consequences for the backlog (after the first pass):** J07b (below) with the four changes above; H04 (time-marching) gets the droplet as a test case next to the pendulum and SIR of K09; J08 (stickiness) waits for a working closure; the EKF control (J05) applies to the parametric form only, which is the comparison's point.
+
+## Second pass (J07b): making the free closure train
+
+`run_closure2.py`, same plant, records (3 seeds) and controls; sensor weight 300, 12,000 Adam steps then L-BFGS 500. Four arms:
+
+- **pointwise start + PINN:** $f$ is first estimated point by point from the smoothed record, $f_i = -\dot X_i m_s / (h_m A (\rho_{v,s}(T_i) - \rho_{v,a}))$ (Savitzky–Golay, window 21, order 3, the equation-discovery estimate), the `UnknownFunction` is pre-trained to those points (3,000 Adam steps on the function alone), and the PINN refines fields and function together;
+- **two-stage:** the network fits the record with $f$ frozen at its start (6,000 steps), then $f$ is released (6,000 + 500);
+- **Legendre basis:** $f$ as six Legendre modes of $X$ bounded to $[0, 1]$ (`basis={"type": "legendre", "modes": 6}`, no monotone constraint), one stage;
+- **pointwise only:** the pre-trained function without the PINN, the control the twin must beat.
+
+![J07b](../../docs/assets/benchmarks/j07b_closure.png)
+
+| Arm | Rel. L2 of $f$, seeds 0 / 1 / 2 | Rel. L2 of $X$ | Time |
+|---|---|---|---|
+| pointwise estimate, raw | 0.046 / 0.035 / 0.038 | | 2 s |
+| pointwise only (pre-trained function) | 0.030 / 0.020 / 0.027 | | 2 s |
+| pointwise start + PINN | **0.439** / **0.021** / **0.017** | 0.66 / 0.009 / 0.007 | 380–480 s |
+| two-stage | 0.49 / 0.75 / 0.88 (all $f \equiv$ const) | 0.13 / 0.08 / 0.12 | 1,900–2,200 s |
+| Legendre basis | 0.068 / 0.20 / 0.66 | 0.005 / 0.008 / 0.77 | 270–560 s |
+| first pass (monotone net, no start) | 1.00 / 0.94 / 0.93 | | |
+| least squares, right form | 0.005 / 0.002 / 0.001 | | 0.2 s |
+| least squares, linear form | 0.056 / 0.054 / 0.055 | | 0.3 s |
+
+### Conclusion (second pass)
+
+1. **The record itself gives the closure to 2–3 %, before any PINN.** With mass and temperature every second, $\dot X$ from a smoothing filter and the known transfer coefficients turn each reading into a point of $f(X)$; the raw points are within 3.5–4.6 % and the function fitted to them within 2–3 %. That is the equation-discovery estimate, and it is the start the PINN needs.
+2. **From that start the PINN refines, or destroys.** Two seeds improve the function to 1.7–2.1 % with the fields at 0.7–0.9 %, better than the start; the third leaves the basin (the function becomes a step at $X \approx 1.5$, the fields 66 % off). The refinement is a gain of a third at a 1-in-3 risk of losing everything, which a check against the start's misfit would catch (the failed seed's temperature error is 20 % against 1 %).
+3. **Freezing the function first makes the collapse certain**, and **a basis parametrization removes the sticky collapse but not the multimodality**: the Legendre modes cannot vanish silently, so no run ends flat, but the three seeds land at 7 %, 20 % and 66 %. The flat basin is a property of the monotone network; the wide basin structure is the problem's.
+4. **The classical fit with the right form is still ten times better than the best free function.** Where the functional form is known, fit it; the free function's place is where it is not, and there it should start from the pointwise estimate and be checked against it. For the twin the rule is: estimate the closure from the record pointwise, use the PINN to make it consistent with the physics, and reject the result when the misfit rises above the start's.
+
+**Consequences for the backlog:** a `pointwise_start` helper for closures of a measured field (the smoothing-and-division estimate as a package function) and a misfit guard that rejects a refinement worse than its start; K39's noise-model weight on this problem; H04 (time-marching) on the forward droplet; J08 (stickiness) can proceed on the pointwise-plus-PINN recipe.
+
