@@ -116,3 +116,31 @@ Over 30 synthetic data sets, the interval the Laplace posterior gives for the id
 ## Sampling follow-ups (experiments B02, B03, B04, B08)
 
 On heat, convection, wave and the KdV soliton no sampler differs significantly from fresh uniform points (errors 0.2–2.5 %, 5 paired seeds); RAD has the best median on three of the four and narrows the spread (B02). On Burgers the resampling cadence changes the error threefold, more than any choice of sampler at a fixed cadence, and RAD's best cadence is every 10 steps, which is now the study's default (B04). Good RAD settings on Burgers lie on $c \approx k/2$, and a zero uniform floor with a sharp exponent is three times worse than uniform; on Allen–Cahn every setting is equally and modestly better than uniform (B03). The error falls as about $N^{-1/3}$ in the number of collocation points on Burgers, for uniform and RAD alike, and not at all on Allen–Cahn, while cost is linear in $N$ (B08). Write-ups: [`B02_more_pdes`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B02_more_pdes), [`B03_rad_grid`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B03_rad_grid), [`B04_resampling_frequency`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B04_resampling_frequency), [`B08_point_count`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B08_point_count).
+
+## Field-valued unknowns (experiment F09)
+
+A drifting diffusivity $\alpha(t)$ and a coefficient field $\alpha(x)$ identified on the heat equation with `UnknownFunction` (a 2 × 32 network through a softplus), 200 noisy observations, 10,000 Adam steps, 5 seeds, against the best constant for each truth. Details in `experiments/F09_field_unknowns/README.md`.
+
+![F09](assets/benchmarks/f09_field_unknowns.png)
+
+| Truth | Rel. L2 of $\hat\alpha$ at noise 0.01 | Scalar model instead | Best constant's distance in $u$ |
+|---|---|---|---|
+| $\alpha(t) = 0.05 + 0.1 t$ | 0.037 | 0.32 | 0.048 |
+| $\alpha(t)$ with a step at $t = 0.5$ | 0.254 (a ramp with the right mean) | 0.50 | 0.080 |
+| $\alpha(x)$, centred bump | 0.405 (collapses to the constant) | 0.50 | 0.038 |
+| $\alpha(x)$, two layers | 0.125 (shape and plateaus recovered) | 0.62 | 0.198 |
+
+- A linear drift is recovered to a few percent; a scalar model absorbs it as the best constant with a field error 2.7 times larger.
+- A jump comes back as a smooth ramp: the data see $\int \alpha$ through the solution's amplitude, and a smooth surrogate rounds the kink.
+- A field is identified only where the solution feels it (through the flux $\alpha u_x$): the two-layer medium, whose solution no constant reproduces within 20 %, is recovered; the centred bump, which a constant reproduces to 4 %, is not. The check is one call to `heat_variable_reference`.
+- The optimizer's weight decay had been acting on the unknowns; PDE unknowns now train without it.
+
+## Sensor layout vs conditioning (experiment K02)
+
+The Fisher information of a sensor layout from `sensor_jacobian` on closed forms (heat $\alpha$; KdV $\alpha, \beta$), and $\alpha$ identified from 1–8 probes against the bound of each layout. Details in `experiments/K02_sensor_layout/README.md`.
+
+![K02](assets/benchmarks/k02_sensor_layout.png)
+
+- On heat a probe's information scales with $\sin^2 \pi x_0$: a probe at 5 % of the length is 6.4 times worse (in standard deviation) than one at the centre, and two probes at the quarter points equal one at the centre. The domain mean, a quarter-point probe and the wall flux lie within a factor of two of the best probe.
+- On KdV a probe on the soliton's path sees height (fixes $\alpha$) and width (fixes $\beta$) with $\kappa(F) \approx 7$; four lengths away it sees only the tail, where both coefficients scale the same number: $\kappa(F) > 10^4$, correlation 0.996. Two evenly spaced probes at $\pm 7.5$ are worse than one at the origin; placement beats count.
+K02_PART_B

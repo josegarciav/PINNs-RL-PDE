@@ -6,6 +6,8 @@
 
 ::: benchmarks.reference.allen_cahn_reference
 
+::: benchmarks.reference.heat_variable_reference
+
 ::: benchmarks.sampling_study.StudySettings
 
 ::: benchmarks.sampling_study.run_sampling_study

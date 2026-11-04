@@ -384,6 +384,23 @@ CATALOG: dict[str, dict[str, Any]] = {
         initial_condition={"C": "1", "T": "1"},
     ),
     # --------------------------------------------------------------- systems
+    "reaction_diffusion_pair": dict(
+        name="Coupled reaction-diffusion pair",
+        equations=["u_t - D*u_xx + k*(u - v)", "v_t - D*v_xx - k*(u - v)"],
+        domain={"x": (0, 1), "t": (0, 1)},
+        fields=["u", "v"],
+        parameters={"D": 0.05, "k": 1.0},
+        initial_condition={"u": "sin(pi*x)", "v": "0"},
+        boundary_conditions={
+            "u": {"dirichlet": {"value": 0.0}},
+            "v": {"dirichlet": {"value": 0.0}},
+        },
+        # u + v diffuses, u - v diffuses and decays at rate 2k.
+        exact_solution={
+            "u": f"0.5*(exp(-D*{PI2}*t) + exp(-(D*{PI2} + 2*k)*t))*sin(pi*x)",
+            "v": f"0.5*(exp(-D*{PI2}*t) - exp(-(D*{PI2} + 2*k)*t))*sin(pi*x)",
+        },
+    ),
     "gray_scott": dict(
         name="Gray-Scott",
         equations=[

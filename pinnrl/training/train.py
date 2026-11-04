@@ -229,7 +229,11 @@ def _attach_synthetic_observations(pde, config_dict):
     """Inverse mode without observations: generate noisy ones from the exact solution."""
     mode = config_dict["training"].get("mode", "forward")
     inverse_cfg = config_dict.get("inverse", {})
-    if mode == "inverse" and pde.observation_data is None and pde.config.trainable_parameters:
+    has_unknowns = pde.config.trainable_parameters or getattr(pde, "unknown_functions", None)
+    sensors = getattr(pde, "sensors", [])
+    if sensors and any(s.values is None for s in sensors):
+        pde.observe(seed=int(inverse_cfg.get("obs_seed", 0)))  # each sensor's own noise
+    elif mode == "inverse" and pde.observation_data is None and has_unknowns and not sensors:
         n_obs = int(inverse_cfg.get("obs_points", 200))
         noise = float(inverse_cfg.get("obs_noise", 0.01))
         seed = int(inverse_cfg.get("obs_seed", 0))
@@ -265,7 +269,9 @@ def load_run(run_dir, device=None):
     what was trained. The PDE is the forward problem at the configured (true)
     parameters, so its exact solution is the reference even for inverse runs;
     observation data is not reloaded (a Well run's snapshot records the time
-    window its observations covered).
+    window its observations covered). The weights of a custom problem's
+    unknown functions (``unknown_functions.pt``) are restored, so
+    ``pde.evaluate_unknown`` gives the identified function.
 
     Args:
         run_dir: Run folder written by :func:`run_training`.
@@ -292,6 +298,9 @@ def load_run(run_dir, device=None):
     model, _ = build_model(config_dict, device)
     model.load_state_dict(torch.load(run_dir / "final_model.pt", map_location=device))
     model.eval()
+    unknowns_path = run_dir / "unknown_functions.pt"
+    if unknowns_path.exists() and getattr(pde, "unknown_functions", None):
+        pde.load_unknown_state_dict(torch.load(unknowns_path, map_location=device))
     return pde, model, config_dict
 
 
@@ -583,6 +592,9 @@ def main():
     if args.pde_file:
         with open(args.pde_file) as f:
             custom_spec = yaml.safe_load(f) or {}
+        from pinnrl.pdes.custom import resolve_input_paths
+
+        custom_spec = resolve_input_paths(custom_spec, Path(args.pde_file).parent)
     elif args.pde is None:
         parser.error("one of --pde or --pde-file is required")
     else:

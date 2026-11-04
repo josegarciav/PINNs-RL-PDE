@@ -6,6 +6,22 @@ Every shipped PDE is registered once in `pdes.registry`, and both the CLI and th
 
 ::: pdes.custom.Fields
 
+::: pdes.unknowns.UnknownFunction
+
+::: pdes.inputs.TimeSeries
+
+::: pdes.sensors.Sensor
+
+::: pdes.sensors.PointSensor
+
+::: pdes.sensors.BoundarySensor
+
+::: pdes.sensors.IntegralSensor
+
+::: pdes.sensors.sensor_jacobian
+
+::: pdes.sensors.sensor_noise_vector
+
 ::: pdes.symbolic.compile_expression
 
 ::: pdes.symbolic.CompiledExpression

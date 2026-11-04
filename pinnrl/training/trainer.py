@@ -392,8 +392,22 @@ class PDETrainer:
         return params
 
     def _build_adam(self, params):
+        """Adam over ``params``; the PDE's unknowns get no weight decay.
+
+        Weight decay is a regularizer for the network's weights. Applied to an
+        identified coefficient or to the weights of an unknown function it is a
+        prior toward zero, and with Adam's normalization it drives any
+        parameter with a weak data gradient to zero at the learning rate.
+        """
+        pde_ids = set()
+        if hasattr(self.pde, "trainable_parameters_iter"):
+            pde_ids = {id(p) for p in self.pde.trainable_parameters_iter()}
+        groups = [{"params": [p for p in params if id(p) not in pde_ids]}]
+        pde_params = [p for p in params if id(p) in pde_ids]
+        if pde_params:
+            groups.append({"params": pde_params, "weight_decay": 0.0})
         return optim.Adam(
-            params,
+            groups,
             lr=self.config.training.learning_rate,
             weight_decay=self.config.training.weight_decay,
         )
@@ -1032,6 +1046,12 @@ class PDETrainer:
             self.logger.info("Saving model...")
             model_path = os.path.join(experiment_dir, "final_model.pt")
             torch.save(self.model.state_dict(), model_path)
+            # Field-valued unknowns (CustomPDE.unknown_functions) have weights of their own.
+            if getattr(self.pde, "unknown_functions", None):
+                torch.save(
+                    self.pde.unknown_state_dict(),
+                    os.path.join(experiment_dir, "unknown_functions.pt"),
+                )
 
             # Save all plots using the save_plots method
             self.logger.info("Generating and saving all plots...")

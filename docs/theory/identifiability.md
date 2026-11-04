@@ -43,6 +43,12 @@ Most problems of interest have no closed-form solution, and the surrogate's outp
 
 Each is validated against the exact layer on a catalogue entry with a closed form before it is trusted elsewhere.
 
+## Field-valued unknowns
+
+When the unknown is a function, $\alpha(x)$ or $\alpha(t)$, the parameter space is infinite-dimensional and the questions above are asked of its modes. For the heat equation in conservative form, $u_t = (\alpha(x) u_x)_x$, the first-order response of the solution to a perturbation $\delta\alpha$ solves $\delta u_t = (\alpha\, \delta u_x)_x + (\delta\alpha\, u_x)_x$: the perturbation acts through the flux $\delta\alpha\, u_x$, so $\alpha$ is invisible wherever $u_x$ vanishes, and a localized $\delta\alpha$ is diffused before it reaches the sensors. Modes of $\alpha$ that are oscillatory, or supported where the gradient is small, lie in the sloppy directions of the (now infinite) Fisher matrix. A time-varying $\alpha(t)$ is better placed: it changes the decay rate of every mode at once, and $\int_0^t \alpha$ is read directly from the amplitude of the solution.
+
+The practical test is the one of the previous section with the function in place of the parameter: compare the solution for the true field with the one for the best constant (or the best low-order polynomial). If the two differ by less than the surrogate's own field error, the data cannot distinguish them and the recovered field will collapse to that constant, however expressive the network. Experiment F09 shows both outcomes on heat: a two-layer $\alpha(x)$ whose solution is 20 % away from any constant is recovered in shape; a centred bump whose solution a constant reproduces to 4 % is not. A smooth network also turns a jump in $\alpha(t)$ into a ramp, the finite resolution of a surrogate with a few hundred weights. Reduced bases for the field (K48) and pointwise intervals (K47) are the next steps.
+
 ## References
 
 - Bellman, R. & Åström, K. J. (1970). On structural identifiability. *Mathematical Biosciences* 7, 329–339. [doi:10.1016/0025-5564(70)90132-X](https://doi.org/10.1016/0025-5564(70)90132-X)

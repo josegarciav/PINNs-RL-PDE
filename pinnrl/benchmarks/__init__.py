@@ -23,6 +23,7 @@ from pinnrl.benchmarks.reference import (
     ReferenceSolution,
     allen_cahn_reference,
     burgers_reference,
+    heat_variable_reference,
 )
 from pinnrl.benchmarks.sampling_study import (
     STUDY_PDES,
@@ -41,6 +42,7 @@ __all__ = [
     "StudySettings",
     "allen_cahn_reference",
     "burgers_reference",
+    "heat_variable_reference",
     "run_sampling_study",
     "solve_heat_1d",
     "solve_wave_1d",

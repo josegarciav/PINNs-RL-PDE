@@ -23,16 +23,41 @@ parameter dict, for anything the expression language cannot say.
 from __future__ import annotations
 
 import copy
+import itertools
 from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 import torch
 import yaml
+from torch import nn
 
+from .inputs import TimeSeries
 from .pde_base import PDEBase, PDEConfig
+from .sensors import Sensor
 from .symbolic import CompiledExpression, compile_expression, derivative_name, split_derivative
+from .unknowns import UnknownFunction
 
 _DUMMY_COORDINATE = "_x"  # the spatial input an ODE's network ignores
+
+
+def resolve_input_paths(spec: Mapping[str, Any], base_dir: str | Path) -> dict[str, Any]:
+    """A copy of ``spec`` whose relative ``inputs[*].path`` entries are taken from ``base_dir``."""
+    spec = dict(spec)
+    inputs = spec.get("inputs")
+    if isinstance(inputs, Mapping):
+        resolved = {}
+        for name, entry in inputs.items():
+            if (
+                isinstance(entry, Mapping)
+                and "path" in entry
+                and not Path(entry["path"]).is_absolute()
+            ):
+                entry = {**entry, "path": str(Path(base_dir) / entry["path"])}
+            resolved[name] = entry
+        spec["inputs"] = resolved
+    return spec
+
 
 Equations = str | Sequence[str] | Callable[["Fields", dict[str, Any]], Any]
 
@@ -55,12 +80,14 @@ class Fields:
         fields: Sequence[str],
         coordinates: Sequence[str],
         device: torch.device,
+        unknowns: Mapping[str, UnknownFunction] | None = None,
     ):
         """Evaluate ``model`` at ``x, t`` (fresh leaf copies that require grad)."""
         self._x = x.detach().to(device).requires_grad_(True)
         self._t = t.detach().to(device).requires_grad_(True)
         self._fields = tuple(fields)
         self._coordinates = tuple(coordinates)
+        self._unknowns: dict[str, UnknownFunction] = dict(unknowns or {})
         self._u = model(torch.cat([self._x, self._t], dim=1))
         self._cache: dict[tuple[str, tuple[str, ...]], torch.Tensor] = {}
         self._spatial = [c for c in self._coordinates if c != "t"]
@@ -76,6 +103,11 @@ class Fields:
         return self._coordinates
 
     @property
+    def unknowns(self) -> tuple[str, ...]:
+        """Names of the unknown functions available as ``f.<name>``."""
+        return tuple(self._unknowns)
+
+    @property
     def n_points(self) -> int:
         """Number of points in the batch."""
         return self._x.shape[0]
@@ -88,7 +120,20 @@ class Fields:
         return self._x[:, i : i + 1]
 
     def value(self, field: str) -> torch.Tensor:
-        """The field ``field`` as predicted by the network, shape ``(N, 1)``."""
+        """The field ``field`` as predicted by the network, or an unknown function, shape ``(N, 1)``."""
+        if field in self._unknowns:
+            key = (field, ())
+            if key not in self._cache:
+                fn = self._unknowns[field]
+                self._cache[key] = fn(
+                    {
+                        name: self.coordinate(name)
+                        if name in self._coordinates
+                        else self.value(name)
+                        for name in fn.inputs
+                    }
+                )
+            return self._cache[key]
         j = self._fields.index(field)
         return self._u[:, j : j + 1]
 
@@ -115,16 +160,16 @@ class Fields:
         """``f.u``, ``f.u_xx``, ``f.x`` by attribute; anything else is an error."""
         if name.startswith("_"):
             raise AttributeError(name)
-        if name in self._fields:
+        if name in self._fields or name in self._unknowns:
             return self.value(name)
         if name in self._coordinates:
             return self.coordinate(name)
-        split = split_derivative(name, self._fields, self._coordinates)
+        split = split_derivative(name, self._fields + tuple(self._unknowns), self._coordinates)
         if split is not None:
             return self.d(split[0], *split[1])
         raise AttributeError(
-            f"{name!r} is not a field {self._fields}, a coordinate {self._coordinates} "
-            "or a derivative such as 'u_xx'"
+            f"{name!r} is not a field {self._fields}, an unknown function {tuple(self._unknowns)}, "
+            f"a coordinate {self._coordinates} or a derivative such as 'u_xx'"
         )
 
     __getitem__ = __getattr__
@@ -175,13 +220,38 @@ class CustomPDE(PDEBase):
         initial_velocity: ``u_t(x, t0)`` in the same forms, used when an
             equation is second order in time (default 0).
         boundary_conditions: As for :class:`PDEBase` (``dirichlet``,
-            ``neumann``, ``periodic``), applied to every field.
+            ``neumann``, ``periodic``), applied to every field; or, for a
+            system, ``{field: {kind: options}}`` with its own conditions per
+            field (a field left out has none).
         exact_solution: ``u(x, t)`` in the same forms as the initial
             condition (expressions may use ``t``), or a callable
             ``u(x, t) -> (N, k)``; enables :meth:`validate`.
         name: Display name for runs and the dashboard.
         trainable_parameters: Parameters to identify in inverse mode.
         parameter_initial_guesses: Their starting values.
+        inputs: Measured inputs, ``{name: TimeSeries | spec}`` (see
+            :class:`~pinnrl.pdes.inputs.TimeSeries`): a signal of ``t`` that
+            the equations and boundary values may use by name, read at the
+            time of each point. Boundary values (``dirichlet`` ``value`` /
+            ``left`` / ``right``, ``neumann`` ``value``) may also be
+            expressions in the coordinates, parameters and inputs.
+        sensors: Observation operators (see :mod:`pinnrl.pdes.sensors`):
+            :class:`~pinnrl.pdes.sensors.PointSensor`,
+            :class:`~pinnrl.pdes.sensors.BoundarySensor`,
+            :class:`~pinnrl.pdes.sensors.IntegralSensor` or their specs. Each
+            sensor's records enter the data loss as its own weighted term;
+            :meth:`observe` fills them from the exact solution.
+        field_weights: ``{field: weight}`` for systems: the field's residual,
+            initial and boundary errors enter the loss multiplied by this
+            weight (default 1), so a slow or small component can be given
+            more say than its scale would.
+        unknown_functions: Field-valued unknowns, ``{name: spec}`` with the
+            keys of :class:`~pinnrl.pdes.unknowns.UnknownFunction` (``inputs``,
+            ``hidden``, ``positive``, ``bounds``, ``monotone``, ``initial``,
+            ``truth``, ...) or ready-built instances. The name is used in the
+            expressions like a parameter (``"u_t - alpha*u_xx"``, with
+            ``alpha_x`` for its derivative). Their weights are trained in
+            inverse mode; the ``truth`` serves synthetic data and grading.
         observation_data: Observations for the data term (see :class:`PDEConfig`).
         training: A ``TrainingConfig`` or dict of training options.
         device: Torch device.
@@ -209,6 +279,10 @@ class CustomPDE(PDEBase):
         name: str = "Custom PDE",
         trainable_parameters: Sequence[str] = (),
         parameter_initial_guesses: Mapping[str, float] | None = None,
+        unknown_functions: Mapping[str, Mapping[str, Any] | UnknownFunction] | None = None,
+        field_weights: Mapping[str, float] | None = None,
+        inputs: Mapping[str, Any] | None = None,
+        sensors: Sequence[Sensor | Mapping[str, Any]] | None = None,
         observation_data: Mapping[str, Any] | None = None,
         training: Any = None,
         device: torch.device | str | None = None,
@@ -230,6 +304,46 @@ class CustomPDE(PDEBase):
         self.coordinates = self.spatial_coordinates + (("t",) if self.time_dependent else ())
         self.parameters = {str(k): float(v) for k, v in (parameters or {}).items()}
         self._architecture = architecture
+        self.unknown_functions = nn.ModuleDict()
+        for uname, spec in dict(unknown_functions or {}).items():
+            uname = str(uname)
+            if uname in self.parameters or uname in self.fields or uname in self.coordinates:
+                raise ValueError(
+                    f"unknown function {uname!r} clashes with a parameter, field or coordinate"
+                )
+            if isinstance(spec, UnknownFunction):
+                fn = spec
+            else:
+                fn = UnknownFunction.from_spec(uname, spec, coordinate_ranges=domain)
+            for inp in fn.inputs:
+                if inp not in self.coordinates and inp not in self.fields:
+                    raise ValueError(
+                        f"input {inp!r} of unknown function {uname!r} is neither a coordinate "
+                        f"{self.coordinates} nor a field {self.fields}"
+                    )
+            self.unknown_functions[uname] = fn
+        self._unknown_names = tuple(self.unknown_functions.keys())
+        self.inputs: dict[str, TimeSeries] = {}
+        for iname, spec in dict(inputs or {}).items():
+            iname = str(iname)
+            taken = (
+                set(self.parameters)
+                | set(self.fields)
+                | set(self.coordinates)
+                | set(self._unknown_names)
+            )
+            if iname in taken:
+                raise ValueError(
+                    f"input {iname!r} clashes with a parameter, field, coordinate or unknown"
+                )
+            if not self.time_dependent:
+                raise ValueError(f"input {iname!r}: a time series needs a time-dependent problem")
+            self.inputs[iname] = TimeSeries.from_spec(iname, spec)
+        self._bc_expressions: dict[str, CompiledExpression] = {}
+        self._observables: dict[str, CompiledExpression] = {}
+        self.sensors: list[Sensor] = [
+            s if isinstance(s, Sensor) else Sensor.from_spec(dict(s)) for s in (sensors or [])
+        ]
         self._spec = {
             "equations": equations if not callable(equations) else None,
             "domain": {k: list(v) for k, v in domain.items() if k != _DUMMY_COORDINATE},
@@ -242,7 +356,26 @@ class CustomPDE(PDEBase):
             "name": name,
             "time_order": time_order,
             "architecture": architecture,
+            "unknown_functions": {k: v.to_spec() for k, v in self.unknown_functions.items()},
+            "field_weights": dict(field_weights or {}),
+            "inputs": {k: v.to_spec() for k, v in self.inputs.items()},
+            "sensors": [],  # filled by to_dict, so records written after construction are kept
         }
+        unknown_weights = sorted(set(field_weights or {}) - set(self.fields))
+        if unknown_weights:
+            raise ValueError(
+                f"field_weights for {unknown_weights}, which are not fields {self.fields}"
+            )
+        self._field_weights = [float((field_weights or {}).get(f, 1.0)) for f in self.fields]
+        self._per_field_bcs: dict[str, dict[str, Any]] | None = None
+        bcs = dict(boundary_conditions or {})
+        if bcs and all(k in self.fields for k in bcs):
+            self._per_field_bcs = {f: dict(bcs[f] or {}) for f in bcs}
+        elif any(k in self.fields for k in bcs):
+            raise ValueError(
+                "boundary_conditions mixes field names with condition kinds; give either "
+                f"{{kind: options}} for every field or {{field: {{kind: options}}}}: {sorted(bcs)}"
+            )
 
         # Residual: compiled expressions or the user's callable.
         self._residual_fn: Callable | None = None
@@ -257,8 +390,9 @@ class CustomPDE(PDEBase):
                     f"{len(texts)} equation(s) for {len(self.fields)} field(s) {self.fields}; "
                     "give one equation per field"
                 )
+            symbols = self.fields + self._unknown_names
             self._equations = [
-                compile_expression(t, self.fields, self.coordinates, self.parameters) for t in texts
+                compile_expression(t, symbols, self.coordinates, self.parameters) for t in texts
             ]
             self._needed = {p for e in self._equations for p in e.parameters}
         self._ic = self._compile_map(initial_condition, "initial_condition", with_time=False)
@@ -271,7 +405,9 @@ class CustomPDE(PDEBase):
             self._needed |= set(compiled.parameters)
         if self._exact:
             self._needed |= {p for e in self._exact.values() for p in e.parameters}
-        missing = sorted(self._needed - set(self.parameters))
+        missing = sorted(
+            self._needed - set(self.parameters) - set(self._unknown_names) - set(self.inputs)
+        )
         if missing:
             raise ValueError(
                 f"Parameters {missing} appear in the equations but are not in parameters="
@@ -290,7 +426,9 @@ class CustomPDE(PDEBase):
             domain=[domain[c] for c in self.spatial_coordinates],
             time_domain=domain["t"] if self.time_dependent else (0.0, 0.0),
             parameters=dict(self.parameters),
-            boundary_conditions=copy.deepcopy(dict(boundary_conditions or {})),
+            boundary_conditions=copy.deepcopy(dict(boundary_conditions or {}))
+            if self._per_field_bcs is None
+            else {},
             initial_condition={"type": "custom"} if has_ic else {},
             exact_solution={"type": "custom"} if exact_solution is not None else {},
             dimension=len(self.spatial_coordinates),
@@ -304,6 +442,18 @@ class CustomPDE(PDEBase):
             observation_data=dict(observation_data) if observation_data else None,
         )
         super().__init__(config)
+        self.unknown_functions.to(self.device)
+        for sensor in self.sensors:
+            sensor.bind(self)
+            pending = getattr(sensor, "_pending_values", None)
+            if pending is not None:
+                sensor.set_values(pending)
+                del sensor._pending_values
+        if self._per_field_bcs is not None:
+            self.config.boundary_conditions = copy.deepcopy(bcs)
+            self.boundary_conditions = {
+                f: self._parse_boundary_conditions(c) for f, c in self._per_field_bcs.items()
+            }
 
     # ----------------------------------------------------------------- building
     def _compile_map(
@@ -318,6 +468,18 @@ class CustomPDE(PDEBase):
             expr = compile_expression(text, (), coords, self.parameters)
             if expr.parameters and set(expr.parameters) & set(self.fields):
                 raise ValueError(f"{what} for {field!r} must not depend on the fields: {text!r}")
+            for uname in set(expr.parameters) & set(self._unknown_names):
+                fn = self.unknown_functions[uname]
+                if not fn.has_truth:
+                    raise ValueError(
+                        f"{what} for {field!r} uses the unknown function {uname!r}, which needs a "
+                        f"truth to be evaluated there: {text!r}"
+                    )
+                if any(i not in coords for i in fn.inputs):
+                    raise ValueError(
+                        f"{what} for {field!r} uses {uname!r}, whose inputs {fn.inputs} are not all "
+                        f"coordinates of that expression {tuple(coords)}"
+                    )
             compiled[field] = expr
         return compiled
 
@@ -334,11 +496,14 @@ class CustomPDE(PDEBase):
     def from_yaml(cls, path: str, **overrides: Any) -> CustomPDE:
         """Build from a YAML file with the layout of :meth:`to_dict`."""
         with open(path) as f:
-            return cls.from_dict(yaml.safe_load(f) or {}, **overrides)
+            spec = yaml.safe_load(f) or {}
+        return cls.from_dict(resolve_input_paths(spec, Path(path).parent), **overrides)
 
     def to_dict(self) -> dict[str, Any]:
         """The textual spec that rebuilds this problem (callables are left out as ``None``)."""
-        return copy.deepcopy(self._spec)
+        spec = copy.deepcopy(self._spec)
+        spec["sensors"] = [s.to_spec() for s in self.sensors]
+        return spec
 
     def build_trainer(
         self,
@@ -372,7 +537,7 @@ class CustomPDE(PDEBase):
                 training_cfg[key] = {**training_cfg[key], **value}
             else:
                 training_cfg[key] = value
-        if self.config.trainable_parameters and "mode" not in training:
+        if (self.config.trainable_parameters or self._unknown_names) and "mode" not in training:
             training_cfg["mode"] = "inverse"
         architecture = architecture or self._architecture
         device = torch.device(device) if device is not None else self.device
@@ -389,6 +554,7 @@ class CustomPDE(PDEBase):
         self.config.training = config.training
         self.device = device
         self.config.device = device
+        self.unknown_functions.to(device)
         model = PINNModel(config=config, device=device).to(device)
         return PDETrainer(model=model, pde=self, config=config, device=device)
 
@@ -401,8 +567,10 @@ class CustomPDE(PDEBase):
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
     ) -> torch.Tensor:
         """Residuals of every equation at ``x, t``, shape ``(N, k)``."""
-        f = Fields(model, x, t, self.fields, self.coordinates, self.device)
+        f = Fields(model, x, t, self.fields, self.coordinates, self.device, self.unknown_functions)
         params = self._parameter_values()
+        if self.inputs:
+            params.update(self._input_values(f.coordinate("t")))
         if self._residual_fn is not None:
             out = self._residual_fn(f, params)
             if not isinstance(out, torch.Tensor):
@@ -434,10 +602,16 @@ class CustomPDE(PDEBase):
             return out.reshape(x.shape[0], -1)
         like = x[:, 0:1]
         values: dict[str, Any] = self._parameter_values()
+        if t is not None:
+            values.update(self._input_values(t))
         for i, c in enumerate(self.spatial_coordinates):
             values[c] = x[:, i : i + 1]
         if t is not None:
             values["t"] = t
+        needed = {p for e in (compiled or {}).values() for p in e.parameters}
+        for uname in needed & set(self._unknown_names):
+            fn = self.unknown_functions[uname]
+            values[uname] = fn.truth({i: values[i].expand_as(like) for i in fn.inputs})
         columns = []
         for field in self.fields:
             expr = (compiled or {}).get(field)
@@ -449,6 +623,186 @@ class CustomPDE(PDEBase):
             return None
         return lambda x, t: self._evaluate_map(self._ic, self._ic_fn, x, None)
 
+    def _weighted(self, error: torch.Tensor) -> torch.Tensor:
+        """``error`` ``(N, k)`` with each field's column scaled by the root of its weight."""
+        if all(w == 1.0 for w in self._field_weights):
+            return error
+        w = torch.tensor(self._field_weights, device=error.device, dtype=error.dtype).sqrt()
+        return error * w[: error.shape[1]]
+
+    def compute_loss(
+        self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
+    ) -> dict[str, torch.Tensor]:
+        """As :meth:`PDEBase.compute_loss`, with the residual columns weighted by ``field_weights``."""
+        losses = super().compute_loss(model, x, t)
+        if any(w != 1.0 for w in self._field_weights):
+            losses["residual"] = self._apply_loss_fn(
+                self._weighted(self.compute_residual(model, x, t))
+            )
+            weights = self._training_option("loss_weights") or {}
+            adaptive = self._training_option("adaptive_weights")
+            if adaptive is not None and getattr(adaptive, "enabled", False):
+                physics = (1.0, 1.0, 1.0)
+            else:
+                physics = (
+                    float(weights.get("pde", weights.get("residual", 1.0))),
+                    float(weights.get("boundary", 10.0)),
+                    float(weights.get("initial", 10.0)),
+                )
+            losses["total"] = self.weighted_total(losses, *physics)
+        return losses
+
+    def evaluate_expression(
+        self,
+        text: str,
+        model: torch.nn.Module,
+        x: torch.Tensor,
+        t: torch.Tensor | None,
+        parameters: Mapping[str, Any] | None = None,
+    ) -> torch.Tensor:
+        """An expression of the fields (``"-alpha*u_x"``) evaluated with ``model`` at ``x, t``.
+
+        The same language as the equations: fields and their derivatives (by
+        autograd), coordinates, parameters, unknown functions and inputs. Used
+        by sensors and handy for fluxes and other derived quantities.
+        ``parameters`` overrides parameter values (tensors allowed), which the
+        sensitivity analysis uses to differentiate through the expression.
+        """
+        if text not in self._observables:
+            expr = compile_expression(
+                text, self.fields + self._unknown_names, self.coordinates, self.parameters
+            )
+            unknown = set(expr.parameters) - set(self.parameters) - set(self.inputs)
+            if unknown:
+                raise ValueError(f"expression {text!r} uses unknown names {sorted(unknown)}")
+            self._observables[text] = expr
+        expr = self._observables[text]
+        if t is None:
+            t = torch.zeros(x.shape[0], 1, device=self.device, dtype=x.dtype)
+        f = Fields(model, x, t, self.fields, self.coordinates, self.device, self.unknown_functions)
+        values: dict[str, Any] = self._parameter_values()
+        values.update(parameters or {})
+        if self.inputs:
+            values.update(self._input_values(f.coordinate("t")))
+        for field in expr.fields:
+            values[field] = f.value(field)
+        for field, coords in expr.derivatives:
+            values[derivative_name(field, coords)] = f.d(field, *coords)
+        for c in expr.coordinates:
+            values[c] = f.coordinate(c)
+        return expr(values, f.value(self.fields[0]))
+
+    def observe(self, noise: float | None = None, seed: int | None = 0) -> list[Sensor]:
+        """Fill every sensor's records from the exact solution, through its operator, with noise.
+
+        ``noise`` overrides each sensor's own standard deviation; the seed is
+        offset per sensor so records are independent. Needs an exact solution.
+        """
+        if not self.has_exact_solution:
+            raise ValueError(f"{self.config.name}: observe() needs a configured exact_solution")
+        pde = self
+
+        class _Exact(torch.nn.Module):
+            def forward(self, inp):
+                d = len(pde.spatial_coordinates)
+                return pde.exact_solution(inp[:, :d], inp[:, d:])
+
+        exact = _Exact()
+        # Read the TRUE parameters, not the current guesses (as generate_synthetic_observations).
+        saved = self._trainable_params
+        try:
+            if self._true_parameters:
+                self._trainable_params = nn.ParameterDict()
+            for k, sensor in enumerate(self.sensors):
+                sensor.observe(
+                    exact, noise=noise, seed=None if seed is None else int(seed) + 1000 * k
+                )
+        finally:
+            self._trainable_params = saved
+        return self.sensors
+
+    def _compute_data_loss(self, model: torch.nn.Module) -> torch.Tensor:
+        """Observation data (if any) plus one weighted term per sensor."""
+        loss = super()._compute_data_loss(model)
+        for sensor in self.sensors:
+            loss = loss + sensor.loss(model, self._apply_loss_fn)
+        return loss
+
+    def _input_values(self, t: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Every measured input read at the times ``t`` (``(N, 1)``)."""
+        return {name: series(t) for name, series in self.inputs.items()}
+
+    def _boundary_target(self, value: Any, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        """A boundary value, a number or an expression in coordinates, parameters and inputs."""
+        if not isinstance(value, str):
+            return torch.full_like(t, float(value))
+        if value not in self._bc_expressions:
+            expr = compile_expression(value, (), self.coordinates, self.parameters)
+            unknown = set(expr.parameters) - set(self.parameters) - set(self.inputs)
+            if unknown:
+                raise ValueError(
+                    f"boundary value {value!r} uses {sorted(unknown)}, which are neither "
+                    f"parameters {sorted(self.parameters)} nor inputs {sorted(self.inputs)}"
+                )
+            self._bc_expressions[value] = expr
+        values: dict[str, Any] = self._parameter_values()
+        values.update(self._input_values(t))
+        for i, c in enumerate(self.spatial_coordinates):
+            values[c] = x[:, i : i + 1]
+        values["t"] = t
+        return self._bc_expressions[value](values, t)
+
+    def _dirichlet_values(self, options, x_lo, x_hi, t):
+        """Targets on the two faces; numbers or expressions (``"sin(2*pi*t)"``, an input's name)."""
+        if options.get("type") == "exact":
+            return super()._dirichlet_values(options, x_lo, x_hi, t)
+        value = options.get("value", 0.0)
+        left, right = options.get("left", value), options.get("right", value)
+        return self._boundary_target(left, x_lo, t), self._boundary_target(right, x_hi, t)
+
+    def _boundary_loss(self, model: torch.nn.Module) -> torch.Tensor:
+        """Mean loss over every condition on every face, per field when the conditions are."""
+        if self._per_field_bcs is None:
+            conditions = {f: self.boundary_conditions for f in self.fields}
+        else:
+            conditions = self.boundary_conditions
+        if not any(conditions.values()):
+            return torch.tensor(0.0, device=self.device)
+        n = int(self._training_option("num_boundary_points", 100))
+        needs_grad = any(
+            k in ("neumann", "periodic") for conds in conditions.values() for k in conds
+        )
+        terms = []
+        for axis, x_lo, x_hi, t in self._seeded_points("boundary", n):
+            x_lo = x_lo.clone().requires_grad_(needs_grad)
+            x_hi = x_hi.clone().requires_grad_(needs_grad)
+            u_lo = model(torch.cat([x_lo, t], dim=1))
+            u_hi = model(torch.cat([x_hi, t], dim=1))
+            for j, field in enumerate(self.fields):
+                conds = conditions.get(field, {})
+                if not conds:
+                    continue
+                w = self._field_weights[j] ** 0.5
+                f_lo, f_hi = u_lo[:, j : j + 1], u_hi[:, j : j + 1]
+                if needs_grad:
+                    df_lo = self._grad(f_lo, x_lo)[:, axis : axis + 1]
+                    df_hi = self._grad(f_hi, x_hi)[:, axis : axis + 1]
+                for kind, options in conds.items():
+                    if kind == "dirichlet":
+                        g_lo, g_hi = self._dirichlet_values(
+                            options, x_lo.detach(), x_hi.detach(), t
+                        )
+                        if g_lo.shape[1] > 1:  # type 'exact' gives every field: take this one
+                            g_lo, g_hi = g_lo[:, j : j + 1], g_hi[:, j : j + 1]
+                        terms += [w * (f_lo - g_lo), w * (f_hi - g_hi)]
+                    elif kind == "neumann":
+                        g_lo = self._boundary_target(options.get("value", 0.0), x_lo.detach(), t)
+                        g_hi = self._boundary_target(options.get("value", 0.0), x_hi.detach(), t)
+                        terms += [w * (df_lo - g_lo), w * (df_hi - g_hi)]
+                    else:  # periodic
+                        terms += [w * (f_lo - f_hi), w * (df_lo - df_hi)]
+        return torch.stack([self._apply_loss_fn(term) for term in terms]).mean()
+
     def _initial_loss(self, model: torch.nn.Module) -> torch.Tensor:
         """``u(x, t0) = u0(x)``, plus ``u_t(x, t0) = v0(x)`` for second order in time."""
         if self.initial_condition is None:
@@ -457,11 +811,11 @@ class CustomPDE(PDEBase):
         x, t = self._seeded_points("initial", n)
         t = t.clone().requires_grad_(self.time_order >= 2)
         u = model(torch.cat([x, t], dim=1))
-        loss = self._apply_loss_fn(u - self.initial_condition(x, t.detach()))
+        loss = self._apply_loss_fn(self._weighted(u - self.initial_condition(x, t.detach())))
         if self.time_order >= 2:
             velocity = self._evaluate_map(self._velocity, self._velocity_fn, x, None)
             u_t = torch.cat([self._grad(u[:, j : j + 1], t) for j in range(u.shape[1])], dim=1)
-            loss = loss + self._apply_loss_fn(u_t - velocity)
+            loss = loss + self._apply_loss_fn(self._weighted(u_t - velocity))
         return loss
 
     def _exact_solution(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
@@ -475,9 +829,76 @@ class CustomPDE(PDEBase):
             return None
         return self._exact_solution(x, t)
 
+    # --------------------------------------------------------- unknown functions
+    def trainable_parameters_iter(self):
+        """The scalar unknowns and the weights of every unknown function (for the optimizer)."""
+        return itertools.chain(
+            super().trainable_parameters_iter(), self.unknown_functions.parameters()
+        )
+
+    def evaluate_unknown(
+        self,
+        name: str,
+        x: torch.Tensor,
+        t: torch.Tensor | None = None,
+        model: torch.nn.Module | None = None,
+        truth: bool = False,
+    ) -> torch.Tensor:
+        """The learned (or, with ``truth=True``, the true) unknown function ``name`` at ``x, t``.
+
+        ``x`` is ``(N, d)`` over the spatial coordinates and ``t`` ``(N, 1)``;
+        ``model`` is needed when the function depends on a field.
+        """
+        fn = self.unknown_functions[name]
+        x = x.to(self.device).reshape(x.shape[0], -1)
+        values: dict[str, torch.Tensor] = {}
+        for i, c in enumerate(self.spatial_coordinates):
+            values[c] = x[:, i : i + 1]
+        if t is not None:
+            values["t"] = t.to(self.device).reshape(-1, 1)
+        if any(i in self.fields for i in fn.inputs):
+            if model is None:
+                raise ValueError(f"{name!r} depends on a field; pass the model")
+            tt = values.get("t", torch.zeros(x.shape[0], 1, device=self.device))
+            u = model(torch.cat([x, tt], dim=1))
+            for j, field in enumerate(self.fields):
+                values[field] = u[:, j : j + 1]
+        inputs = {i: values[i] for i in fn.inputs}
+        return fn.truth(inputs) if truth else fn(inputs)
+
+    @torch.no_grad()
+    def unknown_function_error(
+        self, name: str, num_points: int = 2000, model: torch.nn.Module | None = None
+    ) -> float:
+        """Relative L2 error of the learned unknown ``name`` against its truth.
+
+        Over a tensor grid of its inputs when they are all coordinates
+        (:meth:`UnknownFunction.grid`), else over ``num_points`` uniform
+        space-time points with the fields taken from ``model``.
+        """
+        fn = self.unknown_functions[name]
+        if all(i in self.coordinates for i in fn.inputs):
+            n = max(2, int(round(num_points ** (1.0 / len(fn.inputs)))))
+            return fn.relative_error(n=n)
+        x, t = self._sample_uniform(num_points)
+        pred = self.evaluate_unknown(name, x, t, model=model)
+        true = self.evaluate_unknown(name, x, t, model=model, truth=True)
+        return float(torch.linalg.norm(pred - true) / torch.linalg.norm(true))
+
+    def unknown_state_dict(self) -> dict[str, torch.Tensor]:
+        """Weights of the unknown functions (saved next to the model by the trainer)."""
+        return self.unknown_functions.state_dict()
+
+    def load_unknown_state_dict(self, state: Mapping[str, torch.Tensor]) -> None:
+        """Restore weights saved by :meth:`unknown_state_dict`."""
+        self.unknown_functions.load_state_dict(dict(state))
+        self.unknown_functions.to(self.device)
+
     def __repr__(self) -> str:
         eqs = [e.text for e in self._equations] or ["<callable residual>"]
+        inputs = f", inputs={tuple(self.inputs)}" if self.inputs else ""
+        unknowns = f", unknown_functions={self._unknown_names}" if self._unknown_names else ""
         return (
             f"CustomPDE({self.config.name!r}, fields={self.fields}, "
-            f"coordinates={self.coordinates}, equations={eqs})"
+            f"coordinates={self.coordinates}, equations={eqs}{unknowns}{inputs})"
         )

@@ -72,6 +72,8 @@ pde = CustomPDE(
 
 The residual has shape `(N, 2)`; the residual loss averages over both equations, and residual-based sampling uses the norm over the equations at each point.
 
+Boundary conditions given as `{kind: options}` apply to every field. A system whose fields obey different conditions keys them by field, `boundary_conditions={"u": {"dirichlet": {"value": 1.0}}, "v": {"neumann": {"value": 0.0}}}`; a field left out has none. When one component is small or slow and would otherwise be ignored by the optimizer, `field_weights={"v": 10.0}` multiplies that field's residual, initial and boundary errors in the loss. The catalogue entry `reaction_diffusion_pair`, two heat equations exchanging mass at rate `k`, has a closed form and is the test case for both.
+
 ## A residual in Python
 
 When the expression language is not enough (a lookup table, a learned closure, a conditional), pass a callable `residual(f, p)`. `f` is a `Fields` accessor with the same notation as attributes (`f.u`, `f.u_xx`, `f.x`, `f.t`, `f.d("u", "x", "t")`, `f.laplacian("u")`), each derivative computed once by autograd and cached; `p` is the parameter dict, with `nn.Parameter` values for the ones being identified. Return an `(N, k)` tensor or a list of `(N, 1)` tensors.
@@ -113,6 +115,86 @@ trainer = pde.build_trainer("feedforward", num_epochs=500, loss_weights={"data":
 trainer.train(progress=False)
 print(pde.get_trainable_parameter_values())
 ```
+
+## Unknown functions
+
+When the unknown physics is a function rather than a number, a coefficient that drifts in time, a heterogeneous field or a closure of the solution, give it as an `unknown_functions` entry and use its name in the equation like a parameter. It becomes an [`UnknownFunction`](api/pdes.md#pinnrl.pdes.unknowns.UnknownFunction), a small network of the inputs you name (coordinates or fields), whose weights train with the data in inverse mode. The subscript notation applies to it too: `alpha_x` is the derivative of the learned function, by autograd, so the conservative form of a heterogeneous diffusion is `u_t - alpha_x*u_x - alpha*u_xx`.
+
+Constraints the physics imposes are built into the output, so training never leaves the admissible set: `positive: true` (a softplus), `bounds: [lo, hi]` (a sigmoid into the interval) and `monotone: {u: increasing}` (non-negative weights on every path from that input, for a closure such as a reaction rate that grows with concentration). `initial` is the constant the function starts at, the counterpart of a scalar's initial guess. A `truth` expression in the inputs records the function the synthetic data came from: `generate_synthetic_observations` and an `exact_solution` that mentions the unknown use it, and `pde.unknown_function_error("alpha")` grades the recovery as a relative L2 error over the input range.
+
+<!-- doctest: skip -->
+```python
+pde = CustomPDE(
+    "u_t - alpha*u_xx",
+    domain={"x": (0, 1), "t": (0, 1)},
+    initial_condition="sin(pi*x)",
+    boundary_conditions={"dirichlet": {"value": 0.0}},
+    exact_solution="exp(-pi^2*(0.05*t + 0.05*t^2))*sin(pi*x)",   # for alpha = 0.05 + 0.1 t
+    unknown_functions={
+        "alpha": {"inputs": ["t"], "positive": True, "initial": 0.2, "truth": "0.05 + 0.1*t"},
+    },
+)
+pde.generate_synthetic_observations(n_points=200, noise_std=0.01, seed=0)
+trainer = pde.build_trainer("feedforward", num_epochs=2000)
+trainer.train(progress=False)
+print(pde.unknown_function_error("alpha"))          # relative L2 of the recovered alpha(t)
+alpha_hat = pde.evaluate_unknown("alpha", x, t)     # the function itself, at any points
+```
+
+A closure of the field takes the field as input and a range to normalise it: `{"f": {"inputs": ["u"], "input_ranges": {"u": [-1, 1]}, "monotone": "increasing"}}`, used as `u_t - D*u_xx - f`. Problems without a closed form take a numerical reference as `exact_solution`; `pinnrl.benchmarks.heat_variable_reference(alpha)` solves `u_t = (alpha(x, t) u_x)_x` by the method of lines and `.as_exact_solution()` interpolates it. The experiment [F09](benchmarks.md#field-valued-unknowns-experiment-f09) recovers a drifting `alpha(t)` and a two-layer `alpha(x)` this way, and shows which fields the data cannot determine.
+
+The weights of unknown functions are saved next to the model (`unknown_functions.pt`) and restored by `load_run`. The optimizer applies no weight decay to them, nor to scalar unknowns: decay is a prior toward zero, which is a regularizer for network weights and a bias for physics.
+
+## Measured inputs
+
+A plant model is driven by what was recorded: an inlet temperature, a feed rate, the ambient conditions. Give such a record as an `inputs` entry, a [`TimeSeries`](api/pdes.md#pinnrl.pdes.inputs.TimeSeries) built from a CSV or NPZ file (`{"path": "left.csv", "time_column": "t", "value_column": "T_left"}`) or from arrays, and use its name in the equations or in boundary values. It is read at the time of every collocation or boundary point by linear interpolation and held constant outside the record. Boundary values accept expressions in the coordinates, parameters and inputs, so `dirichlet: {left: "q", right: "0.2*t"}` and `neumann: {value: "sin(2*pi*t)"}` work alongside plain numbers.
+
+<!-- doctest: skip -->
+```python
+pde = CustomPDE(
+    "u_t - alpha*u_xx - q",                                   # a measured source
+    domain={"x": (0, 1), "t": (0, 1)},
+    parameters={"alpha": 0.1},
+    inputs={"q": {"path": "source.csv", "time_column": "t", "value_column": "q"},
+            "T_in": TimeSeries(t_samples, values)},
+    boundary_conditions={"dirichlet": {"left": "T_in", "right": 0.0}},   # a measured boundary
+    initial_condition="0",
+)
+```
+
+In a YAML specification, relative `path` entries are taken from the file's own folder. The run snapshot records the inputs by path (or inline when they came from arrays), so `load_run` rebuilds the driven problem.
+
+## Sensors
+
+A plant does not deliver the field at random points of space-time. A probe sits at one place and reports a sequence of readings; a flux meter reports `-alpha*u_x` on a wall; a level or a tank temperature is an integral over the domain. The `sensors` argument describes such observation operators ([`PointSensor`](api/pdes.md#pinnrl.pdes.sensors.PointSensor), [`BoundarySensor`](api/pdes.md#pinnrl.pdes.sensors.BoundarySensor), [`IntegralSensor`](api/pdes.md#pinnrl.pdes.sensors.IntegralSensor)), each with the expression it reports, its timestamps, its own noise level, a `delay` (the record stamped `t` reflects the state at `t - delay`) and a `weight` in the loss. Their records enter the data term as one mean-squared misfit per sensor, next to any scattered `observation_data`.
+
+<!-- doctest: skip -->
+```python
+import numpy as np
+from pinnrl.pdes import PointSensor, BoundarySensor, IntegralSensor, sensor_jacobian
+from pinnrl.pdes.catalog import from_catalog
+from pinnrl.analysis import fisher_information
+from pinnrl.pdes.sensors import sensor_noise_vector
+
+times = np.linspace(0.05, 1.0, 40)
+pde = from_catalog(
+    "heat",
+    trainable_parameters=["alpha"], parameter_initial_guesses={"alpha": 0.5},
+    sensors=[
+        PointSensor(0.3, times, noise=0.01, name="probe"),                         # u(0.3, t)
+        BoundarySensor("left", times, "-alpha*u_x", noise=0.02, delay=0.05),       # wall flux, delayed
+        IntegralSensor(times, "u", normalize=True, noise=0.01),                    # the mean over x
+    ],
+)
+pde.observe(seed=0)                     # records from the true solution, through the operators
+trainer = pde.build_trainer("feedforward", num_epochs=2000)
+
+# Which layout determines alpha best? The Fisher information of the records, from the closed form.
+J = sensor_jacobian(pde, ["alpha"])
+print(fisher_information(J, sensor_noise_vector(pde.sensors), ["alpha"]).std)
+```
+
+`pde.evaluate_expression("-alpha*u_x", model, x, t)` is the same machinery for your own derived quantities. `sensor.set_values(records)` attaches real measurements; `pinnrl-train --pde-file` records synthetic ones when a spec's sensors carry none. Experiment [K02](benchmarks.md#sensor-layout-vs-conditioning-experiment-k02) uses `sensor_jacobian` to rank layouts.
 
 ## From the command line
 
@@ -247,7 +329,7 @@ pde = CustomPDE("V_t - 0.5*sigma^2*S^2*V_SS - r*S*V_S + r*V", domain={"S": (1, 2
 
 ## The catalogue
 
-`pinnrl.pdes.catalog.CATALOG` holds forty-two such specifications: parabolic (heat in 1-D to 5-D, with a source, advection–diffusion, Fisher–KPP, Allen–Cahn, Cahn–Hilliard, Burgers, porous medium, Black–Scholes), hyperbolic (wave in 1-D and 2-D, telegraph, convection, Klein–Gordon, sine–Gordon), dispersive (KdV with one or two coefficients, the Euler–Bernoulli beam, Schrödinger as a real system), steady (Poisson in 2-D and 4-D, Helmholtz, a convection–diffusion boundary layer, Bratu), ODEs (logistic, damped oscillator, pendulum, Lotka–Volterra, Van der Pol, Lorenz, SIR, a CSTR), systems (Gray–Scott, Brusselator, linear shallow water, Stokes) and a three-state Hamilton–Jacobi–Bellman equation.
+`pinnrl.pdes.catalog.CATALOG` holds forty-three such specifications: parabolic (heat in 1-D to 5-D, with a source, advection–diffusion, Fisher–KPP, Allen–Cahn, Cahn–Hilliard, Burgers, porous medium, Black–Scholes), hyperbolic (wave in 1-D and 2-D, telegraph, convection, Klein–Gordon, sine–Gordon), dispersive (KdV with one or two coefficients, the Euler–Bernoulli beam, Schrödinger as a real system), steady (Poisson in 2-D and 4-D, Helmholtz, a convection–diffusion boundary layer, Bratu), ODEs (logistic, damped oscillator, pendulum, Lotka–Volterra, Van der Pol, Lorenz, SIR, a CSTR), systems (a coupled reaction–diffusion pair with a closed form, Gray–Scott, Brusselator, linear shallow water, Stokes) and a three-state Hamilton–Jacobi–Bellman equation.
 
 ```python
 from pinnrl.pdes.catalog import CATALOG, from_catalog
@@ -264,6 +346,7 @@ Every entry with a closed-form solution is checked by the test suite: the exact 
 - The derivative notation applies to fields, not to expressions: write `(u^2)_xx` as `2*u_x^2 + 2*u*u_xx`, or use a callable residual.
 
 - Derivatives are taken by nested autograd; order four and above is slow and numerically noisy, as for the shipped Cahn–Hilliard equation. Cost grows with the number of coordinates and with the order, so a 5-D Laplacian is five second-derivative passes.
-- Boundary conditions apply to every field and every face alike; mixed or per-field conditions need a callable residual or a subclass.
+- A boundary condition applies to both faces of an axis alike (Dirichlet takes `left`/`right` values); conditions that differ by face in kind, or Robin conditions, need a callable residual or a subclass.
+- An unknown function is a smooth network: a jump in the true coefficient is recovered as a steep ramp, and a field the data barely feel (see F09) collapses to the constant that fits best. Check identifiability before trusting the recovered shape.
 - The network sees raw coordinates: scale your problem so that the domain and the fields are of order one (non-dimensionalization helpers are on the roadmap).
 - Integral terms, delays and non-local operators are outside the expression language.
