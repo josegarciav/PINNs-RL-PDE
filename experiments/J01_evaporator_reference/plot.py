@@ -94,6 +94,7 @@ ax = axes[3]
 if runs:
     t = np.array(runs[0]["t"]) / 60
     ax.plot(t, runs[0]["outlet_X_ref"], color=INK, linewidth=1.6, ls="--", label="reference")
+    runs = [r for r in runs if np.isfinite(r["rel_l2_X"])]  # a diverged seed is left out
     for r in runs:
         ax.plot(
             t,
@@ -107,7 +108,7 @@ if runs:
     ax.set_ylabel("outlet X(L, t)")
     errs = [r["rel_l2_X_minus_feed"] for r in runs]
     ax.set_title(
-        f"J02: PINN outlet, steam step (rel. L2 of X − feed: {np.median(errs):.3f})",
+        f"J02: PINN outlet, steam step (rel. L2 of X − feed: {np.nanmedian(errs):.3f})",
         loc="left",
         fontsize=10.5,
         pad=8,

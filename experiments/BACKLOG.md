@@ -190,8 +190,8 @@ before it counts as done.
 
 | ID | P | Experiment | Question | Setup and metric | Status |
 |---|---|---|---|---|---|
-| J01 | P1 | Evaporator reference simulator | A trusted forward model to grade everything else against. | 1-D falling-film evaporator energy/mass balance, steady and dynamic, with a classical solver (FDM/ODE). Grid convergence. | todo |
-| J02 | P1 | PINN forward solve of J01 | Can the PINN match the reference simulator? | Rel. L2 on temperature and concentration profiles. | todo |
+| J01 | P1 | Evaporator reference simulator | A trusted forward model to grade everything else against. | `pinnrl.process.FallingFilmEvaporator`: transport of W and X along a heated tube with boiling-point elevation, fouling, measured feed and steam; steady ODE and first-order method-of-lines solvers, grid-converged; sensitivities and three scenarios. See `J01_evaporator_reference/`. | done |
+| J02 | P1 | PINN forward solve of J01 | Can the PINN match the reference simulator? | The `custom_pde()` form, normalized, Adam + L-BFGS: 0.4–0.6 % on W and X for the steam step (2 of 3 seeds; one diverged in L-BFGS). See `J01_evaporator_reference/`. | done |
 | J03 | P1 | Fouling estimation | Recover a time-varying fouling resistance R_f(t) from synthetic sensors. | Inverse mode with R_f(t) as a small network (builds on F09). | todo |
 | J04 | P1 | Plant-like sensors | Is R_f identifiable from outlet/boundary measurements only? | Sensor operator on the J01 outputs; profile likelihood (F07 method). | todo |
 | J05 | P2 | EKF/UKF baseline | PINN estimator vs a Kalman filter on a lumped model. | Estimation error, latency, tuning effort. | todo |

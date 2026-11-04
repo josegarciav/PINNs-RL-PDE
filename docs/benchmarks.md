@@ -177,3 +177,12 @@ Adam, L-BFGS and Adam→L-BFGS at matched wall-clock time on heat, Burgers and A
 Every position a cloud swarm evaluates, weighted by its likelihood, against the exact posterior on heat $\alpha$ and the damped pendulum. Details in `experiments/K47_swarm_posterior/README.md`.
 
 - The weighted swarm is centred on the posterior mean (within 0.05 standard deviations) but 0.5–0.7 as wide, with 80–87 % coverage at the 90 % level: importance weights cannot recover tails the swarm never visits. The accepted (likelihood-ratio) set is wider and covers 90–100 %; widened by K46's factor it is the usable interval. For a density, use a sampler, with the parametric surrogate (K45) as its cheap forward model.
+
+## The evaporator reference and its PINN (experiments J01, J02)
+
+`pinnrl.process.FallingFilmEvaporator`: liquid flow and solids fraction transported along a heated tube with boiling-point elevation, fouling and measured feed and steam signals; a steady-state ODE solver, a first-order method-of-lines dynamic solver, and the same model as a `CustomPDE`. Details in `experiments/J01_evaporator_reference/README.md`.
+
+![J01](assets/benchmarks/j01_evaporator.png)
+
+- One pass evaporates 31 % of the feed's water; a fouling of $10^{-4}$ m²K/W moves the outlet solids as much as 1.7 K of steam or 18 % of feed, so the outlet alone cannot tell them apart. The solver converges at first order (0.2 s per 10-minute simulation on the working grid).
+- The normalised PINN reproduces the steam-step scenario to 0.4–0.6 % on both fields in under six minutes, in physical units; one of three seeds diverged in the L-BFGS finish (the safeguard is the next engineering item).

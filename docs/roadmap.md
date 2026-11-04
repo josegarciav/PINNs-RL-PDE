@@ -36,7 +36,7 @@ The goal is to estimate unknown physics with known validity conditions and calib
 
 ## v0.7+: process twins
 
-- `pinnrl.process`: evaporator and spray-dryer models with method-of-lines reference simulators and linearized-stability checks (J01, J07, K09; P17).
+- [x] `pinnrl.process`: the falling-film evaporator with its method-of-lines reference simulator and `custom_pde()` form (J01, J02 done). *Open: the spray-dryer model (J07), linearized-stability checks (K09), an L-BFGS step safeguard in the trainer.*
 - Classical estimators on the same models: EKF/UKF and moving-horizon estimation (J05; P15, P19).
 - Historian adapter: CSV or Parquet plus a tag map to sensor definitions.
 - A dashboard "Process" view: soft-sensor trends with uncertainty bands, and time to the next cleaning.
