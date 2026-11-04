@@ -160,7 +160,7 @@ The shortest path to results you can trust and publish:
 | H01 | P1 | Convection failure (Krishnapriyan et al. 2021) | At what velocity β does the PINN fail, and does RAD or curriculum fix it? | β ∈ {1, 10, 30, 50}, uniform vs RAD vs curriculum over β. | todo |
 | H02 | P1 | Burgers viscosity sweep | Error vs shock sharpness. | ν ∈ {0.1, 0.01, 0.01/π, 0.001}. | todo |
 | H03 | P1 | Allen–Cahn benchmark | Reproduce the known failure on `x2_cos` and test the fixes. | ε sweep; vanilla vs RAD vs time-marching vs causal weighting. | todo |
-| H04 | P1 | Time-marching windows | Sequential time windows vs the whole domain at once. | Allen–Cahn and KdV, 2/4/8 windows. | todo |
+| H04 | P1 | Time-marching windows | Sequential time windows vs the whole domain at once. | `PDETrainer.train_windows` on pendulum, SIR, Lorenz, Van der Pol and the drying droplet, 1/2/4/8 windows at the same budget, 2 seeds: SIR rescued (1.0 → 0.001 with 8 windows), the pendulum a budget problem (fine in one shot with 12k + 500 steps), Lorenz unrescued, the droplet's transition a resolution problem. Allen–Cahn and KdV still to run. See `H04_time_marching/`. | done (ODEs and the droplet) |
 | H05 | P2 | Parameter curriculum | Coarse-to-fine schedule on ν or β (roadmap v0.4). | Against H01/H02 at equal total epochs. | todo |
 | H06 | P2 | KdV long-time propagation | Error growth with horizon. | T ∈ {1, 2, 5}. Soliton position and amplitude error. | todo |
 | H07 | P2 | Cahn–Hilliard mixed form | Auxiliary μ output (two 2nd-order equations) vs direct 4th order. | Error, and time per epoch. | todo |

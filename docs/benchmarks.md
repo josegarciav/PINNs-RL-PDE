@@ -284,3 +284,16 @@ python experiments/J07_droplet_drying/run.py --seeds 3 --steps 12000 --lbfgs-ste
 - **Least squares with the right form is at the noise floor** ($n$, $X_{cr}$ to 1 % in 0.2 s) and the wrong form is 5.5 % off with a misfit 16 times larger.
 - **Second pass (J07b).** The record itself gives the closure to 2–3 % pointwise ($f_i = -\dot X_i m_s / (h_m A \Delta\rho)$ from the smoothed readings); started there, the PINN refines it to 1.7–2.1 % on two seeds and destroys it on the third (a misfit check against the start catches that). Freezing the function first makes the collapse certain; a Legendre basis removes the sticky collapse (7 %, 20 %, 66 %) but not the multimodality. Figure: `assets/benchmarks/j07b_closure.png`.
 
+## Time-marching windows (experiment H04)
+
+```bash
+python experiments/H04_time_marching/run.py --seeds 2 --steps 12000 --workers 4
+```
+
+`PDETrainer.train_windows` (the same Adam budget split over 1, 2, 4 or 8 time windows, the network carried over, an L-BFGS finish on the whole span) on the K09 failures, Van der Pol and the drying droplet. Details in `experiments/H04_time_marching/README.md`.
+
+![H04](assets/benchmarks/h04_time_marching.png)
+
+- **Time marching rescues SIR**: one-shot training returns the disease-free state (error 1.0), eight windows find the epidemic wave to 0.1 %. A window short against the feature keeps the network off the trivial branch.
+- **The pendulum was a budget problem**: 12,000 + 500 steps give 0.3–3 % in one shot where K09's 2,000 + 100 gave 74 %; windows do not help it. **Lorenz is rescued by nothing** (a chaotic trajectory with a growth of $e^{23}$ is not one network's job), and **the droplet's sharp transition is a resolution problem**, unchanged by the schedule (2–5 % on the moisture).
+
