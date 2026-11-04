@@ -143,4 +143,4 @@ The Fisher information of a sensor layout from `sensor_jacobian` on closed forms
 
 - On heat a probe's information scales with $\sin^2 \pi x_0$: a probe at 5 % of the length is 6.4 times worse (in standard deviation) than one at the centre, and two probes at the quarter points equal one at the centre. The domain mean, a quarter-point probe and the wall flux lie within a factor of two of the best probe.
 - On KdV a probe on the soliton's path sees height (fixes $\alpha$) and width (fixes $\beta$) with $\kappa(F) \approx 7$; four lengths away it sees only the tail, where both coefficients scale the same number: $\kappa(F) > 10^4$, correlation 0.996. Two evenly spaced probes at $\pm 7.5$ are worse than one at the origin; placement beats count.
-K02_PART_B
+- Trained on the records, the spread of $\hat\alpha$ across seeds matches each layout's bound (1.6–2.7 % against 1.3–2.5 %), and the error stops at the 2 % surrogate floor: sensor design pays until the bound reaches the forward model's accuracy.

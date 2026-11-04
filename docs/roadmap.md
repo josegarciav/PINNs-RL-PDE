@@ -30,7 +30,7 @@ The goal is to estimate unknown physics with known validity conditions and calib
 - [x] **Field-valued unknowns:** a learnable coefficient field $\alpha(x, t)$ or closure $f(u)$, with positivity and monotonicity constraints. *Done: `CustomPDE(unknown_functions=...)` with `UnknownFunction`; F09 recovers $\alpha(t)$ to 4 % and a two-layer $\alpha(x)$ in shape on heat, and shows which fields the data cannot determine.*
 - [x] **Coupled multi-field systems** (`output_dim > 1`) with per-field BCs and loss weights. *Done: `CustomPDE(boundary_conditions={field: ...}, field_weights=...)`; the catalogue's `reaction_diffusion_pair` trains to its closed form in `test_coupled_systems.py`.*
 - [x] **Measured inputs:** BCs and forcing from interpolated time series. *Done: `CustomPDE(inputs={"q": {"path": "left.csv"}}, boundary_conditions={"dirichlet": {"left": "q"}})`; `test_measured_inputs.py` trains heat with its boundary following a CSV.*
-- **Sensor operators:** point, boundary and integral observations with per-sensor noise and delay. *Done when: F05 and K02 use them.*
+- [x] **Sensor operators:** point, boundary and integral observations with per-sensor noise and delay. *Done: `CustomPDE(sensors=[PointSensor, BoundarySensor, IntegralSensor])`, `pde.observe`, `sensor_jacobian`; K02 ranks layouts by their Fisher information and trains on sensor records (F05's fixed probes are one `PointSensor` each; its results predate the module).*
 - **Non-dimensionalization helpers** (a reference scale per variable). *Done when: J01 trains without hand-scaling.*
 - **High-dimensional stability:** dimension sweeps of stability constants and quadrature error. *Done when: K08 is written up (P12).*
 
