@@ -45,6 +45,10 @@ class Sensor:
             ``pde.observe`` and by likelihood weighting).
         delay: The record stamped ``t`` reflects the state at ``t - delay``.
         weight: Multiplier of this sensor's mean-squared error in the data loss.
+        scale: Magnitude the misfit is divided by in the loss. Default: the
+            reported field's scale when the problem is normalized
+            (``build_trainer(normalize=True)``) and the expression is a field
+            name, else 1.
         name: Label for reports; defaults to the class name.
     """
 
@@ -58,9 +62,11 @@ class Sensor:
         noise: float = 0.0,
         delay: float = 0.0,
         weight: float = 1.0,
+        scale: float | None = None,
         name: str | None = None,
     ):
         self.expression = str(expression)
+        self.scale = None if scale is None else float(scale)
         self.times = np.asarray(times if times is not None else [], dtype=np.float64).reshape(-1)
         self.noise = float(noise)
         self.delay = float(delay)
@@ -125,13 +131,22 @@ class Sensor:
             clean = clean + sigma * torch.randn(clean.shape, generator=gen).to(clean.device)
         return self.set_values(clean)
 
+    def loss_scale(self) -> float:
+        """The magnitude the misfit is divided by: ``scale``, or the field's scale when normalized."""
+        if self.scale is not None:
+            return self.scale
+        if getattr(self._pde, "_normalized", False):
+            return float(self._pde.field_scales.get(self.expression, (0.0, 1.0))[1])
+        return 1.0
+
     def loss(self, model: torch.nn.Module, reduce) -> torch.Tensor:
-        """The sensor's weighted data misfit ``weight * reduce(H[u] - y)``."""
+        """The sensor's weighted data misfit ``weight * reduce((H[u] - y) / scale)``."""
         if self.values is None:
             raise ValueError(
                 f"{self.name} has no records; call pde.observe() or sensor.set_values()"
             )
-        return self.weight * reduce(self.predict(model) - self.values.to(self._pde.device))
+        error = (self.predict(model) - self.values.to(self._pde.device)) / self.loss_scale()
+        return self.weight * reduce(error)
 
     def to_spec(self) -> dict[str, Any]:
         """The dict that rebuilds the sensor (records included when present)."""
@@ -144,6 +159,8 @@ class Sensor:
             "weight": self.weight,
             "name": self.name,
         }
+        if self.scale is not None:
+            spec["scale"] = self.scale
         if self.values is not None:
             spec["values"] = self.values.detach().cpu().reshape(-1).tolist()
         return spec
@@ -173,7 +190,7 @@ class PointSensor(Sensor):
         location: Spatial position, a number in 1-D or a sequence of ``d`` numbers.
         times: Timestamps of the records.
         expression: What is reported there (default the first field).
-        **kwargs: ``noise``, ``delay``, ``weight``, ``name`` as for :class:`Sensor`.
+        **kwargs: ``noise``, ``delay``, ``weight``, ``scale``, ``name`` as for :class:`Sensor`.
     """
 
     kind = "point"
@@ -209,7 +226,7 @@ class BoundarySensor(Sensor):
         axis: Spatial axis of the face (0 in 1-D).
         position: Coordinates along the other axes in more than one dimension
             (defaults to the centre of each).
-        **kwargs: ``noise``, ``delay``, ``weight``, ``name`` as for :class:`Sensor`.
+        **kwargs: ``noise``, ``delay``, ``weight``, ``scale``, ``name`` as for :class:`Sensor`.
     """
 
     kind = "boundary"
@@ -260,7 +277,7 @@ class IntegralSensor(Sensor):
         weight_expression: An optional weight ``w(x)`` in the spatial coordinates.
         quadrature: Midpoint-rule points per spatial axis.
         normalize: Divide by the domain volume (a mean instead of an integral).
-        **kwargs: ``noise``, ``delay``, ``weight``, ``name`` as for :class:`Sensor`.
+        **kwargs: ``noise``, ``delay``, ``weight``, ``scale``, ``name`` as for :class:`Sensor`.
     """
 
     kind = "integral"

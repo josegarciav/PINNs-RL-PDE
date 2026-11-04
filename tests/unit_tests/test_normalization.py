@@ -116,3 +116,37 @@ def test_cli_normalize_round_trips_through_the_run_snapshot(tmp_path):
     assert model.scaled and torch.allclose(model._out_offset, torch.tensor([[300.0]]))
     x = torch.tensor([[L / 3, T / 2]])
     assert math.isfinite(model(x).item())
+
+
+def test_sensor_misfit_is_taken_in_units_of_the_field_scale():
+    """A normalized problem divides a sensor's misfit by its field's scale (J03's failure)."""
+    from pinnrl.pdes import PointSensor
+
+    def build(normalize):
+        pde = CustomPDE(
+            "u_t - alpha*u_xx",
+            domain={"x": (0, 1000.0), "t": (0, 3600.0)},
+            parameters={"alpha": 50.0},
+            initial_condition="300 + 50*sin(pi*x/1000)",
+            boundary_conditions={"dirichlet": {"value": 300.0}},
+            exact_solution="300 + 50*exp(-alpha*pi**2*t/1000**2)*sin(pi*x/1000)",
+            scales={"u": (300.0, 50.0)},
+            sensors=[PointSensor(500.0, [600.0, 1200.0, 1800.0], name="probe")],
+        )
+        pde.observe(seed=0)
+        torch.manual_seed(0)
+        trainer = pde.build_trainer("feedforward", normalize=normalize, num_epochs=1)
+        return pde, trainer
+
+    raw_pde, raw_trainer = build(False)
+    scaled_pde, scaled_trainer = build(True)
+    raw = float(raw_pde.sensors[0].loss(raw_trainer.model, raw_pde._apply_loss_fn))
+    scaled = float(scaled_pde.sensors[0].loss(scaled_trainer.model, scaled_pde._apply_loss_fn))
+    err_raw = raw_pde.sensors[0].predict(raw_trainer.model) - raw_pde.sensors[0].values
+    err_scaled = scaled_pde.sensors[0].predict(scaled_trainer.model) - scaled_pde.sensors[0].values
+    assert raw == pytest.approx(float((err_raw**2).mean()), rel=1e-5)
+    assert scaled == pytest.approx(float((err_scaled**2).mean()) / 50.0**2, rel=1e-5)
+    assert scaled_pde.sensors[0].loss_scale() == 50.0
+    explicit = PointSensor(500.0, [600.0], scale=10.0)
+    assert explicit.to_spec()["scale"] == 10.0
+    assert explicit.loss_scale() == 10.0
