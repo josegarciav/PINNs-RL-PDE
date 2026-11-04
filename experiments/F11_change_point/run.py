@@ -72,8 +72,11 @@ def build(model: str, start: dict):
     )
 
 
+CLEAN = {"weight_decay": 0.0, "gradient_clipping": 0.0}
+
+
 def run_cell(job):
-    model, start_name, noise, seed, steps = job
+    model, start_name, noise, seed, steps, clean, lbfgs = job
     import numpy as np
     import torch
 
@@ -92,6 +95,7 @@ def run_cell(job):
         scheduler_type="constant",
         early_stopping={"enabled": False},
         loss_weights={"residual": 1.0, "boundary": 10.0, "initial": 10.0, "data": 10.0},
+        **(CLEAN if clean else {}),
     )
     torch.manual_seed(seed)
     trainer.model.apply(lambda m: m.reset_parameters() if hasattr(m, "reset_parameters") else None)
@@ -102,6 +106,11 @@ def run_cell(job):
         trainer.train_steps(num_steps=500, resample_every=50)
         done += 500
         trajectory.append(pde.get_trainable_parameter_values() if model == "change_point" else {})
+    if lbfgs:  # an L-BFGS finish of 100 steps (D01's lever)
+        trainer._switch_to_lbfgs()
+        for g in trainer.optimizer.param_groups:
+            g["lr"] = 1.0
+        trainer.train_steps(num_steps=100, resample_every=50)
     grid = torch.linspace(0, 1, 101).reshape(-1, 1)
     truth = 0.05 + 0.1 * (grid.ravel().numpy() > 0.5)
     with torch.no_grad():
@@ -157,6 +166,8 @@ def main():
     parser.add_argument("--seeds", type=int, default=5)
     parser.add_argument("--steps", type=int, default=10000)
     parser.add_argument("--workers", type=int, default=5)
+    parser.add_argument("--clean", action="store_true", help="no network weight decay or clipping")
+    parser.add_argument("--lbfgs", action="store_true", help="finish with 100 L-BFGS steps")
     parser.add_argument("--out", type=Path, default=HERE / "results")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -166,13 +177,13 @@ def main():
     }
     (args.out / "crlb.json").write_text(json.dumps(bounds, indent=1))
     jobs = [
-        ("change_point", start, noise, seed, args.steps)
+        ("change_point", start, noise, seed, args.steps, args.clean, args.lbfgs)
         for seed in range(args.seeds)
         for noise in NOISES
         for start in STARTS
     ]
     jobs += [
-        ("network", "from_0.3", noise, seed, args.steps)
+        ("network", "from_0.3", noise, seed, args.steps, args.clean, args.lbfgs)
         for seed in range(args.seeds)
         for noise in NOISES
     ]
