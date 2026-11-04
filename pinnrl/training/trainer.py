@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import os
 import time
 from collections.abc import Callable, Sequence
@@ -506,19 +507,67 @@ class PDETrainer:
         self._is_lbfgs = True
         self.scheduler = self._build_scheduler(force_reduce_lr=True)
 
+    #: An L-BFGS step whose loss is not finite, or exceeds the loss before the step by this
+    #: factor, is rolled back (the line search can step to an unbounded loss on a rough network).
+    LBFGS_BLOWUP_FACTOR = 10.0
+    #: After this many rolled-back steps in a row the trainer returns to Adam.
+    LBFGS_MAX_FAILURES = 3
+
     def _lbfgs_step(self, x_batch, t_batch):
-        """One L-BFGS optimizer step using a recompute-loss closure."""
+        """One L-BFGS optimizer step using a recompute-loss closure, with a safeguard.
+
+        The parameters are snapshotted before the step. If the loss after the
+        step is not finite or more than ``LBFGS_BLOWUP_FACTOR`` times the loss
+        before it, the snapshot is restored and the L-BFGS learning rate is
+        halved; after ``LBFGS_MAX_FAILURES`` such steps in a row the optimizer
+        falls back to Adam for the rest of the run.
+        """
         captured: dict[str, torch.Tensor] = {}
+        params = self._collect_optimizable_params()
+        snapshot = [p.detach().clone() for p in params]
+        before: list[float] = []
 
         def closure():
             self.optimizer.zero_grad()
             losses = self.pde.compute_loss(self.model, x_batch, t_batch)
             total = losses["total"]
+            if not before:
+                before.append(float(total.detach()))
             total.backward()
             captured["losses"] = losses
             return total
 
         self.optimizer.step(closure)
+        # (the loss needs autograd for the residual's derivatives, so no ``no_grad`` here)
+        after = self.pde.compute_loss(self.model, x_batch, t_batch)
+        value = float(after["total"].detach())
+        blew_up = not math.isfinite(value) or (
+            before and math.isfinite(before[0]) and value > self.LBFGS_BLOWUP_FACTOR * before[0]
+        )
+        if blew_up:
+            with torch.no_grad():
+                for p, s in zip(params, snapshot, strict=True):
+                    p.copy_(s)
+            self._lbfgs_failures = getattr(self, "_lbfgs_failures", 0) + 1
+            for group in self.optimizer.param_groups:
+                group["lr"] = group["lr"] * 0.5
+            self.logger.warning(
+                "L-BFGS step rolled back (loss %s after %s); lr halved to %.3g",
+                value,
+                before[0] if before else "?",
+                self.optimizer.param_groups[0]["lr"],
+            )
+            if self._lbfgs_failures >= self.LBFGS_MAX_FAILURES:
+                self.logger.warning(
+                    "L-BFGS failed %d times in a row: back to Adam", self._lbfgs_failures
+                )
+                self.optimizer = self._build_adam(params)
+                self._is_lbfgs = False
+                self._lbfgs_failures = 0
+                self.scheduler = self._build_scheduler()
+            captured["losses"] = self.pde.compute_loss(self.model, x_batch, t_batch)
+            return captured["losses"]
+        self._lbfgs_failures = 0
         if "losses" not in captured:
             # Defensive: torch's LBFGS.step always evaluates the closure at least once.
             captured["losses"] = self.pde.compute_loss(self.model, x_batch, t_batch)
