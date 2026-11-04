@@ -255,3 +255,17 @@ The Jacobian spectrum along the reference trajectory of eight catalogue ODE syst
 - **The evaporator's discretised operator is non-normal**: the upwind transport has one defective eigenvalue $-v/\Delta z$ and the computed spectrum is a circle of rounding around it, so its "stiffness ratio" means nothing. The physics is convectively stabilised and not stiff: the source terms grow locally at 0.02 s⁻¹, the transport removes them at 0.05 s⁻¹, the physical rates span a factor 6, and the grid-set rate (10 s⁻¹ at $n_z = 201$) that forces BDF is one a PINN never sees.
 - **On ODEs the PINN fails by the trivial solution, not by stiffness**: pendulum, Lorenz and SIR collapse to an exact trivial solution close to the initial condition (errors 0.7–1.0), while Van der Pol with the same fast-unit count and a stiffness of 2,500 trains to $10^{-3}$. Every success has at most 30 fast units in the window; time-marching (H04) and causal weighting are the remedies.
 
+## A Kalman-filter baseline (experiment J05)
+
+```bash
+python experiments/J05_ekf_baseline/run.py --seeds 3
+```
+
+`pinnrl.process.ExtendedKalmanFilter` (with a Rauch–Tung–Striebel smoother) on a lumped method-of-lines model of the evaporator with 6–51 cells, the fouling as a random-walk state, on J03's records and seeds; against the PINN twin, and with the steam and feed biases of J04. Details in `experiments/J05_ekf_baseline/README.md`.
+
+![J05](assets/benchmarks/j05_ekf_baseline.png)
+
+- **With the model known, the filter beats the PINN twin by a wide margin at a thousandth of the cost**: 11 cells track the drift to 3.5 % in L2 and 2 % at the end in 0.2 s against the PINN's 9–16 % and 10–49 % in five minutes; the smoother on 51 cells reaches 2.3 % and 0.7 %, close to J04's 5 % data limit.
+- **The tuning is one number**, the random-walk intensity: a decade too small and the filter lags the ramp by four minutes, a decade too large and it follows the noise. Six cells still give 7 %.
+- **The inputs bound both estimators alike**: a 0.3 K steam bias costs the filter 12 % at the end, a 1 % feed bias 8 %, the J04 numbers. The PINN's case is the partly unknown model (a closure, a field), not this one; the EKF stays as the control on every later comparison.
+

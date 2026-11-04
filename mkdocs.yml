@@ -97,3 +97,4 @@ nav:
     - Benchmarks: api/benchmarks.md
     - Analysis: api/analysis.md
     - Uncertainty: api/uq.md
+    - Process models: api/process.md

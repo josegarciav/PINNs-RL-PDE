@@ -31,7 +31,7 @@ sensors and, optionally, ``R_f(t)`` as an unknown function.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -199,6 +199,33 @@ class FallingFilmEvaporator:
         return EvaporatorReference(
             W=ReferenceSolution(x=z, t=t, u=W), X=ReferenceSolution(x=z, t=t, u=X), q=q, z=z, t=t
         )
+
+    def fouling_state_space(self, nz: int = 11):
+        """The interior states ``[W_1..W_{nz-1}, X_1..X_{nz-1}]`` with ``R_f`` as a parameter, for an estimator.
+
+        Returns ``(f, h, s0)``: ``f(t, s, theta)`` the interior dynamics with
+        ``theta = [R_f]`` (the other signals from this model's ``W_in``,
+        ``X_in`` and ``T_s``), ``h(t, s)`` the outlet records ``[X(L), W(L)]``,
+        and ``s0`` the steady interior state at ``t = 0`` with this model's
+        ``R_f(0)``. The J05 Kalman-filter baseline is built on it.
+        """
+        holder = [float(_as_fn(self.R_f)(0.0))]
+        model = replace(self, R_f=lambda t: holder[0])
+        rhs = model.mol_rhs(nz)
+        W_in, X_in = _as_fn(self.W_in), _as_fn(self.X_in)
+
+        def f(t: float, s: np.ndarray, theta: np.ndarray) -> np.ndarray:
+            holder[0] = float(theta[0])
+            full = np.concatenate([[W_in(t)], s[: nz - 1], [X_in(t)], s[nz - 1 :]])
+            d = rhs(t, full)
+            return np.concatenate([d[1:nz], d[nz + 1 :]])
+
+        def h(t: float, s: np.ndarray) -> np.ndarray:
+            return np.array([s[2 * nz - 3], s[nz - 2]])
+
+        ss = self.steady_state(nz, t=0.0)
+        s0 = np.concatenate([ss["W"][1:], ss["X"][1:]])
+        return f, h, s0
 
     # ------------------------------------------------------------- the PINN
     def custom_pde(
