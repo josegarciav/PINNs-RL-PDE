@@ -41,7 +41,7 @@ for i, o in enumerate(r["ode"]):
     errs = [p["rel_l2_mean"] for p in pinn if p["system"] == o["system"]]
     if not errs:
         continue
-    x = o["growth_exponent"]
+    x = o["fast_units"]
     ax.scatter([x] * len(errs), errs, color=PALETTE[i % len(PALETTE)], s=36, zorder=3)
     ax.annotate(
         o["system"].replace("_", " "),
@@ -51,9 +51,9 @@ for i, o in enumerate(r["ode"]):
         fontsize=9,
     )
 ax.set_yscale("log")
-ax.set_xlabel("perturbation growth over the window, $T \\max \\mathrm{Re}\\,\\lambda$")
+ax.set_xlabel("fast units in the window, $T \\max |\\lambda|$")
 ax.set_ylabel("PINN relative L2 error (2 seeds, mean over fields)")
-ax.set_title("a) catalogue ODE systems: PINN error vs linearized growth", loc="left")
+ax.set_title("a) catalogue ODE systems: PINN error vs the window's fast units", loc="left")
 
 # b) evaporator eigenvalues in the complex plane for two grids
 ax = axes[1]

@@ -28,7 +28,7 @@ Three things the package can measure follow.
 
 ## Linearized stability of coupled systems
 
-For a system $u_t = f(u; \theta)$ (the ODE entries, the reaction terms of Gray–Scott or the Brusselator, a process model with several balances), the Jacobian $\partial f/\partial u$ at an operating point gives the linearized dynamics. Its eigenvalues decide whether perturbations decay, and their ratio is the stiffness, which bounds the time step of an explicit method and stiffens the PINN loss in the same way a high-order derivative does. Experiment K09 computes the spectrum for the catalogue systems and for the evaporator model, and the roadmap's process twins report it as a standard diagnostic.
+For a system $u_t = f(u; \theta)$ (the ODE entries, the reaction terms of Gray–Scott or the Brusselator, a process model with several balances), the Jacobian $\partial f/\partial u$ at an operating point gives the linearized dynamics. Its eigenvalues decide whether perturbations decay, and their ratio is the stiffness, which bounds the time step of an explicit method and stiffens the PINN loss in the same way a high-order derivative does. Experiment K09 computes the spectrum for the catalogue systems and for the evaporator model. Two cautions from it: the discretised transport operator of a process model is non-normal (an upwind scheme has one defective eigenvalue $-v/\Delta z$), so its computed spectrum is a pseudospectrum and the stiffness it suggests is the grid's, which a PINN never sees; and on ODEs the PINN's failures were trivial solutions close to the initial condition (pendulum, SIR, Lorenz), not the stiff systems. The process twins report the physical rates (residence, source) and the number of fast units in the window instead.
 
 ## High dimensions
 

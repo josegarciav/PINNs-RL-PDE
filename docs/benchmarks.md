@@ -242,3 +242,16 @@ The evaporator twin with the steam and feed records as inputs and two outlet sen
 - **It lands at the surrogate's limit, not the data's**: J04's bound on the end value is 5 %, the PINN delivers 10–49 % at the end of the window and its excursions follow the steam signal (the surrogate's imperfect response to the recorded input is absorbed by the unknown). The value a few residence times before the end of the record is good to 5–10 %.
 - The first pass ignored the records because the flow sensor's units (kg/s, scale 0.02) made its misfit 2,500 times too weak in the normalized loss; sensor misfits are now taken in units of the field's scale.
 
+## Linearized stability (experiment K09)
+
+```bash
+python experiments/K09_linearized_stability/run.py --seeds 2 --steps 2000 --workers 3
+```
+
+The Jacobian spectrum along the reference trajectory of eight catalogue ODE systems (fastest rate, stiffness ratio, fast units in the window, oscillations, perturbation growth) next to the PINN's error on each; and the method-of-lines spectrum of the evaporator (`FallingFilmEvaporator.mol_rhs`) against its grid, with the source terms alone. Details in `experiments/K09_linearized_stability/README.md`.
+
+![K09](assets/benchmarks/k09_linearized_stability.png)
+
+- **The evaporator's discretised operator is non-normal**: the upwind transport has one defective eigenvalue $-v/\Delta z$ and the computed spectrum is a circle of rounding around it, so its "stiffness ratio" means nothing. The physics is convectively stabilised and not stiff: the source terms grow locally at 0.02 s⁻¹, the transport removes them at 0.05 s⁻¹, the physical rates span a factor 6, and the grid-set rate (10 s⁻¹ at $n_z = 201$) that forces BDF is one a PINN never sees.
+- **On ODEs the PINN fails by the trivial solution, not by stiffness**: pendulum, Lorenz and SIR collapse to an exact trivial solution close to the initial condition (errors 0.7–1.0), while Van der Pol with the same fast-unit count and a stiffness of 2,500 trains to $10^{-3}$. Every success has at most 30 fast units in the window; time-marching (H04) and causal weighting are the remedies.
+
