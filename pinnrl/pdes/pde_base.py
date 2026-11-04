@@ -114,6 +114,9 @@ class PDEBase:
             self.time_domain = config.t_domain
         else:
             self.time_domain = [0.0, 1.0]
+        # Time-marching (H04): when set, collocation points and data records are taken on
+        # [t0, time_cutoff] only; ``PDETrainer.train_windows`` moves it window by window.
+        self.time_cutoff: float | None = None
 
         # Convert time_domain to tuple if it's a list
         if isinstance(self.time_domain, list):
@@ -684,6 +687,14 @@ class PDEBase:
             f"{self.config.exact_solution.get('type')!r}"
         )
 
+    def sampling_time_domain(self) -> tuple[float, float]:
+        """The time span points are drawn from: the time domain, cut at ``time_cutoff`` when set."""
+        t0, t1 = float(self.time_domain[0]), float(self.time_domain[1])
+        cutoff = getattr(self, "time_cutoff", None)
+        if cutoff is not None:
+            t1 = min(t1, max(float(cutoff), t0))
+        return t0, t1
+
     def _sample_uniform(self, num_points: int) -> tuple[torch.Tensor, torch.Tensor]:
         """Exactly ``num_points`` points from a jittered space-time grid.
 
@@ -693,7 +704,7 @@ class PDEBase:
         deviation of 1% of its axis length (then is clipped to the domain) to
         break grid alignment.
         """
-        bounds = list(self.domain) + [tuple(self.time_domain)]
+        bounds = list(self.domain) + [self.sampling_time_domain()]
         lo = torch.tensor([float(b[0]) for b in bounds], device=self.device)
         hi = torch.tensor([float(b[1]) for b in bounds], device=self.device)
         per_axis = max(2, math.ceil(num_points ** (1.0 / len(bounds))))
@@ -718,8 +729,9 @@ class PDEBase:
         for dim in range(self.dimension):
             lowers.append(self.domain[dim][0])
             uppers.append(self.domain[dim][1])
-        lowers.append(self.time_domain[0])
-        uppers.append(self.time_domain[1])
+        t_lo, t_hi = self.sampling_time_domain()
+        lowers.append(t_lo)
+        uppers.append(t_hi)
 
         samples = torch.zeros(num_points, total_dims, device=self.device)
         for d in range(total_dims):

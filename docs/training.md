@@ -54,6 +54,15 @@ Each `train()` call plans its own schedule: the learning rate restarts from `tra
 
 `train_steps` performs exactly the same update as `train`. It accepts `sample_fn(model, progress) -> (x, t)` to plug in any sampler, and `checkpoints`/`on_checkpoint` to evaluate along the way.
 
+**Time-marching.** A PINN trained on the whole time span at once can settle on a wrong solution with a small residual (a trivial solution close to the initial condition, or a smoothed-out sharp transition). `train_windows` trains on `[t0, cutoff]` for each cutoff in turn, with the network and the identified unknowns carrying over, and finishes on the whole span:
+
+```python
+cutoffs = [2.5, 5.0, 10.0]                         # the last one is the end of the time domain
+out = trainer.train_windows(cutoffs, steps_per_window=4000, resample_every=50, lbfgs_steps=500)
+```
+
+While a window is active `pde.time_cutoff` restricts the collocation samplers, the observations and the sensor records to it; it is reset afterwards. Experiment [H04](benchmarks.md) measures what it buys on the systems where one-shot training fails.
+
 To reload a finished CLI or dashboard run:
 
 <!-- doctest: skip -->

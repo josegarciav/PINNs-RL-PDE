@@ -810,13 +810,21 @@ class CustomPDE(PDEBase):
     def _compute_data_loss(self, model: torch.nn.Module) -> torch.Tensor:
         """Observation data (if any, in units of the field scales) plus one term per sensor."""
         obs = getattr(self, "observation_data", None)
-        if obs and getattr(self, "_normalized", False):
+        cutoff = getattr(self, "time_cutoff", None)
+        if obs and cutoff is not None:  # time-marching: only the records inside the window
+            keep = (obs["t"].reshape(-1) <= cutoff).nonzero().reshape(-1)
+            obs = {k: v[keep] for k, v in obs.items() if isinstance(v, torch.Tensor)}
+            if keep.numel() == 0:
+                obs = None
+        if obs and (getattr(self, "_normalized", False) or cutoff is not None):
             pred = model(torch.cat([obs["x"], obs["t"]], dim=1))[:, : obs["u"].shape[1]]
             loss = self._apply_loss_fn(self._weighted(pred - obs["u"]))
-        else:
+        elif obs:
             loss = super()._compute_data_loss(model)
+        else:
+            loss = torch.tensor(0.0, device=self.device)
         for sensor in self.sensors:
-            loss = loss + sensor.loss(model, self._apply_loss_fn)
+            loss = loss + sensor.loss(model, self._apply_loss_fn, time_cutoff=cutoff)
         return loss
 
     def _input_values(self, t: torch.Tensor) -> dict[str, torch.Tensor]:

@@ -660,6 +660,50 @@ class PDETrainer:
         self.optimizer.step()
         return losses
 
+    def train_windows(
+        self,
+        cutoffs: Sequence[float],
+        steps_per_window: int,
+        resample_every: int = 50,
+        lbfgs_steps: int = 0,
+    ) -> dict[str, Any]:
+        """Time-marching (H04): train on ``[t0, cutoff]`` for each cutoff in turn, then on everything.
+
+        Collocation points, observations and sensor records beyond the current
+        cutoff are left out (``pde.time_cutoff``); the network, the optimizer
+        and the identified unknowns carry over between windows, so each window
+        starts from the solution of the previous one. The last cutoff should be
+        the end of the time domain. ``lbfgs_steps`` adds an L-BFGS finish on the
+        whole domain.
+
+        Returns:
+            ``{"steps", "train_time_s", "loss", "windows"}`` with the per-step loss
+            concatenated over the windows.
+        """
+        loss_curve: list[float] = []
+        train_time = 0.0
+        steps = 0
+        windows = []
+        try:
+            for cutoff in cutoffs:
+                self.pde.time_cutoff = float(cutoff)
+                result = self.train_steps(num_steps=steps_per_window, resample_every=resample_every)
+                loss_curve += list(result["loss"])
+                train_time += float(result["train_time_s"])
+                steps += int(result["steps"])
+                windows.append({"cutoff": float(cutoff), "final_loss": loss_curve[-1]})
+        finally:
+            self.pde.time_cutoff = None
+        if lbfgs_steps > 0:
+            self._switch_to_lbfgs()
+            for group in self.optimizer.param_groups:
+                group["lr"] = 1.0
+            result = self.train_steps(num_steps=lbfgs_steps, resample_every=resample_every)
+            loss_curve += list(result["loss"])
+            train_time += float(result["train_time_s"])
+            steps += int(result["steps"])
+        return {"steps": steps, "train_time_s": train_time, "loss": loss_curve, "windows": windows}
+
     def train_steps(
         self,
         num_steps: int | None = None,

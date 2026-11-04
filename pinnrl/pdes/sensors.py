@@ -139,13 +139,24 @@ class Sensor:
             return float(self._pde.field_scales.get(self.expression, (0.0, 1.0))[1])
         return 1.0
 
-    def loss(self, model: torch.nn.Module, reduce) -> torch.Tensor:
-        """The sensor's weighted data misfit ``weight * reduce((H[u] - y) / scale)``."""
+    def loss(
+        self, model: torch.nn.Module, reduce, time_cutoff: float | None = None
+    ) -> torch.Tensor:
+        """The sensor's weighted data misfit ``weight * reduce((H[u] - y) / scale)``.
+
+        With ``time_cutoff`` only the records stamped at or before it count
+        (time-marching, :meth:`PDETrainer.train_windows`).
+        """
         if self.values is None:
             raise ValueError(
                 f"{self.name} has no records; call pde.observe() or sensor.set_values()"
             )
         error = (self.predict(model) - self.values.to(self._pde.device)) / self.loss_scale()
+        if time_cutoff is not None:
+            keep = torch.as_tensor(self.times <= float(time_cutoff), device=error.device)
+            if not bool(keep.any()):
+                return torch.zeros((), device=error.device)
+            error = error[keep.reshape(-1)]
         return self.weight * reduce(error)
 
     def to_spec(self) -> dict[str, Any]:
