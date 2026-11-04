@@ -33,9 +33,12 @@ ALPHA_GUESS = 0.5
 TRAJECTORY_EVERY = 50
 
 
-def run_cell(job: tuple[float, int, int, int]) -> dict:
+CLEAN = {"weight_decay": 0.0, "gradient_clipping": 0.0}  # --clean: no regularization of the network
+
+
+def run_cell(job: tuple[float, int, int, int, bool]) -> dict:
     """Train one inverse problem and return its record."""
-    noise, n_obs, seed, steps = job
+    noise, n_obs, seed, steps, clean = job
     import torch
 
     from pinnrl.pdes.catalog import from_catalog
@@ -67,6 +70,7 @@ def run_cell(job: tuple[float, int, int, int]) -> dict:
         scheduler_type="constant",
         early_stopping={"enabled": False},
         loss_weights={"residual": 1.0, "boundary": 10.0, "initial": 10.0, "data": 10.0},
+        **(CLEAN if clean else {}),
     )
     torch.manual_seed(seed)
     # Re-seed the network init after the sampler drew its points so the init
@@ -106,12 +110,17 @@ def main():
     parser.add_argument("--seeds", type=int, default=10)
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="no weight decay and no gradient clipping on the network (D01's finding)",
+    )
     parser.add_argument("--out", type=Path, default=HERE / "results")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
     jobs = [
-        (noise, n_obs, seed, args.steps)
+        (noise, n_obs, seed, args.steps, args.clean)
         for seed in range(args.seeds)
         for noise in NOISES
         for n_obs in N_OBS
