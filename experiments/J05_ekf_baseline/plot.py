@@ -98,7 +98,15 @@ for i, nz in enumerate(sorted({r["nz"] for r in runs})):
 if pinn:
     lo, hi = min(r["rf_rel_l2"] for r in pinn), max(r["rf_rel_l2"] for r in pinn)
     ax.axhspan(lo, hi, color=PALETTE[1], alpha=0.15, linewidth=0)
-    ax.text(sigmas[-1], lo * 0.9, "PINN twin (J03), 3 seeds", fontsize=9, color=PALETTE[1], ha="right", va="top")
+    ax.text(
+        sigmas[-1],
+        lo * 0.9,
+        "PINN twin (J03), 3 seeds",
+        fontsize=9,
+        color=PALETTE[1],
+        ha="right",
+        va="top",
+    )
 ax.plot([], [], "--s", color=INK2, markersize=4, label="smoother (dashed)")
 ax.set_xscale("log")
 ax.set_yscale("log")

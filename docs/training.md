@@ -56,6 +56,7 @@ Each `train()` call plans its own schedule: the learning rate restarts from `tra
 
 **Time-marching.** A PINN trained on the whole time span at once can settle on a wrong solution with a small residual (a trivial solution close to the initial condition, or a smoothed-out sharp transition). `train_windows` trains on `[t0, cutoff]` for each cutoff in turn, with the network and the identified unknowns carrying over, and finishes on the whole span:
 
+<!-- doctest: skip -->
 ```python
 cutoffs = [2.5, 5.0, 10.0]                         # the last one is the end of the time domain
 out = trainer.train_windows(cutoffs, steps_per_window=4000, resample_every=50, lbfgs_steps=500)

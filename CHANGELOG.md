@@ -7,7 +7,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [0.6.0] — 2026-11-04
+
+The richer-unknowns release: field-valued unknowns, coupled systems, measured inputs, sensor operators and non-dimensionalization, with the first process models of v0.7 (the falling-film evaporator, the drying droplet, an extended Kalman filter) and time-marching training. The inverse recipe changes: see *Changed*.
 
 ### Changed
 - **PDE unknowns get no weight decay.** The scalar parameters identified in inverse mode and the weights of unknown functions form their own Adam parameter group with `weight_decay=0`. The configured decay still applies to the network. Decay on a physical parameter is a prior toward zero; with Adam's normalization it drove the weights of an unknown function to zero at the learning rate whenever the data gradient was weak, which flattened every recovered field to a constant (found in F09). A full rerun of F01 without the decay reproduces every cell, so the scalar results stand.
