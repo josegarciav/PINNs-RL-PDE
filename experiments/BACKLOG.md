@@ -126,7 +126,7 @@ The shortest path to results you can trust and publish:
 
 | ID | P | Experiment | Question | Setup and metric | Status |
 |---|---|---|---|---|---|
-| F01 | P0 | Heat α recovery baseline | Accuracy of α vs noise and number of observations. | noise ∈ {0, 0.01, 0.05, 0.1} × N_obs ∈ {20, 50, 200, 1000}, 10 seeds, vs the Cramér–Rao bound. Relative error of α. See `F01_heat_alpha_recovery/`. | done |
+| F01 | P0 | Heat α recovery baseline | Accuracy of α vs noise and number of observations. | noise ∈ {0, 0.01, 0.05, 0.1} × N_obs ∈ {20, 50, 200, 1000}, 10 seeds, vs the Cramér–Rao bound. Relative error of α. Rerun with the clean configuration (no weight decay, no clipping): the 2 % floor becomes 0.1–0.2 % and the error follows the bound from σ = 0.01 up. See `F01_heat_alpha_recovery/`. | done (clean rerun 2026-11-04) |
 | F02 | P1 | Joint KdV (α, β) | Are two parameters jointly identifiable? | Recovery error and correlation across seeds vs the 2 × 2 Cramér–Rao bound, plus a follow-up (truth start, long training, data weight). The surrogate's optimum sits 20 % off. See `F02_kdv_joint/`. | done (rerun after D01/D02, K39) |
 | F03 | P1 | Burgers ν near the shock | Recovery of ν at ν = 0.01/π. | Same noise grid as F01, log ν identified, bound from the Cole–Hopf reference. ν overestimated 2.5–5× by the unresolved shock. See `F03_burgers_nu/`. | done (rerun after shock resolution) |
 | F04 | P1 | Initial-guess sensitivity | Does the estimate depend on the starting guess? | 10 initial guesses spanning 0.1–10× the true value, 10 seeds, heat α. See `F04_initial_guess/`. | done |

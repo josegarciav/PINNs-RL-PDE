@@ -65,23 +65,23 @@ python experiments/F01_heat_alpha_recovery/run.py --seeds 10 --steps 5000 --work
 
 The diffusivity of the 1-D heat equation ($\alpha = 0.1$, started at 0.5) is identified from 20 to 1,000 noisy observations of the exact solution, for noise standard deviations from 0 to 0.1, on 10 seeds. The `heat` entry of the [catalogue](custom_equations.md#the-catalogue) is used with `alpha` trainable; a 4 × 64 MLP trains for 5,000 Adam steps with loss weights residual / BC / IC / data = 1 / 10 / 10 / 10.
 
-![F01](assets/benchmarks/f01_heat_alpha.png)
+![F01 clean](assets/benchmarks/f01_heat_alpha_clean.png)
 
 | Noise σ | $N_{\text{obs}}$ = 20 | 50 | 200 | 1000 |
 |---|---|---|---|---|
-| 0 | 0.017 | 0.019 | 0.020 | 0.015 |
-| 0.01 | 0.027 | 0.016 | 0.019 | 0.017 |
-| 0.05 | 0.041 | 0.033 | 0.021 | 0.020 |
-| 0.1 | 0.054 | 0.055 | 0.024 | 0.025 |
+| 0 | 0.0010 | 0.0015 | 0.0017 | 0.0018 |
+| 0.01 | 0.0098 | 0.0073 | 0.0024 | 0.0022 |
+| 0.05 | 0.024 | 0.028 | 0.011 | 0.0052 |
+| 0.1 | 0.044 | 0.055 | 0.016 | 0.010 |
 
-Median relative error of $\hat\alpha$ over 10 seeds.
+Median relative error of $\hat\alpha$ over 10 seeds, with the network's weight decay and gradient clipping off (`--clean`, 2026-11-04). The first run, with the packaged regularization, gave 0.015–0.027 in the first two rows and 0.020–0.055 in the last two ([the table is in the experiment folder](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F01_heat_alpha_recovery)).
 
 **What this says:**
 
-- **A 2 % floor that data cannot lower.** With clean or lightly noisy data every seed lands at $\hat\alpha \approx 0.098$ whatever the number of observations. The Cramér–Rao bound for 1,000 points is 0.2 %, so the floor is the surrogate's own forward error (2–3 % in $u$), absorbed by the parameter.
-- **Above the floor, near-efficient.** For σ ≥ 0.05 the spread of $\hat\alpha$ across seeds matches the Cramér–Rao bound from the same points to within about 20 %, so the Fisher information predicts how many sensors a target accuracy needs.
-- **Few noisy points bias low.** At 20 points the bias grows with noise (−3 %, −5 %, −9 %): the physics loss prefers a smoother, slower-diffusing field when the fixed data weight ignores the noise level.
-- **Field error does not predict parameter error.** The relative L2 error of $u$ is 2–4 % in every cell while the median error of α spans 1.5–5.5 % and single seeds reach 22 %.
+- **The 2 % floor was the regularization.** With the packaged weight decay and gradient clipping, clean data gave 1.5–2 % whatever the number of observations, every seed at $\hat\alpha \approx 0.098$. With both off the same Adam run lands at 0.1–0.2 % with a field error of 0.2 %, and the median error over the grid falls from 2.2 % to 0.6 %. The defaults that help a forward fit are priors on the surrogate that the parameter absorbs; inverse runs start from `weight_decay=0`, `gradient_clipping=0`.
+- **Near-efficient from the floor up.** For σ ≥ 0.01 the spread of $\hat\alpha$ across seeds matches the Cramér–Rao bound from the same points to within about 20 % in most cells, and the error now falls with $N$ along the bound (σ = 0.01: 1.0 %, 0.7 %, 0.24 %, 0.22 % against 1.1 %, 0.7 %, 0.35 %, 0.16 %), so the Fisher information predicts how many sensors a target accuracy needs.
+- **Few noisy points bias low, regularized or not.** At 20 points the bias is −3.5 % and −8 % at σ = 0.05 and 0.1 in the clean run: the physics loss prefers a smoother, slower-diffusing field when the fixed data weight ignores the noise level (K39).
+- **Field error does not predict parameter error.** The field error spans 0.2–3 % and the parameter error 0.1–5.5 %, with one seed at 22 % for a field error of 3 %.
 
 The full write-up, with IQRs, the spread against the bound per cell, and the follow-ups (the floor after optimizer settling, K01 Fisher information, K39 likelihood weighting), is in [`experiments/F01_heat_alpha_recovery`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F01_heat_alpha_recovery).
 
@@ -169,7 +169,7 @@ The F09 fields in a cosine basis: the Fisher spectrum of the modes from the refe
 
 Adam, L-BFGS and Adam→L-BFGS at matched wall-clock time on heat, Burgers and Allen–Cahn, and the heat-diffusivity floor cell of F01 without the packaged regularization. Details in `experiments/D01_optimizer_baseline/README.md`.
 
-- **The 2 % floor of F01–F09 was the packaged weight decay and gradient clipping of the network**, not the surrogate: with both off, Adam identifies $\alpha$ to 0.4 % with a 0.23 % field error, and an L-BFGS finish halves that again (0.2 %, 0.1 %). Every inverse experiment is being reread with the clean configuration (F01 `--clean`).
+- **The 2 % floor of F01–F09 was the packaged weight decay and gradient clipping of the network**, not the surrogate: with both off, Adam identifies $\alpha$ to 0.4 % with a 0.23 % field error, and an L-BFGS finish halves that again (0.2 %, 0.1 %). F01 has been rerun on its whole grid with the clean configuration (its floor is 0.1–0.2 %); F02, F03 and F09 are still to be reread.
 - L-BFGS reaches $2 \times 10^{-4}$ on heat in 120 s against Adam's $10^{-3}$, is 2–3 times better on Burgers, and halves Allen–Cahn's error where Adam makes no progress. The switch point hardly matters when both phases work; an early switch on Burgers diverged in 3 of 6 runs, so the trainer needs a step safeguard before `adam_lbfgs` becomes a default.
 
 ## The swarm as a posterior sample (experiment K47)
