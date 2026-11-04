@@ -201,3 +201,19 @@ One network $u_w(x, t; \theta)$ with the parameters as inputs (`CustomPDE(parame
 
 - One pass evaporates 31 % of the feed's water; a fouling of $10^{-4}$ m²K/W moves the outlet solids as much as 1.7 K of steam or 18 % of feed, so the outlet alone cannot tell them apart. The solver converges at first order (0.2 s per 10-minute simulation on the working grid).
 - The normalised PINN reproduces the steam-step scenario to 0.4–0.6 % on both fields in under six minutes, in physical units; one of three seeds diverged in the L-BFGS finish (the safeguard is the next engineering item).
+
+## Fouling from outlet sensors: identifiability (experiment J04)
+
+```bash
+python experiments/J04_plant_sensors/run.py --datasets 5 --modes 6
+```
+
+The Fisher information of J03's outlet records (solids and flow every 5 s over 20 minutes) for six Legendre modes of the fouling resistance $R_f(t)$ and four nuisances (the clean coefficient $U$, a steam bias, feed-flow and feed-solids biases), from finite differences on the reference solver; and F07's profile likelihood of the drift's end value on the reference. Details in `experiments/J04_plant_sensors/README.md`.
+
+![J04](assets/benchmarks/j04_plant_sensors.png)
+
+- **With the inputs known, the outlet determines the whole time course**: six modes to 1–4 % of the mean fouling, $\kappa(F) = 25$, the end value to 5 %. The flow meter halves the bound of the solids sensor alone, 1 s sampling halves it again, a mid-tube probe adds nothing.
+- **$U$ and the constant fouling are one unknown** ($1/U + R_f$): a monitor estimates the change of resistance since a reference state, never its absolute value.
+- **The steam temperature is the nuisance that matters**: 0.5 K of steam bias reproduces the records of a 30 % fouling error (correlation 0.85 with the drift), and with the three input biases free together the leftover direction masquerades as a drift (the drift's bound goes from 2 % to 45 %). The twin needs the steam temperature to 0.1 K, or a heat-duty signal.
+- The profile likelihood on the reference is the Fisher parabola at $\pm 10$ %, with a 95 % interval of $\pm 2$ % on the drift's end value (steam known) and $\pm 4$ % (steam bias re-fitted).
+
