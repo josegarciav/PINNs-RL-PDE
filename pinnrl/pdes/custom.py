@@ -241,6 +241,13 @@ class CustomPDE(PDEBase):
             :class:`~pinnrl.pdes.sensors.IntegralSensor` or their specs. Each
             sensor's records enter the data loss as its own weighted term;
             :meth:`observe` fills them from the exact solution.
+        scales: ``{field: scale}`` or ``{field: (offset, scale)}``, the
+            magnitude (and typical value) of each field in its physical units,
+            e.g. ``{"T": (300.0, 50.0)}`` for a temperature around 300 K
+            varying by tens of kelvin. With ``build_trainer(normalize=True)``
+            the network predicts ``offset + scale * net(x̂)`` over inputs
+            mapped to ``[-1, 1]``, so a problem written in metres, seconds and
+            kelvin trains like one on the unit square.
         field_weights: ``{field: weight}`` for systems: the field's residual,
             initial and boundary errors enter the loss multiplied by this
             weight (default 1), so a slow or small component can be given
@@ -281,6 +288,7 @@ class CustomPDE(PDEBase):
         parameter_initial_guesses: Mapping[str, float] | None = None,
         unknown_functions: Mapping[str, Mapping[str, Any] | UnknownFunction] | None = None,
         field_weights: Mapping[str, float] | None = None,
+        scales: Mapping[str, float | Sequence[float]] | None = None,
         inputs: Mapping[str, Any] | None = None,
         sensors: Sequence[Sensor | Mapping[str, Any]] | None = None,
         observation_data: Mapping[str, Any] | None = None,
@@ -361,6 +369,19 @@ class CustomPDE(PDEBase):
             "inputs": {k: v.to_spec() for k, v in self.inputs.items()},
             "sensors": [],  # filled by to_dict, so records written after construction are kept
         }
+        self.field_scales: dict[str, tuple[float, float]] = {}
+        for fname, value in dict(scales or {}).items():
+            if fname not in self.fields:
+                raise ValueError(f"scales for {fname!r}, which is not a field {self.fields}")
+            offset, scale = (
+                (0.0, float(value))
+                if isinstance(value, (int, float))
+                else (float(value[0]), float(value[1]))
+            )
+            if scale <= 0:
+                raise ValueError(f"scale of {fname!r} must be positive")
+            self.field_scales[fname] = (offset, scale)
+        self._spec["scales"] = {k: list(v) for k, v in self.field_scales.items()}
         unknown_weights = sorted(set(field_weights or {}) - set(self.fields))
         if unknown_weights:
             raise ValueError(
@@ -511,9 +532,15 @@ class CustomPDE(PDEBase):
         config_path: str | None = None,
         device: torch.device | str | None = None,
         model: Mapping[str, Any] | None = None,
+        normalize: bool = False,
         **training: Any,
     ):
         """A :class:`~pinnrl.training.trainer.PDETrainer` for this problem with packaged defaults.
+
+        ``normalize=True`` non-dimensionalizes the network: its inputs are
+        mapped from the domain to ``[-1, 1]`` and its outputs are
+        ``offset + scale * net`` with the ``scales`` of the problem (1 for a
+        field without one). The equations stay in physical units.
 
         ``architecture`` names an entry of the ``architectures:`` block of
         ``config.yaml`` (``config_path`` for your own file); ``model``
@@ -540,13 +567,23 @@ class CustomPDE(PDEBase):
         if (self.config.trainable_parameters or self._unknown_names) and "mode" not in training:
             training_cfg["mode"] = "inverse"
         architecture = architecture or self._architecture
+        model = dict(model or {})
+        self._normalized = bool(normalize)
+        if normalize:
+            model.setdefault("input_bounds", self.normalization_bounds())
+            model.setdefault(
+                "output_offset", [self.field_scales.get(f, (0.0, 1.0))[0] for f in self.fields]
+            )
+            model.setdefault(
+                "output_scale", [self.field_scales.get(f, (0.0, 1.0))[1] for f in self.fields]
+            )
         device = torch.device(device) if device is not None else self.device
         config = Config.__new__(Config)
         config.device = device
         config.training = TrainingConfig.from_dict(training_cfg)
         config.model = ModelConfig.from_architecture(
             architecture,
-            {**defaults.get("architectures", {}).get(architecture, {}), **dict(model or {})},
+            {**defaults.get("architectures", {}).get(architecture, {}), **model},
             input_dim=self.config.input_dim,
             output_dim=self.config.output_dim,
         )
@@ -623,11 +660,36 @@ class CustomPDE(PDEBase):
             return None
         return lambda x, t: self._evaluate_map(self._ic, self._ic_fn, x, None)
 
-    def _weighted(self, error: torch.Tensor) -> torch.Tensor:
-        """``error`` ``(N, k)`` with each field's column scaled by the root of its weight."""
-        if all(w == 1.0 for w in self._field_weights):
+    def _multipliers(self, kind: str) -> list[float]:
+        """Per-field multiplier of an ``error`` (IC, BC, data) or ``residual`` column in the loss.
+
+        The root of the field weight, and, when the problem is normalized
+        (``build_trainer(normalize=True)``), divided by the field's scale so
+        the error is in units of the field's magnitude; a residual is further
+        multiplied by the time span (the time scale of ``u_t``) or, for a
+        steady problem, by the square of the first axis's length.
+        """
+        mult = [w**0.5 for w in self._field_weights]
+        if not getattr(self, "_normalized", False):
+            return mult
+        if self.time_dependent:
+            t0, t1 = float(self.time_domain[0]), float(self.time_domain[1])
+            ref = t1 - t0 if t1 > t0 else 1.0
+        else:
+            lo, hi = self.domain[0]
+            ref = (hi - lo) ** 2
+        out = []
+        for f, m in zip(self.fields, mult, strict=True):
+            scale = self.field_scales.get(f, (0.0, 1.0))[1]
+            out.append(m / scale * (ref if kind == "residual" else 1.0))
+        return out
+
+    def _weighted(self, error: torch.Tensor, kind: str = "error") -> torch.Tensor:
+        """``error`` ``(N, k)`` with each field's column scaled by :meth:`_multipliers`."""
+        mult = self._multipliers(kind)
+        if all(m == 1.0 for m in mult):
             return error
-        w = torch.tensor(self._field_weights, device=error.device, dtype=error.dtype).sqrt()
+        w = torch.tensor(mult, device=error.device, dtype=error.dtype)
         return error * w[: error.shape[1]]
 
     def compute_loss(
@@ -635,9 +697,9 @@ class CustomPDE(PDEBase):
     ) -> dict[str, torch.Tensor]:
         """As :meth:`PDEBase.compute_loss`, with the residual columns weighted by ``field_weights``."""
         losses = super().compute_loss(model, x, t)
-        if any(w != 1.0 for w in self._field_weights):
+        if any(m != 1.0 for m in self._multipliers("residual")):
             losses["residual"] = self._apply_loss_fn(
-                self._weighted(self.compute_residual(model, x, t))
+                self._weighted(self.compute_residual(model, x, t), "residual")
             )
             weights = self._training_option("loss_weights") or {}
             adaptive = self._training_option("adaptive_weights")
@@ -722,8 +784,13 @@ class CustomPDE(PDEBase):
         return self.sensors
 
     def _compute_data_loss(self, model: torch.nn.Module) -> torch.Tensor:
-        """Observation data (if any) plus one weighted term per sensor."""
-        loss = super()._compute_data_loss(model)
+        """Observation data (if any, in units of the field scales) plus one term per sensor."""
+        obs = getattr(self, "observation_data", None)
+        if obs and getattr(self, "_normalized", False):
+            pred = model(torch.cat([obs["x"], obs["t"]], dim=1))[:, : obs["u"].shape[1]]
+            loss = self._apply_loss_fn(self._weighted(pred - obs["u"]))
+        else:
+            loss = super()._compute_data_loss(model)
         for sensor in self.sensors:
             loss = loss + sensor.loss(model, self._apply_loss_fn)
         return loss
@@ -782,7 +849,7 @@ class CustomPDE(PDEBase):
                 conds = conditions.get(field, {})
                 if not conds:
                     continue
-                w = self._field_weights[j] ** 0.5
+                w = self._multipliers("error")[j]
                 f_lo, f_hi = u_lo[:, j : j + 1], u_hi[:, j : j + 1]
                 if needs_grad:
                     df_lo = self._grad(f_lo, x_lo)[:, axis : axis + 1]
@@ -828,6 +895,13 @@ class CustomPDE(PDEBase):
         if not self.has_exact_solution:
             return None
         return self._exact_solution(x, t)
+
+    def normalization_bounds(self) -> list[list[float]]:
+        """One ``[lo, hi]`` per network input (the spatial axes, then time), from the domain."""
+        bounds = [[float(lo), float(hi)] for lo, hi in self.domain]
+        t0, t1 = float(self.time_domain[0]), float(self.time_domain[1])
+        bounds.append([t0, t1] if t1 > t0 else [t0, t0 + 1.0])
+        return bounds
 
     # --------------------------------------------------------- unknown functions
     def trainable_parameters_iter(self):

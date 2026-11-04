@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pinnrl.config import Config
 
+import torch
+
 from .attention import AttentionNetwork, SelfAttention
 from .autoencoder import AutoEncoder
 from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
@@ -115,6 +117,36 @@ class PINNModel(BaseNetwork):
         else:  # Default to feedforward
             self.model = FeedForwardNetwork(config_with_device)
 
+        # Non-dimensionalization: an affine map of the inputs to [-1, 1] and of the
+        # outputs to their physical scale, kept as buffers so a checkpoint carries them.
+        bounds = config.model.get("input_bounds")
+        scale = config.model.get("output_scale")
+        offset = config.model.get("output_offset")
+        self.scaled = bounds is not None or scale is not None or offset is not None
+        if bounds is not None:
+            b = torch.as_tensor(bounds, dtype=torch.float32)
+            if b.shape != (config.model.input_dim, 2):
+                raise ValueError(
+                    f"input_bounds needs one (lo, hi) pair per input, {config.model.input_dim}; got {b.shape}"
+                )
+            self.register_buffer("_in_lo", b[:, 0])
+            self.register_buffer("_in_span", (b[:, 1] - b[:, 0]).clamp_min(1e-12))
+        else:
+            self._in_lo = None
+        k = config.model.output_dim
+        self.register_buffer(
+            "_out_scale",
+            torch.as_tensor(scale if scale is not None else [1.0] * k, dtype=torch.float32).reshape(
+                1, k
+            ),
+        )
+        self.register_buffer(
+            "_out_offset",
+            torch.as_tensor(
+                offset if offset is not None else [0.0] * k, dtype=torch.float32
+            ).reshape(1, k),
+        )
+
         # Explicitly move the model to the specified device
         self.model = self.model.to(self.device)
         self.to(self.device)
@@ -122,10 +154,18 @@ class PINNModel(BaseNetwork):
     def forward(self, x):
         """Forward pass of the model.
 
+        With ``input_bounds`` the inputs are mapped to ``[-1, 1]`` first; with
+        ``output_scale`` / ``output_offset`` the network's output is returned
+        as ``offset + scale * net(x)``. Without them this is ``self.model(x)``.
+
         Args:
             x: Input tensor of shape (batch_size, input_dim)
 
         Returns:
             Output tensor of shape (batch_size, output_dim)
         """
-        return self.model(x)
+        if not self.scaled:
+            return self.model(x)
+        if self._in_lo is not None:
+            x = 2.0 * (x - self._in_lo) / self._in_span - 1.0
+        return self._out_offset + self._out_scale * self.model(x)

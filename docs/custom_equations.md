@@ -196,6 +196,25 @@ print(fisher_information(J, sensor_noise_vector(pde.sensors), ["alpha"]).std)
 
 `pde.evaluate_expression("-alpha*u_x", model, x, t)` is the same machinery for your own derived quantities. `sensor.set_values(records)` attaches real measurements; `pinnrl-train --pde-file` records synthetic ones when a spec's sensors carry none. Experiment [K02](benchmarks.md#sensor-layout-vs-conditioning-experiment-k02) uses `sensor_jacobian` to rank layouts.
 
+## Non-dimensionalization
+
+A problem written in its own units, metres, seconds and kelvin, is a bad problem for a network that expects inputs and outputs of order one: the raw heat problem below, on a 1,000 mm slab over an hour with temperatures around 300 K, trains to a 250 K error where the same problem on the unit square trains to a few percent. Give each field its magnitude with `scales` (a scale, or an `(offset, scale)` pair) and pass `normalize=True` to `build_trainer` (`--normalize` on the command line). The network then sees the domain mapped to $[-1, 1]$ and predicts `offset + scale * net`, and the loss terms are taken in those units too: initial, boundary and data errors divided by the field's scale, the residual multiplied by the time span over the scale (the magnitude of $u_t$). The equations stay as written, in physical units, and the trained model answers in them.
+
+<!-- doctest: skip -->
+```python
+pde = CustomPDE(
+    "u_t - alpha*u_xx",                                      # mm^2/s, mm, s, K
+    domain={"x": (0, 1000.0), "t": (0, 3600.0)},
+    parameters={"alpha": 50.0},
+    initial_condition="300 + 50*sin(pi*x/1000)",
+    boundary_conditions={"dirichlet": {"value": 300.0}},
+    scales={"u": (300.0, 50.0)},                             # around 300 K, varying by 50 K
+)
+trainer = pde.build_trainer("feedforward", normalize=True, num_epochs=1000)
+```
+
+With 1,000 Adam steps the normalized model's maximum error is 2 K against 248 K for the raw one (`test_normalization.py`). The run snapshot keeps the bounds and scales in its `model` block, so `load_run` rebuilds the scaled model.
+
 ## From the command line
 
 Write the same specification as YAML and pass it with `--pde-file` in place of `--pde`. Every other flag works as usual, including `--mode inverse --identify r`.
@@ -348,5 +367,5 @@ Every entry with a closed-form solution is checked by the test suite: the exact 
 - Derivatives are taken by nested autograd; order four and above is slow and numerically noisy, as for the shipped Cahn–Hilliard equation. Cost grows with the number of coordinates and with the order, so a 5-D Laplacian is five second-derivative passes.
 - A boundary condition applies to both faces of an axis alike (Dirichlet takes `left`/`right` values); conditions that differ by face in kind, or Robin conditions, need a callable residual or a subclass.
 - An unknown function is a smooth network: a jump in the true coefficient is recovered as a steep ramp, and a field the data barely feel (see F09) collapses to the constant that fits best. Check identifiability before trusting the recovered shape.
-- The network sees raw coordinates: scale your problem so that the domain and the fields are of order one (non-dimensionalization helpers are on the roadmap).
+- Without `normalize=True` the network sees raw coordinates and raw field values; a problem in physical units needs the [non-dimensionalization](#non-dimensionalization) step, or hand scaling.
 - Integral terms, delays and non-local operators are outside the expression language.

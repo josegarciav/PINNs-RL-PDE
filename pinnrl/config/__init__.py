@@ -324,6 +324,11 @@ class ModelConfig:
     mapping_size: int = 32  # Default mapping size for Fourier features
     scale: float = 10.0  # Default scale for Fourier features
     modes: int | None = None  # For FNO (number of Fourier modes)
+    # Non-dimensionalization (see PINNModel): inputs are mapped from these bounds
+    # to [-1, 1]; outputs are offset + scale * net(...), one entry per field.
+    input_bounds: list[list[float]] | None = None
+    output_scale: list[float] | None = None
+    output_offset: list[float] | None = None
 
     def __init__(
         self,
@@ -404,6 +409,9 @@ class ModelConfig:
 
 
 _ARCHITECTURE_EXTRAS = (
+    "input_bounds",
+    "output_scale",
+    "output_offset",
     "hidden_dims",
     "mapping_size",
     "scale",

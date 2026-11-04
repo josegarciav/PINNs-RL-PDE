@@ -93,6 +93,7 @@ def build_config_dict(
     epochs=None,
     dataset=None,
     custom=None,
+    normalize=False,
 ):
     """Build a full config dict from yaml base + overrides.
 
@@ -107,6 +108,9 @@ def build_config_dict(
         arch_type: Architecture key from the ``architectures:`` block.
         use_rl: Enable the experimental RL bandit sampler.
         epochs: Optional override of ``training.num_epochs``.
+        normalize: Non-dimensionalize the network: ``model.input_bounds`` from
+            the domain, and ``output_offset`` / ``output_scale`` from a custom
+            spec's ``scales`` (see :class:`~pinnrl.pdes.custom.CustomPDE`).
         dataset: Optional Well dataset block, e.g.
             ``{"name": "active_matter", "split": "train", "n_traj": 1,
             "n_points": 4096, "seed": 0, "base": None,
@@ -181,6 +185,20 @@ def build_config_dict(
     if dataset:
         _apply_well_dataset_defaults(config, dataset)
 
+    if normalize and config["pde"]["domain"] is not None:
+        bounds = [[float(lo), float(hi)] for lo, hi in config["pde"]["domain"]]
+        t0, t1 = (float(v) for v in (config["pde"]["time_domain"] or (0.0, 1.0)))
+        bounds.append([t0, t1] if t1 > t0 else [t0, t0 + 1.0])
+        config["model"]["input_bounds"] = bounds
+        if custom is not None:
+            fields = list(custom.get("fields") or ["u"])
+            scales = {
+                k: (v if isinstance(v, (list, tuple)) else [0.0, v])
+                for k, v in (custom.get("scales") or {}).items()
+            }
+            config["model"]["output_offset"] = [float(scales.get(f, [0.0, 1.0])[0]) for f in fields]
+            config["model"]["output_scale"] = [float(scales.get(f, [0.0, 1.0])[1]) for f in fields]
+
     return config
 
 
@@ -203,6 +221,8 @@ def create_pde(config_dict, device):
             parameter_initial_guesses=dict(pde_cfg.get("parameter_initial_guesses", {}) or {}),
             observation_data=pde_cfg.get("observation_data"),
         )
+        # A normalized run scales the loss terms by the field scales too.
+        pde._normalized = config_dict.get("model", {}).get("input_bounds") is not None
         return _attach_synthetic_observations(pde, config_dict)
     pde_cls = get_pde_spec(pde_cfg["name"]).cls
 
@@ -257,6 +277,9 @@ def build_model(config_dict, device):
         input_dim=config_dict["model"]["input_dim"],
         output_dim=config_dict["model"]["output_dim"],
     )
+    for key in ("input_bounds", "output_scale", "output_offset"):
+        if config_dict["model"].get(key) is not None:
+            setattr(config_obj.model, key, config_dict["model"][key])
     config_obj.training = TrainingConfig.from_dict(config_dict["training"])
     return PINNModel(config=config_obj, device=device).to(device), config_obj
 
@@ -427,6 +450,14 @@ def main():
         "--pde",
         default=None,
         help="PDE config key or display name (e.g. 'heat' or 'Heat Equation')",
+    )
+    parser.add_argument(
+        "--normalize",
+        action="store_true",
+        help=(
+            "Non-dimensionalize the network: inputs mapped from the domain to [-1, 1], "
+            "outputs scaled by the 'scales' of a --pde-file spec, loss terms in those units."
+        ),
     )
     parser.add_argument(
         "--pde-file",
@@ -677,6 +708,7 @@ def main():
         args.epochs,
         dataset=dataset_block,
         custom=custom_spec,
+        normalize=args.normalize,
     )
     config_dict["device"] = str(device)
 
