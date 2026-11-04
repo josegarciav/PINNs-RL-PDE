@@ -135,6 +135,30 @@ class FallingFilmEvaporator:
             raise RuntimeError(f"steady-state solve failed: {sol.message}")
         return {"z": z, "W": sol.y[0], "X": sol.y[1], "q": self.heat_flux(sol.y[1], t)}
 
+    def mol_rhs(self, nz: int = 201) -> Callable[[float, np.ndarray], np.ndarray]:
+        """The method-of-lines right-hand side ``ds/dt = f(t, s)`` on ``nz`` axial points.
+
+        The state is ``s = [W_0..W_{nz-1}, X_0..X_{nz-1}]``; first-order upwind
+        in ``z``; the inlet entries are overwritten by the feed signals. The
+        Jacobian of this function is what the linearized-stability analysis
+        (K09) looks at.
+        """
+        dz = self.length / (nz - 1)
+        P, lam, v = self.perimeter, self.latent_heat, self.velocity
+        W_in, X_in = _as_fn(self.W_in), _as_fn(self.X_in)
+
+        def rhs(tau, s):
+            W, X = s[:nz].copy(), s[nz:].copy()
+            W[0], X[0] = W_in(tau), X_in(tau)  # the inlet is a boundary value
+            q = self.heat_flux(X, tau)
+            dW = np.zeros(nz)
+            dX = np.zeros(nz)
+            dW[1:] = -v * (W[1:] - W[:-1]) / dz - P * q[1:] / lam
+            dX[1:] = -v * (X[1:] - X[:-1]) / dz + X[1:] * P * q[1:] / (lam * W[1:])
+            return np.concatenate([dW, dX])
+
+        return rhs
+
     def reference(
         self,
         t_max: float,
@@ -154,25 +178,14 @@ class FallingFilmEvaporator:
             method: ``solve_ivp`` method; ``BDF`` handles the stiff source.
         """
         z = np.linspace(0.0, self.length, nz)
-        dz = z[1] - z[0]
         t = np.linspace(0.0, t_max, nt)
-        P, lam, v = self.perimeter, self.latent_heat, self.velocity
+        W_in, X_in = _as_fn(self.W_in), _as_fn(self.X_in)
         if initial == "steady":
             ss = self.steady_state(nz, t=0.0)
             W0, X0 = ss["W"], ss["X"]
         else:
             W0, X0 = np.asarray(initial["W"], dtype=float), np.asarray(initial["X"], dtype=float)
-        W_in, X_in = _as_fn(self.W_in), _as_fn(self.X_in)
-
-        def rhs(tau, s):
-            W, X = s[:nz].copy(), s[nz:].copy()
-            W[0], X[0] = W_in(tau), X_in(tau)  # the inlet is a boundary value
-            q = self.heat_flux(X, tau)
-            dW = np.zeros(nz)
-            dX = np.zeros(nz)
-            dW[1:] = -v * (W[1:] - W[:-1]) / dz - P * q[1:] / lam
-            dX[1:] = -v * (X[1:] - X[:-1]) / dz + X[1:] * P * q[1:] / (lam * W[1:])
-            return np.concatenate([dW, dX])
+        rhs = self.mol_rhs(nz)
 
         s0 = np.concatenate([W0, X0])
         sol = solve_ivp(rhs, (0.0, t_max), s0, t_eval=t, method=method, rtol=1e-8, atol=1e-11)

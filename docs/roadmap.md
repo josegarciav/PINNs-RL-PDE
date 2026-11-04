@@ -36,7 +36,7 @@ The goal is to estimate unknown physics with known validity conditions and calib
 
 ## v0.7+: process twins
 
-- [x] `pinnrl.process`: the falling-film evaporator with its method-of-lines reference simulator and `custom_pde()` form (J01, J02 done). *Open: the spray-dryer model (J07), linearized-stability checks (K09). The L-BFGS step safeguard is in the trainer.*
+- [x] `pinnrl.process`: the falling-film evaporator with its method-of-lines reference simulator and `custom_pde()` form (J01, J02 done); fouling estimation from outlet sensors (J03: the drift to 9–16 %, at the surrogate's limit) and its identifiability (J04: the data allow 5 % on the end value; U and the constant fouling are one unknown; the steam temperature is the nuisance that matters). *Open: the spray-dryer model (J07), linearized-stability checks (K09, running), calibrated fouling intervals (J06), the EKF baseline (J05).*
 - Classical estimators on the same models: EKF/UKF and moving-horizon estimation (J05; P15, P19).
 - Historian adapter: CSV or Parquet plus a tag map to sensor definitions.
 - A dashboard "Process" view: soft-sensor trends with uncertainty bands, and time to the next cleaning.

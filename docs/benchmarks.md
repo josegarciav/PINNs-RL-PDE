@@ -202,6 +202,17 @@ One network $u_w(x, t; \theta)$ with the parameters as inputs (`CustomPDE(parame
 - One pass evaporates 31 % of the feed's water; a fouling of $10^{-4}$ m²K/W moves the outlet solids as much as 1.7 K of steam or 18 % of feed, so the outlet alone cannot tell them apart. The solver converges at first order (0.2 s per 10-minute simulation on the working grid).
 - The normalised PINN reproduces the steam-step scenario to 0.4–0.6 % on both fields in under six minutes, in physical units; one of three seeds diverged in the L-BFGS finish (the safeguard is the next engineering item).
 
+## Change-point identification (experiment F11)
+
+```bash
+python experiments/F11_change_point/run.py --seeds 5 --steps 10000 --workers 5 --clean --lbfgs --out experiments/F11_change_point/results/clean
+```
+
+Heat with $\alpha(t) = a + b\,\sigma((t - t_0)/0.02)$, the three numbers trainable from either side of the truth, 200 observations at noise 0, 0.01 and 0.05, 5 seeds, against the Cramér–Rao bound and F09's network unknown. Details in `experiments/F11_change_point/README.md`.
+
+- **A change point is identifiable to the bound** with the clean configuration: the median error of $t_0$ is 0.0075 against a bound of 0.0062 at noise 0.01 and 0.032 against 0.031 at noise 0.05, from either start; $b$ is at the truth within its bound. The parametrised step beats the network's ramp at every noise level.
+- Under the default weight decay and gradient clipping the same runs put $t_0$ 0.16 early, 25 times the bound, with half the jump: the regularization, not the estimator.
+
 ## Fouling from outlet sensors: identifiability (experiment J04)
 
 ```bash
@@ -216,4 +227,18 @@ The Fisher information of J03's outlet records (solids and flow every 5 s over 2
 - **$U$ and the constant fouling are one unknown** ($1/U + R_f$): a monitor estimates the change of resistance since a reference state, never its absolute value.
 - **The steam temperature is the nuisance that matters**: 0.5 K of steam bias reproduces the records of a 30 % fouling error (correlation 0.85 with the drift), and with the three input biases free together the leftover direction masquerades as a drift (the drift's bound goes from 2 % to 45 %). The twin needs the steam temperature to 0.1 K, or a heat-duty signal.
 - The profile likelihood on the reference is the Fisher parabola at $\pm 10$ %, with a 95 % interval of $\pm 2$ % on the drift's end value (steam known) and $\pm 4$ % (steam bias re-fitted).
+
+## Fouling estimation (experiment J03)
+
+```bash
+python experiments/J03_fouling_estimation/run.py --seeds 3 --steps 4000 --workers 3
+```
+
+The evaporator twin with the steam and feed records as inputs and two outlet sensors ($X$ and $W$ every 5 s, 20 minutes), the fouling $R_f(t)$ an `UnknownFunction` of time bounded to $[0, 5 \times 10^{-4}]$, against a scalar $R_f$; the J02 recipe, 3 seeds. Details in `experiments/J03_fouling_estimation/README.md`.
+
+![J03](assets/benchmarks/j03_fouling_estimation.png)
+
+- **The twin recovers the drift to 9–16 % in L2** (the field to 2 %) where the best constant is wrong by 53–55 % (field 7 %): a drifting coefficient is a function to identify.
+- **It lands at the surrogate's limit, not the data's**: J04's bound on the end value is 5 %, the PINN delivers 10–49 % at the end of the window and its excursions follow the steam signal (the surrogate's imperfect response to the recorded input is absorbed by the unknown). The value a few residence times before the end of the record is good to 5–10 %.
+- The first pass ignored the records because the flow sensor's units (kg/s, scale 0.02) made its misfit 2,500 times too weak in the normalized loss; sensor misfits are now taken in units of the field's scale.
 
