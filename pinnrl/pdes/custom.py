@@ -847,9 +847,16 @@ class CustomPDE(PDEBase):
         """Targets on the two faces; numbers or expressions (``"sin(2*pi*t)"``, an input's name)."""
         if options.get("type") == "exact":
             return super()._dirichlet_values(options, x_lo, x_hi, t)
+        # One-sided: ``{left: ...}`` alone (no ``value``, no ``right``) constrains the lower face
+        # only, the inlet of a transport problem; the other face is left free (``None``).
+        one_sided = "value" not in options and ("left" in options) != ("right" in options)
         value = options.get("value", 0.0)
-        left, right = options.get("left", value), options.get("right", value)
-        return self._boundary_target(left, x_lo, t), self._boundary_target(right, x_hi, t)
+        left = options.get("left", None if one_sided else value)
+        right = options.get("right", None if one_sided else value)
+        return (
+            None if left is None else self._boundary_target(left, x_lo, t),
+            None if right is None else self._boundary_target(right, x_hi, t),
+        )
 
     def _boundary_loss(self, model: torch.nn.Module) -> torch.Tensor:
         """Mean loss over every condition on every face, per field when the conditions are."""
@@ -885,9 +892,12 @@ class CustomPDE(PDEBase):
                         g_lo, g_hi = self._dirichlet_values(
                             options, x_lo.detach(), x_hi.detach(), t
                         )
-                        if g_lo.shape[1] > 1:  # type 'exact' gives every field: take this one
+                        if g_lo is not None and g_lo.shape[1] > 1:  # type 'exact': every field
                             g_lo, g_hi = g_lo[:, j : j + 1], g_hi[:, j : j + 1]
-                        terms += [w * (f_lo - g_lo), w * (f_hi - g_hi)]
+                        if g_lo is not None:
+                            terms.append(w * (f_lo - g_lo))
+                        if g_hi is not None:
+                            terms.append(w * (f_hi - g_hi))
                     elif kind == "neumann":
                         g_lo = self._boundary_target(options.get("value", 0.0), x_lo.detach(), t)
                         g_hi = self._boundary_target(options.get("value", 0.0), x_hi.detach(), t)
