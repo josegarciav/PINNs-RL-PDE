@@ -32,7 +32,7 @@ The goal is to estimate unknown physics with known validity conditions and calib
 - [x] **Measured inputs:** BCs and forcing from interpolated time series. *Done: `CustomPDE(inputs={"q": {"path": "left.csv"}}, boundary_conditions={"dirichlet": {"left": "q"}})`; `test_measured_inputs.py` trains heat with its boundary following a CSV.*
 - [x] **Sensor operators:** point, boundary and integral observations with per-sensor noise and delay. *Done: `CustomPDE(sensors=[PointSensor, BoundarySensor, IntegralSensor])`, `pde.observe`, `sensor_jacobian`; K02 ranks layouts by their Fisher information and trains on sensor records (F05's fixed probes are one `PointSensor` each; its results predate the module).*
 - [x] **Non-dimensionalization helpers** (a reference scale per variable). *Done: `CustomPDE(scales=...)` + `build_trainer(normalize=True)` / `--normalize`; a heat problem in millimetres, seconds and kelvin trains like the unit problem (`test_normalization.py`). J01 will be the first process model to use it.*
-- **High-dimensional stability:** dimension sweeps of stability constants and quadrature error. *Done when: K08 is written up (P12).*
+- [x] **High-dimensional stability:** dimension sweeps of stability constants and quadrature error. *Done: K08, heat and convection in $d = 1 \ldots 5$; the quadrature gap is dimension-independent, the stability constant grows with the condition errors, and high-dimensional convection collapses to zero.*
 
 ## v0.7+: process twins
 

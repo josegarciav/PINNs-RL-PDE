@@ -46,6 +46,8 @@ When an experiment shows that a feature works, move the reusable code into
 | `F03_burgers_nu/` | F03 | Burgers viscosity near the shock, identified as log ν, against a finite-difference bound from the Cole–Hopf reference. `run.py`, `plot.py`. |
 | `F07_profile_likelihood/` | F07 | Profile likelihood of the heat diffusivity: the data misfit at fixed α on a grid, against the Fisher parabola. `run.py`. |
 | `F09_field_unknowns/` | F09 | Recovery of a drifting α(t) (linear, step) and a coefficient field α(x) (bump, two layers) on heat with `UnknownFunction`, against the best constant. README with results, `run.py`, `plot.py`. |
+| `K48_reduced_bases/` | K48 | The F09 fields in a cosine basis: Fisher spectrum of the modes from the reference solver, the swarm over the coefficients, and a 6-mode basis vs a network as the unknown. README with results, `run.py`, `plot.py`. |
+| `K08_dimension_scaling/` | K08 | Heat and convection in d = 1–5: error, residual, stability constant, quadrature gap and cost vs dimension at matched total and matched per-axis points. README with results, `run.py`, `plot.py`. |
 | `K02_sensor_layout/` | K02 | Sensor count, placement and kind vs the Fisher information of the layout (heat α, KdV α–β) with `sensor_jacobian`, plus α identified from 1–8 probes against each layout's bound. README with results, `run.py`, `plot.py`. |
 | `K01_fisher_information/` | K01 | Fisher information from the trained surrogate (implicit-function theorem, MINRES) checked against closed forms (heat, KdV) and a numerical reference (Burgers). README with results, `run.py`. |
 | `K03_training_conditioning/` | K03 | Loss-Hessian and tangent-kernel spectra across eight operators and two architectures, against the final error. `run.py`. |
