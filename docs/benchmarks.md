@@ -178,6 +178,21 @@ Every position a cloud swarm evaluates, weighted by its likelihood, against the 
 
 - The weighted swarm is centred on the posterior mean (within 0.05 standard deviations) but 0.5–0.7 as wide, with 80–87 % coverage at the 90 % level: importance weights cannot recover tails the swarm never visits. The accepted (likelihood-ratio) set is wider and covers 90–100 %; widened by K46's factor it is the usable interval. For a density, use a sampler, with the parametric surrogate (K45) as its cheap forward model.
 
+
+## Parametric surrogate as the forward emulator (experiment K45)
+
+```bash
+python experiments/K45_parametric_surrogate/run.py --seeds 2 --datasets 10 --workers 4
+```
+
+One network $u_w(x, t; \theta)$ with the parameters as inputs (`CustomPDE(parametric=...)`), trained once over the prior range (4 × 64, Adam 4,000 steps then L-BFGS 100), against a dedicated network per parameter value at the same budget, on heat ($\alpha \in [0.02, 0.5]$), the KdV soliton ($(\alpha, \beta) \in [2, 12] \times [0.3, 3]$) and the Burgers travelling wave ($\nu \in [0.05, 0.5]$); then the swarm of K46 run on the surrogate's misfit (`pde.surrogate_misfit`) against the closed-form misfit on 10 noisy data sets. Details in `experiments/K45_parametric_surrogate/README.md`.
+
+![K45](assets/benchmarks/k45_parametric_surrogate.png)
+
+- **One surrogate covers the range to 0.2–0.3 % on heat and Burgers and 0.2–2 % on KdV**, at a quarter to a half of the cost of five dedicated networks (9–19 minutes against 23–56), and a forward evaluation of 10,000 points costs 15–40 ms. On heat it is 5–10 times less accurate than a network per value; on Burgers as accurate; on KdV it matches in the middle of the box and is 4–8 times worse at the corners.
+- **The swarm on the surrogate is the swarm on the closed form.** Best fits agree to 0.04–0.3 % of the truth, 90 % widths to 1–3 %, and coverage data set by data set (8/10 heat, 7/10 KdV, the swarm's own under-coverage from K46). The surrogate's forward error is well below the scatter the data impose, and the region of a PINN inverse problem can be sampled on the PINN's own misfit at 0.1–0.2 s per data set.
+- **Where the surrogate's error exceeds the data scatter (the KdV corner at (11, 0.4), 2 %), the region is biased by about that error**; the check is one dedicated network at the best fit.
+
 ## The evaporator reference and its PINN (experiments J01, J02)
 
 `pinnrl.process.FallingFilmEvaporator`: liquid flow and solids fraction transported along a heated tube with boiling-point elevation, fouling and measured feed and steam signals; a steady-state ODE solver, a first-order method-of-lines dynamic solver, and the same model as a `CustomPDE`. Details in `experiments/J01_evaporator_reference/README.md`.
