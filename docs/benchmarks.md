@@ -269,3 +269,17 @@ python experiments/J05_ekf_baseline/run.py --seeds 3
 - **The tuning is one number**, the random-walk intensity: a decade too small and the filter lags the ramp by four minutes, a decade too large and it follows the noise. Six cells still give 7 %.
 - **The inputs bound both estimators alike**: a 0.3 K steam bias costs the filter 12 % at the end, a 1 % feed bias 8 %, the J04 numbers. The PINN's case is the partly unknown model (a closure, a field), not this one; the EKF stays as the control on every later comparison.
 
+## A drying droplet and its closure (experiment J07, first pass)
+
+```bash
+python experiments/J07_droplet_drying/run.py --seeds 3 --steps 12000 --lbfgs-steps 500 --data-weight 300 --workers 3
+```
+
+`pinnrl.process.DryingDroplet` (a 1.5 mm droplet drying in 90 °C air with a characteristic drying curve as its rate closure): the PINN forward solve, and the closure $f(X)$ identified as an unknown function from a mass-and-temperature record, against least squares with the right and with a wrong parametric form. Details in `experiments/J07_droplet_drying/README.md`.
+
+![J07](assets/benchmarks/j07_droplet_drying.png)
+
+- **The forward solve reaches 8–14 % on the moisture** at 12,000 + 500 steps: the 50 K temperature rise over 40 s at the critical moisture is the feature a smooth network spreads (time-marching is the next lever).
+- **The unknown closure collapses to a constant on every seed**, either ignoring the physics ($f \equiv 0$, records fitted) or the data ($f \equiv 0.06$): K09's trivial attractor in the inverse setting, sticky because softplus-constrained weights that go small cannot grow back. One recovery to 15 % did not reproduce.
+- **Least squares with the right form is at the noise floor** ($n$, $X_{cr}$ to 1 % in 0.2 s) and the wrong form is 5.5 % off with a misfit 16 times larger. The second pass (J07b) tries two-stage training, a basis parametrization and a pointwise start from the record.
+

@@ -253,7 +253,10 @@ def main():
     jobs = [("forward", s) for s in range(args.seeds)] + [("closure", s) for s in range(args.seeds)]
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         futures = [
-            pool.submit(run_forward if kind == "forward" else run_closure, (s, args.steps))
+            pool.submit(
+                run_forward if kind == "forward" else run_closure,
+                (s, args.steps, args.lbfgs_steps, args.initial, args.data_weight),
+            )
             for kind, s in jobs
         ]
         for fut in futures:
