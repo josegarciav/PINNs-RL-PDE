@@ -281,3 +281,38 @@ def test_pde_file_run_saves_and_reloads_the_unknown_weights(tmp_path):
     assert not torch.allclose(
         pde2.evaluate_unknown("alpha", X, T), torch.full_like(T, 0.2)
     )  # the weights moved and were restored
+
+
+def test_basis_function_is_a_linear_combination_of_fixed_modes():
+    fn = UnknownFunction(
+        "a", ["x"], input_ranges={"x": (0, 1)}, basis={"type": "cosine", "modes": 5}, initial=0.1
+    )
+    x = {"x": torch.linspace(0, 1, 9).reshape(-1, 1)}
+    assert torch.allclose(fn(x), torch.full((9, 1), 0.1))  # the constant mode carries the start
+    assert fn.coefficients.shape == (5,) and fn.coefficients[0].item() == pytest.approx(0.1)
+    with torch.no_grad():
+        fn.coefficients[2] = 0.3
+    expected = 0.1 + 0.3 * torch.cos(2 * math.pi * x["x"])
+    assert torch.allclose(fn(x), expected, atol=1e-6)
+    modes = fn.modes(x)
+    assert modes.shape == (9, 5) and torch.allclose(modes[:, 0], torch.ones(9))
+    leg = UnknownFunction("b", ["x"], basis={"type": "legendre", "modes": 4}, initial=0.0)
+    z = torch.linspace(-1, 1, 5).reshape(-1, 1)
+    assert torch.allclose(leg.modes({"x": z})[:, 2], (1.5 * z**2 - 0.5).ravel())
+    spec = yaml.safe_load(yaml.safe_dump(fn.to_spec()))
+    assert UnknownFunction.from_spec("a", spec).basis == {"type": "cosine", "modes": 5}
+    with pytest.raises(ValueError, match="single input"):
+        UnknownFunction("c", ["x", "t"], basis={"modes": 3})
+    with pytest.raises(ValueError, match="cosine"):
+        UnknownFunction("c", ["x"], basis={"type": "fourier", "modes": 3})
+    with pytest.raises(ValueError, match="network"):
+        _ = UnknownFunction("d", ["x"]).coefficients
+    # inside a problem: positive output, trainable coefficients only
+    pde = CustomPDE(
+        "u_t - alpha_x*u_x - alpha*u_xx",
+        domain={"x": (0, 1), "t": (0, 1)},
+        unknown_functions={
+            "alpha": {"inputs": ["x"], "basis": {"modes": 6}, "positive": True, "initial": 0.1}
+        },
+    )
+    assert sum(p.numel() for p in pde.unknown_functions.parameters()) == 7

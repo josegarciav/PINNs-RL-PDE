@@ -84,6 +84,29 @@ class _ConstrainedLinear(nn.Module):
         return nn.functional.linear(x, self.weight(), self.linear.bias)
 
 
+class _BasisFeatures(nn.Module):
+    """Fixed features of one normalized input in ``[-1, 1]``: cosine or Legendre modes."""
+
+    def __init__(self, kind: str, modes: int):
+        super().__init__()
+        if kind not in ("cosine", "legendre"):
+            raise ValueError(f"basis type must be 'cosine' or 'legendre', not {kind!r}")
+        if modes < 1:
+            raise ValueError("a basis needs at least one mode")
+        self.kind, self.modes = kind, int(modes)
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        """``(N, 1)`` in ``[-1, 1]`` to ``(N, modes)``; the first mode is the constant 1."""
+        z = z[:, :1]
+        if self.kind == "cosine":
+            k = torch.arange(self.modes, device=z.device, dtype=z.dtype)
+            return torch.cos(k * math.pi * (z + 1.0) / 2.0)
+        cols = [torch.ones_like(z), z]
+        for n in range(1, self.modes - 1):  # Bonnet recursion
+            cols.append(((2 * n + 1) * z * cols[-1] - n * cols[-2]) / (n + 1))
+        return torch.cat(cols[: self.modes], dim=1)
+
+
 class UnknownFunction(nn.Module):
     """A learnable function of coordinates and fields that replaces a coefficient.
 
@@ -105,6 +128,12 @@ class UnknownFunction(nn.Module):
             those inputs, by non-negative weights on every path from them.
         initial: The constant the function starts at (the network's last layer
             starts at zero), the analogue of a scalar's initial guess.
+        basis: ``{"type": "cosine" | "legendre", "modes": n}``: instead of a
+            network, a linear combination of ``n`` fixed modes of a single
+            input, so the unknown is the coefficient vector
+            :attr:`coefficients` and the identifiability of each mode can be
+            analysed like a parameter (K48). ``hidden``, ``activation`` and
+            ``monotone`` do not apply; ``positive`` and ``bounds`` still do.
         truth: The true function as an expression in the inputs (``"0.1 + 0.05*t"``,
             with ``pi``, ``exp``, ``heaviside``, ...) or a callable
             ``truth(**inputs) -> (N, 1)``. Used for synthetic data, for exact
@@ -129,6 +158,7 @@ class UnknownFunction(nn.Module):
         monotone: Mapping[str, str] | str | None = None,
         initial: float = 1.0,
         truth: str | Callable | None = None,
+        basis: Mapping[str, Any] | None = None,
     ):
         super().__init__()
         self.name = str(name)
@@ -177,20 +207,35 @@ class UnknownFunction(nn.Module):
         self.register_buffer("_lo", lo)
         self.register_buffer("_hi", hi)
 
-        signs = [
-            {"increasing": 1, "decreasing": -1}.get(self.monotone.get(i, ""), 0)
-            for i in self.inputs
-        ]
-        layers: list[nn.Module] = []
-        widths = [len(self.inputs), *self.hidden, 1]
-        for k, (n_in, n_out) in enumerate(zip(widths[:-1], widths[1:], strict=True)):
-            if k == 0:
-                layers.append(_ConstrainedLinear(n_in, n_out, signs=signs))
-            else:
-                layers.append(_ConstrainedLinear(n_in, n_out, all_positive=bool(self.monotone)))
-            if k < len(widths) - 2:
-                layers.append(_ACTIVATIONS[activation]())
-        self.net = nn.Sequential(*layers)
+        self.basis: dict[str, Any] | None = None
+        if basis is not None:
+            if len(self.inputs) != 1:
+                raise ValueError(f"a basis needs a single input; {name!r} has {self.inputs}")
+            if self.monotone:
+                raise ValueError("monotone is not available with a basis")
+            self.basis = {
+                "type": str(basis.get("type", "cosine")),
+                "modes": int(basis.get("modes", 6)),
+            }
+            self.net = nn.Sequential(
+                _BasisFeatures(self.basis["type"], self.basis["modes"]),
+                _ConstrainedLinear(self.basis["modes"], 1),
+            )
+        else:
+            signs = [
+                {"increasing": 1, "decreasing": -1}.get(self.monotone.get(i, ""), 0)
+                for i in self.inputs
+            ]
+            layers: list[nn.Module] = []
+            widths = [len(self.inputs), *self.hidden, 1]
+            for k, (n_in, n_out) in enumerate(zip(widths[:-1], widths[1:], strict=True)):
+                if k == 0:
+                    layers.append(_ConstrainedLinear(n_in, n_out, signs=signs))
+                else:
+                    layers.append(_ConstrainedLinear(n_in, n_out, all_positive=bool(self.monotone)))
+                if k < len(widths) - 2:
+                    layers.append(_ACTIVATIONS[activation]())
+            self.net = nn.Sequential(*layers)
         self._start_at_constant(self.initial)
 
         self._truth_fn: Callable | None = truth if callable(truth) else None
@@ -215,6 +260,28 @@ class UnknownFunction(nn.Module):
             else:
                 last.linear.weight.zero_()
             last.linear.bias.fill_(self._preimage(value))
+            if self.basis is not None:  # the constant mode carries the start; no bias
+                last.linear.bias.zero_()
+                last.linear.weight[0, 0] = self._preimage(value)
+
+    @property
+    def coefficients(self) -> torch.Tensor:
+        """The mode coefficients of a basis function (before the output transform), ``(modes,)``.
+
+        Raises:
+            ValueError: When the function is a network rather than a basis.
+        """
+        if self.basis is None:
+            raise ValueError(f"{self.name!r} is a network; coefficients need basis=...")
+        return self.net[-1].linear.weight.reshape(-1)
+
+    def modes(self, values: Mapping[str, torch.Tensor]) -> torch.Tensor:
+        """The basis modes at ``values``, ``(N, modes)``, for sensitivity analyses."""
+        if self.basis is None:
+            raise ValueError(f"{self.name!r} is a network; modes need basis=...")
+        z = self._stack(values)
+        z = 2.0 * (z - self._lo) / (self._hi - self._lo) - 1.0
+        return self.net[0](z)
 
     def _preimage(self, value: float) -> float:
         if self.bounds is not None:
@@ -266,6 +333,8 @@ class UnknownFunction(nn.Module):
             spec["monotone"] = dict(self.monotone)
         if self.truth_text is not None:
             spec["truth"] = self.truth_text
+        if self.basis is not None:
+            spec["basis"] = dict(self.basis)
         return spec
 
     # --------------------------------------------------------------- evaluation
@@ -329,7 +398,10 @@ class UnknownFunction(nn.Module):
 
     def extra_repr(self) -> str:
         """Signature, widths and constraints, for ``repr``."""
-        parts = [f"{self.name}({', '.join(self.inputs)})", f"hidden={list(self.hidden)}"]
+        parts = [f"{self.name}({', '.join(self.inputs)})"]
+        parts.append(
+            f"basis={self.basis}" if self.basis is not None else f"hidden={list(self.hidden)}"
+        )
         if self.positive:
             parts.append("positive")
         if self.bounds is not None:

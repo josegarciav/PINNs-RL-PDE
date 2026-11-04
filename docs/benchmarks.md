@@ -132,7 +132,7 @@ A drifting diffusivity $\alpha(t)$ and a coefficient field $\alpha(x)$ identifie
 
 - A linear drift is recovered to a few percent; a scalar model absorbs it as the best constant with a field error 2.7 times larger.
 - A jump comes back as a smooth ramp: the data see $\int \alpha$ through the solution's amplitude, and a smooth surrogate rounds the kink.
-- A field is identified only where the solution feels it (through the flux $\alpha u_x$): the two-layer medium, whose solution no constant reproduces within 20 %, is recovered; the centred bump, which a constant reproduces to 4 %, is not. The check is one call to `heat_variable_reference`.
+- A field is identified only where the solution feels it (through the flux $\alpha u_x$) and only to the surrogate's accuracy: the two-layer medium, whose solution no constant reproduces within 20 %, is recovered; the centred bump, which a constant reproduces to 4 %, twice the surrogate's field error, is not, although the data alone would determine its modes (K48). The check is one call to `heat_variable_reference`.
 - The optimizer's weight decay had been acting on the unknowns; PDE unknowns now train without it.
 
 ## Sensor layout vs conditioning (experiment K02)

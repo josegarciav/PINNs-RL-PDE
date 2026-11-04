@@ -141,6 +141,8 @@ print(pde.unknown_function_error("alpha"))          # relative L2 of the recover
 alpha_hat = pde.evaluate_unknown("alpha", x, t)     # the function itself, at any points
 ```
 
+A field can also be written in a fixed basis instead of a network, `{"alpha": {"inputs": ["x"], "basis": {"type": "cosine", "modes": 6}}}` (or `legendre`): the unknown is then the coefficient vector `fn.coefficients`, one scalar per mode, so each mode's identifiability can be analysed like a parameter and the coefficients can be sampled by the swarm (K48).
+
 A closure of the field takes the field as input and a range to normalise it: `{"f": {"inputs": ["u"], "input_ranges": {"u": [-1, 1]}, "monotone": "increasing"}}`, used as `u_t - D*u_xx - f`. Problems without a closed form take a numerical reference as `exact_solution`; `pinnrl.benchmarks.heat_variable_reference(alpha)` solves `u_t = (alpha(x, t) u_x)_x` by the method of lines and `.as_exact_solution()` interpolates it. The experiment [F09](benchmarks.md#field-valued-unknowns-experiment-f09) recovers a drifting `alpha(t)` and a two-layer `alpha(x)` this way, and shows which fields the data cannot determine.
 
 The weights of unknown functions are saved next to the model (`unknown_functions.pt`) and restored by `load_run`. The optimizer applies no weight decay to them, nor to scalar unknowns: decay is a prior toward zero, which is a regularizer for network weights and a bias for physics.
