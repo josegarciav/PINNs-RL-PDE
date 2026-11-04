@@ -36,34 +36,13 @@ DATA_WEIGHT = 300.0
 
 
 def pointwise_estimate(dr, times, m_rec, T_rec):
-    """``(X_i, f_i)`` from the smoothed mass and temperature records."""
-    from scipy.signal import savgol_filter
-
-    from pinnrl.process.droplet import M_W, R_GAS, saturation_pressure
-
-    X = savgol_filter(m_rec / dr.m_s - 1.0, 21, 3)
-    dX = savgol_filter(m_rec / dr.m_s - 1.0, 21, 3, deriv=1, delta=float(times[1] - times[0]))
-    T = savgol_filter(T_rec, 21, 3)
-    area, _h, h_m = dr.transfer(np.maximum(X, 0.0))
-    rho_vs = saturation_pressure(T) * M_W / (R_GAS * T)
-    drive = h_m * area * (rho_vs - dr.Y_air * dr.rho_air) / dr.m_s
-    f = np.clip(-dX / np.maximum(drive, 1e-12), 0.0, 1.0)
-    keep = X > dr.X_eq + 0.02
-    return X[keep], f[keep]
+    """``(X_i, f_i)`` from the smoothed records (``DryingDroplet.closure_from_record``)."""
+    return dr.closure_from_record(times, m_rec, T_rec, window=21, order=3)
 
 
 def pretrain(fn, X_pts, f_pts, steps=3000):
-    import torch
-
-    X = torch.tensor(X_pts, dtype=torch.float32).reshape(-1, 1)
-    y = torch.tensor(f_pts, dtype=torch.float32).reshape(-1, 1)
-    opt = torch.optim.Adam(fn.parameters(), lr=1e-2)
-    for _ in range(steps):
-        opt.zero_grad()
-        loss = ((fn({"X": X}) - y) ** 2).mean()
-        loss.backward()
-        opt.step()
-    return float(loss)
+    """Pre-train the unknown function to the pointwise estimate (``UnknownFunction.fit``)."""
+    return fn.fit({"X": X_pts}, f_pts, steps=steps, lr=1e-2)
 
 
 def run_arm(job):

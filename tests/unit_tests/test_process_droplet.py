@@ -71,3 +71,25 @@ def test_unknown_closure_builds_bounded_monotone_and_trains():
     losses = pde.compute_loss(trainer.model, x, t)
     assert all(np.isfinite(v.item()) for v in losses.values())
     trainer.train_steps(num_steps=2)
+
+
+def test_closure_read_off_a_clean_record_and_fitted_to_the_unknown_function():
+    dr = DryingDroplet()
+    ref = dr.reference(200.0, nt=2001)
+    times = np.arange(1.0, 200.0 + 1e-9, 1.0)
+    m = np.interp(times, ref.t, ref.m)
+    T = np.interp(times, ref.t, ref.T)
+    X_pts, f_pts = dr.closure_from_record(times, m, T)
+    truth = dr.drying_curve(X_pts)
+    assert np.linalg.norm(f_pts - truth) / np.linalg.norm(truth) < 0.05
+    assert X_pts.min() > dr.X_eq and bool((f_pts >= 0).all()) and bool((f_pts <= 1).all())
+    pde = dr.custom_pde(200.0, unknown_rate={"hidden": [8, 8]})
+    fn = pde.unknown_functions["f"]
+    torch.manual_seed(0)
+    mse = fn.fit({"X": X_pts}, f_pts, steps=500)
+    X = torch.linspace(dr.X_eq, dr.X0, 100).reshape(-1, 1)
+    with torch.no_grad():
+        fitted = fn({"X": X}).ravel().numpy()
+    exact = dr.drying_curve(X.ravel().numpy())
+    assert mse < 5e-3
+    assert np.linalg.norm(fitted - exact) / np.linalg.norm(exact) < 0.1

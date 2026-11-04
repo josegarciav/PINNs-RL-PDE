@@ -25,6 +25,7 @@ import math
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -374,6 +375,33 @@ class UnknownFunction(nn.Module):
             raise ValueError(f"unknown function {self.name!r} has no truth to compare with")
         like = values[self.inputs[0]].reshape(-1, 1)
         return self._truth_expr({i: values[i].reshape(-1, 1) for i in self.inputs}, like)
+
+    def fit(
+        self,
+        values: Mapping[str, Any],
+        targets: Any,
+        steps: int = 3000,
+        lr: float = 1e-2,
+    ) -> float:
+        """Pre-train the function to ``targets`` at the input ``values`` (least squares, Adam).
+
+        The start of an inverse run when a pointwise estimate of the function
+        exists, e.g. a closure read off a dense record (J07b). Returns the
+        final mean-squared error.
+        """
+        inputs = {
+            i: torch.as_tensor(np.asarray(values[i]), dtype=torch.float32).reshape(-1, 1)
+            for i in self.inputs
+        }
+        y = torch.as_tensor(np.asarray(targets), dtype=torch.float32).reshape(-1, 1)
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        loss = torch.zeros(())
+        for _ in range(int(steps)):
+            optimizer.zero_grad()
+            loss = ((self(inputs) - y) ** 2).mean()
+            loss.backward()
+            optimizer.step()
+        return float(loss.detach())
 
     def grid(
         self, n: int = 256, device: torch.device | str | None = None

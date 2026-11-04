@@ -164,6 +164,39 @@ class DryingDroplet:
         X, T = sol.y
         return DropletReference(t=t, X=X, T=T, m=self.m_s * (1.0 + X), d=self.diameter(X))
 
+    def closure_from_record(
+        self,
+        times: np.ndarray,
+        mass: np.ndarray,
+        temperature: np.ndarray,
+        window: int = 21,
+        order: int = 3,
+        margin: float = 0.02,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """The drying-rate closure read off a mass-and-temperature record, point by point.
+
+        ``f_i = -dX/dt m_s / (h_m A (rho_vs(T_i) - rho_va))`` with the moisture
+        and its rate from a Savitzky–Golay filter of the mass record (window
+        and polynomial order as given) and the transfer coefficients of this
+        model. Returns ``(X_i, f_i)`` for the readings with ``X_i > X_eq +
+        margin``, ``f_i`` clipped to ``[0, 1]``: the start for an
+        :class:`~pinnrl.pdes.unknowns.UnknownFunction` (``fn.fit(...)``).
+        """
+        from scipy.signal import savgol_filter
+
+        times = np.asarray(times, dtype=float)
+        X_rec = np.asarray(mass, dtype=float) / self.m_s - 1.0
+        dt = float(times[1] - times[0])
+        X = savgol_filter(X_rec, window, order)
+        dX = savgol_filter(X_rec, window, order, deriv=1, delta=dt)
+        T = savgol_filter(np.asarray(temperature, dtype=float), window, order)
+        area, _h, h_m = self.transfer(np.maximum(X, 0.0))
+        rho_vs = saturation_pressure(T) * M_W / (R_GAS * T)
+        drive = h_m * area * (rho_vs - self.Y_air * self.rho_air) / self.m_s
+        f = np.clip(-dX / np.maximum(drive, 1e-12), 0.0, 1.0)
+        keep = X > self.X_eq + margin
+        return X[keep], f[keep]
+
     # ------------------------------------------------------------- the PINN
     def expressions(self) -> dict[str, str]:
         """The text sub-expressions of the model in the fields ``X`` and ``T`` (and ``f`` for the closure)."""
