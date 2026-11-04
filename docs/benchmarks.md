@@ -154,3 +154,13 @@ Heat and convection in $d = 1 \ldots 5$ at a fixed budget (4,096 points, 4,000 A
 - For heat the interior residual stays at 2–7 % whatever $d$ while the error grows from 2 % to 44 %: the empirical stability constant goes from 0.8 to 8.4, a factor 4 of it the shrinking norm of the product solution and the rest the initial and boundary errors, which 512 fixed points cover more thinly in high dimension.
 - Convection fails from $d = 2$ and at $d \ge 4$ converges to $u \approx 0$: a small residual with a large initial error, which the residual-based estimate does not see. The bound holds only with the condition terms.
 - The Monte Carlo quadrature gap is 1–4 % at 4,096 points for every $d$, and 10–14 % at 36–216 points: the cost of a dimension is per point (14 → 122 ms per step), not in the quadrature.
+
+## Reduced bases for field unknowns (experiment K48)
+
+The F09 fields in a cosine basis: the Fisher spectrum of the modes from the reference solver, the swarm over the coefficients, and a 6-mode basis against a network as the trained unknown. Details in `experiments/K48_reduced_bases/README.md`.
+
+![K48](assets/benchmarks/k48_reduced_bases.png)
+
+- With an exact forward model, 200 observations at noise 0.01 determine all eight modes of either field to 0.001–0.006, with no null space: F09's collapse of the bump is the surrogate's limit, not the data's.
+- A 6-mode basis recovers the same (biased) field as the network, with coefficients reproducible across seeds to three digits: the PINN's optimum in the field sits 10–50 Fisher standard deviations from the truth. Forward accuracy, not the representation, is the bottleneck of field identification.
+- The reference solver serves the swarm as a forward model (1,440 solves a minute); the swarm under-samples the region at 0.2–0.7 of the Fisher half-widths, and a 4-mode truncation is model-form error that the fit absorbs.
