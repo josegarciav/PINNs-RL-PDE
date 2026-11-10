@@ -113,7 +113,7 @@ def _load_well_dataset(name: str, split: str, base: str | None, n_steps: int):
     ``n_steps`` steps maps to ``max_rollout_steps = n_steps - 1``.
     """
     try:
-        from the_well.data import WellDataset  # type: ignore
+        from the_well.data import WellDataset
     except ImportError as exc:  # pragma: no cover - exercised only without extra
         raise TheWellNotInstalledError() from exc
 
@@ -156,11 +156,11 @@ def _extract_arrays(sample: Any, n_spatial_dims: int) -> dict[str, Any]:
         )
 
     segments = [_as_np(sample["input_fields"])]
-    times = [_as_np(sample["input_time_grid"]).reshape(-1)]
+    time_parts = [_as_np(sample["input_time_grid"]).reshape(-1)]
     if "output_fields" in sample:
         segments.append(_as_np(sample["output_fields"]))
-        times.append(_as_np(sample["output_time_grid"]).reshape(-1))
-    times = np.concatenate(times).astype(np.float32)
+        time_parts.append(_as_np(sample["output_time_grid"]).reshape(-1))
+    times = np.concatenate(time_parts).astype(np.float32)
     shape = segments[0].shape[1:]
     for seg in segments:
         if seg.ndim != n_spatial_dims + 2:
@@ -216,7 +216,8 @@ def _gather(trajectories: list[dict[str, Any]], flat: np.ndarray) -> dict[str, n
         start = 0
         for seg in traj["segments"]:
             hit = (step >= start) & (step < start + len(seg))
-            u[rows[hit]] = seg[(step[hit] - start, *(node[hit] for node in nodes))]
+            index = (step[hit] - start, *(node[hit] for node in nodes))
+            u[rows[hit]] = seg[index]
             start += len(seg)
     return {"x": x, "t": t, "u": u}
 

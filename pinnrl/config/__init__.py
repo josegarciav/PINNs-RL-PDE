@@ -110,7 +110,9 @@ class AdaptiveWeightsConfig:
     strategy: str = "rbw"  # Options: "lrw" or "rbw"
     alpha: float = 0.9  # EMA retention factor (0-1)
     eps: float = 1e-5  # Small constant for numerical stability
-    initial_weights: list[float] = None  # First-step weights for [residual, boundary, initial]
+    initial_weights: list[float] | None = (
+        None  # First-step weights for [residual, boundary, initial]
+    )
 
     def __post_init__(self):
         if self.initial_weights is None:
@@ -158,8 +160,8 @@ class TrainingConfig:
     early_stopping: EarlyStoppingConfig
     learning_rate_scheduler: LearningRateSchedulerConfig
     collocation_distribution: str = "uniform"
-    adaptive_weights: AdaptiveWeightsConfig = None
-    loss_weights: dict[str, float] = None
+    adaptive_weights: AdaptiveWeightsConfig | None = None
+    loss_weights: dict[str, float] | None = None
     optimizer: str = "adam"  # "adam" | "lbfgs" | "adam_lbfgs"
     adam_lbfgs_switch_ratio: float = 0.7
     lbfgs: LBFGSConfig | None = None
@@ -311,7 +313,7 @@ class ModelConfig:
     output_dim: int
     num_layers: int
     activation: str
-    fourier_features: bool
+    fourier_features: int
     fourier_scale: float | None
     dropout: float
     layer_norm: bool

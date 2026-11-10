@@ -7,7 +7,7 @@ import os
 import time
 from collections.abc import Callable, Sequence
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import torch
@@ -20,6 +20,7 @@ from pinnrl.training.adaptive_weights import AdaptiveLossWeights
 
 if TYPE_CHECKING:
     from pinnrl.config import Config
+    from pinnrl.pdes.custom import CustomPDE
     from pinnrl.pdes.pde_base import PDEBase
 
 
@@ -141,7 +142,7 @@ class PDETrainer:
         self._initialize_optimizer_and_scheduler()
 
         # Training history
-        self.history = {
+        self.history: dict[str, list[Any]] = {
             "train_loss": [],
             "val_loss": [],
             "residual_loss": [],
@@ -169,7 +170,7 @@ class PDETrainer:
         # Initialize adaptive weights handler if enabled
         self.use_adaptive_weights = config.training.adaptive_weights.enabled
         if self.use_adaptive_weights:
-            self.adaptive_weights = AdaptiveLossWeights(
+            self.adaptive_weights: AdaptiveLossWeights | None = AdaptiveLossWeights(
                 strategy=config.training.adaptive_weights.strategy,
                 alpha=config.training.adaptive_weights.alpha,
                 eps=config.training.adaptive_weights.eps,
@@ -495,7 +496,7 @@ class PDETrainer:
             group["lr"] = group["initial_lr"] = self.config.training.learning_rate
         if self._optimizer_type == "adam_lbfgs":
             ratio = getattr(self.config.training, "adam_lbfgs_switch_ratio", 0.7)
-            self._switch_epoch = max(1, int(num_epochs * ratio))
+            self._switch_epoch: int | None = max(1, int(num_epochs * ratio))
         else:
             self._switch_epoch = None
         self.scheduler = self._build_scheduler(force_reduce_lr=self._is_lbfgs)
@@ -582,7 +583,7 @@ class PDETrainer:
         sampling_strategy = (
             "adaptive" if self.use_rl else self.config.training.collocation_distribution
         )
-        sampling_kwargs = {}
+        sampling_kwargs: dict[str, Any] = {}
         if sampling_strategy in ("residual_based", "adaptive"):
             sampling_kwargs["model"] = self.model
         if sampling_strategy == "adaptive":
@@ -604,6 +605,7 @@ class PDETrainer:
         if training_mode == "data_only":
             return
         component_names = ["residual", "boundary", "initial"]
+        assert self.adaptive_weights is not None  # only called with use_adaptive_weights
         if self.config.training.adaptive_weights.strategy == "lrw":
             # Learning-rate weighting balances the gradient norm of each component
             # (over the model parameters, not trainable PDE parameters).
@@ -759,6 +761,7 @@ class PDETrainer:
             if time_budget_s is not None:
                 progress = clock / time_budget_s
             else:
+                assert num_steps is not None  # one of the two is given, checked above
                 progress = step / num_steps
             start = time.perf_counter()
             if step % resample_every == 0:
@@ -820,6 +823,7 @@ class PDETrainer:
         # L-BFGS switch follow num_epochs. Weights and optimizer moments carry over.
         self._plan_epochs(num_epochs)
         self.model.train()
+        architecture_name: Any
         if hasattr(self.model, "architecture_name"):
             architecture_name = self.model.architecture_name
         else:
@@ -1142,7 +1146,7 @@ class PDETrainer:
             # Field-valued unknowns (CustomPDE.unknown_functions) have weights of their own.
             if getattr(self.pde, "unknown_functions", None):
                 torch.save(
-                    self.pde.unknown_state_dict(),
+                    cast("CustomPDE", self.pde).unknown_state_dict(),
                     os.path.join(experiment_dir, "unknown_functions.pt"),
                 )
 

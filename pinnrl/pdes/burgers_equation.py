@@ -42,13 +42,14 @@ class BurgersEquation(PDEBase):
             model, x, t, temporal_derivatives=[1], spatial_derivatives=[1, 2]
         )
         u = d["u"]
+        convection: torch.Tensor | int
         if self.dimension == 1:
             convection = u * d["dx"]
         else:
             convection = sum(u * d[f"dx{dim + 1}"] for dim in range(self.dimension))
         return d["dt"] + convection - self.nu * d["laplacian"]
 
-    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable | None:
         if params.get("type") == "sine":
             a, k = params.get("amplitude", -1.0), params.get("frequency", 1.0)
             return lambda x, t: a * torch.prod(torch.sin(k * torch.pi * x), dim=1, keepdim=True)

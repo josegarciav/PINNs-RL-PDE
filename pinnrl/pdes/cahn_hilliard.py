@@ -63,7 +63,7 @@ class CahnHilliardEquation(PDEBase):
             torch.sum(x, dim=1, keepdim=True) / (2 * self.dimension * self.kappa) ** 0.5
         )
 
-    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable | None:
         ic_type = params.get("type")
         if ic_type == "tanh":
             return lambda x, t: self._kink(x)

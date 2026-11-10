@@ -74,7 +74,7 @@ class PINNModel(BaseNetwork):
 
         # Create model based on architecture
         if self.architecture == "fourier":
-            self.model = FourierNetwork(config_with_device)
+            self.model: BaseNetwork = FourierNetwork(config_with_device)
         elif self.architecture == "resnet":
             # Create a specific configuration dictionary for ResNet
             resnet_config = {

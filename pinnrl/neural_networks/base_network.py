@@ -22,7 +22,7 @@ class BaseNetwork(nn.Module):
             config: Configuration mapping with ``.get`` (a dict or a ``ModelConfig``)
         """
         super().__init__()
-        self.config = config
+        self.config: Any = config
         self.device = config.get("device", torch.device("cpu"))
         self.to(self.device)
 

@@ -78,7 +78,7 @@ class BlackScholesEquation(PDEBase):
             + self.r * d["u"]
         )
 
-    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable | None:
         if params.get("type") in ("option", "call_option"):
             strike, option_type = self._option()
             sign = 1.0 if option_type == "call" else -1.0

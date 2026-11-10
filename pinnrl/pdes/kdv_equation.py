@@ -62,7 +62,7 @@ class KdVEquation(PDEBase):
         )
         return d["dt"] + self.alpha * d["u"] * d["dx"] + self.beta * d["dx3"]
 
-    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable | None:
         if params.get("type") == "soliton":
             return lambda x, t: self._soliton(params, x, 0.0)
         return super()._create_initial_condition(params)

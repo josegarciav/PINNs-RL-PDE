@@ -71,10 +71,10 @@ class AutoEncoder(BaseNetwork):
         Returns:
             Latent space representation
         """
-        x = self._prepare_input(x)
+        h = self._prepare_input(x)
         for layer in self.encoder:
-            x = layer(x)
-        return x
+            h = layer(h)
+        return h
 
     def decode(self, z: torch.Tensor) -> torch.Tensor:
         """Decode latent space to output.

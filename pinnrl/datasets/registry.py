@@ -34,6 +34,7 @@ a frequency-domain problem), so every entry defaults to ``data_only``; use
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 # ``the_well`` reads the first step plus a ``max_rollout_steps``-step rollout
@@ -128,7 +129,7 @@ class WellEntry:
         return int(n_steps)
 
 
-def _components(name: str, axes: str, rank: int) -> tuple[str, ...]:
+def _components(name: str, axes: Sequence[str], rank: int) -> tuple[str, ...]:
     """Channel names of a vector (rank 1) or rank-2 tensor field."""
     if rank == 1:
         return tuple(f"{name}_{a}" for a in axes)

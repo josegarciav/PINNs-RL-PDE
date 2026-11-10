@@ -27,7 +27,7 @@ class ConvectionEquation(PDEBase):
         super().__init__(config)
 
     @property
-    def velocity(self) -> list[float]:
+    def velocity(self) -> list[float | torch.Tensor]:
         """Advection velocity, one entry per spatial axis."""
         velocity = self.get_parameter("velocity", default=1.0)
         if isinstance(velocity, (int, float)) or (
@@ -50,7 +50,7 @@ class ConvectionEquation(PDEBase):
         a, k = ic.get("amplitude", 1.0), ic.get("frequency", 1.0)
         return a * torch.sin(k * torch.pi * torch.sum(x, dim=1, keepdim=True))
 
-    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable | None:
         if params.get("type") in ("sine", "sin"):
             return lambda x, t: self._plane_wave(x)
         return super()._create_initial_condition(params)

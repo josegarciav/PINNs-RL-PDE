@@ -31,7 +31,7 @@ class ResNetBlock(nn.Module):
 
         # Get activation function
         if activation == "relu":
-            self.activation_fn = nn.ReLU()
+            self.activation_fn: nn.Module = nn.ReLU()
         elif activation == "leaky_relu":
             self.activation_fn = nn.LeakyReLU()
         elif activation == "tanh":

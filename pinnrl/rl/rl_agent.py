@@ -6,6 +6,7 @@ uses it with ``gamma = 0``, i.e. as a contextual bandit over domain cells.
 """
 
 from collections import deque
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -36,7 +37,7 @@ class DQNNetwork(nn.Module):
         super().__init__()
 
         # Build network
-        layers = []
+        layers: list[nn.Module] = []
 
         # Input layer
         layers.append(
@@ -96,7 +97,7 @@ class ReplayBuffer:
         Args:
             capacity: Maximum number of experiences to store.
         """
-        self.buffer = deque(maxlen=capacity)
+        self.buffer: deque[Any] = deque(maxlen=capacity)
 
     def push(
         self,

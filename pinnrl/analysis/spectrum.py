@@ -96,7 +96,8 @@ def loss_hessian_spectrum(
         q = torch.randn(n, device=flat_g.device, dtype=flat_g.dtype)
     q = q / q.norm()
     Q = [q]
-    alphas, betas = [], []
+    alphas: list[float] = []
+    betas: list[float] = []
     for k in range(m):
         z = hvp(Q[k]).detach()
         alpha = float(Q[k] @ z)

@@ -60,7 +60,7 @@ class WaveEquation(PDEBase):
         d = self.compute_derivatives(model, x, t, temporal_derivatives=[2], spatial_derivatives=[2])
         return d["dt2"] - self.c**2 * d["laplacian"]
 
-    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable | None:
         if params.get("type") == "sine" or (
             params.get("type") == "sine_2d" and self.dimension == 2
         ):

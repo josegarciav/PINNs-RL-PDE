@@ -65,7 +65,7 @@ class HeatEquation(PDEBase):
         d = self.compute_derivatives(model, x, t, temporal_derivatives=[1], spatial_derivatives=[2])
         return d["dt"] - self.alpha * d["laplacian"]
 
-    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable | None:
         ic_type = params.get("type")
         if ic_type in ("sin_exp_decay", "sine"):
             return lambda x, t: self._sine_mode(params, x)

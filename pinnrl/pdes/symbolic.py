@@ -22,6 +22,7 @@ import math
 import re
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from typing import cast
 
 import sympy
 import torch
@@ -53,7 +54,7 @@ def _tensor_args(fn: Callable) -> Callable:
 
 #: Functions available inside expressions, evaluated on tensors.
 TORCH_FUNCTIONS: dict[str, Callable] = {
-    name: _tensor_args(fn)
+    name: _tensor_args(cast(Callable, fn))
     for name, fn in {
         "sin": torch.sin,
         "cos": torch.cos,

@@ -34,7 +34,7 @@ class FeedForwardNetwork(BaseNetwork):
         activation_name = config.get("activation", "relu")
 
         # Build layers
-        layers = []
+        layers: list[nn.Module] = []
         prev_dim = self.input_dim
 
         for hidden_dim in self.hidden_dims:

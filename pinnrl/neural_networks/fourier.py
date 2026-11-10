@@ -19,6 +19,8 @@ class FourierFeatures(nn.Module):
     there is no ``2π`` factor.
     """
 
+    B: torch.Tensor
+
     def __init__(
         self,
         input_dim: int,

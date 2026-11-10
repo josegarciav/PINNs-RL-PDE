@@ -1,5 +1,8 @@
 """Transformer-based architecture with self-attention mechanisms."""
 
+from collections.abc import Iterable
+from typing import cast
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -174,7 +177,7 @@ class AttentionNetwork(BaseNetwork):
         x = self.activation_fn(self.input_proj(x))
 
         # Apply attention layers
-        for attn, ff in self.layers:
+        for attn, ff in cast("Iterable[tuple[nn.Module, nn.Module]]", self.layers):
             x = attn(x)
             x = ff(x)
 

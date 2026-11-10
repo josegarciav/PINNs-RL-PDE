@@ -2,7 +2,7 @@
 
 import math
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -17,11 +17,11 @@ class PDEConfig:
 
     name: str
     domain: (
-        tuple[float, float] | list[tuple[float, float]]
+        Sequence[float] | Sequence[Sequence[float]]
     )  # For 1D, list of tuples for higher dimensions
-    time_domain: tuple[float, float] | None  # None: the observations' time range
+    time_domain: Sequence[float] | None  # None: the observations' time range
     parameters: dict[str, float]
-    boundary_conditions: dict[str, dict[str, Any]]
+    boundary_conditions: Mapping[str, Mapping[str, Any]]
     initial_condition: dict[str, Any]
     exact_solution: dict[str, Any]
     dimension: int = 1  # Default to 1D
@@ -93,34 +93,38 @@ class PDEBase:
                 ``adaptive`` strategy; built lazily with defaults when omitted.
         """
         self.config = config
-        self.domain = config.domain
+        domain: Any = config.domain
+        self.domain: list[tuple[float, float]]
         self.bandit_sampler = bandit_sampler
 
         # One (lo, hi) pair per spatial axis; a bare (lo, hi) means one axis.
-        if not self.domain:
+        if not domain:
             self.domain = [(0.0, 1.0)]
-        elif isinstance(self.domain[0], (list, tuple)):
-            self.domain = [(float(lo), float(hi)) for lo, hi in self.domain]
+        elif isinstance(domain[0], (list, tuple)):
+            self.domain = [(float(lo), float(hi)) for lo, hi in domain]
         else:
-            self.domain = [(float(self.domain[0]), float(self.domain[1]))]
+            self.domain = [(float(domain[0]), float(domain[1]))]
 
         # Update config with normalized domain format
         self.config.domain = self.domain
 
         # Handle time_domain/t_domain property
+        time_domain: Any
         if hasattr(config, "time_domain"):
-            self.time_domain = config.time_domain
+            time_domain = config.time_domain
         elif hasattr(config, "t_domain"):
-            self.time_domain = config.t_domain
+            time_domain = config.t_domain
         else:
-            self.time_domain = [0.0, 1.0]
+            time_domain = [0.0, 1.0]
         # Time-marching (H04): when set, collocation points and data records are taken on
         # [t0, time_cutoff] only; ``PDETrainer.train_windows`` moves it window by window.
         self.time_cutoff: float | None = None
 
         # Convert time_domain to tuple if it's a list
-        if isinstance(self.time_domain, list):
-            self.time_domain = tuple(self.time_domain)
+        if isinstance(time_domain, list):
+            time_domain = tuple(time_domain)
+        # ``None`` here is replaced by the observations' time range further down.
+        self.time_domain: tuple[float, float] = time_domain
 
         # Setup device - Handle device explicitly and carefully
         if hasattr(config, "device") and config.device is not None:
@@ -401,6 +405,7 @@ class PDEBase:
                 )
             with torch.no_grad():
                 u = self.exact_solution(x, t)
+                assert u is not None  # has_exact_solution was checked above
                 if noise_std and noise_std > 0:
                     noise = torch.randn(u.shape, generator=gen).to(self.device) * float(noise_std)
                     u = u + noise
@@ -411,7 +416,7 @@ class PDEBase:
         self.observation_data = {"x": x, "t": t, "u": u}
         return self.observation_data
 
-    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable | None:
         """Return ``u0(x, t)`` for the generic IC types; subclasses add their own.
 
         Generic types (all functions of the first spatial coordinate ``x_1``):
@@ -461,7 +466,7 @@ class PDEBase:
             return lambda x, t: a * torch.sin(k * torch.pi * x[:, 0:1])
         raise ValueError(f"{type(self).__name__}: unsupported initial condition type {ic_type!r}")
 
-    def _parse_boundary_conditions(self, config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    def _parse_boundary_conditions(self, config: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
         """Validate the ``boundary_conditions`` block (see the class docstring)."""
         parsed = {}
         for kind, options in config.items():
@@ -494,6 +499,7 @@ class PDEBase:
             hi = torch.tensor([float(b[1]) for b in self.domain])
             x = lo + (hi - lo) * torch.rand(n, self.dimension, generator=gen)
             t0, t1 = float(self.time_domain[0]), float(self.time_domain[1])
+            points: Any
             if kind == "initial":
                 points = (x.to(self.device), torch.full((n, 1), t0, device=self.device))
             else:
@@ -605,8 +611,8 @@ class PDEBase:
         model: torch.nn.Module,
         x: torch.Tensor,
         t: torch.Tensor,
-        temporal_derivatives: list[int] = None,
-        spatial_derivatives: set[int] = None,
+        temporal_derivatives: Iterable[int] | None = None,
+        spatial_derivatives: Iterable[int] | None = None,
     ) -> dict[str, torch.Tensor]:
         """Evaluate ``u = model([x, t])`` and the requested derivatives.
 
@@ -960,6 +966,7 @@ class PDEBase:
             raise ValueError(f"{self.config.name} has no exact solution configured")
         x, t = self.generate_collocation_points(num_points)
         u_exact = self.exact_solution(x, t)
+        assert u_exact is not None  # has_exact_solution was checked above
         with torch.no_grad():
             # Every component the exact solution provides (one for scalar PDEs).
             u_pred = model(torch.cat([x, t], dim=1))[:, : u_exact.shape[1]]

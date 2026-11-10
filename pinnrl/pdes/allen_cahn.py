@@ -55,7 +55,7 @@ class AllenCahnEquation(PDEBase):
         u = d["u"]
         return d["dt"] - self.epsilon**2 * d["laplacian"] - self.reaction_rate * (u - u**3)
 
-    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable | None:
         ic_type = params.get("type")
         if ic_type == "tanh":
             return lambda x, t: self._kink(x)

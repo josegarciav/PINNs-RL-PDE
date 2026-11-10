@@ -73,7 +73,7 @@ class PendulumEquation(PDEBase):
         d = self.compute_derivatives(model, x, t, temporal_derivatives=[1, 2])
         return d["dt2"] + self.damping * d["dt"] + (self.g / self.L) * torch.sin(d["u"])
 
-    def _create_initial_condition(self, params: dict[str, Any]) -> Callable:
+    def _create_initial_condition(self, params: dict[str, Any]) -> Callable | None:
         if params.get("type") in ("small_angle", "fixed"):
             theta0 = float(params.get("initial_angle", params.get("value", 0.5)))
             return lambda x, t: torch.full_like(x[:, 0:1], theta0)

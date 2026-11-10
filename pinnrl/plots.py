@@ -38,7 +38,7 @@ def _write_plotly(fig, save_path):
 
 def solution_grid(
     model, pde, n: int, t: float | None = None
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
     """Evaluate ``model`` and ``pde.exact_solution`` on a regular grid.
 
     1-D PDEs use an ``(x, t)`` grid over the whole time domain, or the single
