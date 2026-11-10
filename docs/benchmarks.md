@@ -376,6 +376,10 @@ Powder sticks when its particles are warmer than their glass transition by more 
 
 See `experiments/J08_stickiness/`.
 
+## Measurement and campaign design for the dryer (experiment J12)
+
+J09's calculation on the tower, with eight inputs admitted at their accuracies. The droplet's diameter and velocity are one unknown (the drying time against the residence time), so measuring the droplet size alone buys nothing; behind them the six balance inputs limit jointly, none alone. What pays is thermocouples good to 0.2 K (critical moisture ±0.085 → ±0.052), nine operating points (±0.065) and, for the stickiness margin, replicate lab assays (1.2 → 0.6 K). The best five points depend on the target: next to the operating limit for the margin, the corners of the window at high load for the curve. 60 fitted campaigns per design confirm the parameters' predicted spreads; the margin's is 20 % optimistic. See `experiments/J12_dryer_design/`.
+
 ## Time-marching windows (experiment H04)
 
 ```bash
