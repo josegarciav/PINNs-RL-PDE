@@ -56,3 +56,41 @@ For reference, the PINN twin of J03 on the same records: rel. L2 0.09–0.16, en
 - J07 (spray dryer): include an unknown closure, so the comparison tests what the PINN is for.
 - K15/J09 (measurement design): the Fisher machinery of J04 applies to both estimators.
 - The EKF is a `pinnrl.process` module; moving-horizon estimation (the roadmap's other classical estimator) can reuse its state-space form.
+
+## Moving-horizon estimation (J05b)
+
+The roadmap's other classical estimator on the same records: `pinnrl.process.MovingHorizonEstimator`, which re-solves the last $N$ records at every solve as a bounded least-squares problem (the state at the window's start plus one disturbance of $R_f$ per record, the arrival cost from an EKF run alongside). What it can do that the filter cannot is constrain: here, that the fouling only grows (disturbances $\ge 0$).
+
+- **Setup:** J05's plant, records and seeds; both estimators on the 11-cell model with $R_f$ a random walk, the same $Q$, $R$ and prior (the physical states without process noise, so that inside a window they follow the model); the MHE solved at every second record. Cases: *tuned* ($\sigma_{rw} = 10^{-6}$, $N$ = 6, 12, 24 records, i.e. 30 s to 2 min); *monotone* (the same with the growth constraint, $N = 12$); *noisy* ($\sigma_{rw} = 10^{-5}$, where the filter follows the noise, with and without the constraint); *bad start* ($R_f$ started at $4 \times 10^{-4}$ with a prior standard deviation of $2 \times 10^{-5}$, a confident wrong prior).
+- **Metrics:** J05's, with the 90 % band's coverage along the window, and the *roughness* of the estimate: the standard deviation of its increments in units of the truth's increment per step (0 for a perfect ramp).
+- **Code:** `run_mhe.py`.
+
+```bash
+python experiments/J05_ekf_baseline/run_mhe.py --seeds 3 --workers 3
+```
+
+Mean over 3 seeds:
+
+| Case | Estimator | Rel. L2 | End error | 90 % band coverage | Roughness | Time |
+|---|---|---|---|---|---|---|
+| tuned | EKF | 0.035 | 0.022 | 0.99 | 2.5 | 0.4 s |
+| | MHE, $N = 6$ | 0.034 | 0.021 | 0.99 | 1.7 | 4.1 s |
+| | MHE, $N = 12$ | 0.034 | 0.021 | 0.99 | 1.7 | 7.9 s |
+| | MHE, $N = 24$ | 0.034 | 0.021 | 0.99 | 1.7 | 13.7 s |
+| monotone | MHE, $N = 12$, growth only | 0.033 | 0.021 | 1.00 | 1.6 | 8.9 s |
+| noisy | EKF | 0.140 | 0.151 | 1.00 | 22.9 | |
+| | MHE, $N = 12$ | 0.138 | 0.152 | 1.00 | 13.8 | |
+| | MHE, $N = 12$, growth only | 0.126 | 0.169 | 1.00 | 8.0 | |
+| bad start | EKF | 0.035 | 0.022 | 0.99 | 2.5 | |
+| | MHE, $N = 12$ / $24$ | 0.034 | 0.021 | 0.99 | 1.7 | |
+
+The MHE is solved at 120 of the 240 records and takes about three linearizations of the window per solve.
+
+Both estimators are within $0.2 \times 10^{-4}$ of the truth 35 s (EKF) and 40–50 s (MHE) after the bad start.
+
+### Conclusion (J05b)
+
+1. **On this model the moving horizon is the Kalman filter, at 10 to 35 times the cost.** Error, end error and band are the same to the second digit for every horizon: the evaporator's response to $R_f$ is nearly linear over a window (J04's profile is the Fisher parabola), and for a linear model the two estimators coincide exactly, which the package tests for horizons of 1, 5 and 40. Re-linearizing along the window buys nothing when one linearization per record was already right. The horizon is not a tuning knob here either: with the arrival cost from the filter, 30 s and 2 min give the same estimate.
+2. **The growth constraint smooths, it does not correct.** With the tuned random walk the constraint is rarely active and changes nothing. With the walk ten times too loose it removes two thirds of the noise-following (roughness 23 → 8, against 14 without the constraint) and a tenth of the L2 error, but the end error is no better (0.17 against 0.15): a one-sided constraint on noisy increments ratchets upward, and the bias it adds offsets the variance it removes. A constraint is not a substitute for the right process noise.
+3. **A confident wrong prior costs both about half a minute**, the residence time of the tube twice over: the outlet records overrule the prior as soon as the wrong fouling has been flushed through, and the window does not get there sooner because its arrival cost is the filter's.
+4. **Where MHE should earn its cost is a model whose nonlinearity matters within a window**, such as the droplet's critical-moisture transition (J07), or constraints that bind in normal operation. For the fouling monitor the EKF with the trend model of J06 is the estimator; the MHE stays in the package as the control for those cases and as the online form of the batch estimator.

@@ -90,3 +90,12 @@ def test_custom_pde_with_unknown_fouling_trains_normalized():
     losses = pde.compute_loss(trainer.model, x, t)
     assert all(np.isfinite(v.item()) for v in losses.values())
     trainer.train_steps(num_steps=2)
+
+
+def test_reference_rejects_an_unknown_initial_keyword():
+    import pytest
+
+    from pinnrl.process import FallingFilmEvaporator
+
+    with pytest.raises(ValueError, match="'steady' or a mapping"):
+        FallingFilmEvaporator().reference(t_max=10.0, nz=11, nt=3, initial="stead")

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -45,7 +45,7 @@ Signal = float | Callable[[float], float]
 def _as_fn(value: Signal) -> Callable[[float], float]:
     if callable(value):
         return value
-    return lambda _t, v=float(value): v
+    return lambda _t, v=float(value): v  # type: ignore[misc]
 
 
 @dataclass
@@ -183,8 +183,13 @@ class FallingFilmEvaporator:
         if initial == "steady":
             ss = self.steady_state(nz, t=0.0)
             W0, X0 = ss["W"], ss["X"]
+        elif isinstance(initial, str):
+            raise ValueError(
+                f"initial must be 'steady' or a mapping with 'W' and 'X', not {initial!r}"
+            )
         else:
-            W0, X0 = np.asarray(initial["W"], dtype=float), np.asarray(initial["X"], dtype=float)
+            profiles = cast("Mapping[str, np.ndarray]", initial)
+            W0, X0 = np.asarray(profiles["W"], dtype=float), np.asarray(profiles["X"], dtype=float)
         rhs = self.mol_rhs(nz)
 
         s0 = np.concatenate([W0, X0])
@@ -200,22 +205,28 @@ class FallingFilmEvaporator:
             W=ReferenceSolution(x=z, t=t, u=W), X=ReferenceSolution(x=z, t=t, u=X), q=q, z=z, t=t
         )
 
-    def fouling_state_space(self, nz: int = 11):
+    def fouling_state_space(self, nz: int = 11, steam_bias: bool = False):
         """The interior states ``[W_1..W_{nz-1}, X_1..X_{nz-1}]`` with ``R_f`` as a parameter, for an estimator.
 
         Returns ``(f, h, s0)``: ``f(t, s, theta)`` the interior dynamics with
         ``theta = [R_f]`` (the other signals from this model's ``W_in``,
         ``X_in`` and ``T_s``), ``h(t, s)`` the outlet records ``[X(L), W(L)]``,
         and ``s0`` the steady interior state at ``t = 0`` with this model's
-        ``R_f(0)``. The J05 Kalman-filter baseline is built on it.
+        ``R_f(0)``. With ``steam_bias`` the parameters are ``theta = [R_f, b]``
+        and the steam temperature is ``T_s(t) - b``: the offset of the steam
+        record, the input the fouling can be traded against (J04), estimated
+        alongside. The Kalman-filter baseline (J05) and the fouling monitor are
+        built on it.
         """
-        holder = [float(_as_fn(self.R_f)(0.0))]
-        model = replace(self, R_f=lambda t: holder[0])
+        holder = [float(_as_fn(self.R_f)(0.0)), 0.0]
+        steam = _as_fn(self.T_s)
+        model = replace(self, R_f=lambda t: holder[0], T_s=lambda t: steam(t) - holder[1])
         rhs = model.mol_rhs(nz)
         W_in, X_in = _as_fn(self.W_in), _as_fn(self.X_in)
 
         def f(t: float, s: np.ndarray, theta: np.ndarray) -> np.ndarray:
             holder[0] = float(theta[0])
+            holder[1] = float(theta[1]) if steam_bias else 0.0
             full = np.concatenate([[W_in(t)], s[: nz - 1], [X_in(t)], s[nz - 1 :]])
             d = rhs(t, full)
             return np.concatenate([d[1:nz], d[nz + 1 :]])
