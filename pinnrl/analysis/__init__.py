@@ -6,6 +6,14 @@ bound. Later layers (sensitivities of a numerical reference or of the trained
 surrogate, profile likelihood, loss-Hessian spectra) are checked against it.
 """
 
+from pinnrl.analysis.design import (
+    DesignResult,
+    greedy_design,
+    information,
+    information_gain,
+    posterior_covariance,
+    target_std,
+)
 from pinnrl.analysis.disturbance import (
     StabilityRatio,
     field_response,
@@ -28,6 +36,12 @@ from pinnrl.analysis.spectrum import (
 from pinnrl.analysis.surrogate import SurrogateSensitivity, surrogate_sensitivities
 
 __all__ = [
+    "DesignResult",
+    "greedy_design",
+    "information",
+    "information_gain",
+    "posterior_covariance",
+    "target_std",
     "FisherSummary",
     "StabilityRatio",
     "field_response",

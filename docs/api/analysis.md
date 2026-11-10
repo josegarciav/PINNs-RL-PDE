@@ -31,3 +31,15 @@ Conditioning and identifiability diagnostics for identified parameters (`pinnrl.
 ::: analysis.disturbance.StabilityRatio
 
 ::: analysis.disturbance.field_response
+
+::: analysis.design.posterior_covariance
+
+::: analysis.design.information
+
+::: analysis.design.target_std
+
+::: analysis.design.information_gain
+
+::: analysis.design.greedy_design
+
+::: analysis.design.DesignResult
