@@ -118,9 +118,9 @@ print(pde.get_trainable_parameter_values())
 
 ## Unknown functions
 
-When the unknown physics is a function rather than a number, a coefficient that drifts in time, a heterogeneous field or a closure of the solution, give it as an `unknown_functions` entry and use its name in the equation like a parameter. It becomes an [`UnknownFunction`](api/pdes.md#pinnrl.pdes.unknowns.UnknownFunction), a small network of the inputs you name (coordinates or fields), whose weights train with the data in inverse mode. The subscript notation applies to it too: `alpha_x` is the derivative of the learned function, by autograd, so the conservative form of a heterogeneous diffusion is `u_t - alpha_x*u_x - alpha*u_xx`.
+When the unknown physics is a function rather than a number, a coefficient that drifts in time, a heterogeneous field or a closure of the solution, give it as an `unknown_functions` entry and use its name in the equation like a parameter. It becomes an [`UnknownFunction`](api/pdes.md#pdes.unknowns.UnknownFunction), a small network of the inputs you name (coordinates or fields), whose weights train with the data in inverse mode. The subscript notation applies to it too: `alpha_x` is the derivative of the learned function, by autograd, so the conservative form of a heterogeneous diffusion is `u_t - alpha_x*u_x - alpha*u_xx`.
 
-Constraints the physics imposes are built into the output, so training never leaves the admissible set: `positive: true` (a softplus), `bounds: [lo, hi]` (a sigmoid into the interval) and `monotone: {u: increasing}` (non-negative weights on every path from that input, for a closure such as a reaction rate that grows with concentration). `initial` is the constant the function starts at, the counterpart of a scalar's initial guess. A `truth` expression in the inputs records the function the synthetic data came from: `generate_synthetic_observations` and an `exact_solution` that mentions the unknown use it, and `pde.unknown_function_error("alpha")` grades the recovery as a relative L2 error over the input range.
+Constraints the physics imposes are built into the output, so training never leaves the admissible set: `positive: true` (a softplus), `bounds: [lo, hi]` (a sigmoid into the interval), `monotone: {u: increasing}` (non-negative weights on every path from that input, for a closure such as a reaction rate that grows with concentration) and `anchor: {at: {X: 0.05}, value: 0.0}`, a value the function is known to take at one point, held exactly by subtracting the network's own value there (a drying rate that vanishes at the equilibrium moisture, a fouling that starts at zero). An anchor with `monotone` fixes the sign everywhere: a closure anchored at zero and increasing is non-negative above its anchor, without a softplus that would keep it from reaching zero. `initial` is the constant the function starts at, the counterpart of a scalar's initial guess; an anchored function starts at its anchor value. A `truth` expression in the inputs records the function the synthetic data came from: `generate_synthetic_observations` and an `exact_solution` that mentions the unknown use it, and `pde.unknown_function_error("alpha")` grades the recovery as a relative L2 error over the input range.
 
 <!-- doctest: skip -->
 ```python
@@ -149,7 +149,7 @@ The weights of unknown functions are saved next to the model (`unknown_functions
 
 ## Measured inputs
 
-A plant model is driven by what was recorded: an inlet temperature, a feed rate, the ambient conditions. Give such a record as an `inputs` entry, a [`TimeSeries`](api/pdes.md#pinnrl.pdes.inputs.TimeSeries) built from a CSV or NPZ file (`{"path": "left.csv", "time_column": "t", "value_column": "T_left"}`) or from arrays, and use its name in the equations or in boundary values. It is read at the time of every collocation or boundary point by linear interpolation and held constant outside the record. Boundary values accept expressions in the coordinates, parameters and inputs, so `dirichlet: {left: "q", right: "0.2*t"}` and `neumann: {value: "sin(2*pi*t)"}` work alongside plain numbers.
+A plant model is driven by what was recorded: an inlet temperature, a feed rate, the ambient conditions. Give such a record as an `inputs` entry, a [`TimeSeries`](api/pdes.md#pdes.inputs.TimeSeries) built from a CSV or NPZ file (`{"path": "left.csv", "time_column": "t", "value_column": "T_left"}`) or from arrays, and use its name in the equations or in boundary values. It is read at the time of every collocation or boundary point by linear interpolation and held constant outside the record. Boundary values accept expressions in the coordinates, parameters and inputs, so `dirichlet: {left: "q", right: "0.2*t"}` and `neumann: {value: "sin(2*pi*t)"}` work alongside plain numbers.
 
 <!-- doctest: skip -->
 ```python
@@ -168,7 +168,7 @@ In a YAML specification, relative `path` entries are taken from the file's own f
 
 ## Sensors
 
-A plant does not deliver the field at random points of space-time. A probe sits at one place and reports a sequence of readings; a flux meter reports `-alpha*u_x` on a wall; a level or a tank temperature is an integral over the domain. The `sensors` argument describes such observation operators ([`PointSensor`](api/pdes.md#pinnrl.pdes.sensors.PointSensor), [`BoundarySensor`](api/pdes.md#pinnrl.pdes.sensors.BoundarySensor), [`IntegralSensor`](api/pdes.md#pinnrl.pdes.sensors.IntegralSensor)), each with the expression it reports, its timestamps, its own noise level, a `delay` (the record stamped `t` reflects the state at `t - delay`) and a `weight` in the loss. Their records enter the data term as one mean-squared misfit per sensor, next to any scattered `observation_data`; in a [normalized](#non-dimensionalization) problem the misfit of a sensor that reports a field is divided by that field's scale (set `scale=` for any other expression).
+A plant does not deliver the field at random points of space-time. A probe sits at one place and reports a sequence of readings; a flux meter reports `-alpha*u_x` on a wall; a level or a tank temperature is an integral over the domain. The `sensors` argument describes such observation operators ([`PointSensor`](api/pdes.md#pdes.sensors.PointSensor), [`BoundarySensor`](api/pdes.md#pdes.sensors.BoundarySensor), [`IntegralSensor`](api/pdes.md#pdes.sensors.IntegralSensor)), each with the expression it reports, its timestamps, its own noise level, a `delay` (the record stamped `t` reflects the state at `t - delay`) and a `weight` in the loss. Their records enter the data term as one mean-squared misfit per sensor, next to any scattered `observation_data`; in a [normalized](#non-dimensionalization) problem the misfit of a sensor that reports a field is divided by that field's scale (set `scale=` for any other expression).
 
 <!-- doctest: skip -->
 ```python
@@ -197,6 +197,21 @@ print(fisher_information(J, sensor_noise_vector(pde.sensors), ["alpha"]).std)
 ```
 
 `pde.evaluate_expression("-alpha*u_x", model, x, t)` is the same machinery for your own derived quantities. `sensor.set_values(records)` attaches real measurements; `pinnrl-train --pde-file` records synthetic ones when a spec's sensors carry none. Experiment [K02](benchmarks.md#sensor-layout-vs-conditioning-experiment-k02) uses `sensor_jacobian` to rank layouts.
+
+After training, `pde.sensor_misfit(trainer.model)` is the one test the run can make on itself: the chi-square of the records under the network, in units of each sensor's noise, against its 99.9 % limit ([`SensorMisfit`](api/pdes.md#pdes.sensors.SensorMisfit)). A twin whose fields miss the records has also missed the unknown (every failed run of J06 and J07b fails this test), so [`train_with_restarts`](api/training.md#training.restarts.train_with_restarts) trains, tests, and starts again from the next seed while the test fails, keeping the best of its attempts:
+
+<!-- doctest: skip -->
+```python
+from pinnrl.training.restarts import train_with_restarts
+
+result = train_with_restarts(
+    pde,
+    lambda seed: pde.build_trainer("feedforward", num_epochs=2000),
+    lambda trainer: trainer.train(progress=False),
+    attempts=3,
+)
+print(result.misfit, result.accepted, result.n_attempts)
+```
 
 ## Parametric surrogates
 

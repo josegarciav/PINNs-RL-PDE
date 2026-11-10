@@ -4,6 +4,10 @@
 
 ::: training.trainer.save_training_metrics
 
+::: training.restarts.train_with_restarts
+
+::: training.restarts.RestartResult
+
 ::: training.adaptive_weights.AdaptiveLossWeights
 
 ::: training.train.build_model

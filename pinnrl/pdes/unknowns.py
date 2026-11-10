@@ -12,7 +12,10 @@ residual expressions exactly like a parameter: ``"u_t - alpha*u_xx"``, with
 Constraints that the physics imposes are built into the output so training
 never leaves the admissible set: a positive coefficient (``positive=True``),
 a bounded one (``bounds=(lo, hi)``) and monotonicity in chosen inputs
-(``monotone={"u": "increasing"}``, a network with positive weights).
+(``monotone={"u": "increasing"}``, a network with positive weights), and a
+value the function is known to take at one point (``anchor={"at": {"X": 0.05},
+"value": 0.0}``: a closure that vanishes at equilibrium, a fouling that starts
+at zero), which with monotonicity also pins the function's sign.
 
 A ``truth`` expression records the function the synthetic data came from, so
 :meth:`UnknownFunction.relative_error` grades the recovery and the exact
@@ -23,7 +26,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import torch
@@ -59,6 +62,8 @@ class _ConstrainedLinear(nn.Module):
     monotone network). Softplus is the map from the raw parameter to the weight.
     """
 
+    signs: torch.Tensor
+
     def __init__(
         self, n_in: int, n_out: int, signs: Sequence[int] = (), all_positive: bool = False
     ):
@@ -88,24 +93,31 @@ class _ConstrainedLinear(nn.Module):
 class _BasisFeatures(nn.Module):
     """Fixed features of one normalized input in ``[-1, 1]``: cosine or Legendre modes."""
 
-    def __init__(self, kind: str, modes: int):
+    def __init__(self, kind: str, modes: int, skip_constant: bool = False):
         super().__init__()
         if kind not in ("cosine", "legendre"):
             raise ValueError(f"basis type must be 'cosine' or 'legendre', not {kind!r}")
         if modes < 1:
             raise ValueError("a basis needs at least one mode")
         self.kind, self.modes = kind, int(modes)
+        self.skip_constant = bool(skip_constant)
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
-        """``(N, 1)`` in ``[-1, 1]`` to ``(N, modes)``; the first mode is the constant 1."""
+        """``(N, 1)`` in ``[-1, 1]`` to ``(N, modes)``; the first mode is the constant 1.
+
+        With ``skip_constant`` the constant is left out and the modes are
+        ``1 .. modes`` (an anchored function supplies its own constant).
+        """
         z = z[:, :1]
+        first = 1 if self.skip_constant else 0
+        total = self.modes + first
         if self.kind == "cosine":
-            k = torch.arange(self.modes, device=z.device, dtype=z.dtype)
+            k = torch.arange(first, total, device=z.device, dtype=z.dtype)
             return torch.cos(k * math.pi * (z + 1.0) / 2.0)
         cols = [torch.ones_like(z), z]
-        for n in range(1, self.modes - 1):  # Bonnet recursion
+        for n in range(1, total - 1):  # Bonnet recursion
             cols.append(((2 * n + 1) * z * cols[-1] - n * cols[-2]) / (n + 1))
-        return torch.cat(cols[: self.modes], dim=1)
+        return torch.cat(cols[first:total], dim=1)
 
 
 class UnknownFunction(nn.Module):
@@ -128,7 +140,16 @@ class UnknownFunction(nn.Module):
             strings when there is a single input): the function is monotone in
             those inputs, by non-negative weights on every path from them.
         initial: The constant the function starts at (the network's last layer
-            starts at zero), the analogue of a scalar's initial guess.
+            starts at zero), the analogue of a scalar's initial guess. An
+            anchored function starts at its anchor value everywhere.
+        anchor: ``{"at": {input: coordinate}, "value": v}`` (``"at"`` may be a
+            number when there is a single input): the function takes ``v`` at
+            that point exactly, whatever the weights, by subtracting its own
+            value there. Combined with ``monotone`` this fixes the sign
+            everywhere: a closure with ``anchor={"at": X_eq, "value": 0}`` and
+            ``monotone="increasing"`` is non-negative above ``X_eq``. ``v`` must
+            be inside ``bounds`` or positive with ``positive``; with a basis the
+            constant mode is dropped, since the anchor supplies it.
         basis: ``{"type": "cosine" | "legendre", "modes": n}``: instead of a
             network, a linear combination of ``n`` fixed modes of a single
             input, so the unknown is the coefficient vector
@@ -142,9 +163,14 @@ class UnknownFunction(nn.Module):
 
     Raises:
         ValueError: For an empty input list, an unknown activation, a
-            non-monotone activation with ``monotone``, inconsistent ``bounds``
-            or an ``initial`` outside the admissible set.
+            non-monotone activation with ``monotone``, inconsistent ``bounds``,
+            an ``initial`` or anchor value outside the admissible set, or an
+            anchor that does not give every input.
     """
+
+    _lo: torch.Tensor
+    _hi: torch.Tensor
+    _z_anchor: torch.Tensor
 
     def __init__(
         self,
@@ -160,6 +186,7 @@ class UnknownFunction(nn.Module):
         initial: float = 1.0,
         truth: str | Callable | None = None,
         basis: Mapping[str, Any] | None = None,
+        anchor: Mapping[str, Any] | None = None,
     ):
         super().__init__()
         self.name = str(name)
@@ -208,6 +235,26 @@ class UnknownFunction(nn.Module):
         self.register_buffer("_lo", lo)
         self.register_buffer("_hi", hi)
 
+        self.anchor: dict[str, Any] | None = None
+        if anchor is not None:
+            at = anchor.get("at") if isinstance(anchor, Mapping) else None
+            if at is None or "value" not in anchor:
+                raise ValueError(f"anchor of {name!r} needs 'at' and 'value'")
+            if not isinstance(at, Mapping):
+                if len(self.inputs) != 1:
+                    raise ValueError(f"anchor 'at' of {name!r} must give every input {self.inputs}")
+                at = {self.inputs[0]: at}
+            missing = [i for i in self.inputs if i not in at]
+            if missing:
+                raise ValueError(f"anchor of {name!r} gives no coordinate for {missing}")
+            self.anchor = {
+                "at": {i: float(at[i]) for i in self.inputs},
+                "value": float(anchor["value"]),
+            }
+            self.initial = self.anchor["value"]
+            z_a = torch.tensor([[self.anchor["at"][i] for i in self.inputs]])
+            self.register_buffer("_z_anchor", 2.0 * (z_a - lo) / (hi - lo) - 1.0)
+
         self.basis: dict[str, Any] | None = None
         if basis is not None:
             if len(self.inputs) != 1:
@@ -219,7 +266,9 @@ class UnknownFunction(nn.Module):
                 "modes": int(basis.get("modes", 6)),
             }
             self.net = nn.Sequential(
-                _BasisFeatures(self.basis["type"], self.basis["modes"]),
+                _BasisFeatures(
+                    self.basis["type"], self.basis["modes"], skip_constant=self.anchor is not None
+                ),
                 _ConstrainedLinear(self.basis["modes"], 1),
             )
         else:
@@ -254,12 +303,16 @@ class UnknownFunction(nn.Module):
     # ------------------------------------------------------------- construction
     def _start_at_constant(self, value: float) -> None:
         """Zero the last layer's weights and set its bias so the output is ``value`` everywhere."""
-        last = self.net[-1]
+        last = cast(_ConstrainedLinear, self.net[-1])
         with torch.no_grad():
             if last.constrained:
                 last.linear.weight.fill_(-12.0)  # softplus(-12) ≈ 6e-6
             else:
                 last.linear.weight.zero_()
+            if self.anchor is not None:  # a flat raw output; the anchor supplies the value
+                last.linear.bias.zero_()
+                self._preimage(value)  # validates the anchor value
+                return
             last.linear.bias.fill_(self._preimage(value))
             if self.basis is not None:  # the constant mode carries the start; no bias
                 last.linear.bias.zero_()
@@ -274,7 +327,7 @@ class UnknownFunction(nn.Module):
         """
         if self.basis is None:
             raise ValueError(f"{self.name!r} is a network; coefficients need basis=...")
-        return self.net[-1].linear.weight.reshape(-1)
+        return cast(_ConstrainedLinear, self.net[-1]).linear.weight.reshape(-1)
 
     def modes(self, values: Mapping[str, torch.Tensor]) -> torch.Tensor:
         """The basis modes at ``values``, ``(N, modes)``, for sensitivity analyses."""
@@ -288,14 +341,12 @@ class UnknownFunction(nn.Module):
         if self.bounds is not None:
             lo, hi = self.bounds
             if not lo < value < hi:
-                raise ValueError(
-                    f"initial {value} of {self.name!r} is outside bounds {self.bounds}"
-                )
+                raise ValueError(f"value {value} of {self.name!r} is outside bounds {self.bounds}")
             p = (value - lo) / (hi - lo)
             return math.log(p / (1.0 - p))
         if self.positive:
             if value <= 0:
-                raise ValueError(f"initial {value} of {self.name!r} must be positive")
+                raise ValueError(f"value {value} of {self.name!r} must be positive")
             return _inverse_softplus(value)
         return value
 
@@ -336,6 +387,8 @@ class UnknownFunction(nn.Module):
             spec["truth"] = self.truth_text
         if self.basis is not None:
             spec["basis"] = dict(self.basis)
+        if self.anchor is not None:
+            spec["anchor"] = {"at": dict(self.anchor["at"]), "value": self.anchor["value"]}
         return spec
 
     # --------------------------------------------------------------- evaluation
@@ -345,11 +398,18 @@ class UnknownFunction(nn.Module):
             raise KeyError(f"{self.name!r} needs values for {missing}")
         return torch.cat([values[i].reshape(-1, 1) for i in self.inputs], dim=1)
 
+    def _raw(self, z: torch.Tensor) -> torch.Tensor:
+        """The network on normalized inputs, shifted so an anchored function hits its anchor."""
+        out = self.net(z)
+        if self.anchor is None:
+            return out
+        return out - self.net(self._z_anchor) + self._preimage(self.anchor["value"])
+
     def forward(self, values: Mapping[str, torch.Tensor]) -> torch.Tensor:
         """The learned function at ``values`` (``{input: (N, 1)}``), shape ``(N, 1)``."""
         z = self._stack(values)
         z = 2.0 * (z - self._lo) / (self._hi - self._lo) - 1.0
-        out = self.net(z)
+        out = self._raw(z)
         if self.bounds is not None:
             lo, hi = self.bounds
             return lo + (hi - lo) * torch.sigmoid(out)
@@ -436,4 +496,6 @@ class UnknownFunction(nn.Module):
             parts.append(f"bounds={list(self.bounds)}")
         if self.monotone:
             parts.append(f"monotone={self.monotone}")
+        if self.anchor is not None:
+            parts.append(f"anchor={self.anchor['value']} at {self.anchor['at']}")
         return ", ".join(parts)

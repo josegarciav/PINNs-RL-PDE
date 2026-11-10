@@ -12,7 +12,15 @@ from .kdv_equation import KdVEquation
 from .pde_base import PDEBase, PDEConfig
 from .pendulum_equation import PendulumEquation
 from .registry import PDE_SPECS, PDESpec, create_pde, get_pde_spec
-from .sensors import BoundarySensor, IntegralSensor, PointSensor, Sensor, sensor_jacobian
+from .sensors import (
+    BoundarySensor,
+    IntegralSensor,
+    PointSensor,
+    Sensor,
+    SensorMisfit,
+    sensor_jacobian,
+    sensor_misfit,
+)
 from .unknowns import UnknownFunction
 from .wave_equation import WaveEquation
 
@@ -34,6 +42,8 @@ __all__ = [
     "IntegralSensor",
     "Sensor",
     "sensor_jacobian",
+    "sensor_misfit",
+    "SensorMisfit",
     "TimeSeries",
     "UnknownFunction",
     "WaveEquation",

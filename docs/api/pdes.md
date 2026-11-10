@@ -20,6 +20,10 @@ Every shipped PDE is registered once in `pdes.registry`, and both the CLI and th
 
 ::: pdes.sensors.sensor_jacobian
 
+::: pdes.sensors.sensor_misfit
+
+::: pdes.sensors.SensorMisfit
+
 ::: pdes.sensors.sensor_noise_vector
 
 ::: pdes.symbolic.compile_expression

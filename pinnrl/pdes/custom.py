@@ -26,7 +26,7 @@ import copy
 import itertools
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import torch
@@ -35,7 +35,7 @@ from torch import nn
 
 from .inputs import TimeSeries
 from .pde_base import PDEBase, PDEConfig
-from .sensors import Sensor
+from .sensors import Sensor, SensorMisfit, sensor_misfit
 from .symbolic import CompiledExpression, compile_expression, derivative_name, split_derivative
 from .unknowns import UnknownFunction
 
@@ -155,7 +155,7 @@ class Fields:
 
     def laplacian(self, field: str) -> torch.Tensor:
         """Sum of the pure second spatial derivatives of ``field``."""
-        return sum(self.d(field, c, c) for c in self._spatial)
+        return cast(torch.Tensor, sum(self.d(field, c, c) for c in self._spatial))
 
     def __getattr__(self, name: str) -> torch.Tensor:
         """``f.u``, ``f.u_xx``, ``f.x`` by attribute; anything else is an error."""
@@ -387,7 +387,9 @@ class CustomPDE(PDEBase):
             "name": name,
             "time_order": time_order,
             "architecture": architecture,
-            "unknown_functions": {k: v.to_spec() for k, v in self.unknown_functions.items()},
+            "unknown_functions": {
+                k: cast(UnknownFunction, v).to_spec() for k, v in self.unknown_functions.items()
+            },
             "field_weights": dict(field_weights or {}),
             "parametric": {k: list(domain[k]) for k in self.parametric},
             "inputs": {k: v.to_spec() for k, v in self.inputs.items()},
@@ -508,13 +510,14 @@ class CustomPDE(PDEBase):
             return None
         coords = self.coordinates if with_time else self.spatial_coordinates
         texts = _as_expression_map(spec, self.fields, what)
+        assert texts is not None  # only a None spec maps to None
         compiled = {}
         for field, text in texts.items():
             expr = compile_expression(text, (), coords, self.parameters)
             if expr.parameters and set(expr.parameters) & set(self.fields):
                 raise ValueError(f"{what} for {field!r} must not depend on the fields: {text!r}")
             for uname in set(expr.parameters) & set(self._unknown_names):
-                fn = self.unknown_functions[uname]
+                fn = cast(UnknownFunction, self.unknown_functions[uname])
                 if not fn.has_truth:
                     raise ValueError(
                         f"{what} for {field!r} uses the unknown function {uname!r}, which needs a "
@@ -602,22 +605,24 @@ class CustomPDE(PDEBase):
                 "output_scale", [self.field_scales.get(f, (0.0, 1.0))[1] for f in self.fields]
             )
         device = torch.device(device) if device is not None else self.device
+        input_dim, output_dim = self.config.input_dim, self.config.output_dim
+        assert input_dim is not None and output_dim is not None  # set by PDEBase.__init__
         config = Config.__new__(Config)
         config.device = device
         config.training = TrainingConfig.from_dict(training_cfg)
         config.model = ModelConfig.from_architecture(
             architecture,
             {**defaults.get("architectures", {}).get(architecture, {}), **model},
-            input_dim=self.config.input_dim,
-            output_dim=self.config.output_dim,
+            input_dim=input_dim,
+            output_dim=output_dim,
         )
         config.rl = None
         self.config.training = config.training
         self.device = device
         self.config.device = device
         self.unknown_functions.to(device)
-        model = PINNModel(config=config, device=device).to(device)
-        return PDETrainer(model=model, pde=self, config=config, device=device)
+        network = PINNModel(config=config, device=device).to(device)
+        return PDETrainer(model=network, pde=self, config=config, device=device)
 
     # ------------------------------------------------------------------ physics
     def _parameter_values(self) -> dict[str, Any]:
@@ -628,7 +633,15 @@ class CustomPDE(PDEBase):
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
     ) -> torch.Tensor:
         """Residuals of every equation at ``x, t``, shape ``(N, k)``."""
-        f = Fields(model, x, t, self.fields, self.coordinates, self.device, self.unknown_functions)
+        f = Fields(
+            model,
+            x,
+            t,
+            self.fields,
+            self.coordinates,
+            self.device,
+            cast("Mapping[str, UnknownFunction]", self.unknown_functions),
+        )
         params = self._parameter_values()
         if self.inputs:
             params.update(self._input_values(f.coordinate("t")))
@@ -671,8 +684,8 @@ class CustomPDE(PDEBase):
             values["t"] = t
         needed = {p for e in (compiled or {}).values() for p in e.parameters}
         for uname in needed & set(self._unknown_names):
-            fn = self.unknown_functions[uname]
-            values[uname] = fn.truth({i: values[i].expand_as(like) for i in fn.inputs})
+            unknown = cast(UnknownFunction, self.unknown_functions[uname])
+            values[uname] = unknown.truth({i: values[i].expand_as(like) for i in unknown.inputs})
         columns = []
         for field in self.fields:
             expr = (compiled or {}).get(field)
@@ -765,7 +778,15 @@ class CustomPDE(PDEBase):
         expr = self._observables[text]
         if t is None:
             t = torch.zeros(x.shape[0], 1, device=self.device, dtype=x.dtype)
-        f = Fields(model, x, t, self.fields, self.coordinates, self.device, self.unknown_functions)
+        f = Fields(
+            model,
+            x,
+            t,
+            self.fields,
+            self.coordinates,
+            self.device,
+            cast("Mapping[str, UnknownFunction]", self.unknown_functions),
+        )
         values: dict[str, Any] = self._parameter_values()
         values.update(parameters or {})
         if self.inputs:
@@ -777,6 +798,15 @@ class CustomPDE(PDEBase):
         for c in expr.coordinates:
             values[c] = f.coordinate(c)
         return expr(values, f.value(self.fields[0]))
+
+    def sensor_misfit(self, model: torch.nn.Module, level: float = 0.999) -> SensorMisfit:
+        """The chi-square of ``model`` against the sensor records, with its acceptance limit.
+
+        See :class:`~pinnrl.pdes.sensors.SensorMisfit`; the check a trained
+        twin can make on itself, and the test :func:`~pinnrl.training.restarts.train_with_restarts`
+        restarts on.
+        """
+        return sensor_misfit(self.sensors, model, level)
 
     def observe(self, noise: float | None = None, seed: int | None = 0) -> list[Sensor]:
         """Fill every sensor's records from the exact solution, through its operator, with noise.
@@ -998,7 +1028,7 @@ class CustomPDE(PDEBase):
         ``x`` is ``(N, d)`` over the spatial coordinates and ``t`` ``(N, 1)``;
         ``model`` is needed when the function depends on a field.
         """
-        fn = self.unknown_functions[name]
+        fn = cast(UnknownFunction, self.unknown_functions[name])
         x = x.to(self.device).reshape(x.shape[0], -1)
         values: dict[str, torch.Tensor] = {}
         for i, c in enumerate(self.spatial_coordinates):
@@ -1025,7 +1055,7 @@ class CustomPDE(PDEBase):
         (:meth:`UnknownFunction.grid`), else over ``num_points`` uniform
         space-time points with the fields taken from ``model``.
         """
-        fn = self.unknown_functions[name]
+        fn = cast(UnknownFunction, self.unknown_functions[name])
         if all(i in self.coordinates for i in fn.inputs):
             n = max(2, int(round(num_points ** (1.0 / len(fn.inputs)))))
             return fn.relative_error(n=n)

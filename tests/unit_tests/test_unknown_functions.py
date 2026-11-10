@@ -316,3 +316,79 @@ def test_basis_function_is_a_linear_combination_of_fixed_modes():
         },
     )
     assert sum(p.numel() for p in pde.unknown_functions.parameters()) == 7
+
+
+# ------------------------------------------------------------------ anchor
+def _shake(fn):
+    """Random weights; a monotone network's last layer (softplus(-12)) gets a push to O(1)."""
+    with torch.no_grad():
+        for p in fn.parameters():
+            p.add_(2 * torch.randn_like(p))
+        if fn.monotone:
+            fn.net[-1].linear.weight.add_(12.0)
+
+
+def test_anchored_function_takes_its_value_at_the_point_whatever_the_weights():
+    torch.manual_seed(2)
+    x = {"X": torch.linspace(0.05, 2.0, 50).reshape(-1, 1)}
+    at = {"X": torch.tensor([[0.05]])}
+    cases = (
+        {},
+        {"positive": True, "anchor": {"at": 0.05, "value": 0.2}},
+        {"bounds": (0.0, 1.0), "anchor": {"at": {"X": 0.05}, "value": 0.5}},
+        {"monotone": "increasing", "hidden": (8, 8)},
+        {"basis": {"type": "legendre", "modes": 4}},
+        {
+            "basis": {"type": "cosine", "modes": 4},
+            "positive": True,
+            "anchor": {"at": 0.05, "value": 0.2},
+        },
+    )
+    for kwargs in cases:
+        kwargs = {"anchor": {"at": 0.05, "value": 0.0}, **kwargs}
+        fn = UnknownFunction("f", ["X"], input_ranges={"X": (0.05, 2.0)}, initial=0.7, **kwargs)
+        value = kwargs["anchor"]["value"]
+        assert fn.initial == value  # an anchored function starts at its anchor value everywhere
+        assert torch.allclose(fn(x), torch.full((50, 1), value), atol=1e-4)
+        _shake(fn)
+        assert fn(at).item() == pytest.approx(value, abs=1e-5)
+        assert fn(x).std() > 1e-3  # the weights moved it off the start
+        if "basis" in kwargs:
+            assert fn.coefficients.shape == (4,)
+            assert not torch.allclose(fn.modes(x)[:, 0], torch.ones(50))  # constant mode dropped
+    # anchor + monotone fixes the sign above the anchor
+    fn = UnknownFunction(
+        "f",
+        ["X"],
+        input_ranges={"X": (0.05, 2.0)},
+        monotone="increasing",
+        hidden=(8, 8),
+        anchor={"at": 0.05, "value": 0.0},
+    )
+    _shake(fn)
+    assert (fn(x) >= -1e-6).all() and fn(x)[-1].item() > 1e-3
+
+
+def test_anchor_spec_round_trip_and_validation():
+    fn = UnknownFunction("f", ["x", "t"], anchor={"at": {"x": 0.0, "t": 0.5}, "value": 1.5})
+    spec = yaml.safe_load(yaml.safe_dump(fn.to_spec()))
+    again = UnknownFunction.from_spec("f", spec)
+    assert again.anchor == {"at": {"x": 0.0, "t": 0.5}, "value": 1.5}
+    assert "anchor=1.5" in repr(again)
+    with pytest.raises(ValueError, match="'at' and 'value'"):
+        UnknownFunction("f", ["x"], anchor={"at": 0.0})
+    with pytest.raises(ValueError, match="every input"):
+        UnknownFunction("f", ["x", "t"], anchor={"at": 0.0, "value": 1.0})
+    with pytest.raises(ValueError, match="no coordinate for"):
+        UnknownFunction("f", ["x", "t"], anchor={"at": {"x": 0.0}, "value": 1.0})
+    with pytest.raises(ValueError, match="outside bounds"):
+        UnknownFunction("f", ["x"], bounds=(0.0, 1.0), anchor={"at": 0.0, "value": 0.0})
+    with pytest.raises(ValueError, match="must be positive"):
+        UnknownFunction("f", ["x"], positive=True, anchor={"at": 0.0, "value": 0.0})
+    # inside a problem, by the YAML spec
+    pde = CustomPDE(
+        "u_t - alpha*u_xx",
+        domain={"x": (0, 1), "t": (0, 1)},
+        unknown_functions={"alpha": {"inputs": ["t"], "anchor": {"at": 0.0, "value": 0.1}}},
+    )
+    assert pde.unknown_functions["alpha"]({"t": torch.zeros(1, 1)}).item() == pytest.approx(0.1)

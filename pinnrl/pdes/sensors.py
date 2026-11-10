@@ -19,13 +19,15 @@ sensor-placement studies (K02, J09) optimise.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import torch
 
-from .symbolic import compile_expression
+from .symbolic import CompiledExpression, compile_expression
 
 
 def _column(values: Any, dtype=torch.float32) -> torch.Tensor:
@@ -74,6 +76,8 @@ class Sensor:
         self.name = name or self.kind
         self.values: torch.Tensor | None = None
         self._pde: Any = None
+        # Set by ``from_spec`` only, and consumed when the sensor is bound to its problem.
+        self._pending_values: Any
 
     # ----------------------------------------------------------------- binding
     def bind(self, pde: Any) -> Sensor:
@@ -158,6 +162,24 @@ class Sensor:
                 return torch.zeros((), device=error.device)
             error = error[keep.reshape(-1)]
         return self.weight * reduce(error)
+
+    def misfit(self, model: torch.nn.Module) -> float:
+        """The chi-square of the records under ``model``: ``sum(((H[u] - y) / noise)^2)``.
+
+        The sensor's own judgement of a fit, in units of its noise: about
+        ``n_records`` when the model reproduces the records to their noise.
+
+        Raises:
+            ValueError: Without records or with ``noise == 0``.
+        """
+        if self.values is None:
+            raise ValueError(f"{self.name} has no records; call pde.observe() or set_values()")
+        if self.noise <= 0:
+            raise ValueError(f"{self.name}: misfit needs noise > 0")
+        with torch.enable_grad():  # the expression may need derivatives of the fields
+            pred = self.predict(model).detach()
+        error = (pred - self.values.to(pred.device)).reshape(-1) / self.noise
+        return float((error**2).sum())
 
     def to_spec(self) -> dict[str, Any]:
         """The dict that rebuilds the sensor (records included when present)."""
@@ -306,7 +328,7 @@ class IntegralSensor(Sensor):
         self.weight_expression = weight_expression
         self.quadrature = int(quadrature)
         self.normalize = bool(normalize)
-        self._weight_compiled = None
+        self._weight_compiled: CompiledExpression | None = None
 
     def _grid(self) -> tuple[torch.Tensor, float]:
         """Midpoint nodes over the spatial domain, ``(Q, d)``, and the cell volume."""
@@ -435,6 +457,70 @@ def sensor_jacobian(
             cols.append(g.reshape(records, -1).sum(dim=1))
         rows.append(torch.stack(cols, dim=1))
     return torch.cat(rows, dim=0)
+
+
+@dataclass
+class SensorMisfit:
+    """The chi-square of a model against the sensor records, and whether it passes.
+
+    ``chi2`` is the sum over all records of the squared error in units of each
+    sensor's noise; ``n`` is the number of records, so ``reduced`` is about 1
+    for a model that explains the records to their noise. ``limit`` is the
+    ``level`` quantile of the chi-square distribution with ``n`` degrees of
+    freedom: a model whose fields fit the data are ``accepted`` when
+    ``chi2 <= limit``. In the twins of J06 and J07 a run whose fit fails this
+    test has also missed the unknown, and it is the test the run itself can
+    make, without the truth.
+    """
+
+    chi2: float
+    n: int
+    limit: float
+    level: float
+    per_sensor: dict[str, float] = dataclasses.field(default_factory=dict)
+
+    @property
+    def reduced(self) -> float:
+        """``chi2 / n``."""
+        return self.chi2 / max(self.n, 1)
+
+    @property
+    def accepted(self) -> bool:
+        """Whether ``chi2 <= limit``."""
+        return bool(self.chi2 <= self.limit)
+
+    def __str__(self) -> str:
+        verdict = "accepted" if self.accepted else "rejected"
+        return (
+            f"chi2 {self.chi2:.1f} on {self.n} records (reduced {self.reduced:.2f}, "
+            f"limit {self.limit:.1f} at {self.level:g}): {verdict}"
+        )
+
+
+def sensor_misfit(
+    sensors: Sequence[Sensor], model: torch.nn.Module, level: float = 0.999
+) -> SensorMisfit:
+    """:class:`SensorMisfit` of ``model`` over the sensors that carry records.
+
+    Raises:
+        ValueError: When no sensor has records, or a sensor with records has no noise.
+    """
+    from scipy.stats import chi2 as chi2_dist
+
+    per_sensor = {s.name: s.misfit(model) for s in sensors if s.values is not None}
+    if not per_sensor:
+        raise ValueError("sensor_misfit needs at least one sensor with records")
+    n = sum(s.n_records for s in sensors if s.values is not None)
+    level = float(level)
+    if not 0.0 < level < 1.0:
+        raise ValueError(f"level must be in (0, 1), got {level}")
+    return SensorMisfit(
+        chi2=float(sum(per_sensor.values())),
+        n=int(n),
+        limit=float(chi2_dist.ppf(level, n)),
+        level=level,
+        per_sensor=per_sensor,
+    )
 
 
 def sensor_noise_vector(sensors: Sequence[Sensor]) -> torch.Tensor:
