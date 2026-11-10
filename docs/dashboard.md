@@ -34,6 +34,20 @@ For a finished run, this tab shows predicted against exact solution surfaces wit
 
 ![Collocation and solution](assets/screenshots/dashboard-collocation.png)
 
+## Process
+
+The soft sensor of the evaporator twin on plant data. Give a plant-historian export (CSV or Parquet) and a YAML [tag map](process_twins.md#plant-data-a-historian-export-and-a-tag-map), and the view runs the [fouling monitor](process_twins.md#estimating-a-drifting-parameter): a Kalman filter on the evaporator model with the fouling resistance as a level and a rate. No network is trained, so the result is there in a few seconds.
+
+- **Fouling resistance:** the estimate at each record with its 90 % band (what was known at the time), the hindsight estimate from the whole record, the cleaning threshold, and the projected time of reaching it with its interval. An interval whose upper end is open means the fouling rate is not yet clearly positive.
+- **Outlet records** against the filter's one-step predictions, and the prediction misfit in units of the sensor noise in the summary: near 1 when the model explains the records; a larger value says the band should not be trusted.
+- **Steam record uncertainty:** a steam-temperature offset mimics fouling (0.5 K for 30 %, experiment J04). Enter how well the steam record is trusted and the offset is estimated alongside, which widens the band to what the data support ([J06](benchmarks.md#calibrated-fouling-intervals-experiment-j06)).
+
+- **Rate walk:** how fast the fouling rate itself may change, $r/\sqrt{\tau}$ for a rate $r$ that may change by its own size over a time $\tau$. The default suits a steady drift; on a curve that bends it gives a narrow band around a biased estimate, and a larger value is the safe choice at the price of a wider time to clean.
+
+**Write demo data** puts a synthetic 20-minute export and its tag map in `runs/process_demo/` and fills the form; the two files are a template for a real export. A `model:` block in the tag map overrides the tube's parameters (`length`, `U`, `velocity`, ...).
+
+![Process view](assets/screenshots/dashboard-process.png)
+
 ## Comparison
 
 Select several finished runs to overlay their loss curves and compare final metrics side by side.

@@ -1429,6 +1429,147 @@ app.layout = html.Div(
                         ),
                     ],
                 ),
+                # ==================== TAB 4: PROCESS ====================
+                dcc.Tab(
+                    label="Process",
+                    value="process",
+                    children=[
+                        html.Div(
+                            [
+                                html.H2("Evaporator fouling monitor"),
+                                html.P(
+                                    "A plant-historian export and a tag map give the fouling "
+                                    "resistance of the tube with its uncertainty band and the "
+                                    "time to the next cleaning. No network is trained: the "
+                                    "estimator is a Kalman filter on the evaporator model."
+                                ),
+                                html.Div(
+                                    [
+                                        html.Label(
+                                            "Historian export (.csv, .parquet)", style=LABEL_STYLE
+                                        ),
+                                        dcc.Input(
+                                            id="process-export-path",
+                                            type="text",
+                                            placeholder="path/to/export.csv",
+                                            style={"width": "100%"},
+                                        ),
+                                    ],
+                                    style=FIELD_STYLE,
+                                ),
+                                html.Div(
+                                    [
+                                        html.Label("Tag map (.yaml)", style=LABEL_STYLE),
+                                        dcc.Input(
+                                            id="process-tagmap-path",
+                                            type="text",
+                                            placeholder="path/to/tags.yaml",
+                                            style={"width": "100%"},
+                                        ),
+                                    ],
+                                    style=FIELD_STYLE,
+                                ),
+                                html.Div(
+                                    [
+                                        html.Div(
+                                            [
+                                                html.Label(
+                                                    "Cleaning threshold (m²K/W)", style=LABEL_STYLE
+                                                ),
+                                                dcc.Input(
+                                                    id="process-threshold",
+                                                    type="number",
+                                                    value=3e-4,
+                                                    min=0,
+                                                    step="any",
+                                                ),
+                                            ],
+                                            style={
+                                                "display": "inline-block",
+                                                "marginRight": "24px",
+                                            },
+                                        ),
+                                        html.Div(
+                                            [
+                                                html.Label(
+                                                    "Steam record uncertainty (K, 0 = trusted)",
+                                                    style=LABEL_STYLE,
+                                                ),
+                                                dcc.Input(
+                                                    id="process-steam-std",
+                                                    type="number",
+                                                    value=0.0,
+                                                    min=0,
+                                                    step="any",
+                                                ),
+                                            ],
+                                            style={
+                                                "display": "inline-block",
+                                                "marginRight": "24px",
+                                            },
+                                        ),
+                                        html.Div(
+                                            [
+                                                html.Label("Model cells", style=LABEL_STYLE),
+                                                dcc.Input(
+                                                    id="process-cells",
+                                                    type="number",
+                                                    value=51,
+                                                    min=6,
+                                                    max=201,
+                                                    step=1,
+                                                ),
+                                            ],
+                                            style={
+                                                "display": "inline-block",
+                                                "marginRight": "24px",
+                                            },
+                                        ),
+                                        html.Div(
+                                            [
+                                                html.Label(
+                                                    "Rate walk (per s^1.5; larger if the rate changes)",
+                                                    style=LABEL_STYLE,
+                                                ),
+                                                dcc.Input(
+                                                    id="process-rate-walk",
+                                                    type="number",
+                                                    value=1e-9,
+                                                    min=0,
+                                                    step="any",
+                                                ),
+                                            ],
+                                            style={"display": "inline-block"},
+                                        ),
+                                    ],
+                                    style=FIELD_STYLE,
+                                ),
+                                html.Button(
+                                    "Run monitor",
+                                    id="process-run-button",
+                                    style={**BUTTON_STYLE, "marginRight": "12px"},
+                                ),
+                                html.Button(
+                                    "Write demo data",
+                                    id="process-demo-button",
+                                    style={**BUTTON_STYLE, "backgroundColor": "#607D8B"},
+                                ),
+                            ],
+                            style={"width": "70%", "margin": "20px auto"},
+                        ),
+                        html.Pre(
+                            id="process-summary",
+                            style={
+                                **PRE_STYLE,
+                                "wordBreak": "normal",
+                                "width": "70%",
+                                "margin": "0 auto",
+                            },
+                        ),
+                        dcc.Graph(id="process-fouling"),
+                        dcc.Graph(id="process-records"),
+                    ],
+                ),
             ],
         ),
     ],
@@ -2864,6 +3005,197 @@ def update_solution_visualizations(experiment, time_point):
 # ============================================================
 # HTML Report Generator
 # ============================================================
+
+
+# ============================================================
+# Process view: the evaporator's fouling monitor
+# ============================================================
+
+
+def process_figures(monitor):
+    """The two figures of the Process view from a :class:`~pinnrl.process.FoulingMonitor`.
+
+    The first is the fouling resistance: what was known at each record with
+    its band, the hindsight estimate, the cleaning threshold and the projected
+    time of reaching it with its interval. The second is the outlet records
+    against the filter's one-step predictions.
+    """
+    from plotly.subplots import make_subplots
+
+    minutes = monitor.t / 60.0
+    scale = 1e4  # plotted in 1e-4 m²K/W
+    level = f"{100 * monitor.level:.0f} %"
+    fouling = go.Figure()
+    fouling.add_trace(
+        go.Scatter(
+            x=np.concatenate([minutes, minutes[::-1]]),
+            y=scale * np.concatenate([monitor.upper, monitor.lower[::-1]]),
+            fill="toself",
+            fillcolor="rgba(33, 150, 243, 0.18)",
+            line=dict(width=0),
+            hoverinfo="skip",
+            name=f"{level} band (known at the time)",
+        )
+    )
+    fouling.add_trace(
+        go.Scatter(
+            x=minutes,
+            y=scale * monitor.fouling,
+            mode="lines",
+            line=dict(color="#1565C0", width=2),
+            name="fouling, filtered",
+        )
+    )
+    fouling.add_trace(
+        go.Scatter(
+            x=minutes,
+            y=scale * monitor.smoothed,
+            mode="lines",
+            line=dict(color="#263238", width=1.5, dash="dash"),
+            name="fouling, in hindsight",
+        )
+    )
+    tt = monitor.time_to_clean
+    if monitor.threshold is not None:
+        fouling.add_hline(
+            y=scale * monitor.threshold,
+            line=dict(color="#C62828", width=1.5, dash="dot"),
+            annotation_text="cleaning threshold",
+            annotation_position="top left",
+        )
+    if tt is not None and np.isfinite(tt.median):
+        now = minutes[-1]
+        fouling.add_trace(
+            go.Scatter(
+                x=[now, now + tt.median / 60.0],
+                y=[scale * monitor.fouling[-1], scale * monitor.threshold],
+                mode="lines",
+                line=dict(color="#1565C0", width=1.5, dash="dot"),
+                name="projection at the present rate",
+            )
+        )
+        upper = tt.upper if np.isfinite(tt.upper) else tt.median + 3.0 * (tt.median - tt.lower)
+        fouling.add_trace(
+            go.Scatter(
+                x=[now + tt.median / 60.0],
+                y=[scale * monitor.threshold],
+                mode="markers",
+                marker=dict(color="#C62828", size=10),
+                error_x=dict(
+                    type="data",
+                    symmetric=False,
+                    array=[(upper - tt.median) / 60.0],
+                    arrayminus=[(tt.median - tt.lower) / 60.0],
+                    color="#C62828",
+                ),
+                name=f"time of cleaning, {level} interval"
+                + ("" if np.isfinite(tt.upper) else " (upper end open)"),
+            )
+        )
+    fouling.update_layout(
+        title="Fouling resistance",
+        xaxis_title="time (min)",
+        yaxis_title="R_f (1e-4 m²K/W)",
+        template="plotly_white",
+        legend=dict(orientation="h", y=-0.2),
+    )
+    records = make_subplots(
+        rows=1, cols=2, subplot_titles=("Outlet solids fraction", "Outlet flow (kg/s)")
+    )
+    for col in (0, 1):
+        records.add_trace(
+            go.Scatter(
+                x=minutes,
+                y=monitor.records[:, col],
+                mode="markers",
+                marker=dict(color="#90A4AE", size=4),
+                name="record",
+                showlegend=col == 0,
+            ),
+            row=1,
+            col=col + 1,
+        )
+        records.add_trace(
+            go.Scatter(
+                x=minutes,
+                y=monitor.predicted[:, col],
+                mode="lines",
+                line=dict(color="#1565C0", width=1.5),
+                name="model, one step ahead",
+                showlegend=col == 0,
+            ),
+            row=1,
+            col=col + 1,
+        )
+    records.update_xaxes(title_text="time (min)")
+    records.update_layout(template="plotly_white", legend=dict(orientation="h", y=-0.2))
+    return fouling, records
+
+
+@app.callback(
+    [Output("process-export-path", "value"), Output("process-tagmap-path", "value")],
+    [Input("process-demo-button", "n_clicks")],
+    prevent_initial_call=True,
+)
+def write_process_demo(n_clicks):
+    """Write the synthetic evaporator export and its tag map next to the runs and fill the form."""
+    from pinnrl.process import write_demo_export
+
+    if not n_clicks:
+        return dash.no_update, dash.no_update
+    export, tags = write_demo_export(os.path.join(RESULTS_DIR, "process_demo"))
+
+    def shown(path):  # relative to where the dashboard runs, when the file is below it
+        relative = os.path.relpath(path)
+        return str(path) if relative.startswith("..") else relative
+
+    return shown(export), shown(tags)
+
+
+@app.callback(
+    [
+        Output("process-summary", "children"),
+        Output("process-fouling", "figure"),
+        Output("process-records", "figure"),
+    ],
+    [Input("process-run-button", "n_clicks")],
+    [
+        State("process-export-path", "value"),
+        State("process-tagmap-path", "value"),
+        State("process-threshold", "value"),
+        State("process-steam-std", "value"),
+        State("process-cells", "value"),
+        State("process-rate-walk", "value"),
+    ],
+)
+def update_process_view(
+    n_clicks, export_path, tagmap_path, threshold, steam_std, cells, rate_walk=None
+):
+    """Run the fouling monitor on the given export and draw its figures."""
+    from pinnrl.process import monitor_from_files
+
+    if not n_clicks:
+        hint = create_empty_figure(
+            "Give an export and a tag map, or write the demo data, then run."
+        )
+        return "", hint, hint
+    if not export_path or not tagmap_path:
+        hint = create_empty_figure("An export and a tag map are both needed.")
+        return "An export and a tag map are both needed.", hint, hint
+    try:
+        monitor = monitor_from_files(
+            export_path,
+            tagmap_path,
+            nz=int(cells or 51),
+            threshold=float(threshold) if threshold else None,
+            steam_bias_std=float(steam_std) if steam_std else None,
+            rate_walk=float(rate_walk) if rate_walk else 1e-9,
+        )
+    except Exception as exc:  # the form shows what was wrong with the files
+        failed = create_empty_figure("The monitor could not run; see the message above.")
+        return f"{type(exc).__name__}: {exc}", failed, failed
+    fouling, records = process_figures(monitor)
+    return monitor.summary(), fouling, records
 
 
 def generate_html_report(experiment_path, figures, metadata):
