@@ -357,6 +357,25 @@ python experiments/J07_droplet_drying/run.py --seeds 3 --steps 12000 --lbfgs-ste
 
 See `experiments/J11_dryer_closure/`.
 
+## A soft sensor for the stickiness margin (experiment J08)
+
+Powder sticks when its particles are warmer than their glass transition by more than a material limit; [`SprayDryer.stickiness_margin`](api/process.md#process.dryer.SprayDryer) is $T_p - T_g(X)$ along the tower, with $T_g$ from Gordon–Taylor. It cannot be measured online: $T_g$ falls by 9 K per 0.01 of moisture.
+
+![J08](assets/benchmarks/j08_stickiness.png)
+
+| Estimate of the outlet margin (std, four operating points) | |
+|---|---|
+| moisture from the water balance of the air | 23–59 K |
+| lab assay of the powder, hours late | 1.6–3.2 K |
+| the twin, identified on J11's five-point campaign and run forward | 1.0–1.5 K |
+| the twin updated with the point's online records | 0.9–1.5 K |
+
+- **The water balance cannot see the powder:** the air carries 36 times the solids' mass, so a humidity error of 0.001 is half the outlet moisture.
+- **The twin beats the assay it replaces and is not late**; the errors of 40 fitted campaigns match the prediction (1.1–1.5 K). The guard band below the sticky limit halves, from 4.6 to 2.3 K. It also gives the margin inside the tower to about 1 K.
+- **The caveat:** these are estimation errors of a model whose structure is the plant's; against a real dryer the first comparison is the twin's moisture against the lab's over a campaign.
+
+See `experiments/J08_stickiness/`.
+
 ## Time-marching windows (experiment H04)
 
 ```bash

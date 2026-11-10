@@ -87,3 +87,20 @@ def test_custom_pde_residual_vanishes_on_the_reference():
     f = pde_u.unknown_functions["f"]
     assert f.anchor == {"at": {"X": dr.droplet.X_eq}, "value": 0.0} and f.monotone
     assert f({"X": torch.tensor([[dr.droplet.X_eq]])}).item() == pytest.approx(0.0, abs=1e-6)
+
+
+def test_glass_transition_and_stickiness_margin():
+    dr = SprayDryer()
+    assert dr.glass_transition(0.0) == pytest.approx(dr.T_g_solids)
+    assert dr.glass_transition(1e9) == pytest.approx(dr.T_g_water, abs=1e-3)  # pure water
+    X = np.linspace(0.0, 1.5, 50)
+    assert np.all(np.diff(dr.glass_transition(X)) < 0)  # water plasticises
+    slope = (dr.glass_transition(0.09) - dr.glass_transition(0.08)) / 0.01
+    assert -11.0 < slope / 100 < -7.0  # about 9 K per 0.01 of moisture
+    ref = dr.reference()
+    margin = dr.stickiness_margin(ref)
+    assert margin.shape == ref.z.shape
+    assert margin[-1] == pytest.approx(ref.T_p[-1] - dr.glass_transition(ref.X[-1]))
+    assert 5.0 < margin[-1] < 20.0 and margin[0] > 100.0  # wet droplets are far above T_g
+    wet = dr.operating_point(T_in=438.15, solids_flow=0.011)
+    assert wet.stickiness_margin()[-1] > margin[-1] + 20.0

@@ -91,6 +91,11 @@ class SprayDryer:
     T_ambient: float = 293.15  # K
     U_wall: float = 1.0  # W/m²K, wall loss coefficient
     cp_vapour: float = 1880.0  # J/kg/K
+    T_g_solids: float = (
+        461.15  # K, glass transition of the dry solids (a maltodextrin-like carrier)
+    )
+    T_g_water: float = 138.15  # K
+    gordon_taylor_k: float = 7.7  # Gordon–Taylor constant of the solids–water pair
     extra: dict[str, Any] = field(default_factory=dict)
 
     # ---------------------------------------------------------------- physics
@@ -175,6 +180,30 @@ class SprayDryer:
             "latent_inconsistency": float(latent / given_up),
             "wall_loss_fraction": float(wall / given_up),
         }
+
+    # ------------------------------------------------------------- stickiness
+    def glass_transition(self, X: np.ndarray) -> np.ndarray:
+        """The glass-transition temperature of the solids at moisture ``X`` (Gordon–Taylor), K.
+
+        ``T_g = (w_s T_gs + k w_w T_gw) / (w_s + k w_w)`` with the water mass
+        fraction ``w_w = X / (1 + X)``. Water plasticises the solids: near the
+        outlet moisture ``T_g`` falls by about 9 K for each 0.01 of ``X``.
+        """
+        X = np.maximum(np.asarray(X, dtype=float), 0.0)
+        w_w = X / (1.0 + X)
+        k = self.gordon_taylor_k
+        return ((1.0 - w_w) * self.T_g_solids + k * w_w * self.T_g_water) / (1.0 - w_w + k * w_w)
+
+    def stickiness_margin(self, ref: DryerReference | None = None) -> np.ndarray:
+        """``T_p - T_g(X)`` along the tower, K.
+
+        Particles are sticky when they are warmer than their glass transition
+        by more than a material constant (10 to 20 K for dairy powders): the
+        margin against that limit is what decides wall deposits and caking. It
+        cannot be measured in the tower; a twin computes it from the profiles.
+        """
+        ref = self.reference() if ref is None else ref
+        return ref.T_p - self.glass_transition(ref.X)
 
     # ---------------------------------------------------------------- records
     def records(
