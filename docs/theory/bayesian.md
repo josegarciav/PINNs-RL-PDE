@@ -22,6 +22,7 @@ An error bar on $\theta$ must say which of these it covers.
 | Parametric epistemic | finite data, correlated parameters | the posterior width along sloppy directions |
 | Surrogate | the network's approximation error and the non-convex training | the bias of F01, the seed spread |
 | Model form | the equation is not the process | a residual structure the surrogate cannot remove (F08) |
+| Input | a recorded input with an offset (a steam temperature) | a shift of the estimate along the direction the input can be traded against; ignored, the interval is too narrow (J06) |
 
 The Fisher bound covers the first. Ensembles over seeds and over noise draws separate the first from the third. Model-form error is the one that no method internal to the model detects, and it is why a twin must report its residual against the plant.
 
@@ -43,6 +44,14 @@ An interval is calibrated when it contains the truth as often as it claims: a 90
 - the **continuous ranked probability score**, a proper scoring rule that rewards both at once (Gneiting & Raftery, 2007).
 
 A method is kept only where it is calibrated, and the page of each method states the regime in which that was checked.
+
+Experiment J06 measures, on the evaporator, the conditions under which the Fisher (Laplace) interval of an identified *function* is calibrated, and each is an assumption the interval inherits rather than something the data check for it:
+
+- **the form assumed for the unknown contains the truth.** A ramp assumed for a fouling curve that saturates gives a ±2.5 % interval around an estimate 25 % off. The form sets the width as much as the data do (±2 % for a ramp, ±8 % for six modes, on the same records), and only the misfit says when it is wrong;
+- **the model's own error is below the interval's width.** A lumped model biased by 2.7 % supports a ±7 % interval and not a ±2 % one;
+- **every input the unknown can be traded against is either measured to that accuracy or among the unknowns with its prior.** A steam record trusted to 0.3 K and taken at face value reduces coverage to 21–52 %; estimated under its prior, coverage returns at five times the width, and that width is the honest one.
+
+An interval reported for a process estimate should name the three: the form, the model, and the inputs it conditions on.
 
 ## References
 
