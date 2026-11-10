@@ -997,8 +997,13 @@ class CustomPDE(PDEBase):
                 continue
             x_lo = x_lo.clone().requires_grad_(needs_grad)
             x_hi = x_hi.clone().requires_grad_(needs_grad)
-            u_lo = model(torch.cat([x_lo, t], dim=1))
-            u_hi = model(torch.cat([x_hi, t], dim=1))
+            if not needs_grad and getattr(model, "native_values", False):
+                # one call for both faces: the compiled kernel's cost is mostly per call
+                both = model(torch.cat([torch.cat([x_lo, t], dim=1), torch.cat([x_hi, t], dim=1)]))
+                u_lo, u_hi = both[: x_lo.shape[0]], both[x_lo.shape[0] :]
+            else:
+                u_lo = model(torch.cat([x_lo, t], dim=1))
+                u_hi = model(torch.cat([x_hi, t], dim=1))
             for j, field in enumerate(self.fields):
                 conds = conditions.get(field, {})
                 if not conds:
