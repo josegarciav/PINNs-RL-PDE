@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -196,6 +196,44 @@ class DryingDroplet:
         f = np.clip(-dX / np.maximum(drive, 1e-12), 0.0, 1.0)
         keep = X > self.X_eq + margin
         return X[keep], f[keep]
+
+    def record_misfit(
+        self,
+        times: np.ndarray,
+        mass: np.ndarray,
+        temperature: np.ndarray,
+        sigma_mass: float,
+        sigma_temperature: float,
+        closure: Callable[[np.ndarray], np.ndarray] | None = None,
+    ) -> dict[str, float]:
+        """Reduced chi-square of a mass-and-temperature record under this model, solved by the ODE reference.
+
+        ``closure`` replaces the drying-rate curve ``f(X)`` (an identified
+        :class:`~pinnrl.pdes.unknowns.UnknownFunction` wrapped as a NumPy
+        function, a pointwise estimate interpolated). Returns ``{"mass",
+        "temperature", "total"}``, each the mean squared residual in units of
+        its noise: about 1 when the model explains the record. This is the
+        check a learned closure has to pass and the guard on a refinement
+        (J07c): a closure whose misfit is above its starting estimate's is
+        rejected. The reference solver makes the check independent of the
+        network that produced the closure.
+        """
+        model = self if closure is None else replace(self, rate_closure=closure)
+        times = np.asarray(times, dtype=float)
+        # A closure that does not vanish at the equilibrium moisture dries the droplet past
+        # zero volume; such a solve fails or returns NaN, and the misfit is infinite.
+        try:
+            with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
+                ref = model.reference(float(times[-1]), nt=max(2001, 4 * times.size + 1))
+        except RuntimeError:
+            return {"mass": math.inf, "temperature": math.inf, "total": math.inf}
+        r_m = (np.interp(times, ref.t, ref.m) - np.asarray(mass, dtype=float)) / sigma_mass
+        r_T = (
+            np.interp(times, ref.t, ref.T) - np.asarray(temperature, dtype=float)
+        ) / sigma_temperature
+        chi_m, chi_T = (float(np.mean(r**2)) for r in (r_m, r_T))
+        chi_m, chi_T = (c if math.isfinite(c) else math.inf for c in (chi_m, chi_T))
+        return {"mass": chi_m, "temperature": chi_T, "total": 0.5 * (chi_m + chi_T)}
 
     # ------------------------------------------------------------- the PINN
     def expressions(self) -> dict[str, str]:

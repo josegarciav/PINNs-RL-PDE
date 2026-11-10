@@ -93,3 +93,31 @@ def test_closure_read_off_a_clean_record_and_fitted_to_the_unknown_function():
     exact = dr.drying_curve(X.ravel().numpy())
     assert mse < 5e-3
     assert np.linalg.norm(fitted - exact) / np.linalg.norm(exact) < 0.1
+
+
+def test_record_misfit_is_one_for_the_plant_curve_and_ranks_wrong_closures():
+    """The reference-solver guard: noise level for the truth, large for a wrong or unphysical closure."""
+    dr = DryingDroplet()
+    ref = dr.reference(200.0, nt=2001)
+    times = np.arange(1.0, 200.0 + 1e-9, 1.0)
+    rng = np.random.default_rng(0)
+    sigma_m, sigma_T = 0.005 * dr.m0, 0.5
+    mass = np.interp(times, ref.t, ref.m) + sigma_m * rng.standard_normal(times.size)
+    temp = np.interp(times, ref.t, ref.T) + sigma_T * rng.standard_normal(times.size)
+    truth = dr.record_misfit(times, mass, temp, sigma_m, sigma_T)
+    assert 0.7 < truth["mass"] < 1.3 and 0.7 < truth["temperature"] < 1.3
+    assert truth["total"] == pytest.approx(0.5 * (truth["mass"] + truth["temperature"]))
+    # The same curve passed as a closure is the same model.
+    same = dr.record_misfit(times, mass, temp, sigma_m, sigma_T, closure=dr.drying_curve)
+    assert same["total"] == pytest.approx(truth["total"], rel=1e-6)
+    # A closure with the wrong falling-rate exponent misses the record several-fold. (A curve
+    # scaled down uniformly would not: the droplet warms up and the rate barely changes.)
+    from dataclasses import replace
+
+    wrong = dr.record_misfit(
+        times, mass, temp, sigma_m, sigma_T, closure=replace(dr, n=2.0).drying_curve
+    )
+    assert wrong["total"] > 4 * truth["total"]
+    # A constant closure dries the droplet past zero volume: an infinite misfit, not NaN.
+    broken = dr.record_misfit(times, mass, temp, sigma_m, sigma_T, closure=lambda X: 0.0 * X + 0.8)
+    assert broken["total"] == np.inf
