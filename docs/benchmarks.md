@@ -269,6 +269,61 @@ python experiments/J05_ekf_baseline/run.py --seeds 3
 - **The tuning is one number**, the random-walk intensity: a decade too small and the filter lags the ramp by four minutes, a decade too large and it follows the noise. Six cells still give 7 %.
 - **The inputs bound both estimators alike**: a 0.3 K steam bias costs the filter 12 % at the end, a 1 % feed bias 8 %, the J04 numbers. The PINN's case is the partly unknown model (a closure, a field), not this one; the EKF stays as the control on every later comparison.
 
+## Moving-horizon estimation (experiment J05b)
+
+```bash
+python experiments/J05_ekf_baseline/run_mhe.py --seeds 3 --workers 3
+```
+
+`pinnrl.process.MovingHorizonEstimator` against the extended Kalman filter on J05's records: the same 11-cell model, $Q$, $R$ and prior, horizons of 6 to 24 records, with and without the constraint that the fouling only grows, a random walk ten times too loose, and a confident wrong prior. Details in `experiments/J05_ekf_baseline/README.md`.
+
+- **On this model the moving horizon is the Kalman filter at 10–35 times the cost**: 3.4 % against 3.5 % in L2 and 2.1 % against 2.2 % at the end for every horizon, because the response to the fouling is nearly linear over a window (for a linear model the two coincide exactly, which the tests check).
+- **The growth constraint smooths, it does not correct**: with the random walk ten times too loose it removes two thirds of the noise-following and a tenth of the L2 error, and leaves the end error where it was; a one-sided constraint on noisy increments ratchets upward.
+- **A confident wrong prior costs both about half a minute**, twice the residence time. The moving horizon's place is a model that is nonlinear within a window or constraints that bind in normal operation.
+
+## Calibrated fouling intervals (experiment J06)
+
+```bash
+python experiments/J06_fouling_intervals/run.py --datasets 100 --workers 6
+python experiments/J06_fouling_intervals/run.py --part pinn --pinn-datasets 12 --members 3 --workers 4
+```
+
+F06's question on the evaporator: over 100 noise draws of J03's records, does the 90 % interval of each estimator contain the fouling at the end of the record, and the time to the next cleaning, 90 % of the time? A batch Gauss–Newton fit through the reference solver (2 or 6 Legendre modes), the Kalman filters of J05 with the fouling as a random walk or as a level and a rate, on 11 and 51 cells, and the PINN twin of J03; with the inputs exact, with a steam record uncertain by 0.3 K, and with a fouling curve that saturates. Details in `experiments/J06_fouling_intervals/README.md`.
+
+![J06](assets/benchmarks/j06_fouling_intervals.png)
+
+- **With the model right and the fouling's form containing the truth, the Fisher interval is calibrated**: 0.92–0.96 for the batch fits and 0.91–0.99 for the trend filter on 51 cells, at ±2 % (a ramp assumed) to ±8 % (six modes). The form is an assumption the interval inherits: the ramp fit on a saturating curve is 25 % off with a ±2.5 % interval, and its misfit (776 against 474) is what says so.
+- **A model good enough for the estimate is not good enough for the interval**: the 11-cell filter of J05 is biased by 2.7 % of the fouling, which the tight intervals of the trend filter do not cover (33–69 %; 91–97 % on 51 cells). The tuned random walk covers on 11 cells because its lag and the grid's bias cancel by half.
+- **The trend filter's rate noise is the same assumption in filter form**: frozen it is the ramp fit (0 % on the saturating curve), free to change over five minutes it covers both curves at ±7 %, and the time to clean then has an open upper end in half the data sets.
+- **A steam record uncertain by 0.3 K, taken at face value, drops every interval to 21–52 %.** With the offset estimated under its prior the batch fits cover 0.89 at ±12–15 %: the honest width for this plant is set by the steam measurement, not by the estimator. Clipping the fouling at zero inside the filter costs five points of coverage once the offset is a state.
+- **The time to clean is calibrated where the level and rate are**: 0.94 at ±7 % for the ramp fit, 0.92–0.93 at ±28–37 % once the steam offset is admitted.
+- **The PINN twin fails to train on 22 of 36 runs** (a constant fouling, or the unknown's bound), which its own sensor misfit detects; the accepted runs are 26 % off at the end of the record against the 5 % the data allow, and no internal width covers that (0.25 with the Fisher width, 0.60–0.80 with ensembles at ±31–45 %). J03's three good seeds were a lucky draw.
+
+## Measurement design for the fouling estimate (experiment J09)
+
+J06 ends with an interval of ±12–15 % once the steam record's offset is admitted. J09 admits every instrument error (the steam offset, the feed solids, both flow meters' gains, the outlet density meter's offset), each with the accuracy it is trusted to as a prior, and prices the remedies before any is bought: the posterior covariance $(P_0^{-1} + J^\top R^{-1} J)^{-1}$, with the sensitivities from the reference solver, does not depend on the records ([`pinnrl.analysis.posterior_covariance`](api/analysis.md#analysis.design.posterior_covariance), [`greedy_design`](api/analysis.md#analysis.design.greedy_design)).
+
+![J09](assets/benchmarks/j09_measurement_design.png)
+
+| Design (std of $R_f(T)$, % of the truth; six free modes) | |
+|---|---|
+| exact instruments | 5.0 |
+| the steam offset admitted alone / the four mass-balance instruments alone | 9.1 / 9.3 |
+| everything admitted (the baseline) | 10.6 |
+| the steam probe calibrated to 0.03 K | 9.3 |
+| three lab samples of the outlet solids, at the best times | 9.3 |
+| a 4 K steam swing instead of 1 K | 7.1 |
+| a condensate meter, gain unknown to 2 % | 4.9 |
+| the condensate meter and the 4 K swing | 2.8 |
+
+- **Two sources limit the estimate, and one is invisible one instrument at a time.** The evaporation rate carries the fouling and the records give it twice, by the flow balance and by the solids balance; any single loose instrument leaves the other balance closed (5.0–5.2 %), all four together cost as much as the steam offset. For the same reason no single calibration pays.
+- **A condensate meter is the measurement to buy**: it reports the evaporation directly, not as the difference of two flows eight times larger, and with its gain unknown to 2 % it beats exact instruments without it.
+- **The steam swing is the free remedy.** A change of the steam temperature changes the flux by $\Delta T_s/(1/U + R_f)$ whatever the offset. No swing gives 13.8 %, 4 K gives 7.1 %; a swing as slow as the window is worth almost nothing, since that is what a change of fouling looks like.
+- **Lab samples buy 1.3 points**, best taken at the end, a quarter and past the middle of the window (the greedy triple is the best of all 1140).
+- **The prediction holds**: over 200 nonlinear simulated fits per design the errors' standard deviations are within 5 % of the predicted ones (10.6 → 11.1, 9.5 → 9.8, 2.8 → 2.9 %), with coverages of 0.87–0.88.
+
+See `experiments/J09_measurement_design/`.
+
 ## A drying droplet and its closure (experiment J07)
 
 ```bash
@@ -283,6 +338,24 @@ python experiments/J07_droplet_drying/run.py --seeds 3 --steps 12000 --lbfgs-ste
 - **The unknown closure collapses to a constant on every seed**, either ignoring the physics ($f \equiv 0$, records fitted) or the data ($f \equiv 0.06$): K09's trivial attractor in the inverse setting, sticky because softplus-constrained weights that go small cannot grow back. One recovery to 15 % did not reproduce.
 - **Least squares with the right form is at the noise floor** ($n$, $X_{cr}$ to 1 % in 0.2 s) and the wrong form is 5.5 % off with a misfit 16 times larger.
 - **Second pass (J07b).** The record itself gives the closure to 2–3 % pointwise ($f_i = -\dot X_i m_s / (h_m A \Delta\rho)$ from the smoothed readings); started there, the PINN refines it to 1.7–2.1 % on two seeds and destroys it on the third (a misfit check against the start catches that). Freezing the function first makes the collapse certain; a Legendre basis removes the sticky collapse (7 %, 20 %, 66 %) but not the multimodality. Figure: `assets/benchmarks/j07b_closure.png`.
+- **The guard (J07c).** `DryingDroplet.record_misfit` solves the droplet with a closure by the reference solver and returns the reduced $\chi^2$ of the record: 0.9 for the plant's curve, 1.5–1.7 for the two good refinements, 60–90 for the pointwise start they came from, 390–765 for the two failed runs and infinite for the collapsed constants. It catches every failure of J07b, including one the network's own fields hide (fields within 0.8 %, closure 20 % off, record missed 43-fold). The start's misfit is all at the equilibrium moisture, where its closure is 0.01 instead of 0; what the PINN refinement buys is that consistency, a fifty-fold drop in misfit at an unchanged L2 error.
+- **Shooting (J07d), the classical control.** A monotone piecewise-linear closure on 24 knots, fitted through the reference solver by bounded least squares from a cold start, reaches 1.5–1.6 % on every seed with the record at the noise level, in 8–10 s against the PINN's six to eight minutes and one lost seed in three. With an ODE model and a reference solver that takes a closure, an unknown function is a few dozen bounded parameters; the PINN's case starts where the forward solve is missing or too expensive to iterate.
+- **The anchored closure (J07e).** `UnknownFunction(anchor={"at": X_eq, "value": 0.0})` with `monotone` holds $f(X_{eq}) = 0$ by construction. The same pointwise estimate then misses the record by 1.6–2.3 times its noise instead of 60–92 times, in one second; refining it with the PINN improves one seed and worsens two (the misfit guard rejects both). Shooting stays ahead (1.5–1.6 % against 2–3 %).
+
+![J07c](assets/benchmarks/j07c_guard.png)
+
+## The closure at dryer scale (experiment J11)
+
+[`SprayDryer`](api/process.md#process.dryer.SprayDryer) couples J07's droplet to the air it dries in: a co-current plug-flow tower at steady state, four ODEs along the residence time, with the instruments a plant has (six air thermocouples, the outlet humidity, the powder's moisture). One solve takes 5 ms, so the estimator is a least-squares fit through it; no network was trained.
+
+![J11](assets/benchmarks/j11_dryer_closure.png)
+
+- **The curve's form known:** five operating points give the critical moisture and the exponent to ±0.03 each (2 % in L2), in under a second; ±0.11 and ±0.06 once the wall loss (30 %) and the droplet size (10 %) are uncertain, more than the linear analysis predicts.
+- **A free-form closure is not identifiable from the tower:** 4 to 6 of its 11 directions are determined, the band closes only below a moisture of 0.5, and the fits are 8–21 % off. The droplets cross the high-moisture range above the first thermocouple.
+- **The prediction does not need it:** the powder moisture at an operating point outside the campaign (four times wetter) is predicted to 0.9–1.6 % by the free-form fits and 0.5–0.9 % with the form known; one lab assay resolves 1 %. From a single operating point it is 2.5 %.
+- **For the twin:** identify the closure on a droplet rig, carry it to the tower, and estimate at dryer scale the few numbers its records determine, with the droplet size as the nuisance to design for.
+
+See `experiments/J11_dryer_closure/`.
 
 ## Time-marching windows (experiment H04)
 

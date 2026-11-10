@@ -80,6 +80,7 @@ nav:
     - Custom equations: custom_equations.md
     - Training: training.md
     - Inverse problems: inverse_problems.md
+    - Process twins: process_twins.md
     - Datasets (The Well): datasets.md
     - Dashboard: dashboard.md
     - Benchmarks: benchmarks.md
