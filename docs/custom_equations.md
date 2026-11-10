@@ -236,6 +236,18 @@ trainer = pde.build_trainer("feedforward", normalize=True, num_epochs=1000)
 
 With 1,000 Adam steps the normalized model's maximum error is 2 K against 248 K for the raw one (`test_normalization.py`). The run snapshot keeps the bounds and scales in its `model` block, so `load_run` rebuilds the scaled model.
 
+## A faster step: the compiled kernel
+
+For a plain `tanh` network the derivatives a residual needs can be carried forward through the layers next to the value, and the weight gradient taken by one reverse pass, instead of differentiating by autograd twice and backpropagating through that graph. [`pinnrl.native`](api/native.md) does this in a small C++ kernel, compiled on first use, and `derivatives="native"` switches a problem to it:
+
+<!-- doctest: skip -->
+```python
+trainer = pde.build_trainer("feedforward", model={"layer_norm": False}, derivatives="native")
+print(pde.native_active(trainer.model))      # True where the kernel applies; autograd otherwise
+```
+
+On the heat problem of experiment [I11](benchmarks.md#the-cost-of-a-training-step-pytorch-c-and-rust-experiment-i11) the step goes from 10.6 to 5.4 ms with the same loss and gradients to rounding. The kernel covers: macOS with a C++ compiler; a feed-forward network of `Linear` and `tanh` without layer normalization, float32 on the CPU; equations given as text, with first and pure second derivatives (`u_x`, `u_t`, `u_xx`, a Laplacian; not `u_xt` or `u_xxx`) and no unknown functions. Anywhere else the residual is computed by autograd, without notice, so the option is safe to leave on. Its weight gradient cannot be differentiated again: the Hessian and sensitivity analyses of `pinnrl.analysis` need the default `derivatives="autograd"`. From the command line: `pinnrl-train --pde-file spec.yaml --derivatives native`.
+
 ## From the command line
 
 Write the same specification as YAML and pass it with `--pde-file` in place of `--pde`. Every other flag works as usual, including `--mode inverse --identify r`.

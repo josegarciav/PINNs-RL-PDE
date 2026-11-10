@@ -223,6 +223,7 @@ def create_pde(config_dict, device):
         )
         # A normalized run scales the loss terms by the field scales too.
         pde._normalized = config_dict.get("model", {}).get("input_bounds") is not None
+        pde.derivatives = config_dict.get("model", {}).get("derivatives", "autograd")
         return _attach_synthetic_observations(pde, config_dict)
     pde_cls = get_pde_spec(pde_cfg["name"]).cls
 
@@ -281,7 +282,9 @@ def build_model(config_dict, device):
         if config_dict["model"].get(key) is not None:
             setattr(config_obj.model, key, config_dict["model"][key])
     config_obj.training = TrainingConfig.from_dict(config_dict["training"])
-    return PINNModel(config=config_obj, device=device).to(device), config_obj
+    model = PINNModel(config=config_obj, device=device).to(device)
+    model.native_values = config_dict["model"].get("derivatives", "autograd") == "native"
+    return model, config_obj
 
 
 def load_run(run_dir, device=None):
@@ -450,6 +453,16 @@ def main():
         "--pde",
         default=None,
         help="PDE config key or display name (e.g. 'heat' or 'Heat Equation')",
+    )
+    parser.add_argument(
+        "--derivatives",
+        choices=["autograd", "native"],
+        default="autograd",
+        help=(
+            "With --pde-file: 'native' takes the residual's derivatives from the compiled kernel "
+            "(pinnrl.native: macOS, a feed-forward tanh network without layer norm, CPU, first and "
+            "pure second derivatives), about twice as fast per step; autograd wherever it does not apply."
+        ),
     )
     parser.add_argument(
         "--normalize",
@@ -711,6 +724,7 @@ def main():
         normalize=args.normalize,
     )
     config_dict["device"] = str(device)
+    config_dict["model"]["derivatives"] = args.derivatives
 
     # Wire inverse-problem flags through to the PDE config + run-time options.
     if args.identify:

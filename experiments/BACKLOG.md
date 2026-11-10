@@ -172,7 +172,7 @@ The shortest path to results you can trust and publish:
 
 | ID | P | Experiment | Question | Setup and metric | Status |
 |---|---|---|---|---|---|
-| I01 | P0 | Epoch time breakdown | Where does training time go? | Profile residual autograd, BC/IC, sampling, logging and the live snapshot npz. Fraction of time per stage. | todo |
+| I01 | P0 | Epoch time breakdown | Where does training time go? | Answered in I11: sampling and the optimizer are 0.1 ms of a 10.6 ms step and bookkeeping 0.8 ms; `tanh` is 3.5 ms and the three backward passes 6.0 ms. See `I11_native_pinn/`. | done |
 | I02 | P1 | Device throughput | CPU vs MPS vs CUDA per architecture. | Batch sweep. Points/s and the crossover batch size. | todo |
 | I03 | P1 | 1-D to 2-D cost | Points and time needed to keep the error constant from heat to heat_2d. | Error vs N for both; the scaling exponent. | todo |
 | I04 | P2 | Vectorised derivatives | `torch.func` (vmap/jacrev) vs the autograd loops in `compute_derivatives`. | Speed-up and numerical agreement. | todo |
@@ -182,6 +182,12 @@ The shortest path to results you can trust and publish:
 | I08 | P2 | 3-D heat feasibility | Can the package handle a 3-D domain? | New config; error and memory. | todo |
 | I09 | P3 | Domain decomposition | XPINN/FBPINN-style subdomains in 2-D. | Against I03's single-domain result. | todo |
 | I10 | P3 | High-dimensional heat | d = 5, 10. How does the error scale? | Monte-Carlo collocation; error vs d. | todo |
+| I11 | P1 | Native training step (C++, Rust) | How fast is a PINN step without a framework, and can the gain go back into the trainer? | The heat step (4 × 64 tanh, 5,120 points) with Taylor-mode forward derivatives and a hand-written reverse pass: 3.6 ms in C++ and 3.7 ms in Rust on Accelerate, against 8.8 ms for PyTorch autograd and 10.6 ms for the trainer; 45 ms with plain loops. Gradients agree with autograd to 4e-7. The kernel went into `pinnrl.native`: `build_trainer(derivatives="native")` gives 5.4 ms. See `I11_native_pinn/`. | done |
+| I12 | P1 | Native kernel: layer normalization | The packaged feed-forward default has layer norm on, which the kernel does not cover. | Jets through `LayerNorm` (forward and reverse) in `jets.cpp`; agreement with autograd; the step time on the default network. | todo |
+| I13 | P2 | Native kernel: mixed and third derivatives | `u_xt`, `u_xxx` (KdV), `u_xxxx` (Cahn–Hilliard) fall back to autograd. | General Taylor coefficients to order 4 in the kernel; KdV and wave residuals against autograd; step times. | todo |
+| I14 | P2 | Native kernel on Linux | The kernel is macOS-only (Accelerate). | The same source on OpenBLAS (`cblas_sgemm`, a vectorised tanh); build on first use; CI on ubuntu; step time against PyTorch with MKL/OpenBLAS. | todo |
+| I15 | P2 | One value pass, built-in PDE classes | The boundary and initial points go through the kernel in three calls; the registry's PDE classes (`HeatEquation`, ...) do not use it at all. | Batch the value points into one call; route `PDEBase.compute_derivatives` through `model.jets`; step time against I11's 3.6 ms standalone. | todo |
+| I16 | P3 | Native reference solvers | The method-of-lines right-hand sides (evaporator, dryer) are Python callbacks inside `solve_ivp`; a batch fit of J06 takes 4–14 s. | The evaporator RHS and an implicit integrator in C++ or Rust; time per solve and per Gauss–Newton fit against the SciPy path. | todo |
 
 ## J. Industrial digital-twin track
 

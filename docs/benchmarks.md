@@ -193,6 +193,28 @@ One network $u_w(x, t; \theta)$ with the parameters as inputs (`CustomPDE(parame
 - **The swarm on the surrogate is the swarm on the closed form.** Best fits agree to 0.04–0.3 % of the truth, 90 % widths to 1–3 %, and coverage data set by data set (8/10 heat, 7/10 KdV, the swarm's own under-coverage from K46). The surrogate's forward error is well below the scatter the data impose, and the region of a PINN inverse problem can be sampled on the PINN's own misfit at 0.1–0.2 s per data set.
 - **Where the surrogate's error exceeds the data scatter (the KdV corner at (11, 0.4), 2 %), the region is biased by about that error**; the check is one dedicated network at the best fit.
 
+## The cost of a training step: PyTorch, C++ and Rust (experiment I11)
+
+The same heat PINN step (a 4 × 64 `tanh` network, 5,120 points, Adam) written ten ways, on an Apple M4.
+
+![I11](assets/benchmarks/i11_native_pinn.png)
+
+| Implementation | ms per step (1 thread / 4 threads) |
+|---|---|
+| C++ and Rust with no framework, Accelerate for the matrix products and `tanh` | 3.6 / 3.7 |
+| `pinnrl` trainer, `derivatives="native"` | 5.4 / 5.5 |
+| PyTorch autograd, a minimal loop | 8.8 / 6.6 |
+| `pinnrl` trainer, autograd | 10.6 / 8.3 |
+| C++ and Rust with plain loops | 45 / 47 |
+
+- **Sampling, the optimizer and bookkeeping are a tenth of a step**; the rest is the network's arithmetic.
+- **`tanh` is the most expensive single operation in PyTorch** here: 2.6 ns an element, twenty times the matrix product next to it, a third of the trainer's step.
+- **Taylor-mode derivatives do not pay in tensor operations** (9.3–12.4 ms against 8.8 for double backward); they pay with fused loops in compiled code.
+- **C++ and Rust are indistinguishable**, 2.4 times faster than the PyTorch step on the same BLAS and five times slower than it without one.
+- **The kernel is in the package:** [`build_trainer(derivatives="native")`](custom_equations.md#a-faster-step-the-compiled-kernel) halves the trainer's step (10.6 → 5.4 ms) with the same loss and gradients to rounding. It is opt-in and, for now, macOS only and for plain `tanh` networks without layer normalization.
+
+See `experiments/I11_native_pinn/`.
+
 ## The evaporator reference and its PINN (experiments J01, J02)
 
 `pinnrl.process.FallingFilmEvaporator`: liquid flow and solids fraction transported along a heated tube with boiling-point elevation, fouling and measured feed and steam signals; a steady-state ODE solver, a first-order method-of-lines dynamic solver, and the same model as a `CustomPDE`. Details in `experiments/J01_evaporator_reference/README.md`.

@@ -93,6 +93,7 @@ nav:
     - Neural networks: api/neural_networks.md
     - PDEs: api/pdes.md
     - Training: api/training.md
+    - Native kernel: api/native.md
     - RL sampler: api/rl.md
     - Plots: api/plots.md
     - Benchmarks: api/benchmarks.md

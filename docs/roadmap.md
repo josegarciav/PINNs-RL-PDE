@@ -43,6 +43,16 @@ The goal is to estimate unknown physics with known validity conditions and calib
 - [x] Bayesian measurement design for sensors and lab sampling (J09; P24). *Done: `pinnrl.analysis.posterior_covariance`, `target_std`, `information_gain` and `greedy_design`; on the evaporator with every instrument error admitted, the steam offset and the four mass-balance instruments jointly limit the fouling estimate (10.6 %), no single calibration pays, a condensate meter halves it and with a 4 K steam swing reaches 2.8 %; lab samples buy little and are best at the end, a quarter and past the middle of the window. See [Benchmarks](benchmarks.md#measurement-design-for-the-fouling-estimate-experiment-j09).*
 - [x] Type checking (mypy) across the package. *Done: `uv run mypy` passes on the 66 modules of `pinnrl` (default strictness, configured in `pyproject.toml`) and runs in CI next to ruff.*
 
+## Performance: a compiled kernel for the training step
+
+- [x] Time breakdown of a step, and the same step in C++ and Rust (I01, I11). *Done: the step is arithmetic (sampling, optimizer and bookkeeping under a tenth); `tanh` and the double-backward passes dominate; a framework-free step on Accelerate takes 3.6 ms in either language against 8.8 ms in PyTorch and 10.6 ms in the trainer.*
+- [x] The kernel in the trainer. *Done: `pinnrl.native` and `build_trainer(derivatives="native")`, 10.6 → 5.4 ms a step on the benchmark problem with the same gradients to rounding; opt-in; macOS, plain `tanh` networks, first and pure second derivatives.*
+- Layer normalization in the kernel, so the packaged default network benefits (I12).
+- Mixed and third- and fourth-order derivatives (KdV, Cahn–Hilliard) (I13).
+- A Linux build on OpenBLAS, tested in CI (I14).
+- One value pass for boundary and initial points; the registry's PDE classes through the kernel (I15).
+- Compiled right-hand sides for the method-of-lines reference solvers, which the classical estimators spend their time in (I16).
+
 ## Not planned
 
 A hosted service and monetization (until the research results justify it); a custom PDE-builder UI; operator learning beyond the existing FNO-style layers.

@@ -150,6 +150,9 @@ class PINNModel(BaseNetwork):
         # Explicitly move the model to the specified device
         self.model = self.model.to(self.device)
         self.to(self.device)
+        #: Evaluate inputs that do not require grad through the compiled kernel
+        #: (:mod:`pinnrl.native`) when it applies; set by ``build_trainer(derivatives="native")``.
+        self.native_values = False
 
     def forward(self, x):
         """Forward pass of the model.
@@ -164,8 +167,54 @@ class PINNModel(BaseNetwork):
         Returns:
             Output tensor of shape (batch_size, output_dim)
         """
+        if (
+            self.native_values
+            and isinstance(x, torch.Tensor)
+            and not x.requires_grad
+            and x.dim() == 2
+        ):
+            got = self.jets(x)  # the compiled kernel, for points nothing is differentiated at
+            if got is not None:
+                return got[0]
         if not self.scaled:
             return self.model(x)
         if self._in_lo is not None:
             x = 2.0 * (x - self._in_lo) / self._in_span - 1.0
         return self._out_offset + self._out_scale * self.model(x)
+
+    def jets(self, x, first=(), second=()):
+        """Value and derivatives by the compiled kernel, or ``None`` when it does not apply.
+
+        ``(u, du, d2u)`` with ``du[c]`` the derivative of every output with
+        respect to input column ``c`` (for ``c`` in ``first`` and ``second``)
+        and ``d2u[c]`` the pure second derivative (``c`` in ``second``), each
+        ``(N, output_dim)`` and differentiable with respect to the weights
+        once. The non-dimensionalization of the inputs and outputs is applied.
+        The kernel covers a feed-forward stack of ``Linear`` and ``tanh`` in
+        float32 on the CPU (:mod:`pinnrl.native`); for any other network, on
+        another device, or where the kernel cannot be built, this returns
+        ``None`` and the caller differentiates by autograd.
+        """
+        from pinnrl import native
+
+        layers = getattr(self.model, "layers", None)
+        if not isinstance(self.model, FeedForwardNetwork) or layers is None:
+            return None
+        if x.device.type != "cpu" or x.dtype != torch.float32 or not native.available():
+            return None
+        linears = native.supported_layers(list(layers))
+        if linears is None or linears[0].weight.dtype != torch.float32:
+            return None
+        z, slope = x, None
+        if self.scaled and self._in_lo is not None:
+            z = 2.0 * (x - self._in_lo) / self._in_span - 1.0
+            slope = 2.0 / self._in_span  # dz/dx per input column
+        u, du, d2u = native.mlp_jets(linears, z, first, second)
+        if self.scaled:
+            u = self._out_offset + self._out_scale * u
+            du = {c: self._out_scale * g for c, g in du.items()}
+            d2u = {c: self._out_scale * g for c, g in d2u.items()}
+        if slope is not None:
+            du = {c: g * slope[c] for c, g in du.items()}
+            d2u = {c: g * slope[c] ** 2 for c, g in d2u.items()}
+        return u, du, d2u
