@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 
-from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
+from .base_network import BaseNetwork, ExactLayerNorm, InputType, NetworkConfig, OutputType
 
 
 class ResNetBlock(nn.Module):
@@ -46,11 +46,11 @@ class ResNetBlock(nn.Module):
         # Build the residual block
         self.layers = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim),
+            ExactLayerNorm(hidden_dim),
             self.activation_fn,
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, in_dim),
-            nn.LayerNorm(in_dim),
+            ExactLayerNorm(in_dim),
             nn.Dropout(dropout),
         )
 

@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
+from .base_network import BaseNetwork, ExactLayerNorm, InputType, NetworkConfig, OutputType
 
 
 class SelfAttention(nn.Module):
@@ -38,7 +38,7 @@ class SelfAttention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.dropout = nn.Dropout(dropout)
         self.scale = self.head_dim**-0.5
-        self.layer_norm = nn.LayerNorm(dim)
+        self.layer_norm = ExactLayerNorm(dim)
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass of the layer.
@@ -96,7 +96,7 @@ class FeedForwardBlock(nn.Module):
             nn.Linear(dim * expansion, dim),
             nn.Dropout(dropout),
         )
-        self.layer_norm = nn.LayerNorm(dim)
+        self.layer_norm = ExactLayerNorm(dim)
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass of the block.

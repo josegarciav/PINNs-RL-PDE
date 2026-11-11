@@ -211,7 +211,8 @@ The same heat PINN step (a 4 × 64 `tanh` network, 5,120 points, Adam) written t
 - **`tanh` is the most expensive single operation in PyTorch** here: 2.6 ns an element, twenty times the matrix product next to it, a third of the trainer's step.
 - **Taylor-mode derivatives do not pay in tensor operations** (9.3–12.4 ms against 8.8 for double backward); they pay with fused loops in compiled code.
 - **C++ and Rust are indistinguishable**, 2.4 times faster than the PyTorch step on the same BLAS and five times slower than it without one.
-- **The kernel is in the package:** [`build_trainer(derivatives="native")`](custom_equations.md#a-faster-step-the-compiled-kernel) halves the trainer's step (10.6 → 5.4 ms) with the same loss and gradients to rounding. It is opt-in and, for now, macOS only and for plain `tanh` networks without layer normalization.
+- **The kernel is in the package:** [`build_trainer(derivatives="native")`](custom_equations.md#a-faster-step-the-compiled-kernel) halves the trainer's step (10.6 → 5.4 ms) and, with the packaged network's layer normalization, cuts it threefold (32 → 10.4 ms), with the same loss and gradients to rounding. It is opt-in and, for now, macOS only and for `tanh` feed-forward networks.
+- **A PyTorch defect found on the way:** `torch.nn.LayerNorm` returns a wrong weight gradient for any loss with second derivatives of the network (2–3 % off in norm on this problem, 1–9 % in single directions against finite differences; exact for first-order residuals). The package's networks now use [`ExactLayerNorm`](api/neural_networks.md#neural_networks.base_network.ExactLayerNorm), the same function written in elementary operations, at the same cost.
 
 See `experiments/I11_native_pinn/`.
 

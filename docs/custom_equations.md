@@ -242,11 +242,11 @@ For a plain `tanh` network the derivatives a residual needs can be carried forwa
 
 <!-- doctest: skip -->
 ```python
-trainer = pde.build_trainer("feedforward", model={"layer_norm": False}, derivatives="native")
+trainer = pde.build_trainer("feedforward", derivatives="native")
 print(pde.native_active(trainer.model))      # True where the kernel applies; autograd otherwise
 ```
 
-On the heat problem of experiment [I11](benchmarks.md#the-cost-of-a-training-step-pytorch-c-and-rust-experiment-i11) the step goes from 10.6 to 5.4 ms with the same loss and gradients to rounding. The kernel covers: macOS with a C++ compiler; a feed-forward network of `Linear` and `tanh` without layer normalization, float32 on the CPU; equations given as text, with first and pure second derivatives (`u_x`, `u_t`, `u_xx`, a Laplacian; not `u_xt` or `u_xxx`) and no unknown functions. Anywhere else the residual is computed by autograd, without notice, so the option is safe to leave on. Its weight gradient cannot be differentiated again: the Hessian and sensitivity analyses of `pinnrl.analysis` need the default `derivatives="autograd"`. From the command line: `pinnrl-train --pde-file spec.yaml --derivatives native`.
+On the heat problem of experiment [I11](benchmarks.md#the-cost-of-a-training-step-pytorch-c-and-rust-experiment-i11) the step goes from 32 to 10.4 ms with the packaged network (layer normalization on) and from 10.6 to 5.4 ms without layer normalization, with the same loss and gradients to rounding. The kernel covers: macOS with a C++ compiler; a feed-forward network of `Linear` and `tanh`, with or without `LayerNorm` before each `tanh`, float32 on the CPU; equations given as text, with first and pure second derivatives (`u_x`, `u_t`, `u_xx`, a Laplacian; not `u_xt` or `u_xxx`) and no unknown functions. Anywhere else the residual is computed by autograd, without notice, so the option is safe to leave on. Its weight gradient cannot be differentiated again: the Hessian and sensitivity analyses of `pinnrl.analysis` need the default `derivatives="autograd"`. From the command line: `pinnrl-train --pde-file spec.yaml --derivatives native`.
 
 ## From the command line
 

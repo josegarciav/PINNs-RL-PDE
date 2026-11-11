@@ -47,7 +47,7 @@ The goal is to estimate unknown physics with known validity conditions and calib
 
 - [x] Time breakdown of a step, and the same step in C++ and Rust (I01, I11). *Done: the step is arithmetic (sampling, optimizer and bookkeeping under a tenth); `tanh` and the double-backward passes dominate; a framework-free step on Accelerate takes 3.6 ms in either language against 8.8 ms in PyTorch and 10.6 ms in the trainer.*
 - [x] The kernel in the trainer. *Done: `pinnrl.native` and `build_trainer(derivatives="native")`, 10.6 → 5.4 ms a step on the benchmark problem with the same gradients to rounding; opt-in; macOS, plain `tanh` networks, first and pure second derivatives.*
-- Layer normalization in the kernel, so the packaged default network benefits (I12).
+- [x] Layer normalization in the kernel, so the packaged default network benefits (I12). *Done: 32 → 10.4 ms a step on the default network. The check against autograd exposed a PyTorch defect, a wrong third-order derivative of `nn.LayerNorm` (weight gradients of second-order residuals 2–3 % off); the package's networks now use `ExactLayerNorm`.*
 - Mixed and third- and fourth-order derivatives (KdV, Cahn–Hilliard) (I13).
 - A Linux build on OpenBLAS, tested in CI (I14).
 - One value pass for boundary and initial points; the registry's PDE classes through the kernel (I15).

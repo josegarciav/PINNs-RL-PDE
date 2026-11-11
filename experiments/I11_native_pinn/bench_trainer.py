@@ -38,14 +38,14 @@ STAGES = {  # function name fragments -> stage of the step
 }
 
 
-def make(mode, seed):
+def make(mode, seed, layer_norm=False):
     from pinnrl.pdes.catalog import from_catalog
 
     torch.manual_seed(seed)
     pde = from_catalog("heat")
     trainer = pde.build_trainer(
         "feedforward",
-        model={"hidden_dims": [B.WIDTH] * B.DEPTH, "layer_norm": False},
+        model={"hidden_dims": [B.WIDTH] * B.DEPTH, "layer_norm": layer_norm},
         derivatives=mode,
         num_collocation_points=B.N_COL,
         batch_size=B.N_COL,
@@ -92,16 +92,21 @@ def main():
     rows = []
     for threads in (1, 4):
         torch.set_num_threads(threads)
-        for mode in ("autograd", "native"):
+        for mode, layer_norm in (
+            ("autograd", False),
+            ("native", False),
+            ("autograd", True),
+            ("native", True),
+        ):
             for seed in range(args.seeds):
-                pde, trainer = make(mode, seed)
+                pde, trainer = make(mode, seed, layer_norm)
                 active = pde.native_active(trainer.model)
                 tic = time.perf_counter()
                 trainer.train_steps(num_steps=args.steps, resample_every=1)
                 ms = 1e3 * (time.perf_counter() - tic) / args.steps
                 rows.append(
                     {
-                        "impl": f"pinnrl-{mode}",
+                        "impl": f"pinnrl-{mode}" + (" + layer norm" if layer_norm else ""),
                         "threads": threads,
                         "seed": seed,
                         "steps": args.steps,
@@ -111,7 +116,7 @@ def main():
                     }
                 )
                 print(
-                    f"pinnrl {mode:<8} threads={threads} seed={seed}  {ms:.2f} ms/step  rel L2 {rows[-1]['rel_l2']:.2e}",
+                    f"pinnrl {mode:<8} {'layer norm' if layer_norm else 'plain     '} threads={threads} seed={seed}  {ms:.2f} ms/step  rel L2 {rows[-1]['rel_l2']:.2e}",
                     flush=True,
                 )
     torch.set_num_threads(1)

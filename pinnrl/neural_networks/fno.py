@@ -14,7 +14,7 @@ Equations" (2021), arXiv:2010.08895.
 import torch
 import torch.nn as nn
 
-from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
+from .base_network import BaseNetwork, ExactLayerNorm, InputType, NetworkConfig, OutputType
 
 
 class SpectralConv1d(nn.Module):
@@ -76,7 +76,7 @@ class FNOBlock(nn.Module):
         super().__init__()
         self.spectral = SpectralConv1d(channels, modes)
         self.linear = nn.Linear(channels, channels)
-        self.norm = nn.LayerNorm(channels)
+        self.norm = ExactLayerNorm(channels)
 
         activations = {
             "relu": nn.ReLU(),

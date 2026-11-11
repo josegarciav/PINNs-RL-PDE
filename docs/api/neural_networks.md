@@ -8,6 +8,8 @@
 
 ::: neural_networks.base_network.BaseNetwork
 
+::: neural_networks.base_network.ExactLayerNorm
+
 ## FeedForward
 
 ::: neural_networks.feedforward.FeedForwardNetwork

@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 
-from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
+from .base_network import BaseNetwork, ExactLayerNorm, InputType, NetworkConfig, OutputType
 
 
 class AutoEncoder(BaseNetwork):
@@ -42,7 +42,7 @@ class AutoEncoder(BaseNetwork):
         for hidden_dim in self.hidden_dims:
             self.encoder.append(nn.Linear(prev_dim, hidden_dim))
             if self.use_layer_norm:
-                self.encoder.append(nn.LayerNorm(hidden_dim))
+                self.encoder.append(ExactLayerNorm(hidden_dim))
             self.encoder.append(self._get_activation_module(activation_name))
             if self.dropout_rate > 0.0:
                 self.encoder.append(nn.Dropout(self.dropout_rate))
@@ -55,7 +55,7 @@ class AutoEncoder(BaseNetwork):
         for hidden_dim in reversed(self.hidden_dims):
             self.decoder.append(nn.Linear(prev_dim, hidden_dim))
             if self.use_layer_norm:
-                self.decoder.append(nn.LayerNorm(hidden_dim))
+                self.decoder.append(ExactLayerNorm(hidden_dim))
             self.decoder.append(self._get_activation_module(activation_name))
             if self.dropout_rate > 0.0:
                 self.decoder.append(nn.Dropout(self.dropout_rate))

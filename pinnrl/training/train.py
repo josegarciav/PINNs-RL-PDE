@@ -460,7 +460,7 @@ def main():
         default="autograd",
         help=(
             "With --pde-file: 'native' takes the residual's derivatives from the compiled kernel "
-            "(pinnrl.native: macOS, a feed-forward tanh network without layer norm, CPU, first and "
+            "(pinnrl.native: macOS, a feed-forward tanh network with or without layer norm, CPU, first and "
             "pure second derivatives), about twice as fast per step; autograd wherever it does not apply."
         ),
     )

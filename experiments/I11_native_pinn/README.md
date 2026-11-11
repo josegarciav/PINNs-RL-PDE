@@ -72,4 +72,25 @@ Per element of a 4096 × 64 array: `torch.tanh` 2.6 ns (1.1 ns on 4 threads), `t
 - `PINNModel.jets(x, first, second)` and `PINNModel.native_values`; `Fields(..., jets=...)`; `CustomPDE.build_trainer(derivatives="native")`, `CustomPDE.native_active(model)`; `pinnrl-train --pde-file ... --derivatives native`.
 - Opt-in, so default results are unchanged. Where the kernel does not apply the residual is computed by autograd as before.
 
-**Limits of the kernel, as shipped:** macOS (Accelerate) with a C++ compiler; a feed-forward network of `Linear` and `tanh` without layer normalization (the packaged `feedforward` default has it on: pass `model={"layer_norm": False}`); float32 on the CPU; equations given as text with first and pure second derivatives (not $u_{xt}$, $u_{xxx}$) and no unknown functions; weight gradients once (no Hessian-vector products, so the Hessian and sensitivity analyses of `pinnrl.analysis` need `derivatives="autograd"`). Next steps are on the roadmap: layer normalization and mixed and third derivatives in the kernel, a Linux build on OpenBLAS, one value pass instead of three.
+**Limits of the kernel, as shipped:** macOS (Accelerate) with a C++ compiler; a feed-forward network of `Linear` and `tanh`, with or without `LayerNorm` before each `tanh`; float32 on the CPU; equations given as text with first and pure second derivatives (not $u_{xt}$, $u_{xxx}$) and no unknown functions; weight gradients once (no Hessian-vector products, so the Hessian and sensitivity analyses of `pinnrl.analysis` need `derivatives="autograd"`). Next steps are on the roadmap: mixed and third derivatives in the kernel, a Linux build on OpenBLAS, one value pass instead of three.
+
+## Layer normalization, and a defect in PyTorch's (I12)
+
+The packaged `feedforward` network has `LayerNorm` between each `Linear` and its `tanh`, and layer normalization is expensive to differentiate twice: the trainer's step on the same problem is 32 ms with it against 10.6 ms without (and it reaches 7e-4 where the plain network reaches 2e-3 in the same 2,000 steps). The kernel now carries the derivative streams through the normalization by the quotient rule to second order, with its own reverse pass:
+
+| Trainer, heat benchmark, 1 thread (4 threads) | autograd | `derivatives="native"` |
+|---|---|---|
+| plain `tanh` network | 10.6 (8.3) ms | 5.4 (5.5) ms |
+| packaged default, layer normalization | 32.0 (28.6) ms | **10.4** (10.3) ms |
+
+**Checking that reverse pass against autograd failed, and autograd was the one in error.** The kernel's values, first and second derivatives agreed with PyTorch to 3e-7 and so did the weight gradient of any loss built on values and first derivatives; with a second derivative in the loss the two disagreed by percent. Finite differences in float64 settle it: the gradient of `torch.nn.LayerNorm` (PyTorch 2.10) is wrong at third order, that is, for the weight gradient of a loss containing second derivatives of the network with respect to its inputs.
+
+| Heat residual loss, 4 × 64 `tanh` network with layer normalization, float64 | `nn.LayerNorm` | written out in elementary operations |
+|---|---|---|
+| directional derivative against central differences, five random directions | 0.8–9 % off | 1e-10 to 1e-8 |
+| weight gradient against the written-out version, three seeds | 1.8–3.3 % off in norm, cosine 0.9995–0.9998 | |
+| the same for a first-order residual ($u_t + u_x$) | exact | |
+
+One symptom needs no reference: the gradient with respect to the biases of a normalized layer must sum to zero (the output does not change when a constant is added to the pre-activations), and with `nn.LayerNorm` it does not.
+
+The package's networks now use `pinnrl.neural_networks.ExactLayerNorm`, a subclass of `nn.LayerNorm` whose forward pass is `weight * c * rsqrt(mean(c²) + eps) + bias` with `c = x - mean(x)`: the same values, parameters and checkpoint keys, a gradient that matches finite differences, and the same 32 ms a step under autograd. Earlier runs with the default network on second-order equations followed a descent direction 2–3 % off the true one; nothing suggests their conclusions change, but they are not bit-reproducible after the fix. The defect is PyTorch's and worth reporting upstream; `tests/unit_tests/test_exact_layer_norm.py` reproduces it in twenty lines and will say when it is fixed.

@@ -597,8 +597,8 @@ class CustomPDE(PDEBase):
 
         ``derivatives="native"`` takes the residual's derivatives from the
         compiled kernel of :mod:`pinnrl.native` instead of autograd, about
-        twice as fast per step where it applies: a feed-forward ``tanh``
-        network without layer normalization on the CPU, equations given as
+        two to three times as fast per step where it applies: a feed-forward
+        ``tanh`` network (with or without layer normalization) on the CPU, equations given as
         text with first and pure second derivatives, macOS. Where it does not
         apply the residual falls back to autograd without notice;
         ``pde.native_active(trainer.model)`` says which one runs.

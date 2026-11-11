@@ -11,7 +11,8 @@ PyTorch. Experiment I11 measures the step at roughly half the autograd time on A
 It is opt-in (``pde.build_trainer(..., derivatives="native")``) and narrow by design:
 
 * macOS with the Accelerate framework and a C++ compiler (``clang++``);
-* a feed-forward network of ``Linear`` layers and ``tanh`` only, float32, on the CPU;
+* a feed-forward network of ``Linear`` layers and ``tanh``, with or without ``LayerNorm``
+  before each ``tanh``, float32, on the CPU;
 * first derivatives and pure second derivatives (``u_x``, ``u_t``, ``u_xx``; not ``u_xt`` or
   ``u_xxx``);
 * gradients with respect to the weights only, once (no Hessian-vector products).
@@ -59,13 +60,16 @@ def _load() -> ctypes.CDLL | None:
         _FAILED = "no C++ compiler found (install the Xcode command line tools)"
         return None
     source = _SOURCE.read_bytes()
-    tag = hashlib.sha256(source).hexdigest()[:16]
+    tag = hashlib.sha256(source + b"flags-2").hexdigest()[:16]
     lib_path = _cache_dir() / f"jets-{tag}.dylib"
     if not lib_path.exists():
         lib_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = lib_path.with_suffix(f".{os.getpid()}.tmp")
         cmd = [
             compiler, "-O3", "-mcpu=native", "-std=c++17", "-shared", "-fPIC",
+            # sums may be reordered (so the reductions vectorise); NaN and infinity keep their meaning
+            "-fassociative-math", "-fno-signed-zeros", "-fno-trapping-math", "-fno-math-errno",
+            "-freciprocal-math",
             "-DACCELERATE_NEW_LAPACK", str(_SOURCE), "-framework", "Accelerate", "-o", str(tmp),
         ]  # fmt: skip
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -119,27 +123,35 @@ def _give(buffer: torch.Tensor) -> None:
 
 
 class _Jets(torch.autograd.Function):
-    """``(S N, k)`` output jets of the MLP with weights ``params = (W0, b0, W1, b1, ...)``."""
+    """``(S N, k)`` output jets of the MLP.
+
+    ``params`` are ``(W0, b0, W1, b1, ...)`` followed, with layer normalization,
+    by ``(gamma0, beta0, gamma1, beta1, ...)`` for the hidden layers.
+    """
 
     @staticmethod
-    def forward(ctx, x, first, parent, *params):  # noqa: D102
+    def forward(ctx, x, first, parent, n_layers, eps, *params):  # noqa: D102
         lib = _load()
         assert lib is not None
-        weights = [p.detach().contiguous() for p in params[0::2]]
-        biases = [p.detach().contiguous() for p in params[1::2]]
-        n, n_layers = x.shape[0], len(weights)
+        linear, norm = params[: 2 * n_layers], params[2 * n_layers :]
+        weights = [p.detach().contiguous() for p in linear[0::2]]
+        biases = [p.detach().contiguous() for p in linear[1::2]]
+        gammas = [p.detach().contiguous() for p in norm[0::2]]
+        betas = [p.detach().contiguous() for p in norm[1::2]]
+        n = x.shape[0]
         sizes = [x.shape[1]] + [w.shape[0] for w in weights]
         streams = 1 + len(first) + len(parent)
         c_sizes = _int_array(sizes)
-        work = _take(lib.pinn_jets_work_size(n, n_layers, c_sizes, streams))
+        work = _take(lib.pinn_jets_work_size(n, n_layers, c_sizes, streams, int(bool(gammas))))
         out = torch.empty(streams * n, sizes[-1])
         x = x.detach().contiguous()
         lib.pinn_jets_forward(
             ctypes.c_void_p(x.data_ptr()), n, n_layers, c_sizes, _pointer_array(weights),
             _pointer_array(biases), len(first), _int_array(first), len(parent), _int_array(parent),
-            ctypes.c_void_p(work.data_ptr()), ctypes.c_void_p(out.data_ptr()),
+            _pointer_array(gammas) if gammas else None, _pointer_array(betas) if gammas else None,
+            ctypes.c_float(eps), ctypes.c_void_p(work.data_ptr()), ctypes.c_void_p(out.data_ptr()),
         )  # fmt: skip
-        ctx.jet_state = (work, weights, sizes, n, tuple(first), tuple(parent))
+        ctx.jet_state = (work, weights, gammas, eps, sizes, n, tuple(first), tuple(parent))
         return out
 
     @staticmethod
@@ -147,49 +159,77 @@ class _Jets(torch.autograd.Function):
     def backward(ctx, grad_out):  # noqa: D102
         lib = _load()
         assert lib is not None
-        work, weights, sizes, n, first, parent = ctx.jet_state
+        work, weights, gammas, eps, sizes, n, first, parent = ctx.jet_state
         streams = 1 + len(first) + len(parent)
         grad_w = [torch.empty_like(w) for w in weights]
         grad_b = [torch.empty(w.shape[0]) for w in weights]
+        grad_gamma = [torch.empty_like(g) for g in gammas]
+        grad_beta = [torch.empty_like(g) for g in gammas]
         scratch = _take(2 * streams * n * max(sizes))
         grad_out = grad_out.contiguous()
         lib.pinn_jets_backward(
             n, len(weights), _int_array(sizes), _pointer_array(weights), len(first), len(parent),
-            _int_array(parent), ctypes.c_void_p(work.data_ptr()),
-            ctypes.c_void_p(grad_out.data_ptr()), _pointer_array(grad_w), _pointer_array(grad_b),
-            ctypes.c_void_p(scratch.data_ptr()),
+            _int_array(parent), _pointer_array(gammas) if gammas else None, ctypes.c_float(eps),
+            ctypes.c_void_p(work.data_ptr()), ctypes.c_void_p(grad_out.data_ptr()),
+            _pointer_array(grad_w), _pointer_array(grad_b),
+            _pointer_array(grad_gamma) if gammas else None,
+            _pointer_array(grad_beta) if gammas else None, ctypes.c_void_p(scratch.data_ptr()),
         )  # fmt: skip
         _give(scratch)
         _give(work)
         ctx.jet_state = None
-        grads: list[torch.Tensor | None] = [None, None, None]
+        grads: list[torch.Tensor | None] = [None, None, None, None, None]
         for gw, gb in zip(grad_w, grad_b, strict=True):
             grads += [gw, gb]
+        for gg, gb in zip(grad_gamma, grad_beta, strict=True):
+            grads += [gg, gb]
         return tuple(grads)
 
 
-def supported_layers(layers: Sequence[torch.nn.Module]) -> list[torch.nn.Linear] | None:
-    """The ``Linear`` layers of a ``Linear, Tanh, ..., Linear`` stack, or ``None`` for anything else.
+def supported_stack(
+    layers: Sequence[torch.nn.Module],
+) -> tuple[list[torch.nn.Linear], list[torch.nn.LayerNorm]] | None:
+    """The layers of a ``Linear, [LayerNorm,] Tanh, ..., Linear`` stack, or ``None`` for anything else.
 
+    Returns the ``Linear`` layers and the ``LayerNorm`` layers (one per hidden
+    layer, or none at all; all with affine parameters and the same ``eps``).
     Dropout with probability zero and identity modules are ignored.
     """
     linears: list[torch.nn.Linear] = []
-    expect_linear = True
+    norms: list[torch.nn.LayerNorm] = []
+    state = "linear"  # what must come next: linear, then (norm or tanh)
     for layer in layers:
         if isinstance(layer, torch.nn.Identity) or (
             isinstance(layer, torch.nn.Dropout) and layer.p == 0.0
         ):
             continue
-        if expect_linear and isinstance(layer, torch.nn.Linear) and layer.bias is not None:
+        if state == "linear" and isinstance(layer, torch.nn.Linear) and layer.bias is not None:
             linears.append(layer)
-        elif not expect_linear and isinstance(layer, torch.nn.Tanh):
-            pass
+            state = "after-linear"
+        elif (
+            state == "after-linear"
+            and isinstance(layer, torch.nn.LayerNorm)
+            and layer.elementwise_affine
+            and layer.bias is not None
+            and tuple(layer.normalized_shape) == (linears[-1].out_features,)
+        ):
+            norms.append(layer)
+            state = "after-norm"
+        elif state in ("after-linear", "after-norm") and isinstance(layer, torch.nn.Tanh):
+            state = "linear"
         else:
             return None
-        expect_linear = not expect_linear
-    if not linears or expect_linear:  # must end on a Linear
+    if not linears or state != "after-linear":  # must end on a Linear
         return None
-    return linears
+    if norms and (len(norms) != len(linears) - 1 or len({m.eps for m in norms}) != 1):
+        return None
+    return linears, norms
+
+
+def supported_layers(layers: Sequence[torch.nn.Module]) -> list[torch.nn.Linear] | None:
+    """The ``Linear`` layers of a stack the kernel covers (see :func:`supported_stack`), or ``None``."""
+    stack = supported_stack(layers)
+    return None if stack is None else stack[0]
 
 
 def mlp_jets(
@@ -197,6 +237,7 @@ def mlp_jets(
     x: torch.Tensor,
     first: Sequence[int] = (),
     second: Sequence[int] = (),
+    norms: Sequence[torch.nn.LayerNorm] = (),
 ) -> tuple[torch.Tensor, dict[int, torch.Tensor], dict[int, torch.Tensor]]:
     """Value and derivatives of a tanh MLP at ``x`` through the compiled kernel.
 
@@ -205,6 +246,7 @@ def mlp_jets(
         x: Inputs, ``(N, d)``, float32 on the CPU; treated as data (no gradient flows to it).
         first: Input columns to differentiate once.
         second: Input columns to differentiate twice (each is added to ``first`` if missing).
+        norms: The ``LayerNorm`` after each hidden ``Linear`` (before its ``tanh``), or none.
 
     Returns:
         ``(u, du, d2u)``: the output ``(N, k)``, ``{column: du/dx_column}`` and
@@ -213,17 +255,23 @@ def mlp_jets(
     Raises:
         RuntimeError: When the kernel is not available (see :func:`unavailable_reason`) or the
             input is not float32 on the CPU.
+        ValueError: When ``norms`` does not have one entry per hidden layer.
     """
     if not available():
         raise RuntimeError(unavailable_reason())
     if x.dtype != torch.float32 or x.device.type != "cpu":
         raise RuntimeError("the native kernel needs float32 inputs on the CPU")
+    if norms and len(norms) != len(linears) - 1:
+        raise ValueError("norms needs one LayerNorm per hidden layer")
     first_cols = list(dict.fromkeys([*first, *second]))
     parent = [first_cols.index(c) for c in second]
     params: list[torch.Tensor] = []
     for lin in linears:
         params += [lin.weight, lin.bias]
-    out = _Jets.apply(x, tuple(first_cols), tuple(parent), *params)
+    for norm in norms:
+        params += [norm.weight, norm.bias]
+    eps = float(norms[0].eps) if norms else 0.0
+    out = _Jets.apply(x, tuple(first_cols), tuple(parent), len(linears), eps, *params)
     n = x.shape[0]
     u = out[:n]
     du = {c: out[(1 + i) * n : (2 + i) * n] for i, c in enumerate(first_cols)}
@@ -234,4 +282,4 @@ def mlp_jets(
     return u, du, d2u
 
 
-__all__ = ["available", "mlp_jets", "supported_layers", "unavailable_reason"]
+__all__ = ["available", "mlp_jets", "supported_layers", "supported_stack", "unavailable_reason"]

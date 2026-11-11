@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from pinnrl import CustomPDE, native
+from pinnrl.neural_networks import ExactLayerNorm
 from pinnrl.pdes.catalog import from_catalog
 
 pytestmark = pytest.mark.skipif(not native.available(), reason=str(native.unavailable_reason()))
@@ -25,18 +26,18 @@ def _mlp(sizes, seed=0):
     return [torch.nn.Linear(a, b) for a, b in zip(sizes[:-1], sizes[1:], strict=True)]
 
 
-def _forward(linears, x):
+def _forward(linears, x, norms=()):
     h = x
     for k, lin in enumerate(linears):
         h = lin(h)
         if k < len(linears) - 1:
-            h = torch.tanh(h)
+            h = torch.tanh(norms[k](h) if norms else h)
     return h
 
 
-def _autograd_jets(linears, x, first, second):
+def _autograd_jets(linears, x, first, second, norms=()):
     x = x.clone().requires_grad_(True)
-    u = _forward(linears, x)
+    u = _forward(linears, x, norms)
     grads = [torch.autograd.grad(u[:, j].sum(), x, create_graph=True)[0] for j in range(u.shape[1])]
     du = {c: torch.stack([g[:, c] for g in grads], 1) for c in first}
     d2u = {
@@ -78,6 +79,41 @@ def test_jets_and_weight_gradients_match_autograd():
         assert torch.allclose(g, lin_p.grad, rtol=2e-3, atol=2e-4)
 
 
+def test_layer_normalization_jets_and_gradients_match_autograd():
+    linears = _mlp([3, 16, 12, 2])
+    norms = [ExactLayerNorm(16), ExactLayerNorm(12)]
+    with torch.no_grad():
+        for m in norms:
+            m.weight.add_(0.3 * torch.randn_like(m.weight))
+            m.bias.add_(0.3 * torch.randn_like(m.bias))
+    x = torch.rand(40, 3)
+    u, du, d2u = native.mlp_jets(linears, x, first=[0, 2], second=[2, 1], norms=norms)
+    ur, dur, d2ur = _autograd_jets(linears, x, [0, 1, 2], [2, 1], norms)
+    assert torch.allclose(u, ur, atol=1e-5)
+    assert all(torch.allclose(du[c], dur[c], atol=1e-4) for c in du)
+    assert all(torch.allclose(d2u[c], d2ur[c], atol=1e-3) for c in d2u)
+    weights = [torch.randn(40, 2) for _ in range(4)]
+
+    def functional(u, du, d2u):
+        return (
+            (weights[0] * u).sum()
+            + (weights[1] * du[0] * du[2]).sum()
+            + (weights[2] * d2u[2]).sum()
+            + (weights[3] * d2u[1] * u).sum()
+        )
+
+    modules = [*linears, *norms]
+    functional(u, du, d2u).backward()
+    got = [p.grad.clone() for m in modules for p in m.parameters()]
+    for m in modules:
+        m.zero_grad()
+    functional(ur, dur, d2ur).backward()
+    for g, p in zip(got, [p for m in modules for p in m.parameters()], strict=True):
+        assert torch.allclose(g, p.grad, rtol=5e-3, atol=5e-4)
+    with pytest.raises(ValueError, match="one LayerNorm per hidden layer"):
+        native.mlp_jets(linears, x, norms=norms[:1])
+
+
 def test_value_only_and_validation():
     linears = _mlp([2, 8, 1])
     x = torch.rand(10, 2)
@@ -94,13 +130,19 @@ def test_value_only_and_validation():
     assert (
         native.supported_layers([lin(2, 4), torch.nn.Dropout(0.0), tanh(), lin(4, 1)]) is not None
     )
-    assert native.supported_layers([lin(2, 4), torch.nn.LayerNorm(4), tanh(), lin(4, 1)]) is None
+    stack = native.supported_stack([lin(2, 4), torch.nn.LayerNorm(4), tanh(), lin(4, 1)])
+    assert stack is not None and len(stack[1]) == 1
+    assert native.supported_stack([lin(2, 4), torch.nn.LayerNorm(4), lin(4, 1)]) is None
+    plain = torch.nn.LayerNorm(4, elementwise_affine=False)
+    assert native.supported_stack([lin(2, 4), plain, tanh(), lin(4, 1)]) is None
+    mixed = [lin(2, 4), torch.nn.LayerNorm(4), tanh(), lin(4, 4), tanh(), lin(4, 1)]
+    assert native.supported_stack(mixed) is None  # a norm on some hidden layers only
     assert native.supported_layers([lin(2, 4), torch.nn.ReLU(), lin(4, 1)]) is None
     assert native.supported_layers([lin(2, 4), tanh()]) is None
     assert native.supported_layers([lin(2, 4), torch.nn.Dropout(0.1), tanh(), lin(4, 1)]) is None
 
 
-def _pair(pde_factory, **kwargs):
+def _pair(pde_factory, layer_norm=False, **kwargs):
     """The same problem and network with autograd and with the kernel."""
     out = []
     for mode in ("autograd", "native"):
@@ -108,7 +150,7 @@ def _pair(pde_factory, **kwargs):
         pde = pde_factory()
         trainer = pde.build_trainer(
             "feedforward",
-            model={"hidden_dims": [16, 16], "layer_norm": False},
+            model={"hidden_dims": [16, 16], "layer_norm": layer_norm},
             derivatives=mode,
             **SETTINGS,
             **kwargs,
@@ -117,8 +159,9 @@ def _pair(pde_factory, **kwargs):
     return out
 
 
-def test_heat_residual_loss_and_gradients_agree_with_autograd():
-    (pde_a, tr_a), (pde_n, tr_n) = _pair(lambda: from_catalog("heat"))
+@pytest.mark.parametrize("layer_norm", [False, True])
+def test_heat_residual_loss_and_gradients_agree_with_autograd(layer_norm):
+    (pde_a, tr_a), (pde_n, tr_n) = _pair(lambda: from_catalog("heat"), layer_norm=layer_norm)
     assert pde_n.native_active(tr_n.model) and not pde_a.native_active(tr_a.model)
     x, t = torch.rand(100, 1), torch.rand(100, 1)
     r_a, r_n = pde_a.compute_residual(tr_a.model, x, t), pde_n.compute_residual(tr_n.model, x, t)
@@ -182,7 +225,7 @@ def test_falls_back_to_autograd_where_the_kernel_does_not_apply():
 
     x, t = torch.rand(20, 1), torch.rand(20, 1)
     heat = from_catalog("heat")
-    trainer = build(heat, layer_norm=True)  # the packaged default network
+    trainer = build(heat, layer_norm=False, activation="gelu")
     assert not heat.native_active(trainer.model)
     assert torch.isfinite(heat.compute_residual(trainer.model, x, t)).all()
     kdv = CustomPDE("u_t + 6*u*u_x + u_xxx", domain={"x": (0, 1), "t": (0, 1)})  # third order

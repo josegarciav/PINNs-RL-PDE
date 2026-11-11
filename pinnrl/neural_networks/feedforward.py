@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 
-from .base_network import BaseNetwork, InputType, NetworkConfig, OutputType
+from .base_network import BaseNetwork, ExactLayerNorm, InputType, NetworkConfig, OutputType
 
 
 class FeedForwardNetwork(BaseNetwork):
@@ -40,7 +40,7 @@ class FeedForwardNetwork(BaseNetwork):
         for hidden_dim in self.hidden_dims:
             layers.append(nn.Linear(prev_dim, hidden_dim))
             if self.use_layer_norm:
-                layers.append(nn.LayerNorm(hidden_dim))
+                layers.append(ExactLayerNorm(hidden_dim))
             # A fresh activation module per layer
             layers.append(self._get_activation_module(activation_name))
             if self.dropout_rate > 0.0:
