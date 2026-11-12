@@ -1,0 +1,2901 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Physics-informed neural networks for forward and inverse PDE problems, evaluated against numerical references">
+      
+      
+      
+        <link rel="canonical" href="https://josegarciav.github.io/PINNs-RL-PDE/benchmarks/">
+      
+      
+        <link rel="prev" href="../dashboard/">
+      
+      
+        <link rel="next" href="../applications/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Benchmarks - pinnrl</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#benchmarks" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="pinnrl" class="md-header__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            pinnrl
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Benchmarks
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../getting_started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../concepts/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Concepts
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../equations/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Equations
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../theory/" class="md-tabs__link">
+          
+  
+  
+  Theory
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../custom_equations/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../applications/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Applications
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../research/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Research program
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+  API reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="pinnrl" class="md-nav__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    pinnrl
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Theory
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/well_posedness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Well-posedness and stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/identifiability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identifiability and conditioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/bayesian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Bayesian view and uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/numerical_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The numerical-analysis bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/equivalence_regions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equivalence regions and swarm sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../custom_equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Custom equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inverse_problems/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverse problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../process_twins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process twins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets (The Well)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#classical-baselines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classical baselines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference solutions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-study-experiments-b01-and-b06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling study (experiments B01 and B06)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#identification-baseline-experiment-f01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identification baseline (experiment F01)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conditioning-diagnostics-experiment-k01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditioning diagnostics (experiment K01)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#training-conditioning-experiment-k03" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training conditioning (experiment K03)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#disturbance-and-stability-experiments-k05k07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disturbance and stability (experiments K05–K07)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calibrated-uncertainty-experiments-f06-k10-k39-k46" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calibrated uncertainty (experiments F06, K10, K39, K46)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-follow-ups-experiments-b02-b03-b04-b08" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling follow-ups (experiments B02, B03, B04, B08)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-valued-unknowns-experiment-f09" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field-valued unknowns (experiment F09)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sensor-layout-vs-conditioning-experiment-k02" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sensor layout vs conditioning (experiment K02)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dimension-scaling-experiment-k08" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dimension scaling (experiment K08)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reduced-bases-for-field-unknowns-experiment-k48" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reduced bases for field unknowns (experiment K48)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimizers-and-the-floor-experiments-d01-d02" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimizers and the floor (experiments D01, D02)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-swarm-as-a-posterior-sample-experiment-k47" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The swarm as a posterior sample (experiment K47)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#parametric-surrogate-as-the-forward-emulator-experiment-k45" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parametric surrogate as the forward emulator (experiment K45)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-cost-of-a-training-step-pytorch-c-and-rust-experiment-i11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The cost of a training step: PyTorch, C++ and Rust (experiment I11)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-evaporator-reference-and-its-pinn-experiments-j01-j02" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The evaporator reference and its PINN (experiments J01, J02)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#change-point-identification-experiment-f11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Change-point identification (experiment F11)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fouling-from-outlet-sensors-identifiability-experiment-j04" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fouling from outlet sensors: identifiability (experiment J04)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fouling-estimation-experiment-j03" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fouling estimation (experiment J03)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linearized-stability-experiment-k09" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linearized stability (experiment K09)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-kalman-filter-baseline-experiment-j05" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A Kalman-filter baseline (experiment J05)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#moving-horizon-estimation-experiment-j05b" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Moving-horizon estimation (experiment J05b)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calibrated-fouling-intervals-experiment-j06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calibrated fouling intervals (experiment J06)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#measurement-design-for-the-fouling-estimate-experiment-j09" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measurement design for the fouling estimate (experiment J09)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-drying-droplet-and-its-closure-experiment-j07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A drying droplet and its closure (experiment J07)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-closure-at-dryer-scale-experiment-j11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The closure at dryer scale (experiment J11)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-soft-sensor-for-the-stickiness-margin-experiment-j08" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A soft sensor for the stickiness margin (experiment J08)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#measurement-and-campaign-design-for-the-dryer-experiment-j12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measurement and campaign design for the dryer (experiment J12)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#time-marching-windows-experiment-h04" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time-marching windows (experiment H04)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../applications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Applications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research program
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/neural_networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neural networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/pdes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDEs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/native/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native kernel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/rl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL sampler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/plots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/uq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#classical-baselines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classical baselines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference solutions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-study-experiments-b01-and-b06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling study (experiments B01 and B06)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#identification-baseline-experiment-f01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identification baseline (experiment F01)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conditioning-diagnostics-experiment-k01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditioning diagnostics (experiment K01)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#training-conditioning-experiment-k03" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training conditioning (experiment K03)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#disturbance-and-stability-experiments-k05k07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disturbance and stability (experiments K05–K07)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calibrated-uncertainty-experiments-f06-k10-k39-k46" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calibrated uncertainty (experiments F06, K10, K39, K46)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-follow-ups-experiments-b02-b03-b04-b08" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling follow-ups (experiments B02, B03, B04, B08)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-valued-unknowns-experiment-f09" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field-valued unknowns (experiment F09)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sensor-layout-vs-conditioning-experiment-k02" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sensor layout vs conditioning (experiment K02)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dimension-scaling-experiment-k08" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dimension scaling (experiment K08)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reduced-bases-for-field-unknowns-experiment-k48" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reduced bases for field unknowns (experiment K48)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimizers-and-the-floor-experiments-d01-d02" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimizers and the floor (experiments D01, D02)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-swarm-as-a-posterior-sample-experiment-k47" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The swarm as a posterior sample (experiment K47)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#parametric-surrogate-as-the-forward-emulator-experiment-k45" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parametric surrogate as the forward emulator (experiment K45)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-cost-of-a-training-step-pytorch-c-and-rust-experiment-i11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The cost of a training step: PyTorch, C++ and Rust (experiment I11)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-evaporator-reference-and-its-pinn-experiments-j01-j02" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The evaporator reference and its PINN (experiments J01, J02)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#change-point-identification-experiment-f11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Change-point identification (experiment F11)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fouling-from-outlet-sensors-identifiability-experiment-j04" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fouling from outlet sensors: identifiability (experiment J04)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fouling-estimation-experiment-j03" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fouling estimation (experiment J03)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linearized-stability-experiment-k09" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linearized stability (experiment K09)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-kalman-filter-baseline-experiment-j05" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A Kalman-filter baseline (experiment J05)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#moving-horizon-estimation-experiment-j05b" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Moving-horizon estimation (experiment J05b)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calibrated-fouling-intervals-experiment-j06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calibrated fouling intervals (experiment J06)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#measurement-design-for-the-fouling-estimate-experiment-j09" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measurement design for the fouling estimate (experiment J09)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-drying-droplet-and-its-closure-experiment-j07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A drying droplet and its closure (experiment J07)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-closure-at-dryer-scale-experiment-j11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The closure at dryer scale (experiment J11)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-soft-sensor-for-the-stickiness-margin-experiment-j08" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A soft sensor for the stickiness margin (experiment J08)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#measurement-and-campaign-design-for-the-dryer-experiment-j12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measurement and campaign design for the dryer (experiment J12)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#time-marching-windows-experiment-h04" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time-marching windows (experiment H04)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="benchmarks">Benchmarks<a class="headerlink" href="#benchmarks" title="Permanent link">&para;</a></h1>
+<p><code>pinnrl-benchmark</code> has two parts: classical baselines, so PINN accuracy has a reference point, and a multi-seed study that compares collocation samplers fairly. Every number below can be reproduced with the commands shown.</p>
+<h2 id="classical-baselines">Classical baselines<a class="headerlink" href="#classical-baselines" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pinnrl-benchmark<span class="w"> </span>fdm<span class="w"> </span>--pde<span class="w"> </span>heat<span class="w">     </span><span class="c1"># explicit finite differences, periodic 1-D heat</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pinnrl-benchmark<span class="w"> </span>fdm<span class="w"> </span>--pde<span class="w"> </span>wave<span class="w">     </span><span class="c1"># leap-frog, periodic 1-D travelling wave</span>
+</code></pre></div>
+<p>Both report the relative L2 error at the final time against the analytical solution, plus the maximum error and the wall time. On the default heat problem (<span class="arithmatex">\(\alpha = 0.1\)</span>, <span class="arithmatex">\(u_0 = \sin 2\pi x\)</span>, 101 points), the explicit scheme reaches a relative L2 error of about <span class="arithmatex">\(7 \times 10^{-4}\)</span> in about 30 ms. The convergence is second order: doubling the points at a fixed diffusion number cuts the error about four-fold. That's the bar a PINN is measured against on forward problems.</p>
+<h2 id="reference-solutions">Reference solutions<a class="headerlink" href="#reference-solutions" title="Permanent link">&para;</a></h2>
+<p>When there is no closed form, PINNs are scored against high-accuracy numerical references (<code>pinnrl.benchmarks.reference</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Reference</th>
+<th>Method</th>
+<th>Verification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>burgers_reference</code></td>
+<td>Cole–Hopf integral evaluated by a log-sum-exp trapezoid rule</td>
+<td>Reproduces Basdevant et al. (1986): <span class="arithmatex">\(u_x(0, 1.6037/\pi) = -152.00516\)</span> for <span class="arithmatex">\(\nu = 0.01/\pi\)</span>; agrees with a fine finite-difference solve to <span class="arithmatex">\(7 \times 10^{-5}\)</span></td>
+</tr>
+<tr>
+<td><code>allen_cahn_reference</code></td>
+<td>Second-order finite differences plus adaptive Runge–Kutta (method of lines) on a grid 8× finer than the output</td>
+<td>Grid-converged: doubling the solver grid changes the field by less than <span class="arithmatex">\(10^{-5}\)</span> (relative)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sampling-study-experiments-b01-and-b06">Sampling study (experiments B01 and B06)<a class="headerlink" href="#sampling-study-experiments-b01-and-b06" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pinnrl-benchmark<span class="w"> </span>sampling<span class="w"> </span>--seeds<span class="w"> </span><span class="m">10</span><span class="w"> </span>--steps<span class="w"> </span><span class="m">15000</span><span class="w"> </span>--checkpoints<span class="w"> </span><span class="m">50</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">4</span>
+</code></pre></div>
+<p><strong>Setup:</strong>
+- The Burgers (<span class="arithmatex">\(\nu = 0.01/\pi\)</span>) and Allen–Cahn (<span class="arithmatex">\(u_t = 0.001\,u_{xx} + 5(u - u^3)\)</span>, <span class="arithmatex">\(u_0 = x^2\cos\pi x\)</span>) benchmarks.
+- A tanh MLP (4 × 64) trained for 15,000 Adam steps on 1,000 points, with 10 paired seeds (identical initial weights across samplers).
+- Five samplers:
+  - uniform and stratified, with fresh points every step;
+  - uniform refreshed every 100 steps, a control for how often points change;
+  - RAD (k = 1, c = 1) and the RL bandit, also every 100 steps.
+- Each run records the relative L2 error and the residual evaluations spent, including the sampler's own (RAD +20 %, bandit +0.3 %). Samplers are compared at equal steps (B01) and at equal total evaluations (B06).</p>
+<p><img alt="B01 sampling study" src="../assets/benchmarks/b01_sampling.png" /></p>
+<table>
+<thead>
+<tr>
+<th>PDE</th>
+<th>Sampler</th>
+<th>Rel. L2, equal steps</th>
+<th>vs uniform (paired)</th>
+<th>Rel. L2, equal evaluations</th>
+<th>vs uniform</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Burgers</td>
+<td>uniform</td>
+<td>0.055</td>
+<td>–</td>
+<td>0.055</td>
+<td>–</td>
+</tr>
+<tr>
+<td></td>
+<td>stratified</td>
+<td>0.038</td>
+<td>6/10, p = 0.63</td>
+<td>0.038</td>
+<td>6/10, p = 0.63</td>
+</tr>
+<tr>
+<td></td>
+<td>RAD</td>
+<td>0.136</td>
+<td>3/10, p = 0.11</td>
+<td>0.090</td>
+<td>2/10, p = 0.06</td>
+</tr>
+<tr>
+<td></td>
+<td>RL bandit</td>
+<td>0.117</td>
+<td>1/10, p = 0.06</td>
+<td>0.105</td>
+<td>2/10, <strong>p = 0.01 (worse)</strong></td>
+</tr>
+<tr>
+<td>Allen–Cahn</td>
+<td>uniform</td>
+<td>0.568</td>
+<td>–</td>
+<td>0.568</td>
+<td>–</td>
+</tr>
+<tr>
+<td></td>
+<td>RAD</td>
+<td>0.533</td>
+<td><strong>10/10, p = 0.002</strong></td>
+<td>0.547</td>
+<td><strong>10/10, p = 0.002</strong></td>
+</tr>
+<tr>
+<td></td>
+<td>RL bandit</td>
+<td>0.520</td>
+<td><strong>10/10, p = 0.002</strong></td>
+<td>0.518</td>
+<td><strong>10/10, p = 0.002</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Errors are medians over 10 seeds; "6/10" counts the seeds on which the sampler beat uniform; p is from a Wilcoxon signed-rank test.</p>
+<p><strong>What this says:</strong></p>
+<ul>
+<li><strong>Burgers.</strong> No sampler is significantly better than uniform. Seed-to-seed variation (6×) and optimizer noise (the error moves 1.7× between checkpoints at a constant learning rate) swamp any sampling effect. Charged its probe cost, the bandit is significantly worse.</li>
+<li><strong>Allen–Cahn.</strong> Adaptive samplers win on every seed and the bandit gets there with about 40 % fewer evaluations early on. But every method stays stuck near the wrong solution (relative error above 0.5).</li>
+<li><strong>Recommendation:</strong> use <code>uniform</code> (or <code>stratified</code>) by default. Use <code>residual_based</code> (RAD) when the solution has sharp features, and measure it against uniform at equal budget. Treat <code>--rl</code> as experimental.</li>
+</ul>
+<p>The full write-up, with IQRs, the same-cadence control and the follow-ups it motivates (optimizer settling, resampling frequency, Allen–Cahn failure modes), is in <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B01_sampling_equal_compute"><code>experiments/B01_sampling_equal_compute</code></a>.</p>
+<h2 id="identification-baseline-experiment-f01">Identification baseline (experiment F01)<a class="headerlink" href="#identification-baseline-experiment-f01" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python<span class="w"> </span>experiments/F01_heat_alpha_recovery/run.py<span class="w"> </span>--seeds<span class="w"> </span><span class="m">10</span><span class="w"> </span>--steps<span class="w"> </span><span class="m">5000</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">4</span>
+</code></pre></div>
+<p>The diffusivity of the 1-D heat equation (<span class="arithmatex">\(\alpha = 0.1\)</span>, started at 0.5) is identified from 20 to 1,000 noisy observations of the exact solution, for noise standard deviations from 0 to 0.1, on 10 seeds. The <code>heat</code> entry of the <a href="../custom_equations/#the-catalogue">catalogue</a> is used with <code>alpha</code> trainable; a 4 × 64 MLP trains for 5,000 Adam steps with loss weights residual / BC / IC / data = 1 / 10 / 10 / 10.</p>
+<p><img alt="F01 clean" src="../assets/benchmarks/f01_heat_alpha_clean.png" /></p>
+<table>
+<thead>
+<tr>
+<th>Noise σ</th>
+<th><span class="arithmatex">\(N_{\text{obs}}\)</span> = 20</th>
+<th>50</th>
+<th>200</th>
+<th>1000</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>0.0010</td>
+<td>0.0015</td>
+<td>0.0017</td>
+<td>0.0018</td>
+</tr>
+<tr>
+<td>0.01</td>
+<td>0.0098</td>
+<td>0.0073</td>
+<td>0.0024</td>
+<td>0.0022</td>
+</tr>
+<tr>
+<td>0.05</td>
+<td>0.024</td>
+<td>0.028</td>
+<td>0.011</td>
+<td>0.0052</td>
+</tr>
+<tr>
+<td>0.1</td>
+<td>0.044</td>
+<td>0.055</td>
+<td>0.016</td>
+<td>0.010</td>
+</tr>
+</tbody>
+</table>
+<p>Median relative error of <span class="arithmatex">\(\hat\alpha\)</span> over 10 seeds, with the network's weight decay and gradient clipping off (<code>--clean</code>, 2026-11-04). The first run, with the packaged regularization, gave 0.015–0.027 in the first two rows and 0.020–0.055 in the last two (<a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F01_heat_alpha_recovery">the table is in the experiment folder</a>).</p>
+<p><strong>What this says:</strong></p>
+<ul>
+<li><strong>The 2 % floor was the regularization.</strong> With the packaged weight decay and gradient clipping, clean data gave 1.5–2 % whatever the number of observations, every seed at <span class="arithmatex">\(\hat\alpha \approx 0.098\)</span>. With both off the same Adam run lands at 0.1–0.2 % with a field error of 0.2 %, and the median error over the grid falls from 2.2 % to 0.6 %. The defaults that help a forward fit are priors on the surrogate that the parameter absorbs; inverse runs start from <code>weight_decay=0</code>, <code>gradient_clipping=0</code>.</li>
+<li><strong>Near-efficient from the floor up.</strong> For σ ≥ 0.01 the spread of <span class="arithmatex">\(\hat\alpha\)</span> across seeds matches the Cramér–Rao bound from the same points to within about 20 % in most cells, and the error now falls with <span class="arithmatex">\(N\)</span> along the bound (σ = 0.01: 1.0 %, 0.7 %, 0.24 %, 0.22 % against 1.1 %, 0.7 %, 0.35 %, 0.16 %), so the Fisher information predicts how many sensors a target accuracy needs.</li>
+<li><strong>Few noisy points bias low, regularized or not.</strong> At 20 points the bias is −3.5 % and −8 % at σ = 0.05 and 0.1 in the clean run: the physics loss prefers a smoother, slower-diffusing field when the fixed data weight ignores the noise level (K39).</li>
+<li><strong>Field error does not predict parameter error.</strong> The field error spans 0.2–3 % and the parameter error 0.1–5.5 %, with one seed at 22 % for a field error of 3 %.</li>
+</ul>
+<p>The full write-up, with IQRs, the spread against the bound per cell, and the follow-ups (the floor after optimizer settling, K01 Fisher information, K39 likelihood weighting), is in <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F01_heat_alpha_recovery"><code>experiments/F01_heat_alpha_recovery</code></a>.</p>
+<p><strong>Initial guess (experiment F04).</strong> Ten starting values from 0.1× to 10× the truth, on one data set per seed (200 observations, noise 0.05). For a fixed data set the ten starts land within 0.3 % of each other, six times less than the spread across seeds; the two seeds that end 5–7 % low do so for every start. Starts far above the truth settle in 700–900 steps, sooner than starts near it. The estimate is a function of the data, not of the guess. Write-up: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F04_initial_guess"><code>experiments/F04_initial_guess</code></a>.</p>
+<p><strong>Fixed sensors (experiment F05).</strong> Plant-like data: 1, 2, 4 or 8 probes at fixed positions read at regular times, against random scatter, all with 200 observations. One probe at mid-domain has the lowest Cramér–Rao bound (1.2 % at noise 0.05 against 1.7 % for scatter) and the PINN delivers it (median error 1.1 % against 1.9 %), because the information about α sits at mid-domain and late times. Spreading the same readings over 8 positions raises the bound and the measured spread alike. Dense time series also halve the low-noise bias. Write-up: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F05_fixed_sensors"><code>experiments/F05_fixed_sensors</code></a>.</p>
+<h2 id="conditioning-diagnostics-experiment-k01">Conditioning diagnostics (experiment K01)<a class="headerlink" href="#conditioning-diagnostics-experiment-k01" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>python<span class="w"> </span>experiments/K01_fisher_information/run.py<span class="w"> </span>--seeds<span class="w"> </span><span class="m">3</span>
+</code></pre></div>
+<p><code>pinnrl.analysis.surrogate_sensitivities</code> computes <span class="arithmatex">\(\partial u / \partial\theta\)</span> from a trained network by the implicit-function theorem (matrix-free Hessian blocks, a MINRES solve), and <code>fisher_information</code> turns it into the Cramér–Rao bound. K01 checks this against the exact layer: on heat and the two-parameter KdV soliton the bounds, the α–β correlation and the condition number agree to 1–4 % (Jacobians to 2–6 %). On Burgers at <span class="arithmatex">\(\nu = 0.01/\pi\)</span> the network smooths the shock and its bound is 2–25× too optimistic. The surrogate's Fisher information is trusted only where its forward error is small compared with the feature the parameter acts on, and the field error is reported next to it. Write-up: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K01_fisher_information"><code>experiments/K01_fisher_information</code></a>; the live demo is in <code>notebooks/07_conditioning.ipynb</code>.</p>
+<p><strong>Two parameters, and a shock (experiments F02, F03).</strong> For the KdV soliton with two coefficients the bound says 200 clean points determine (α, β) to 0.6 % and 1.4 %; the PINN returns them 18 % and 25 % low on every seed, and a run started at the truth drifts to the same point: the minimum of the PINN loss is not at the truth, because the network cannot zero the third-derivative residual of the true soliton. A tenfold data weight halves the bias. For the Burgers viscosity at ν = 0.01/π the network resolves a shock several times wider than the real one and reports a viscosity 2.5–5× too large, still falling at 10,000 steps. The surrogate floor therefore orders as heat 2 %, KdV soliton 20 %, Burgers shock 150 %, and above it the spread across seeds still follows the bound. Write-ups: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F02_kdv_joint"><code>experiments/F02_kdv_joint</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F03_burgers_nu"><code>experiments/F03_burgers_nu</code></a>.</p>
+<p><strong>Profile likelihood (experiment F07).</strong> With α fixed on a grid and the network retrained, the misfit of the exact solution reproduces the Fisher parabola to 2 %, while the PINN's data misfit is 2.5–12× flatter: the network deviates from the PDE instead of reproducing the wrong solution. Profile likelihood with a PINN needs hard physics or the full weighted loss. Write-up: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F07_profile_likelihood"><code>experiments/F07_profile_likelihood</code></a>.</p>
+<h2 id="training-conditioning-experiment-k03">Training conditioning (experiment K03)<a class="headerlink" href="#training-conditioning-experiment-k03" title="Permanent link">&para;</a></h2>
+<p>Across eight operators and two architectures after 3,000 steps, the architecture sets the conditioning, not the operator order: a tanh MLP's residual tangent kernel has a condition number near <span class="arithmatex">\(10^8\)</span> for every problem, Fourier features bring it down by three to five orders but make the residual kernel's trace <span class="arithmatex">\(10^3\)</span>–<span class="arithmatex">\(4 \times 10^3\)</span> times the boundary kernel's on wave-type and fourth-order problems (the gradient pathology), and no run is at a minimum (every Hessian has a negative Ritz value whose size tracks the final loss). Write-up: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K03_training_conditioning"><code>experiments/K03_training_conditioning</code></a>; the tools are <code>pinnrl.analysis.loss_hessian_spectrum</code> and <code>tangent_kernel_spectrum</code>.</p>
+<h2 id="disturbance-and-stability-experiments-k05k07">Disturbance and stability (experiments K05–K07)<a class="headerlink" href="#disturbance-and-stability-experiments-k05k07" title="Permanent link">&para;</a></h2>
+<p><strong>Data disturbances (K05).</strong> For the identified heat diffusivity, a sensor bias or a timestamp delay shifts the estimate by the linear prediction <span class="arithmatex">\(F^{-1}J^\top\delta y\)</span> to within 20 %, with negligible scatter across seeds; a bias of the noise level moves α by 18 % and nothing in the residual flags it. Dropout of 75 % of the points or of a whole probe costs information, not accuracy. Outliers break the squared-error data term and raise the residual 10–25×, which makes the residual a detector for them. <strong>Problem perturbations (K06).</strong> A trained field responds to a change of initial data, boundary data or a coefficient as the exact solution does (amplification 0.7–1.2) when the change exceeds the surrogate's own field error, and not at all below it: the field error is the resolution of a trained surrogate. <strong>Stability constants (K07).</strong> On an independent sample the error falls in proportion to the residual with a constant near 1 for heat, convection, wave, Klein–Gordon and heat in 2-D, and an equation-dependent constant otherwise; for the beam the error stalls while the residual falls, because the boundary and initial mismatches are the binding terms. Write-ups: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K05_data_disturbance"><code>K05_data_disturbance</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K06_problem_disturbance"><code>K06_problem_disturbance</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K07_stability_constants"><code>K07_stability_constants</code></a>; the tools are <code>pinnrl.analysis.perturb_observations</code>, <code>linear_response</code> and <code>stability_ratio</code>.</p>
+<h2 id="calibrated-uncertainty-experiments-f06-k10-k39-k46">Calibrated uncertainty (experiments F06, K10, K39, K46)<a class="headerlink" href="#calibrated-uncertainty-experiments-f06-k10-k39-k46" title="Permanent link">&para;</a></h2>
+<p>Over 30 synthetic data sets, the interval the Laplace posterior gives for the identified heat diffusivity (the surrogate's Fisher information, <code>pinnrl.uq.laplace_posterior</code>) has a standard deviation equal to the spread of the estimate across data sets to three digits, and covers the truth 77 % of the time instead of 90 % only because every estimate is 2 % low (the surrogate floor). An ensemble over initializations covers 13 %: it measures the initialization noise, a quarter of the data noise. The likelihood-ratio region of the exact misfit sampled by the swarm covers 90 %. Setting the data weight from the Gaussian noise model makes the estimate worse (bias up to −21 % at low weights), because the residual of a trained PINN is a systematic approximation error, not noise; the balance weight is set by the surrogate's floor relative to the noise. On closed-form misfits the swarm's region coincides with the Fisher ellipse at these noise levels and under-samples its edges, which K47 addresses. Write-ups: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F06_coverage"><code>F06_coverage</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K39_likelihood_weighting"><code>K39_likelihood_weighting</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K46_swarm_equivalence"><code>K46_swarm_equivalence</code></a>.</p>
+<h2 id="sampling-follow-ups-experiments-b02-b03-b04-b08">Sampling follow-ups (experiments B02, B03, B04, B08)<a class="headerlink" href="#sampling-follow-ups-experiments-b02-b03-b04-b08" title="Permanent link">&para;</a></h2>
+<p>On heat, convection, wave and the KdV soliton no sampler differs significantly from fresh uniform points (errors 0.2–2.5 %, 5 paired seeds); RAD has the best median on three of the four and narrows the spread (B02). On Burgers the resampling cadence changes the error threefold, more than any choice of sampler at a fixed cadence, and RAD's best cadence is every 10 steps, which is now the study's default (B04). Good RAD settings on Burgers lie on <span class="arithmatex">\(c \approx k/2\)</span>, and a zero uniform floor with a sharp exponent is three times worse than uniform; on Allen–Cahn every setting is equally and modestly better than uniform (B03). The error falls as about <span class="arithmatex">\(N^{-1/3}\)</span> in the number of collocation points on Burgers, for uniform and RAD alike, and not at all on Allen–Cahn, while cost is linear in <span class="arithmatex">\(N\)</span> (B08). Write-ups: <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B02_more_pdes"><code>B02_more_pdes</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B03_rad_grid"><code>B03_rad_grid</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B04_resampling_frequency"><code>B04_resampling_frequency</code></a>, <a href="https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B08_point_count"><code>B08_point_count</code></a>.</p>
+<h2 id="field-valued-unknowns-experiment-f09">Field-valued unknowns (experiment F09)<a class="headerlink" href="#field-valued-unknowns-experiment-f09" title="Permanent link">&para;</a></h2>
+<p>A drifting diffusivity <span class="arithmatex">\(\alpha(t)\)</span> and a coefficient field <span class="arithmatex">\(\alpha(x)\)</span> identified on the heat equation with <code>UnknownFunction</code> (a 2 × 32 network through a softplus), 200 noisy observations, 10,000 Adam steps, 5 seeds, against the best constant for each truth. Details in <code>experiments/F09_field_unknowns/README.md</code>.</p>
+<p><img alt="F09" src="../assets/benchmarks/f09_field_unknowns.png" /></p>
+<table>
+<thead>
+<tr>
+<th>Truth</th>
+<th>Rel. L2 of <span class="arithmatex">\(\hat\alpha\)</span> at noise 0.01</th>
+<th>Scalar model instead</th>
+<th>Best constant's distance in <span class="arithmatex">\(u\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="arithmatex">\(\alpha(t) = 0.05 + 0.1 t\)</span></td>
+<td>0.037</td>
+<td>0.32</td>
+<td>0.048</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\alpha(t)\)</span> with a step at <span class="arithmatex">\(t = 0.5\)</span></td>
+<td>0.254 (a ramp with the right mean)</td>
+<td>0.50</td>
+<td>0.080</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\alpha(x)\)</span>, centred bump</td>
+<td>0.405 (collapses to the constant)</td>
+<td>0.50</td>
+<td>0.038</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\alpha(x)\)</span>, two layers</td>
+<td>0.125 (shape and plateaus recovered)</td>
+<td>0.62</td>
+<td>0.198</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>A linear drift is recovered to a few percent; a scalar model absorbs it as the best constant with a field error 2.7 times larger.</li>
+<li>A jump comes back as a smooth ramp: the data see <span class="arithmatex">\(\int \alpha\)</span> through the solution's amplitude, and a smooth surrogate rounds the kink.</li>
+<li>A field is identified only where the solution feels it (through the flux <span class="arithmatex">\(\alpha u_x\)</span>) and only to the surrogate's accuracy: the two-layer medium, whose solution no constant reproduces within 20 %, is recovered; the centred bump, which a constant reproduces to 4 %, twice the surrogate's field error, is not, although the data alone would determine its modes (K48). The check is one call to <code>heat_variable_reference</code>.</li>
+<li>The optimizer's weight decay had been acting on the unknowns; PDE unknowns now train without it.</li>
+</ul>
+<h2 id="sensor-layout-vs-conditioning-experiment-k02">Sensor layout vs conditioning (experiment K02)<a class="headerlink" href="#sensor-layout-vs-conditioning-experiment-k02" title="Permanent link">&para;</a></h2>
+<p>The Fisher information of a sensor layout from <code>sensor_jacobian</code> on closed forms (heat <span class="arithmatex">\(\alpha\)</span>; KdV <span class="arithmatex">\(\alpha, \beta\)</span>), and <span class="arithmatex">\(\alpha\)</span> identified from 1–8 probes against the bound of each layout. Details in <code>experiments/K02_sensor_layout/README.md</code>.</p>
+<p><img alt="K02" src="../assets/benchmarks/k02_sensor_layout.png" /></p>
+<ul>
+<li>On heat a probe's information scales with <span class="arithmatex">\(\sin^2 \pi x_0\)</span>: a probe at 5 % of the length is 6.4 times worse (in standard deviation) than one at the centre, and two probes at the quarter points equal one at the centre. The domain mean, a quarter-point probe and the wall flux lie within a factor of two of the best probe.</li>
+<li>On KdV a probe on the soliton's path sees height (fixes <span class="arithmatex">\(\alpha\)</span>) and width (fixes <span class="arithmatex">\(\beta\)</span>) with <span class="arithmatex">\(\kappa(F) \approx 7\)</span>; four lengths away it sees only the tail, where both coefficients scale the same number: <span class="arithmatex">\(\kappa(F) &gt; 10^4\)</span>, correlation 0.996. Two evenly spaced probes at <span class="arithmatex">\(\pm 7.5\)</span> are worse than one at the origin; placement beats count.</li>
+<li>Trained on the records, the spread of <span class="arithmatex">\(\hat\alpha\)</span> across seeds matches each layout's bound (1.6–2.7 % against 1.3–2.5 %), and the error stops at the 2 % surrogate floor: sensor design pays until the bound reaches the forward model's accuracy.</li>
+</ul>
+<h2 id="dimension-scaling-experiment-k08">Dimension scaling (experiment K08)<a class="headerlink" href="#dimension-scaling-experiment-k08" title="Permanent link">&para;</a></h2>
+<p>Heat and convection in <span class="arithmatex">\(d = 1 \ldots 5\)</span> at a fixed budget (4,096 points, 4,000 Adam steps), with the error, the residual and their ratio measured on fresh points. Details in <code>experiments/K08_dimension_scaling/README.md</code>.</p>
+<p><img alt="K08" src="../assets/benchmarks/k08_dimension_scaling.png" /></p>
+<ul>
+<li>For heat the interior residual stays at 2–7 % whatever <span class="arithmatex">\(d\)</span> while the error grows from 2 % to 44 %: the empirical stability constant goes from 0.8 to 8.4, a factor 4 of it the shrinking norm of the product solution and the rest the initial and boundary errors, which 512 fixed points cover more thinly in high dimension.</li>
+<li>Convection fails from <span class="arithmatex">\(d = 2\)</span> and at <span class="arithmatex">\(d \ge 4\)</span> converges to <span class="arithmatex">\(u \approx 0\)</span>: a small residual with a large initial error, which the residual-based estimate does not see. The bound holds only with the condition terms.</li>
+<li>The Monte Carlo quadrature gap is 1–4 % at 4,096 points for every <span class="arithmatex">\(d\)</span>, and 10–14 % at 36–216 points: the cost of a dimension is per point (14 → 122 ms per step), not in the quadrature.</li>
+</ul>
+<h2 id="reduced-bases-for-field-unknowns-experiment-k48">Reduced bases for field unknowns (experiment K48)<a class="headerlink" href="#reduced-bases-for-field-unknowns-experiment-k48" title="Permanent link">&para;</a></h2>
+<p>The F09 fields in a cosine basis: the Fisher spectrum of the modes from the reference solver, the swarm over the coefficients, and a 6-mode basis against a network as the trained unknown. Details in <code>experiments/K48_reduced_bases/README.md</code>.</p>
+<p><img alt="K48" src="../assets/benchmarks/k48_reduced_bases.png" /></p>
+<ul>
+<li>With an exact forward model, 200 observations at noise 0.01 determine all eight modes of either field to 0.001–0.006, with no null space: F09's collapse of the bump is the surrogate's limit, not the data's.</li>
+<li>A 6-mode basis recovers the same (biased) field as the network, with coefficients reproducible across seeds to three digits: the PINN's optimum in the field sits 10–50 Fisher standard deviations from the truth. Forward accuracy, not the representation, is the bottleneck of field identification.</li>
+<li>The reference solver serves the swarm as a forward model (1,440 solves a minute); the swarm under-samples the region at 0.2–0.7 of the Fisher half-widths, and a 4-mode truncation is model-form error that the fit absorbs.</li>
+</ul>
+<h2 id="optimizers-and-the-floor-experiments-d01-d02">Optimizers and the floor (experiments D01, D02)<a class="headerlink" href="#optimizers-and-the-floor-experiments-d01-d02" title="Permanent link">&para;</a></h2>
+<p>Adam, L-BFGS and Adam→L-BFGS at matched wall-clock time on heat, Burgers and Allen–Cahn, and the heat-diffusivity floor cell of F01 without the packaged regularization. Details in <code>experiments/D01_optimizer_baseline/README.md</code>.</p>
+<ul>
+<li><strong>The 2 % floor of F01–F09 was the packaged weight decay and gradient clipping of the network</strong>, not the surrogate: with both off, Adam identifies <span class="arithmatex">\(\alpha\)</span> to 0.4 % with a 0.23 % field error, and an L-BFGS finish halves that again (0.2 %, 0.1 %). F01 has been rerun on its whole grid with the clean configuration (its floor is 0.1–0.2 %); F02, F03 and F09 are still to be reread.</li>
+<li>L-BFGS reaches <span class="arithmatex">\(2 \times 10^{-4}\)</span> on heat in 120 s against Adam's <span class="arithmatex">\(10^{-3}\)</span>, is 2–3 times better on Burgers, and halves Allen–Cahn's error where Adam makes no progress. The switch point hardly matters when both phases work; an early switch on Burgers diverged in 3 of 6 runs, so the trainer needs a step safeguard before <code>adam_lbfgs</code> becomes a default.</li>
+</ul>
+<h2 id="the-swarm-as-a-posterior-sample-experiment-k47">The swarm as a posterior sample (experiment K47)<a class="headerlink" href="#the-swarm-as-a-posterior-sample-experiment-k47" title="Permanent link">&para;</a></h2>
+<p>Every position a cloud swarm evaluates, weighted by its likelihood, against the exact posterior on heat <span class="arithmatex">\(\alpha\)</span> and the damped pendulum. Details in <code>experiments/K47_swarm_posterior/README.md</code>.</p>
+<ul>
+<li>The weighted swarm is centred on the posterior mean (within 0.05 standard deviations) but 0.5–0.7 as wide, with 80–87 % coverage at the 90 % level: importance weights cannot recover tails the swarm never visits. The accepted (likelihood-ratio) set is wider and covers 90–100 %; widened by K46's factor it is the usable interval. For a density, use a sampler, with the parametric surrogate (K45) as its cheap forward model.</li>
+</ul>
+<h2 id="parametric-surrogate-as-the-forward-emulator-experiment-k45">Parametric surrogate as the forward emulator (experiment K45)<a class="headerlink" href="#parametric-surrogate-as-the-forward-emulator-experiment-k45" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>python<span class="w"> </span>experiments/K45_parametric_surrogate/run.py<span class="w"> </span>--seeds<span class="w"> </span><span class="m">2</span><span class="w"> </span>--datasets<span class="w"> </span><span class="m">10</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">4</span>
+</code></pre></div>
+<p>One network <span class="arithmatex">\(u_w(x, t; \theta)\)</span> with the parameters as inputs (<code>CustomPDE(parametric=...)</code>), trained once over the prior range (4 × 64, Adam 4,000 steps then L-BFGS 100), against a dedicated network per parameter value at the same budget, on heat (<span class="arithmatex">\(\alpha \in [0.02, 0.5]\)</span>), the KdV soliton (<span class="arithmatex">\((\alpha, \beta) \in [2, 12] \times [0.3, 3]\)</span>) and the Burgers travelling wave (<span class="arithmatex">\(\nu \in [0.05, 0.5]\)</span>); then the swarm of K46 run on the surrogate's misfit (<code>pde.surrogate_misfit</code>) against the closed-form misfit on 10 noisy data sets. Details in <code>experiments/K45_parametric_surrogate/README.md</code>.</p>
+<p><img alt="K45" src="../assets/benchmarks/k45_parametric_surrogate.png" /></p>
+<ul>
+<li><strong>One surrogate covers the range to 0.2–0.3 % on heat and Burgers and 0.2–2 % on KdV</strong>, at a quarter to a half of the cost of five dedicated networks (9–19 minutes against 23–56), and a forward evaluation of 10,000 points costs 15–40 ms. On heat it is 5–10 times less accurate than a network per value; on Burgers as accurate; on KdV it matches in the middle of the box and is 4–8 times worse at the corners.</li>
+<li><strong>The swarm on the surrogate is the swarm on the closed form.</strong> Best fits agree to 0.04–0.3 % of the truth, 90 % widths to 1–3 %, and coverage data set by data set (8/10 heat, 7/10 KdV, the swarm's own under-coverage from K46). The surrogate's forward error is well below the scatter the data impose, and the region of a PINN inverse problem can be sampled on the PINN's own misfit at 0.1–0.2 s per data set.</li>
+<li><strong>Where the surrogate's error exceeds the data scatter (the KdV corner at (11, 0.4), 2 %), the region is biased by about that error</strong>; the check is one dedicated network at the best fit.</li>
+</ul>
+<h2 id="the-cost-of-a-training-step-pytorch-c-and-rust-experiment-i11">The cost of a training step: PyTorch, C++ and Rust (experiment I11)<a class="headerlink" href="#the-cost-of-a-training-step-pytorch-c-and-rust-experiment-i11" title="Permanent link">&para;</a></h2>
+<p>The same heat PINN step (a 4 × 64 <code>tanh</code> network, 5,120 points, Adam) written ten ways, on an Apple M4.</p>
+<p><img alt="I11" src="../assets/benchmarks/i11_native_pinn.png" /></p>
+<table>
+<thead>
+<tr>
+<th>Implementation</th>
+<th>ms per step (1 thread / 4 threads)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C++ and Rust with no framework, Accelerate for the matrix products and <code>tanh</code></td>
+<td>3.6 / 3.7</td>
+</tr>
+<tr>
+<td><code>pinnrl</code> trainer, <code>derivatives="native"</code></td>
+<td>5.4 / 5.5</td>
+</tr>
+<tr>
+<td>PyTorch autograd, a minimal loop</td>
+<td>8.8 / 6.6</td>
+</tr>
+<tr>
+<td><code>pinnrl</code> trainer, autograd</td>
+<td>10.6 / 8.3</td>
+</tr>
+<tr>
+<td>C++ and Rust with plain loops</td>
+<td>45 / 47</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Sampling, the optimizer and bookkeeping are a tenth of a step</strong>; the rest is the network's arithmetic.</li>
+<li><strong><code>tanh</code> is the most expensive single operation in PyTorch</strong> here: 2.6 ns an element, twenty times the matrix product next to it, a third of the trainer's step.</li>
+<li><strong>Taylor-mode derivatives do not pay in tensor operations</strong> (9.3–12.4 ms against 8.8 for double backward); they pay with fused loops in compiled code.</li>
+<li><strong>C++ and Rust are indistinguishable</strong>, 2.4 times faster than the PyTorch step on the same BLAS and five times slower than it without one.</li>
+<li><strong>The kernel is in the package:</strong> <a href="../custom_equations/#a-faster-step-the-compiled-kernel"><code>build_trainer(derivatives="native")</code></a> halves the trainer's step (10.6 → 5.4 ms) and, with the packaged network's layer normalization, cuts it threefold (32 → 10.4 ms), with the same loss and gradients to rounding. It is opt-in and, for now, macOS only and for <code>tanh</code> feed-forward networks.</li>
+<li><strong>A PyTorch defect found on the way:</strong> <code>torch.nn.LayerNorm</code> returns a wrong weight gradient for any loss with second derivatives of the network (2–3 % off in norm on this problem, 1–9 % in single directions against finite differences; exact for first-order residuals). The package's networks now use <a href="../api/neural_networks/#neural_networks.base_network.ExactLayerNorm"><code>ExactLayerNorm</code></a>, the same function written in elementary operations, at the same cost.</li>
+</ul>
+<p>See <code>experiments/I11_native_pinn/</code>.</p>
+<h2 id="the-evaporator-reference-and-its-pinn-experiments-j01-j02">The evaporator reference and its PINN (experiments J01, J02)<a class="headerlink" href="#the-evaporator-reference-and-its-pinn-experiments-j01-j02" title="Permanent link">&para;</a></h2>
+<p><code>pinnrl.process.FallingFilmEvaporator</code>: liquid flow and solids fraction transported along a heated tube with boiling-point elevation, fouling and measured feed and steam signals; a steady-state ODE solver, a first-order method-of-lines dynamic solver, and the same model as a <code>CustomPDE</code>. Details in <code>experiments/J01_evaporator_reference/README.md</code>.</p>
+<p><img alt="J01" src="../assets/benchmarks/j01_evaporator.png" /></p>
+<ul>
+<li>One pass evaporates 31 % of the feed's water; a fouling of <span class="arithmatex">\(10^{-4}\)</span> m²K/W moves the outlet solids as much as 1.7 K of steam or 18 % of feed, so the outlet alone cannot tell them apart. The solver converges at first order (0.2 s per 10-minute simulation on the working grid).</li>
+<li>The normalised PINN reproduces the steam-step scenario to 0.4–0.6 % on both fields in under six minutes, in physical units; one of three seeds diverged in the L-BFGS finish (the safeguard is the next engineering item).</li>
+</ul>
+<h2 id="change-point-identification-experiment-f11">Change-point identification (experiment F11)<a class="headerlink" href="#change-point-identification-experiment-f11" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>python<span class="w"> </span>experiments/F11_change_point/run.py<span class="w"> </span>--seeds<span class="w"> </span><span class="m">5</span><span class="w"> </span>--steps<span class="w"> </span><span class="m">10000</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">5</span><span class="w"> </span>--clean<span class="w"> </span>--lbfgs<span class="w"> </span>--out<span class="w"> </span>experiments/F11_change_point/results/clean
+</code></pre></div>
+<p>Heat with <span class="arithmatex">\(\alpha(t) = a + b\,\sigma((t - t_0)/0.02)\)</span>, the three numbers trainable from either side of the truth, 200 observations at noise 0, 0.01 and 0.05, 5 seeds, against the Cramér–Rao bound and F09's network unknown. Details in <code>experiments/F11_change_point/README.md</code>.</p>
+<ul>
+<li><strong>A change point is identifiable to the bound</strong> with the clean configuration: the median error of <span class="arithmatex">\(t_0\)</span> is 0.0075 against a bound of 0.0062 at noise 0.01 and 0.032 against 0.031 at noise 0.05, from either start; <span class="arithmatex">\(b\)</span> is at the truth within its bound. The parametrised step beats the network's ramp at every noise level.</li>
+<li>Under the default weight decay and gradient clipping the same runs put <span class="arithmatex">\(t_0\)</span> 0.16 early, 25 times the bound, with half the jump: the regularization, not the estimator.</li>
+</ul>
+<h2 id="fouling-from-outlet-sensors-identifiability-experiment-j04">Fouling from outlet sensors: identifiability (experiment J04)<a class="headerlink" href="#fouling-from-outlet-sensors-identifiability-experiment-j04" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>python<span class="w"> </span>experiments/J04_plant_sensors/run.py<span class="w"> </span>--datasets<span class="w"> </span><span class="m">5</span><span class="w"> </span>--modes<span class="w"> </span><span class="m">6</span>
+</code></pre></div>
+<p>The Fisher information of J03's outlet records (solids and flow every 5 s over 20 minutes) for six Legendre modes of the fouling resistance <span class="arithmatex">\(R_f(t)\)</span> and four nuisances (the clean coefficient <span class="arithmatex">\(U\)</span>, a steam bias, feed-flow and feed-solids biases), from finite differences on the reference solver; and F07's profile likelihood of the drift's end value on the reference. Details in <code>experiments/J04_plant_sensors/README.md</code>.</p>
+<p><img alt="J04" src="../assets/benchmarks/j04_plant_sensors.png" /></p>
+<ul>
+<li><strong>With the inputs known, the outlet determines the whole time course</strong>: six modes to 1–4 % of the mean fouling, <span class="arithmatex">\(\kappa(F) = 25\)</span>, the end value to 5 %. The flow meter halves the bound of the solids sensor alone, 1 s sampling halves it again, a mid-tube probe adds nothing.</li>
+<li><strong><span class="arithmatex">\(U\)</span> and the constant fouling are one unknown</strong> (<span class="arithmatex">\(1/U + R_f\)</span>): a monitor estimates the change of resistance since a reference state, never its absolute value.</li>
+<li><strong>The steam temperature is the nuisance that matters</strong>: 0.5 K of steam bias reproduces the records of a 30 % fouling error (correlation 0.85 with the drift), and with the three input biases free together the leftover direction masquerades as a drift (the drift's bound goes from 2 % to 45 %). The twin needs the steam temperature to 0.1 K, or a heat-duty signal.</li>
+<li>The profile likelihood on the reference is the Fisher parabola at <span class="arithmatex">\(\pm 10\)</span> %, with a 95 % interval of <span class="arithmatex">\(\pm 2\)</span> % on the drift's end value (steam known) and <span class="arithmatex">\(\pm 4\)</span> % (steam bias re-fitted).</li>
+</ul>
+<h2 id="fouling-estimation-experiment-j03">Fouling estimation (experiment J03)<a class="headerlink" href="#fouling-estimation-experiment-j03" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>python<span class="w"> </span>experiments/J03_fouling_estimation/run.py<span class="w"> </span>--seeds<span class="w"> </span><span class="m">3</span><span class="w"> </span>--steps<span class="w"> </span><span class="m">4000</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">3</span>
+</code></pre></div>
+<p>The evaporator twin with the steam and feed records as inputs and two outlet sensors (<span class="arithmatex">\(X\)</span> and <span class="arithmatex">\(W\)</span> every 5 s, 20 minutes), the fouling <span class="arithmatex">\(R_f(t)\)</span> an <code>UnknownFunction</code> of time bounded to <span class="arithmatex">\([0, 5 \times 10^{-4}]\)</span>, against a scalar <span class="arithmatex">\(R_f\)</span>; the J02 recipe, 3 seeds. Details in <code>experiments/J03_fouling_estimation/README.md</code>.</p>
+<p><img alt="J03" src="../assets/benchmarks/j03_fouling_estimation.png" /></p>
+<ul>
+<li><strong>The twin recovers the drift to 9–16 % in L2</strong> (the field to 2 %) where the best constant is wrong by 53–55 % (field 7 %): a drifting coefficient is a function to identify.</li>
+<li><strong>It lands at the surrogate's limit, not the data's</strong>: J04's bound on the end value is 5 %, the PINN delivers 10–49 % at the end of the window and its excursions follow the steam signal (the surrogate's imperfect response to the recorded input is absorbed by the unknown). The value a few residence times before the end of the record is good to 5–10 %.</li>
+<li>The first pass ignored the records because the flow sensor's units (kg/s, scale 0.02) made its misfit 2,500 times too weak in the normalized loss; sensor misfits are now taken in units of the field's scale.</li>
+</ul>
+<h2 id="linearized-stability-experiment-k09">Linearized stability (experiment K09)<a class="headerlink" href="#linearized-stability-experiment-k09" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>python<span class="w"> </span>experiments/K09_linearized_stability/run.py<span class="w"> </span>--seeds<span class="w"> </span><span class="m">2</span><span class="w"> </span>--steps<span class="w"> </span><span class="m">2000</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">3</span>
+</code></pre></div>
+<p>The Jacobian spectrum along the reference trajectory of eight catalogue ODE systems (fastest rate, stiffness ratio, fast units in the window, oscillations, perturbation growth) next to the PINN's error on each; and the method-of-lines spectrum of the evaporator (<code>FallingFilmEvaporator.mol_rhs</code>) against its grid, with the source terms alone. Details in <code>experiments/K09_linearized_stability/README.md</code>.</p>
+<p><img alt="K09" src="../assets/benchmarks/k09_linearized_stability.png" /></p>
+<ul>
+<li><strong>The evaporator's discretised operator is non-normal</strong>: the upwind transport has one defective eigenvalue <span class="arithmatex">\(-v/\Delta z\)</span> and the computed spectrum is a circle of rounding around it, so its "stiffness ratio" means nothing. The physics is convectively stabilised and not stiff: the source terms grow locally at 0.02 s⁻¹, the transport removes them at 0.05 s⁻¹, the physical rates span a factor 6, and the grid-set rate (10 s⁻¹ at <span class="arithmatex">\(n_z = 201\)</span>) that forces BDF is one a PINN never sees.</li>
+<li><strong>On ODEs the PINN fails by the trivial solution, not by stiffness</strong>: pendulum, Lorenz and SIR collapse to an exact trivial solution close to the initial condition (errors 0.7–1.0), while Van der Pol with the same fast-unit count and a stiffness of 2,500 trains to <span class="arithmatex">\(10^{-3}\)</span>. Every success has at most 30 fast units in the window; time-marching (H04) and causal weighting are the remedies.</li>
+</ul>
+<h2 id="a-kalman-filter-baseline-experiment-j05">A Kalman-filter baseline (experiment J05)<a class="headerlink" href="#a-kalman-filter-baseline-experiment-j05" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>python<span class="w"> </span>experiments/J05_ekf_baseline/run.py<span class="w"> </span>--seeds<span class="w"> </span><span class="m">3</span>
+</code></pre></div>
+<p><code>pinnrl.process.ExtendedKalmanFilter</code> (with a Rauch–Tung–Striebel smoother) on a lumped method-of-lines model of the evaporator with 6–51 cells, the fouling as a random-walk state, on J03's records and seeds; against the PINN twin, and with the steam and feed biases of J04. Details in <code>experiments/J05_ekf_baseline/README.md</code>.</p>
+<p><img alt="J05" src="../assets/benchmarks/j05_ekf_baseline.png" /></p>
+<ul>
+<li><strong>With the model known, the filter beats the PINN twin by a wide margin at a thousandth of the cost</strong>: 11 cells track the drift to 3.5 % in L2 and 2 % at the end in 0.2 s against the PINN's 9–16 % and 10–49 % in five minutes; the smoother on 51 cells reaches 2.3 % and 0.7 %, close to J04's 5 % data limit.</li>
+<li><strong>The tuning is one number</strong>, the random-walk intensity: a decade too small and the filter lags the ramp by four minutes, a decade too large and it follows the noise. Six cells still give 7 %.</li>
+<li><strong>The inputs bound both estimators alike</strong>: a 0.3 K steam bias costs the filter 12 % at the end, a 1 % feed bias 8 %, the J04 numbers. The PINN's case is the partly unknown model (a closure, a field), not this one; the EKF stays as the control on every later comparison.</li>
+</ul>
+<h2 id="moving-horizon-estimation-experiment-j05b">Moving-horizon estimation (experiment J05b)<a class="headerlink" href="#moving-horizon-estimation-experiment-j05b" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>python<span class="w"> </span>experiments/J05_ekf_baseline/run_mhe.py<span class="w"> </span>--seeds<span class="w"> </span><span class="m">3</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">3</span>
+</code></pre></div>
+<p><code>pinnrl.process.MovingHorizonEstimator</code> against the extended Kalman filter on J05's records: the same 11-cell model, <span class="arithmatex">\(Q\)</span>, <span class="arithmatex">\(R\)</span> and prior, horizons of 6 to 24 records, with and without the constraint that the fouling only grows, a random walk ten times too loose, and a confident wrong prior. Details in <code>experiments/J05_ekf_baseline/README.md</code>.</p>
+<ul>
+<li><strong>On this model the moving horizon is the Kalman filter at 10–35 times the cost</strong>: 3.4 % against 3.5 % in L2 and 2.1 % against 2.2 % at the end for every horizon, because the response to the fouling is nearly linear over a window (for a linear model the two coincide exactly, which the tests check).</li>
+<li><strong>The growth constraint smooths, it does not correct</strong>: with the random walk ten times too loose it removes two thirds of the noise-following and a tenth of the L2 error, and leaves the end error where it was; a one-sided constraint on noisy increments ratchets upward.</li>
+<li><strong>A confident wrong prior costs both about half a minute</strong>, twice the residence time. The moving horizon's place is a model that is nonlinear within a window or constraints that bind in normal operation.</li>
+</ul>
+<h2 id="calibrated-fouling-intervals-experiment-j06">Calibrated fouling intervals (experiment J06)<a class="headerlink" href="#calibrated-fouling-intervals-experiment-j06" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>python<span class="w"> </span>experiments/J06_fouling_intervals/run.py<span class="w"> </span>--datasets<span class="w"> </span><span class="m">100</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">6</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>python<span class="w"> </span>experiments/J06_fouling_intervals/run.py<span class="w"> </span>--part<span class="w"> </span>pinn<span class="w"> </span>--pinn-datasets<span class="w"> </span><span class="m">12</span><span class="w"> </span>--members<span class="w"> </span><span class="m">3</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">4</span>
+</code></pre></div>
+<p>F06's question on the evaporator: over 100 noise draws of J03's records, does the 90 % interval of each estimator contain the fouling at the end of the record, and the time to the next cleaning, 90 % of the time? A batch Gauss–Newton fit through the reference solver (2 or 6 Legendre modes), the Kalman filters of J05 with the fouling as a random walk or as a level and a rate, on 11 and 51 cells, and the PINN twin of J03; with the inputs exact, with a steam record uncertain by 0.3 K, and with a fouling curve that saturates. Details in <code>experiments/J06_fouling_intervals/README.md</code>.</p>
+<p><img alt="J06" src="../assets/benchmarks/j06_fouling_intervals.png" /></p>
+<ul>
+<li><strong>With the model right and the fouling's form containing the truth, the Fisher interval is calibrated</strong>: 0.92–0.96 for the batch fits and 0.91–0.99 for the trend filter on 51 cells, at ±2 % (a ramp assumed) to ±8 % (six modes). The form is an assumption the interval inherits: the ramp fit on a saturating curve is 25 % off with a ±2.5 % interval, and its misfit (776 against 474) is what says so.</li>
+<li><strong>A model good enough for the estimate is not good enough for the interval</strong>: the 11-cell filter of J05 is biased by 2.7 % of the fouling, which the tight intervals of the trend filter do not cover (33–69 %; 91–97 % on 51 cells). The tuned random walk covers on 11 cells because its lag and the grid's bias cancel by half.</li>
+<li><strong>The trend filter's rate noise is the same assumption in filter form</strong>: frozen it is the ramp fit (0 % on the saturating curve), free to change over five minutes it covers both curves at ±7 %, and the time to clean then has an open upper end in half the data sets.</li>
+<li><strong>A steam record uncertain by 0.3 K, taken at face value, drops every interval to 21–52 %.</strong> With the offset estimated under its prior the batch fits cover 0.89 at ±12–15 %: the honest width for this plant is set by the steam measurement, not by the estimator. Clipping the fouling at zero inside the filter costs five points of coverage once the offset is a state.</li>
+<li><strong>The time to clean is calibrated where the level and rate are</strong>: 0.94 at ±7 % for the ramp fit, 0.92–0.93 at ±28–37 % once the steam offset is admitted.</li>
+<li><strong>The PINN twin fails to train on 22 of 36 runs</strong> (a constant fouling, or the unknown's bound), which its own sensor misfit detects; the accepted runs are 26 % off at the end of the record against the 5 % the data allow, and no internal width covers that (0.25 with the Fisher width, 0.60–0.80 with ensembles at ±31–45 %). J03's three good seeds were a lucky draw.</li>
+</ul>
+<h2 id="measurement-design-for-the-fouling-estimate-experiment-j09">Measurement design for the fouling estimate (experiment J09)<a class="headerlink" href="#measurement-design-for-the-fouling-estimate-experiment-j09" title="Permanent link">&para;</a></h2>
+<p>J06 ends with an interval of ±12–15 % once the steam record's offset is admitted. J09 admits every instrument error (the steam offset, the feed solids, both flow meters' gains, the outlet density meter's offset), each with the accuracy it is trusted to as a prior, and prices the remedies before any is bought: the posterior covariance <span class="arithmatex">\((P_0^{-1} + J^\top R^{-1} J)^{-1}\)</span>, with the sensitivities from the reference solver, does not depend on the records (<a href="../api/analysis/#analysis.design.posterior_covariance"><code>pinnrl.analysis.posterior_covariance</code></a>, <a href="../api/analysis/#analysis.design.greedy_design"><code>greedy_design</code></a>).</p>
+<p><img alt="J09" src="../assets/benchmarks/j09_measurement_design.png" /></p>
+<table>
+<thead>
+<tr>
+<th>Design (std of <span class="arithmatex">\(R_f(T)\)</span>, % of the truth; six free modes)</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>exact instruments</td>
+<td>5.0</td>
+</tr>
+<tr>
+<td>the steam offset admitted alone / the four mass-balance instruments alone</td>
+<td>9.1 / 9.3</td>
+</tr>
+<tr>
+<td>everything admitted (the baseline)</td>
+<td>10.6</td>
+</tr>
+<tr>
+<td>the steam probe calibrated to 0.03 K</td>
+<td>9.3</td>
+</tr>
+<tr>
+<td>three lab samples of the outlet solids, at the best times</td>
+<td>9.3</td>
+</tr>
+<tr>
+<td>a 4 K steam swing instead of 1 K</td>
+<td>7.1</td>
+</tr>
+<tr>
+<td>a condensate meter, gain unknown to 2 %</td>
+<td>4.9</td>
+</tr>
+<tr>
+<td>the condensate meter and the 4 K swing</td>
+<td>2.8</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Two sources limit the estimate, and one is invisible one instrument at a time.</strong> The evaporation rate carries the fouling and the records give it twice, by the flow balance and by the solids balance; any single loose instrument leaves the other balance closed (5.0–5.2 %), all four together cost as much as the steam offset. For the same reason no single calibration pays.</li>
+<li><strong>A condensate meter is the measurement to buy</strong>: it reports the evaporation directly, not as the difference of two flows eight times larger, and with its gain unknown to 2 % it beats exact instruments without it.</li>
+<li><strong>The steam swing is the free remedy.</strong> A change of the steam temperature changes the flux by <span class="arithmatex">\(\Delta T_s/(1/U + R_f)\)</span> whatever the offset. No swing gives 13.8 %, 4 K gives 7.1 %; a swing as slow as the window is worth almost nothing, since that is what a change of fouling looks like.</li>
+<li><strong>Lab samples buy 1.3 points</strong>, best taken at the end, a quarter and past the middle of the window (the greedy triple is the best of all 1140).</li>
+<li><strong>The prediction holds</strong>: over 200 nonlinear simulated fits per design the errors' standard deviations are within 5 % of the predicted ones (10.6 → 11.1, 9.5 → 9.8, 2.8 → 2.9 %), with coverages of 0.87–0.88.</li>
+</ul>
+<p>See <code>experiments/J09_measurement_design/</code>.</p>
+<h2 id="a-drying-droplet-and-its-closure-experiment-j07">A drying droplet and its closure (experiment J07)<a class="headerlink" href="#a-drying-droplet-and-its-closure-experiment-j07" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>python<span class="w"> </span>experiments/J07_droplet_drying/run.py<span class="w"> </span>--seeds<span class="w"> </span><span class="m">3</span><span class="w"> </span>--steps<span class="w"> </span><span class="m">12000</span><span class="w"> </span>--lbfgs-steps<span class="w"> </span><span class="m">500</span><span class="w"> </span>--data-weight<span class="w"> </span><span class="m">300</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">3</span>
+</code></pre></div>
+<p><code>pinnrl.process.DryingDroplet</code> (a 1.5 mm droplet drying in 90 °C air with a characteristic drying curve as its rate closure): the PINN forward solve, and the closure <span class="arithmatex">\(f(X)\)</span> identified as an unknown function from a mass-and-temperature record, against least squares with the right and with a wrong parametric form. Details in <code>experiments/J07_droplet_drying/README.md</code>.</p>
+<p><img alt="J07" src="../assets/benchmarks/j07_droplet_drying.png" /></p>
+<ul>
+<li><strong>The forward solve reaches 8–14 % on the moisture</strong> at 12,000 + 500 steps: the 50 K temperature rise over 40 s at the critical moisture is the feature a smooth network spreads (time-marching is the next lever).</li>
+<li><strong>The unknown closure collapses to a constant on every seed</strong>, either ignoring the physics (<span class="arithmatex">\(f \equiv 0\)</span>, records fitted) or the data (<span class="arithmatex">\(f \equiv 0.06\)</span>): K09's trivial attractor in the inverse setting, sticky because softplus-constrained weights that go small cannot grow back. One recovery to 15 % did not reproduce.</li>
+<li><strong>Least squares with the right form is at the noise floor</strong> (<span class="arithmatex">\(n\)</span>, <span class="arithmatex">\(X_{cr}\)</span> to 1 % in 0.2 s) and the wrong form is 5.5 % off with a misfit 16 times larger.</li>
+<li><strong>Second pass (J07b).</strong> The record itself gives the closure to 2–3 % pointwise (<span class="arithmatex">\(f_i = -\dot X_i m_s / (h_m A \Delta\rho)\)</span> from the smoothed readings); started there, the PINN refines it to 1.7–2.1 % on two seeds and destroys it on the third (a misfit check against the start catches that). Freezing the function first makes the collapse certain; a Legendre basis removes the sticky collapse (7 %, 20 %, 66 %) but not the multimodality. Figure: <code>assets/benchmarks/j07b_closure.png</code>.</li>
+<li><strong>The guard (J07c).</strong> <code>DryingDroplet.record_misfit</code> solves the droplet with a closure by the reference solver and returns the reduced <span class="arithmatex">\(\chi^2\)</span> of the record: 0.9 for the plant's curve, 1.5–1.7 for the two good refinements, 60–90 for the pointwise start they came from, 390–765 for the two failed runs and infinite for the collapsed constants. It catches every failure of J07b, including one the network's own fields hide (fields within 0.8 %, closure 20 % off, record missed 43-fold). The start's misfit is all at the equilibrium moisture, where its closure is 0.01 instead of 0; what the PINN refinement buys is that consistency, a fifty-fold drop in misfit at an unchanged L2 error.</li>
+<li><strong>Shooting (J07d), the classical control.</strong> A monotone piecewise-linear closure on 24 knots, fitted through the reference solver by bounded least squares from a cold start, reaches 1.5–1.6 % on every seed with the record at the noise level, in 8–10 s against the PINN's six to eight minutes and one lost seed in three. With an ODE model and a reference solver that takes a closure, an unknown function is a few dozen bounded parameters; the PINN's case starts where the forward solve is missing or too expensive to iterate.</li>
+<li><strong>The anchored closure (J07e).</strong> <code>UnknownFunction(anchor={"at": X_eq, "value": 0.0})</code> with <code>monotone</code> holds <span class="arithmatex">\(f(X_{eq}) = 0\)</span> by construction. The same pointwise estimate then misses the record by 1.6–2.3 times its noise instead of 60–92 times, in one second; refining it with the PINN improves one seed and worsens two (the misfit guard rejects both). Shooting stays ahead (1.5–1.6 % against 2–3 %).</li>
+</ul>
+<p><img alt="J07c" src="../assets/benchmarks/j07c_guard.png" /></p>
+<h2 id="the-closure-at-dryer-scale-experiment-j11">The closure at dryer scale (experiment J11)<a class="headerlink" href="#the-closure-at-dryer-scale-experiment-j11" title="Permanent link">&para;</a></h2>
+<p><a href="../api/process/#process.dryer.SprayDryer"><code>SprayDryer</code></a> couples J07's droplet to the air it dries in: a co-current plug-flow tower at steady state, four ODEs along the residence time, with the instruments a plant has (six air thermocouples, the outlet humidity, the powder's moisture). One solve takes 5 ms, so the estimator is a least-squares fit through it; no network was trained.</p>
+<p><img alt="J11" src="../assets/benchmarks/j11_dryer_closure.png" /></p>
+<ul>
+<li><strong>The curve's form known:</strong> five operating points give the critical moisture and the exponent to ±0.03 each (2 % in L2), in under a second; ±0.11 and ±0.06 once the wall loss (30 %) and the droplet size (10 %) are uncertain, more than the linear analysis predicts.</li>
+<li><strong>A free-form closure is not identifiable from the tower:</strong> 4 to 6 of its 11 directions are determined, the band closes only below a moisture of 0.5, and the fits are 8–21 % off. The droplets cross the high-moisture range above the first thermocouple.</li>
+<li><strong>The prediction does not need it:</strong> the powder moisture at an operating point outside the campaign (four times wetter) is predicted to 0.9–1.6 % by the free-form fits and 0.5–0.9 % with the form known; one lab assay resolves 1 %. From a single operating point it is 2.5 %.</li>
+<li><strong>For the twin:</strong> identify the closure on a droplet rig, carry it to the tower, and estimate at dryer scale the few numbers its records determine, with the droplet size as the nuisance to design for.</li>
+</ul>
+<p>See <code>experiments/J11_dryer_closure/</code>.</p>
+<h2 id="a-soft-sensor-for-the-stickiness-margin-experiment-j08">A soft sensor for the stickiness margin (experiment J08)<a class="headerlink" href="#a-soft-sensor-for-the-stickiness-margin-experiment-j08" title="Permanent link">&para;</a></h2>
+<p>Powder sticks when its particles are warmer than their glass transition by more than a material limit; <a href="../api/process/#process.dryer.SprayDryer"><code>SprayDryer.stickiness_margin</code></a> is <span class="arithmatex">\(T_p - T_g(X)\)</span> along the tower, with <span class="arithmatex">\(T_g\)</span> from Gordon–Taylor. It cannot be measured online: <span class="arithmatex">\(T_g\)</span> falls by 9 K per 0.01 of moisture.</p>
+<p><img alt="J08" src="../assets/benchmarks/j08_stickiness.png" /></p>
+<table>
+<thead>
+<tr>
+<th>Estimate of the outlet margin (std, four operating points)</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>moisture from the water balance of the air</td>
+<td>23–59 K</td>
+</tr>
+<tr>
+<td>lab assay of the powder, hours late</td>
+<td>1.6–3.2 K</td>
+</tr>
+<tr>
+<td>the twin, identified on J11's five-point campaign and run forward</td>
+<td>1.0–1.5 K</td>
+</tr>
+<tr>
+<td>the twin updated with the point's online records</td>
+<td>0.9–1.5 K</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>The water balance cannot see the powder:</strong> the air carries 36 times the solids' mass, so a humidity error of 0.001 is half the outlet moisture.</li>
+<li><strong>The twin beats the assay it replaces and is not late</strong>; the errors of 40 fitted campaigns match the prediction (1.1–1.5 K). The guard band below the sticky limit halves, from 4.6 to 2.3 K. It also gives the margin inside the tower to about 1 K.</li>
+<li><strong>The caveat:</strong> these are estimation errors of a model whose structure is the plant's; against a real dryer the first comparison is the twin's moisture against the lab's over a campaign.</li>
+</ul>
+<p>See <code>experiments/J08_stickiness/</code>.</p>
+<h2 id="measurement-and-campaign-design-for-the-dryer-experiment-j12">Measurement and campaign design for the dryer (experiment J12)<a class="headerlink" href="#measurement-and-campaign-design-for-the-dryer-experiment-j12" title="Permanent link">&para;</a></h2>
+<p>J09's calculation on the tower, with eight inputs admitted at their accuracies. The droplet's diameter and velocity are one unknown (the drying time against the residence time), so measuring the droplet size alone buys nothing; behind them the six balance inputs limit jointly, none alone. What pays is thermocouples good to 0.2 K (critical moisture ±0.085 → ±0.052), nine operating points (±0.065) and, for the stickiness margin, replicate lab assays (1.2 → 0.6 K). The best five points depend on the target: next to the operating limit for the margin, the corners of the window at high load for the curve. 60 fitted campaigns per design confirm the parameters' predicted spreads; the margin's is 20 % optimistic. See <code>experiments/J12_dryer_design/</code>.</p>
+<h2 id="time-marching-windows-experiment-h04">Time-marching windows (experiment H04)<a class="headerlink" href="#time-marching-windows-experiment-h04" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>python<span class="w"> </span>experiments/H04_time_marching/run.py<span class="w"> </span>--seeds<span class="w"> </span><span class="m">2</span><span class="w"> </span>--steps<span class="w"> </span><span class="m">12000</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">4</span>
+</code></pre></div>
+<p><code>PDETrainer.train_windows</code> (the same Adam budget split over 1, 2, 4 or 8 time windows, the network carried over, an L-BFGS finish on the whole span) on the K09 failures, Van der Pol and the drying droplet. Details in <code>experiments/H04_time_marching/README.md</code>.</p>
+<p><img alt="H04" src="../assets/benchmarks/h04_time_marching.png" /></p>
+<ul>
+<li><strong>Time marching rescues SIR</strong>: one-shot training returns the disease-free state (error 1.0), eight windows find the epidemic wave to 0.1 %. A window short against the feature keeps the network off the trivial branch.</li>
+<li><strong>The pendulum was a budget problem</strong>: 12,000 + 500 steps give 0.3–3 % in one shot where K09's 2,000 + 100 gave 74 %; windows do not help it. <strong>Lorenz is rescued by nothing</strong> (a chaotic trajectory with a growth of <span class="arithmatex">\(e^{23}\)</span> is not one network's job), and <strong>the droplet's sharp transition is a resolution problem</strong>, unchanged by the schedule (2–5 % on the moisture).</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
