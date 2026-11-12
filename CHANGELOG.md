@@ -7,7 +7,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [0.7.0] — 2026-11-12
+
+The process-twins release: classical estimators next to the PINN twin (moving-horizon estimation, a trend drift model, a fouling monitor with calibrated intervals), a plant-historian adapter and the dashboard's Process view, a spray-dryer tower with its stickiness margin, linear-Gaussian measurement design, an anchor constraint and a misfit test for learned closures, and an optional compiled kernel that halves the training step (threefold on the default network). It also fixes the weight gradient through layer normalization, which PyTorch's own layer gets wrong for losses with second derivatives ([pytorch/pytorch#204478](https://github.com/pytorch/pytorch/issues/204478)).
 
 ### Added
 - **Moving-horizon estimation** (roadmap v0.7, J05b). `pinnrl.process.MovingHorizonEstimator(f, h, Q, R, horizon)` re-solves the last `horizon` records at every record: the state at the window's start and one disturbance per record for every state with process noise, by Gauss–Newton steps that are bounded linear least squares, with the arrival cost from an extended Kalman filter run alongside. `run(..., lower, upper, noise_lower, noise_upper, stride)` bounds the states and the disturbances (`noise_lower=0` for a fouling resistance that only grows) and solves every `stride`-th record. For a linear model without bounds it reproduces the Kalman filter for any horizon (tested). `ExtendedKalmanFilter.step` is the filter's single predict-and-update, which `run` and the estimator share.
