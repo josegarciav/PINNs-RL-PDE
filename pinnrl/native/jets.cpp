@@ -21,15 +21,35 @@
 // inverse square root (norm_forward and norm_backward).
 //
 // All streams of a batch of N points are stacked as row blocks of one (S N x width) matrix, so a
-// layer is one sgemm; the elementwise work is fused into loops the compiler vectorises.
-// Experiments I11–I13 measure it against autograd. Float32, row-major; W[l] is (out x in) as in
-// torch.nn.Linear.
+// layer is one sgemm (Accelerate on macOS, OpenBLAS elsewhere); the elementwise work is fused into
+// loops the compiler vectorises. Experiments I11–I14 measure it against autograd. Float32,
+// row-major; W[l] is (out x in) as in torch.nn.Linear.
 
-#include <Accelerate/Accelerate.h>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <vector>
+
+#ifdef __APPLE__
+#include <Accelerate/Accelerate.h>
+#else
+#include <cblas.h>  // OpenBLAS (libopenblas-dev); see the build flags in __init__.py
+#include "fast_tanh.h"
+#endif
+
+namespace {
+
+// x = tanh(x) over n elements: Apple's vectorised vvtanhf, or a branch-free tanh the compiler
+// vectorises (the C library's tanhf is scalar, and glibc's vector one needs full fast-math).
+inline void tanh_inplace(float* x, int n) {
+#ifdef __APPLE__
+    vvtanhf(x, x, &n);
+#else
+    for (int i = 0; i < n; ++i) x[i] = fast_math::tanhf_approx(x[i]);
+#endif
+}
+
+}  // namespace
 
 namespace {
 
@@ -509,7 +529,7 @@ void pinn_jets_forward(const float* X, int N, int L, const int* sizes, const flo
             norm_forward(T, A, Y, N, width, gamma[l], beta[l], eps, work + norm_state_offset(l, L, rows, sizes));
             A = Y;
         }
-        vvtanhf(A, A, &count);
+        tanh_inplace(A, count);
         float* Hn = work + hin_offset(l + 1, rows, sizes);
         for (size_t start = 0; start < M; start += C) {
             const int len = (int)((M - start) < (size_t)C ? (M - start) : (size_t)C);

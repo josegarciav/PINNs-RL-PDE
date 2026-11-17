@@ -6,11 +6,11 @@ multilayer perceptron the same numbers come from one forward pass that carries t
 next to the value as Taylor coefficients (Taylor mode) and one hand-written reverse pass.
 :func:`mlp_jets` does that in a small C++ kernel (``jets.cpp``, compiled on first use and
 cached), wrapped as a :class:`torch.autograd.Function` so the rest of the loss stays ordinary
-PyTorch. Experiments I11–I13 measure the step at a half to a third of the autograd time on Apple silicon.
+PyTorch. Experiments I11–I14 measure the step at a half to a seventh of the autograd time.
 
 It is opt-in (``pde.build_trainer(..., derivatives="native")``) and narrow by design:
 
-* macOS with the Accelerate framework and a C++ compiler (``clang++``);
+* macOS (the Accelerate framework, ``clang++``) or Linux (OpenBLAS, ``libopenblas-dev``, and ``g++``);
 * a feed-forward network of ``Linear`` layers and ``tanh``, with or without ``LayerNorm``
   before each ``tanh``, float32, on the CPU;
 * derivatives of any order with respect to the inputs, mixed ones included (``u_x``, ``u_xx``,
@@ -49,34 +49,62 @@ def _cache_dir() -> Path:
     return Path(root) if root else Path.home() / ".cache" / "pinnrl" / "native"
 
 
+def _build_command(compiler: str, out: Path) -> list[str] | None:
+    """The compiler command for this platform, or ``None`` where the kernel has no build."""
+    common = [
+        "-O3", "-std=c++17", "-shared", "-fPIC",
+        # sums may be reordered (so the reductions vectorise); NaN and infinity keep their meaning
+        "-fassociative-math", "-fno-signed-zeros", "-fno-trapping-math", "-fno-math-errno",
+        "-freciprocal-math",
+        *os.environ.get("PINNRL_NATIVE_CXXFLAGS", "").split(),
+    ]  # fmt: skip
+    if sys.platform == "darwin":
+        link = ["-framework", "Accelerate"]
+        arch = ["-mcpu=native", "-DACCELERATE_NEW_LAPACK"]
+    elif sys.platform.startswith("linux"):
+        link = ["-lopenblas"]
+        arch = ["-march=native"]
+    else:
+        return None
+    link += os.environ.get("PINNRL_NATIVE_LDFLAGS", "").split()
+    return [compiler, *common, *arch, str(_SOURCE), *link, "-o", str(out)]
+
+
 def _load() -> ctypes.CDLL | None:
     """Compile (once per source version) and load the kernel; ``None`` when that is not possible."""
     global _LIB, _FAILED
     if _LIB is not None or _FAILED is not None:
         return _LIB
-    if sys.platform != "darwin":
-        _FAILED = "the native kernel needs macOS (Accelerate)"
-        return None
-    compiler = os.environ.get("CXX") or shutil.which("clang++") or shutil.which("c++")
+    compiler = (
+        os.environ.get("CXX")
+        or shutil.which("clang++")
+        or shutil.which("g++")
+        or shutil.which("c++")
+    )
     if compiler is None:
-        _FAILED = "no C++ compiler found (install the Xcode command line tools)"
+        _FAILED = (
+            "no C++ compiler found (install the Xcode command line tools on macOS, g++ on Linux)"
+        )
         return None
-    source = _SOURCE.read_bytes()
-    tag = hashlib.sha256(source + b"flags-3").hexdigest()[:16]
-    lib_path = _cache_dir() / f"jets-{tag}.dylib"
+    source = _SOURCE.read_bytes() + _SOURCE.with_name("fast_tanh.h").read_bytes()
+    tag = hashlib.sha256(source + b"flags-4").hexdigest()[:16]
+    lib_path = _cache_dir() / f"jets-{tag}.so"
     if not lib_path.exists():
         lib_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = lib_path.with_suffix(f".{os.getpid()}.tmp")
-        cmd = [
-            compiler, "-O3", "-mcpu=native", "-std=c++17", "-shared", "-fPIC",
-            # sums may be reordered (so the reductions vectorise); NaN and infinity keep their meaning
-            "-fassociative-math", "-fno-signed-zeros", "-fno-trapping-math", "-fno-math-errno",
-            "-freciprocal-math",
-            "-DACCELERATE_NEW_LAPACK", str(_SOURCE), "-framework", "Accelerate", "-o", str(tmp),
-        ]  # fmt: skip
+        cmd = _build_command(compiler, tmp)
+        if cmd is None:
+            _FAILED = "the native kernel builds on macOS (Accelerate) and Linux (OpenBLAS) only"
+            return None
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            _FAILED = f"compiling the native kernel failed: {result.stderr.strip()[-400:]}"
+            hint = (
+                " (on Linux it needs OpenBLAS: apt install libopenblas-dev, or point "
+                "PINNRL_NATIVE_CXXFLAGS / PINNRL_NATIVE_LDFLAGS at its headers and library)"
+                if sys.platform.startswith("linux")
+                else ""
+            )
+            _FAILED = f"compiling the native kernel failed{hint}: {result.stderr.strip()[-400:]}"
             logger.warning(_FAILED)
             return None
         os.replace(tmp, lib_path)

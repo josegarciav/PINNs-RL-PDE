@@ -211,7 +211,7 @@ The same heat PINN step (a 4 × 64 `tanh` network, 5,120 points, Adam) written t
 - **`tanh` is the most expensive single operation in PyTorch** here: 2.6 ns an element, twenty times the matrix product next to it, a third of the trainer's step.
 - **Taylor-mode derivatives do not pay in tensor operations** (9.3–12.4 ms against 8.8 for double backward); they pay with fused loops in compiled code.
 - **C++ and Rust are indistinguishable**, 2.4 times faster than the PyTorch step on the same BLAS and five times slower than it without one.
-- **The kernel is in the package:** [`build_trainer(derivatives="native")`](custom_equations.md#a-faster-step-the-compiled-kernel) halves the trainer's step (10.6 → 5.4 ms) and, with the packaged network's layer normalization, cuts it threefold (32 → 10.4 ms), with the same loss and gradients to rounding. It is opt-in and, for now, macOS only and for `tanh` feed-forward networks.
+- **The kernel is in the package:** [`build_trainer(derivatives="native")`](custom_equations.md#a-faster-step-the-compiled-kernel) halves the trainer's step (10.6 → 5.4 ms) and, with the packaged network's layer normalization, cuts it threefold (32 → 10.4 ms), with the same loss and gradients to rounding. It is opt-in, for `tanh` feed-forward networks, on macOS (Accelerate) and Linux (OpenBLAS, I14).
 - **A PyTorch defect found on the way:** `torch.nn.LayerNorm` returns a wrong weight gradient for any loss with second derivatives of the network (2–3 % off in norm on this problem, 1–9 % in single directions against finite differences; exact for first-order residuals). The package's networks now use [`ExactLayerNorm`](api/neural_networks.md#neural_networks.base_network.ExactLayerNorm), the same function written in elementary operations, at the same cost.
 
 See `experiments/I11_native_pinn/`.
@@ -236,6 +236,8 @@ The same step on five equations, with autograd and with the kernel now carrying 
 - The general loops cost under 5 % against the special-cased kernel of I11/I12 on the heat streams, after the passes over the chunk arrays were pared (the first version was 45 % slower).
 
 See `experiments/I13_native_higher_order/`.
+
+**On Linux with OpenBLAS (experiment I14)**, the same source builds with `g++` and the tests pass; in Docker's VM on the same M4 the step gains 1.3× (heat, plain) to 3.0× (KdV, layer normalization) against 2.1–5.0× under Accelerate. OpenBLAS's `sgemm` is as fast as `torch.mm` there; the difference is that Taylor mode does about as many matrix-product flops as double backward and saves the elementwise work, and without Apple's AMX units the twelve matrix products of a step are two thirds of it. See `experiments/I14_native_linux/`.
 
 ## The evaporator reference and its PINN (experiments J01, J02)
 

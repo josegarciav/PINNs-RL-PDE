@@ -1,5 +1,7 @@
 """The compiled jet kernel (pinnrl.native) against autograd, and its wiring into CustomPDE."""
 
+import os
+
 import pytest
 import torch
 
@@ -7,6 +9,8 @@ from pinnrl import CustomPDE, native
 from pinnrl.neural_networks import ExactLayerNorm
 from pinnrl.pdes.catalog import from_catalog
 
+if os.environ.get("PINNRL_REQUIRE_NATIVE") and not native.available():  # CI: never skip silently
+    pytest.fail(f"the native kernel must build here: {native.unavailable_reason()}")
 pytestmark = pytest.mark.skipif(not native.available(), reason=str(native.unavailable_reason()))
 
 SETTINGS = dict(

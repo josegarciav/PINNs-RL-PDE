@@ -599,7 +599,7 @@ class CustomPDE(PDEBase):
         two to three times as fast per step where it applies: a feed-forward
         ``tanh`` network (with or without layer normalization) on the CPU,
         equations given as text (derivatives of any order, mixed ones
-        included), macOS. Where it does not
+        included), macOS or Linux. Where it does not
         apply the residual falls back to autograd without notice;
         ``pde.native_active(trainer.model)`` says which one runs.
 

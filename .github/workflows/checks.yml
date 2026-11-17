@@ -22,9 +22,13 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+      - name: OpenBLAS for the native kernel (pinnrl.native)
+        run: sudo apt-get install -y --no-install-recommends libopenblas-dev
       - name: Install
         run: uv sync --locked --all-extras --python ${{ matrix.python-version }}
-      - name: Tests (coverage gate on 3.12)
+      - name: Tests (coverage gate on 3.12; the native kernel must build and run)
+        env:
+          PINNRL_REQUIRE_NATIVE: "1"
         run: >
           uv run pytest -q
           ${{ matrix.python-version == '3.12' && '--cov=pinnrl --cov-report=term-missing --cov-fail-under=80' || '' }}
