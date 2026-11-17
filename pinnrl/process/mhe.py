@@ -50,6 +50,8 @@ class MovingHorizonEstimator:
         R: Measurement covariance ``(m, m)`` or a diagonal ``(m,)``.
         horizon: Number of records in the window.
         method: ``solve_ivp`` method for the state propagation.
+        propagate: ``propagate(t0, t1, x)`` in place of ``solve_ivp`` on ``f`` (see
+            :class:`~pinnrl.process.ExtendedKalmanFilter`).
         max_iterations: Cap on the Gauss–Newton iterations of one window solve.
         step_tolerance: A solve stops when its step, in units of the prior and
             disturbance standard deviations, is below this.
@@ -67,13 +69,16 @@ class MovingHorizonEstimator:
         atol: float = 1e-10,
         max_iterations: int = 10,
         step_tolerance: float = 1e-3,
+        propagate: Callable[[float, float, np.ndarray], np.ndarray] | None = None,
     ):
         Q = np.asarray(Q, dtype=float)
         if Q.ndim != 1:
             raise ValueError("MovingHorizonEstimator takes a diagonal Q, shape (n,)")
         if horizon < 1:
             raise ValueError("horizon must be at least one record")
-        self.filter = ExtendedKalmanFilter(f, h, Q, R, method=method, rtol=rtol, atol=atol)
+        self.filter = ExtendedKalmanFilter(
+            f, h, Q, R, method=method, rtol=rtol, atol=atol, propagate=propagate
+        )
         self.f, self.h = f, h
         self.noisy = np.flatnonzero(Q > 0)
         self.q = Q[self.noisy]

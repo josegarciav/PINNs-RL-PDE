@@ -49,7 +49,7 @@ def _cache_dir() -> Path:
     return Path(root) if root else Path.home() / ".cache" / "pinnrl" / "native"
 
 
-def _build_command(compiler: str, out: Path) -> list[str] | None:
+def _build_command(compiler: str, source: Path, out: Path, blas: bool) -> list[str] | None:
     """The compiler command for this platform, or ``None`` where the kernel has no build."""
     common = [
         "-O3", "-std=c++17", "-shared", "-fPIC",
@@ -59,22 +59,33 @@ def _build_command(compiler: str, out: Path) -> list[str] | None:
         *os.environ.get("PINNRL_NATIVE_CXXFLAGS", "").split(),
     ]  # fmt: skip
     if sys.platform == "darwin":
-        link = ["-framework", "Accelerate"]
+        link = ["-framework", "Accelerate"] if blas else []
         arch = ["-mcpu=native", "-DACCELERATE_NEW_LAPACK"]
     elif sys.platform.startswith("linux"):
-        link = ["-lopenblas"]
+        link = ["-lopenblas"] if blas else []
         arch = ["-march=native"]
     else:
         return None
     link += os.environ.get("PINNRL_NATIVE_LDFLAGS", "").split()
-    return [compiler, *common, *arch, str(_SOURCE), *link, "-o", str(out)]
+    return [compiler, *common, *arch, str(source), *link, "-o", str(out)]
 
 
-def _load() -> ctypes.CDLL | None:
-    """Compile (once per source version) and load the kernel; ``None`` when that is not possible."""
-    global _LIB, _FAILED
-    if _LIB is not None or _FAILED is not None:
-        return _LIB
+# name -> (main source, every file whose change rebuilds it, needs a BLAS)
+_LIBRARIES: dict[str, tuple[str, tuple[str, ...], bool]] = {
+    "jets": ("jets.cpp", ("jets.cpp", "fast_tanh.h"), True),
+    "evaporator": ("evaporator.cpp", ("evaporator.cpp",), False),
+}
+_LOADED: dict[str, ctypes.CDLL] = {}
+_ERRORS: dict[str, str] = {}
+
+
+def _load_library(name: str) -> ctypes.CDLL | None:
+    """Compile (once per source version) and load one of the kernels; ``None`` when that fails."""
+    if name in _LOADED:
+        return _LOADED[name]
+    if name in _ERRORS:
+        return None
+    main, sources, blas = _LIBRARIES[name]
     compiler = (
         os.environ.get("CXX")
         or shutil.which("clang++")
@@ -82,38 +93,53 @@ def _load() -> ctypes.CDLL | None:
         or shutil.which("c++")
     )
     if compiler is None:
-        _FAILED = (
+        _ERRORS[name] = (
             "no C++ compiler found (install the Xcode command line tools on macOS, g++ on Linux)"
         )
         return None
-    source = _SOURCE.read_bytes() + _SOURCE.with_name("fast_tanh.h").read_bytes()
-    tag = hashlib.sha256(source + b"flags-4").hexdigest()[:16]
-    lib_path = _cache_dir() / f"jets-{tag}.so"
+    here = _SOURCE.parent
+    digest = hashlib.sha256(b"flags-4")
+    for f in sources:
+        digest.update((here / f).read_bytes())
+    lib_path = _cache_dir() / f"{name}-{digest.hexdigest()[:16]}.so"
     if not lib_path.exists():
         lib_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = lib_path.with_suffix(f".{os.getpid()}.tmp")
-        cmd = _build_command(compiler, tmp)
+        cmd = _build_command(compiler, here / main, tmp, blas)
         if cmd is None:
-            _FAILED = "the native kernel builds on macOS (Accelerate) and Linux (OpenBLAS) only"
+            _ERRORS[name] = (
+                "the native kernels build on macOS (Accelerate) and Linux (OpenBLAS) only"
+            )
             return None
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             hint = (
                 " (on Linux it needs OpenBLAS: apt install libopenblas-dev, or point "
                 "PINNRL_NATIVE_CXXFLAGS / PINNRL_NATIVE_LDFLAGS at its headers and library)"
-                if sys.platform.startswith("linux")
+                if blas and sys.platform.startswith("linux")
                 else ""
             )
-            _FAILED = f"compiling the native kernel failed{hint}: {result.stderr.strip()[-400:]}"
-            logger.warning(_FAILED)
+            _ERRORS[name] = f"compiling {main} failed{hint}: {result.stderr.strip()[-400:]}"
+            logger.warning(_ERRORS[name])
             return None
         os.replace(tmp, lib_path)
     lib = ctypes.CDLL(str(lib_path))
-    lib.pinn_jets_work_size.restype = ctypes.c_long
-    lib.pinn_jets_forward.restype = None
-    lib.pinn_jets_backward.restype = None
-    _LIB = lib
+    if name == "jets":
+        lib.pinn_jets_work_size.restype = ctypes.c_long
+        lib.pinn_jets_forward.restype = None
+        lib.pinn_jets_backward.restype = None
+    else:
+        lib.evap_solve.restype = ctypes.c_int
+    _LOADED[name] = lib
     return lib
+
+
+def _load() -> ctypes.CDLL | None:
+    """The jets kernel (the network's derivatives), or ``None`` when it cannot be built."""
+    global _LIB, _FAILED
+    _LIB = _load_library("jets")
+    _FAILED = _ERRORS.get("jets")
+    return _LIB
 
 
 def available() -> bool:
@@ -347,9 +373,13 @@ def mlp_jets(
 
 __all__ = [
     "available",
+    "evaporator_available",
+    "evaporator_solve",
     "mlp_jets",
     "supported_layers",
     "supported_stack",
     "taylor_streams",
     "unavailable_reason",
 ]
+
+from pinnrl.native.evaporator import evaporator_available, evaporator_solve  # noqa: E402

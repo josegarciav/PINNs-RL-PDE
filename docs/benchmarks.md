@@ -241,6 +241,23 @@ See `experiments/I13_native_higher_order/`.
 
 **The registry's classes and one value pass (experiment I15).** `pde.derivatives = "native"` routes `PDEBase.compute_derivatives` through the kernel, so the registry's `heat`, `kdv`, `burgers` and `pendulum` gain 1.7×, 2.7×, 2.0× and 1.7× on a plain network and 2.5×, 4.7×, 3.1× and 2.3× with layer normalization (idle M4, residuals to 1e-6). Evaluating every boundary face and the initial points in one kernel call is worth 2 % of the heat step; the step with the kernel stands at 5.7 ms against the 3.6 ms of the framework-free program, the rest being the trainer's bookkeeping and the loss arithmetic in PyTorch. See `experiments/I15_native_value_pass/`.
 
+## The evaporator's reference solve in C++ (experiment I16)
+
+The falling-film evaporator's method-of-lines model, one hour at 11, 51 and 201 cells, SciPy's BDF against the compiled SDIRK4 integrator of `pinnrl.native.evaporator`, whose implicit stages are solved exactly by one sweep downstream.
+
+| Inputs | SciPy BDF (dense), 1e-8 | compiled, 1e-8 | compiled, 1e-6 |
+|---|---|---|---|
+| smooth steam, 11 / 51 / 201 cells | 10 / 16 / 78 ms | 1.8 / 5.0 / 16 ms | 1.3 / 2.3 / 5.7 ms |
+| a steam record with 10 s knots | 0.7 / 1.5 / 6.5 s | 6.7 / 30 / 108 ms | 3.5 / 10 / 39 ms |
+| a batch fit of the fouling (4 modes + offset, 51 cells) | 106 s | | 0.68 s, the same estimate |
+| the fouling monitor (360 records, 51 cells) | 1.9 s | 1.2 s | |
+
+- **The right-hand side was never the cost** (7 µs a call); SciPy's dense factorisations of a Jacobian that is block lower-bidiagonal were, and above all the steps a linearly interpolated record's kinks force on a variable-order method. That is where J06's 4–14 s fits came from.
+- **The batch estimator through the reference solver is now as cheap as the filter**, and the filter's remaining time is its own finite-difference Jacobian and matrix exponential.
+- The compiled path splines the sampled inputs; against SciPy's linear interpolation of a noisy record that is a modelling difference of 2 × 10⁻⁵ in the outlet solids, a hundredth of the record's noise.
+
+See `experiments/I16_native_evaporator/`.
+
 ## The evaporator reference and its PINN (experiments J01, J02)
 
 `pinnrl.process.FallingFilmEvaporator`: liquid flow and solids fraction transported along a heated tube with boiling-point elevation, fouling and measured feed and steam signals; a steady-state ODE solver, a first-order method-of-lines dynamic solver, and the same model as a `CustomPDE`. Details in `experiments/J01_evaporator_reference/README.md`.

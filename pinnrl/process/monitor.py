@@ -113,6 +113,7 @@ def monitor_fouling(
     steam_bias_std: float | None = None,
     threshold: float | None = None,
     level: float = 0.9,
+    integrator: str = "auto",
 ) -> FoulingMonitor:
     """Estimate the fouling resistance of ``model`` from outlet records.
 
@@ -141,6 +142,9 @@ def monitor_fouling(
             plausible offset is too narrow.
         threshold: Fouling at which the tube is cleaned; gives ``time_to_clean``.
         level: Nominal level of the intervals.
+        integrator: ``"auto"`` (the compiled integrator of I16 where it builds,
+            SciPy otherwise), ``"native"`` or ``"scipy"`` for the state
+            propagation between records.
     """
     times = np.asarray(times, dtype=float)
     records = np.asarray(records, dtype=float).reshape(times.size, 2)
@@ -164,8 +168,20 @@ def monitor_fouling(
     if with_bias:
         assert steam_bias_std is not None  # with_bias is exactly that
         P0[k_bias] = float(steam_bias_std) ** 2
+    propagate = None
+    if integrator not in ("auto", "native", "scipy"):
+        raise ValueError(f"integrator must be 'auto', 'native' or 'scipy', not {integrator!r}")
+    if integrator != "scipy":
+        from pinnrl.native.evaporator import evaporator_available
+
+        if integrator == "native" or evaporator_available():
+            propagate = model.native_propagator(nz, steam_bias=with_bias, trend=True)
     ekf = ExtendedKalmanFilter(
-        dynamics, lambda t, x: h(t, x[:n]), Q=Q, R=np.array([noise[0] ** 2, noise[1] ** 2])
+        dynamics,
+        lambda t, x: h(t, x[:n]),
+        Q=Q,
+        R=np.array([noise[0] ** 2, noise[1] ** 2]),
+        propagate=propagate,
     )
     # The filter's state is not clipped at zero: clipping the fouling alone leaves the
     # states it is correlated with (the steam offset) inconsistent and costs coverage (J06).

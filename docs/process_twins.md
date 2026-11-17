@@ -75,6 +75,8 @@ mon = monitor_fouling(FallingFilmEvaporator(T_s=steam), times, records,
 print(mon.summary())
 ```
 
+The filters and the batch fits spend their time in the reference solve. Experiment [I16](benchmarks.md#the-evaporators-reference-solve-in-c-experiment-i16) put the evaporator's method-of-lines model in C++ ([`pinnrl.native.evaporator`](api/native.md)): an L-stable fourth-order SDIRK integrator whose implicit stages are solved exactly by one sweep downstream, because the upwind Jacobian couples a cell to its upstream neighbour only. `reference(..., method="native")` uses it (the inputs sampled every 5 s and interpolated by a spline), `FallingFilmEvaporator.native_propagator(nz, steam_bias, trend)` gives the filters a `propagate(t0, t1, x)` for their state layout (`ExtendedKalmanFilter(..., propagate=...)`), and `monitor_fouling(..., integrator="auto")` takes it wherever it builds. SciPy's BDF remains the default of `reference` and the fallback everywhere.
+
 ## Moving-horizon estimation
 
 [`MovingHorizonEstimator`](api/process.md#process.mhe.MovingHorizonEstimator) takes the same `f`, `h`, `Q` and `R` as the filter and re-solves the last `horizon` records at every record, as a bounded least-squares problem in the state at the window's start and one disturbance per record for each state with process noise. For a linear model without bounds it is the Kalman filter, whatever the horizon. Use it for what the filter cannot express: bounds on the states, and bounds on the disturbances, such as a fouling resistance that only grows.

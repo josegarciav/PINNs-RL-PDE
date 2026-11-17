@@ -197,6 +197,12 @@ class ExtendedKalmanFilter:
             the discrete covariance over a step ``dt`` is ``Q dt``.
         R: Measurement covariance ``(m, m)`` or a diagonal ``(m,)``.
         method: ``solve_ivp`` method for the state propagation.
+        rtol: Relative tolerance of the propagation.
+        atol: Absolute tolerance of the propagation.
+        propagate: ``propagate(t0, t1, x)`` returning the state at ``t1``, in
+            place of ``solve_ivp`` on ``f`` (the compiled evaporator integrator,
+            :meth:`~pinnrl.process.FallingFilmEvaporator.native_propagator`);
+            ``f`` is still differentiated for the transition matrix.
     """
 
     def __init__(
@@ -208,9 +214,11 @@ class ExtendedKalmanFilter:
         method: str = "LSODA",
         rtol: float = 1e-8,
         atol: float = 1e-10,
+        propagate: Callable[[float, float, np.ndarray], np.ndarray] | None = None,
     ):
         self.f = f
         self.h = h
+        self._propagate = propagate
         self.Q = np.diag(Q) if np.ndim(Q) == 1 else np.asarray(Q, dtype=float)
         self.R = np.diag(R) if np.ndim(R) == 1 else np.asarray(R, dtype=float)
         self.method = method
@@ -221,6 +229,8 @@ class ExtendedKalmanFilter:
         """The state at ``t1`` from ``x`` at ``t0``."""
         if t1 <= t0:
             return x.copy()
+        if self._propagate is not None:
+            return np.asarray(self._propagate(t0, t1, x), dtype=float)
         sol = solve_ivp(self.f, (t0, t1), x, method=self.method, rtol=self.rtol, atol=self.atol)
         if not sol.success:
             raise RuntimeError(f"state propagation failed: {sol.message}")

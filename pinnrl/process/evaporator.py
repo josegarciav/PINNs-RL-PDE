@@ -30,6 +30,7 @@ sensors and, optionally, ``R_f(t)`` as an unknown function.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any, cast
@@ -159,6 +160,36 @@ class FallingFilmEvaporator:
 
         return rhs
 
+    def _geometry(self) -> tuple[float, float, float, float, float, float, float]:
+        return (
+            float(self.length),
+            float(self.velocity),
+            float(self.perimeter),
+            float(self.U),
+            float(self.latent_heat),
+            float(self.T_sat),
+            float(self.k_bpe),
+        )
+
+    def _signal_tables(
+        self,
+        t0: float,
+        t1: float,
+        spacing: float = 5.0,
+        steam_bias: float = 0.0,
+        R_f: Callable[[float], float] | None = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """The inputs ``W_in, X_in, T_s - steam_bias, R_f`` sampled on ``[t0, t1]`` for the compiled integrator.
+
+        At most every ``spacing`` seconds (and at least 2 and at most 20,001 knots).
+        """
+        n = int(min(max(math.ceil((t1 - t0) / spacing) + 1, 2), 20_001))
+        times = np.linspace(t0, t1, n)
+        fns = [_as_fn(self.W_in), _as_fn(self.X_in), _as_fn(self.T_s), R_f or _as_fn(self.R_f)]
+        values = np.array([[float(fn(t)) for fn in fns] for t in times])
+        values[:, 2] -= steam_bias
+        return times, values
+
     def reference(
         self,
         t_max: float,
@@ -166,6 +197,8 @@ class FallingFilmEvaporator:
         nt: int = 201,
         initial: Mapping[str, np.ndarray] | str = "steady",
         method: str = "BDF",
+        rtol: float = 1e-8,
+        atol: float = 1e-11,
     ) -> EvaporatorReference:
         """Dynamic solution by the method of lines (first-order upwind, implicit in time).
 
@@ -175,7 +208,18 @@ class FallingFilmEvaporator:
             nt: Output time points on ``[0, t_max]``.
             initial: ``"steady"`` (the steady profile at ``t = 0``) or
                 ``{"W": array, "X": array}`` on the ``nz`` grid.
-            method: ``solve_ivp`` method; ``BDF`` handles the stiff source.
+            method: ``solve_ivp`` method (``BDF`` handles the stiff source; above
+                64 cells its Jacobian is declared banded), or ``"native"`` for the
+                compiled integrator of :mod:`pinnrl.native.evaporator` (I16), an
+                L-stable fourth-order SDIRK method whose implicit stages are solved
+                exactly by one sweep downstream: 4–10 times faster at equal
+                accuracy, the inputs sampled every 5 s and interpolated by a spline.
+            rtol: Relative tolerance.
+            atol: Absolute tolerance.
+
+        Raises:
+            RuntimeError: When the solve fails, or ``method="native"`` and the
+                compiled integrator cannot be built here.
         """
         z = np.linspace(0.0, self.length, nz)
         t = np.linspace(0.0, t_max, nt)
@@ -190,20 +234,100 @@ class FallingFilmEvaporator:
         else:
             profiles = cast("Mapping[str, np.ndarray]", initial)
             W0, X0 = np.asarray(profiles["W"], dtype=float), np.asarray(profiles["X"], dtype=float)
-        rhs = self.mol_rhs(nz)
-
         s0 = np.concatenate([W0, X0])
-        sol = solve_ivp(rhs, (0.0, t_max), s0, t_eval=t, method=method, rtol=1e-8, atol=1e-11)
-        if not sol.success:
-            raise RuntimeError(f"evaporator reference failed: {sol.message}")
-        W = sol.y[:nz]
-        X = sol.y[nz:]
+        if method == "native":
+            from pinnrl.native.evaporator import evaporator_solve
+
+            times, values = self._signal_tables(0.0, t_max)
+            out, _ = evaporator_solve(
+                nz, self._geometry(), times, values, s0, t, rtol=rtol, atol=atol
+            )
+            W, X = np.ascontiguousarray(out[:, :nz].T), np.ascontiguousarray(out[:, nz:].T)
+        else:
+            rhs = self.mol_rhs(nz)
+            options: dict[str, Any] = {}
+            if method in ("BDF", "Radau", "LSODA") and nz > 64:
+                options["jac_sparsity"] = self._jacobian_sparsity(nz)
+            sol = solve_ivp(
+                rhs, (0.0, t_max), s0, t_eval=t, method=method, rtol=rtol, atol=atol, **options
+            )
+            if not sol.success:
+                raise RuntimeError(f"evaporator reference failed: {sol.message}")
+            W = sol.y[:nz]
+            X = sol.y[nz:]
         for k, tau in enumerate(t):  # the inlet row carries the boundary values
             W[0, k], X[0, k] = W_in(tau), X_in(tau)
         q = np.stack([self.heat_flux(X[:, k], tau) for k, tau in enumerate(t)], axis=1)
         return EvaporatorReference(
             W=ReferenceSolution(x=z, t=t, u=W), X=ReferenceSolution(x=z, t=t, u=X), q=q, z=z, t=t
         )
+
+    @staticmethod
+    def _jacobian_sparsity(nz: int) -> Any:
+        """The upwind scheme's Jacobian pattern: a cell depends on itself and the one upstream."""
+        from scipy.sparse import lil_matrix
+
+        pattern = lil_matrix((2 * nz, 2 * nz))
+        for i in range(1, nz):
+            for row in (i, nz + i):
+                for col in (i, i - 1, nz + i, nz + i - 1):
+                    pattern[row, col] = 1
+        return pattern.tocsr()
+
+    def native_propagator(
+        self,
+        nz: int = 11,
+        steam_bias: bool = False,
+        trend: bool = False,
+        rtol: float = 1e-8,
+        atol: float = 1e-11,
+        spacing: float = 1.0,
+    ) -> Callable[[float, float, np.ndarray], np.ndarray]:
+        """``propagate(t0, t1, x)`` for the filters, through the compiled integrator (I16).
+
+        ``x`` is the state of :meth:`fouling_state_space` with the parameters
+        appended, as the estimators carry it: ``[s, R_f]`` (``[s, R_f, b]`` with
+        ``steam_bias``) for a parameter held constant between records, or with
+        ``trend`` the local-linear-trend layout of the fouling monitor,
+        ``[s, R_f, rate, (b)]``, where the fouling follows ``R_f + rate (t - t0)``
+        inside the step and its level moves on by ``rate (t1 - t0)``. The
+        recorded signals are sampled every ``spacing`` seconds inside the step.
+        Pass the result as ``ExtendedKalmanFilter(..., propagate=...)``.
+
+        Raises:
+            RuntimeError: When the compiled integrator cannot be built here.
+        """
+        from pinnrl.native.evaporator import evaporator_available, evaporator_solve
+        from pinnrl.native.evaporator import evaporator_unavailable_reason as _why
+
+        if not evaporator_available():
+            raise RuntimeError(_why())
+        n = 2 * (nz - 1)
+        geometry = self._geometry()
+        W_in, X_in = _as_fn(self.W_in), _as_fn(self.X_in)
+
+        def propagate(t0: float, t1: float, x: np.ndarray) -> np.ndarray:
+            x = np.asarray(x, dtype=float)
+            if t1 <= t0:
+                return x.copy()
+            level = float(x[n])
+            rate = float(x[n + 1]) if trend else 0.0
+            bias = float(x[n + 1 + int(trend)]) if steam_bias else 0.0
+            times, values = self._signal_tables(
+                t0, t1, spacing=spacing, steam_bias=bias, R_f=lambda t: level + rate * (t - t0)
+            )
+            s0 = np.concatenate([[W_in(t0)], x[: nz - 1], [X_in(t0)], x[nz - 1 : n]])
+            out, _ = evaporator_solve(
+                nz, geometry, times, values, s0, np.array([t0, t1]), rtol=rtol, atol=atol
+            )
+            new = x.copy()
+            new[: nz - 1] = out[1, 1:nz]
+            new[nz - 1 : n] = out[1, nz + 1 :]
+            if trend:
+                new[n] = level + rate * (t1 - t0)
+            return new
+
+        return propagate
 
     def fouling_state_space(self, nz: int = 11, steam_bias: bool = False):
         """The interior states ``[W_1..W_{nz-1}, X_1..X_{nz-1}]`` with ``R_f`` as a parameter, for an estimator.
