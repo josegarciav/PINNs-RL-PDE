@@ -445,6 +445,48 @@ See `experiments/J08_stickiness/`.
 
 J09's calculation on the tower, with eight inputs admitted at their accuracies. The droplet's diameter and velocity are one unknown (the drying time against the residence time), so measuring the droplet size alone buys nothing; behind them the six balance inputs limit jointly, none alone. What pays is thermocouples good to 0.2 K (critical moisture ±0.085 → ±0.052), nine operating points (±0.065) and, for the stickiness margin, replicate lab assays (1.2 → 0.6 K). The best five points depend on the target: next to the operating limit for the margin, the corners of the window at high load for the curve. 60 fitted campaigns per design confirm the parameters' predicted spreads; the margin's is 20 % optimistic. See `experiments/J12_dryer_design/`.
 
+## The counter-current tower (experiment J13)
+
+[`CounterCurrentDryer`](api/process.md#process.counter_dryer.CounterCurrentDryer) is J11's tower with the air entering at the bottom against the falling droplets: the droplets' state is given at the top and the air's at the bottom, so the steady state is a two-point boundary-value problem and the transient a hyperbolic system whose characteristics run both ways. It is the test the roadmap set for the PINN twin's case, a unit without a cheap initial-value solve.
+
+![J13](assets/benchmarks/j13_counter_current_dryer.png)
+
+| Solve (M4, one thread) | Time |
+|---|---|
+| co-current steady state (J11) | 4 ms |
+| counter-current steady state, shooting | 103 ms |
+| transient, 600 s, 51 / 201 / 401 cells, smooth step at rtol 1e-6 | 0.04 / 0.07 / 0.13 s |
+| transient, a 10 s-knot record of the inlet air at rtol 1e-8 | 0.34 / 0.74 / 1.3 s |
+| least squares, three parameters from one transient record | 10 s |
+| PINN forward solve / PINN twin (2,000 Adam + 200 L-BFGS, the compiled kernel) | 96 s / 110–140 s |
+
+- **The boundary-value problem is the expensive part, and it is not expensive enough.** Shooting costs twenty-five integrations down the tower; the transient, where a twin estimates anything, integrates in a tenth of a second once the Jacobian's sparsity is declared. The PINN's case would need a model with no method-of-lines form at all.
+- **The PINN forward solve needs the problem scaled, and is then 12–15 % off on the moisture** (7–8 % on the droplet temperature, 3 % on the air's) on two seeds of three. The four equations' residuals differ by five orders of magnitude, and the package's residual normalization assumes the fields change over the whole window where this unit's time scales are 5 and 100 s; `custom_pde` now divides each equation by its own scale, and the residual weight had to drop to 1e-3. L-BFGS does all the learning; the kink of the drying curve at the critical moisture is what the network does not resolve.
+- **The twin cannot identify the curve from a transient; the classical fit can.** Critical moisture, exponent and wall loss from five thermocouples, the outlet humidity and hourly powder samples over ten minutes: bounded least squares through the transient lands within the linear prediction (±0.011, ±0.015, ±0.003) on all three data sets; the PINN twin's six runs are rejected by the misfit test (reduced χ² 5–9), with the critical moisture 0.7–1.5 too high and the wall loss negative, the parameters absorbing the physics the network does not resolve.
+
+See `experiments/J13_counter_current_dryer/`.
+
+## The line-level twin (experiment J10)
+
+[`ProcessLine`](api/process.md#process.line.ProcessLine) chains three evaporator passes into the spray dryer: the concentrate sets the droplets' solids and the solids flow, and the dryer is quasi-steady against the evaporator's hours of fouling. Over a four-hour shift the passes foul to 2, 4 and 6e-5 m²K/W, the concentrate thins from 41 to 34 % and the powder's moisture rises from 0.077 to 0.21.
+
+![J10](assets/benchmarks/j10_line_twin.png)
+
+| Estimate of the powder moisture at the end of the shift (std) | |
+|---|---|
+| propagation: fouling unmonitored, dryer and feed at their priors | 0.16 |
+| propagation: fouling as the monitors have it, dryer and feed at their priors | 0.094 (feed flow 61 %, droplet size 27 %) |
+| linear-Gaussian posterior from the dryer's online records alone | 0.0054 |
+| from the dryer's records and the lab's four assays | 0.0022 |
+| from every record of the line | 0.0011 |
+
+- **Once the fouling is monitored, the powder inherits the dryer's inputs, not the evaporator.** The monitors pin the three passes to a few 1e-6, after which the fouling owns 1 % of the powder's variance; what remains is the feed flow and the droplet size, J12's nuisances. The Monte Carlo stds agree with the linear budget within 10 %.
+- **Propagation is the wrong estimator for the powder.** The dryer's thermocouples and hygrometer see the drying itself: their posterior of the powder is 17 times narrower than the propagated band, the lab halves it and the evaporator's records halve it again. Ten simulated shifts with the nuisances drawn from their priors confirm it: the joint fit of twelve unknowns predicts the powder to 0.0008 (claimed 0.0011) in four minutes, the two-stage estimate to 0.075 (claimed 0.10) in ten seconds.
+- **Information flows downstream only.** The dryer's records leave the fouling at its prior; a line twin estimates each unit's unknowns on that unit's instruments and uses the downstream unit's instruments for its product.
+- **The first pass's fouling is one unknown with the feed.** With the feed admitted at its accuracy, the joint posterior of pass 1's fouling is 3.8e-5, larger than the fouling itself (the direction is 0.99 collinear with the feed flow), while the monitor that trusts the feed claims ±6e-6; on the simulated shifts its error is 4.7e-5 and its prediction misfit of 5 flags it. Passes 2 and 3 are measured on both sides and determined to 1–2e-6.
+
+See `experiments/J10_line_twin/`.
+
 ## Time-marching windows (experiment H04)
 
 ```bash

@@ -1,6 +1,6 @@
 # Process twins
 
-`pinnrl.process` holds what the twin of a process unit is built from: reference simulators of the units, the same models as [`CustomPDE`](custom_equations.md) problems for the PINN, the classical estimators every PINN result is compared with, and an adapter for plant-historian data. This page shows how the pieces fit; the numbers behind the recommendations are in [Benchmarks](benchmarks.md) (experiments J01–J07).
+`pinnrl.process` holds what the twin of a process unit is built from: reference simulators of the units, the same models as [`CustomPDE`](custom_equations.md) problems for the PINN, the classical estimators every PINN result is compared with, and an adapter for plant-historian data. This page shows how the pieces fit; the numbers behind the recommendations are in [Benchmarks](benchmarks.md) (experiments J01–J13).
 
 ## The units
 
@@ -9,6 +9,8 @@
 | Falling-film evaporator tube | [`FallingFilmEvaporator`](api/process.md#process.evaporator.FallingFilmEvaporator) | the fouling resistance $R_f(t)$ | outlet solids and flow |
 | Drying droplet | [`DryingDroplet`](api/process.md#process.droplet.DryingDroplet) | the drying-rate closure $f(X)$ | mass and temperature |
 | Spray-dryer tower (co-current, steady) | [`SprayDryer`](api/process.md#process.dryer.SprayDryer) | the same closure, seen through the air | air temperatures at a few heights, outlet humidity, powder moisture |
+| Counter-current tower (steady and transient) | [`CounterCurrentDryer`](api/process.md#process.counter_dryer.CounterCurrentDryer) | the curve's parameters and the wall loss, from a transient | the same, recorded over time |
+| The line: evaporator passes feeding the dryer | [`ProcessLine`](api/process.md#process.line.ProcessLine) | every unit's unknowns, and which one the powder inherits | each pass's outlet, the dryer's instruments, lab assays |
 
 Each class has a reference solver (`reference`, method of lines or an ODE integrator), which plays the plant in the experiments and the forward model in the classical estimators, and `custom_pde()`, which writes the same equations with their inputs, scales and sensors for the PINN.
 
@@ -210,6 +212,41 @@ print(tower.stickiness_margin(profile)[-1])                  # T_p - T_g(X) at t
 
 Experiment [J11](benchmarks.md#the-closure-at-dryer-scale-experiment-j11) measures what those records determine: the two parameters of a known curve form from five operating points, about half the directions of a free-form closure, and, either way, the powder moisture at a new operating point to 1–2 %. Identify the closure on the rig and carry it to the tower; at dryer scale estimate a few numbers and the nuisances (J12 prices them: better thermocouples, more operating points and replicate lab assays pay; a droplet-size measurement does not). What the twin then gives that no instrument does is the stickiness margin, the particle temperature above its glass transition: to 1.0–1.5 K at the outlet, against 1.6–3.2 K for a lab assay hours later and tens of kelvin from the air's water balance ([J08](benchmarks.md#a-soft-sensor-for-the-stickiness-margin-experiment-j08)).
 
+## The counter-current tower
+
+In a counter-current tower the air enters at the bottom against the falling droplets, so the droplets' state is known at the top and the air's at the bottom: the steady state is a two-point boundary-value problem, which [`CounterCurrentDryer.steady`](api/process.md#process.counter_dryer.CounterCurrentDryer) solves by shooting on the air's state at the top (about 100 ms, against 5 ms for the co-current tower), and the transient a system of transport equations whose characteristics run both ways, which `transient` integrates by the method of lines with a sparse Jacobian (0.05–0.6 s for ten minutes, by grid and tolerance). `custom_pde` writes the same four fields in $(z, t)$ for the PINN, with the inlet air as time-series inputs, the steady profiles as the initial condition and each equation divided by its own scale, and `identify=` names the parameters to estimate.
+
+```python
+import numpy as np
+from pinnrl.process import CounterCurrentDryer
+
+tower = CounterCurrentDryer(T_in=lambda t: 433.15 + (15.0 if t > 10.0 else 0.0))   # a step of the inlet air
+profile = tower.steady()                                   # X, T_p, Y, T_a down the tower; the BVP by shooting
+print(profile.outlet(), tower.balances(profile)["energy"], tower.stickiness_margin(profile)[-1])
+response = tower.transient(600.0, nz=201)                  # the step response by the method of lines
+records = tower.records(response, probe_heights=(0.5, 2.0, 3.5, 5.0, 6.5))
+print(records["T_air"][:, -1] - 273.15, records["X_out"][[0, -1]])
+pde = tower.custom_pde(600.0, identify=["Xcr", "ncdc"], initial_guesses={"Xcr": 0.7, "ncdc": 1.0})
+```
+
+Experiment [J13](benchmarks.md#the-counter-current-tower-experiment-j13) is the test the roadmap set for the PINN twin's case, a unit without a cheap initial-value solve. The steady state is one, but its transient is not: with the sparse Jacobian a ten-minute step response integrates in a tenth of a second, a least-squares fit of the curve's two parameters and the wall loss from one transient record takes seconds and lands within the linear prediction, and the PINN twin on the same record does not reach that. The forward PINN solve of the four coupled fields stays at about 10 % on the moisture even with the equations scaled and the residual weight tuned.
+
+## The line
+
+A plant's units are coupled by what flows between them. [`ProcessLine`](api/process.md#process.line.ProcessLine) chains evaporator passes (each pass's outlet is the next pass's feed) and hands the concentrate to the dryer, whose droplets then have the concentrate's solids fraction and whose solids flow is the concentrate's; the dryer is quasi-steady against the evaporator's hours of fouling. `steady` is the line at an instant, `reference` the shift (the passes by the method of lines, the dryer at every output time), `records` what the line's instruments report, and `propagate` the linear and Monte-Carlo propagation of each unit's uncertainty to the concentrate, the powder's moisture and its stickiness margin, with the share of the variance each source owns.
+
+```python
+from pinnrl.process import ProcessLine
+
+line = ProcessLine.default(fouling=[lambda t: 2e-5 * t / 14400, lambda t: 4e-5 * t / 14400, 0.0])
+print(line.steady()["X"], line.steady(t=14400.0)["powder"])      # 10 % -> 41 % solids; the powder after four hours
+shift = line.reference(4 * 3600.0, nz=51, dryer_every=4)          # three passes, then the dryer every 2 min
+budget = line.propagate({"R_f_0": 6e-6, "R_f_1": 5e-6, "X_cr": 0.1, "d0": 25e-6, "W_feed": 0.002}, t=14400.0)
+print(budget["linear"]["powder"])                                  # std of the powder moisture and the shares
+```
+
+Experiment [J10](benchmarks.md#the-line-level-twin-experiment-j10) runs the fouling monitor on each pass with the previous pass's record as its inlet, propagates the end-of-shift bands with the dryer's campaign posterior to the powder, and compares that two-stage estimate with the linear-Gaussian posterior of all twelve unknowns from all records: the information flows downstream only (the dryer's instruments determine its powder but not the fouling behind it), the powder is determined far better by the dryer's own records than by propagating the upstream uncertainties, and the first pass's fouling is one unknown with the feed's calibration.
+
 ## Which estimator
 
 | Situation | Use | Evidence |
@@ -219,4 +256,6 @@ Experiment [J11](benchmarks.md#the-closure-at-dryer-scale-experiment-j11) measur
 | Known model, whole record at once, an interval to defend | Gauss–Newton on the reference solver with a few modes of the unknown | J04, J06 |
 | An unknown function of the state in an ODE model | Shooting with a monotone interpolant through the reference solver | J07d |
 | A closure seen only through a unit's outlet and profile records | A few parameters of a known form (or a scale factor) by least squares through the reference; report the prediction, not the closure | J11 |
+| A few parameters from a transient of a unit whose steady state is a boundary-value problem | Least squares through the method-of-lines transient (a tenth of a second a solve) | J13 |
+| A line of units | Monitor each unit on its own records, then propagate; use the downstream unit's records for its own product | J10 |
 | No reference solver for the unknown's form, or a field in space | The PINN twin, started from a pointwise estimate and checked with a misfit guard | J03, J07b, J07c |

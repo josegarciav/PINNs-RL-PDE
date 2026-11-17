@@ -43,6 +43,17 @@ def _dryer_droplet() -> DryingDroplet:
     return DryingDroplet(d0=250e-6, solids_fraction=0.4, T0=323.15, velocity=0.3)
 
 
+def gordon_taylor(X: np.ndarray, T_g_solids: float, T_g_water: float, k: float) -> np.ndarray:
+    """The Gordon–Taylor glass transition of a solids–water mixture at dry-basis moisture ``X``, K.
+
+    ``T_g = (w_s T_gs + k w_w T_gw) / (w_s + k w_w)`` with the water mass
+    fraction ``w_w = X / (1 + X)``.
+    """
+    X = np.maximum(np.asarray(X, dtype=float), 0.0)
+    w_w = X / (1.0 + X)
+    return ((1.0 - w_w) * T_g_solids + k * w_w * T_g_water) / (1.0 - w_w + k * w_w)
+
+
 @dataclass
 class DryerReference:
     """The steady profiles along the tower.
@@ -189,10 +200,7 @@ class SprayDryer:
         fraction ``w_w = X / (1 + X)``. Water plasticises the solids: near the
         outlet moisture ``T_g`` falls by about 9 K for each 0.01 of ``X``.
         """
-        X = np.maximum(np.asarray(X, dtype=float), 0.0)
-        w_w = X / (1.0 + X)
-        k = self.gordon_taylor_k
-        return ((1.0 - w_w) * self.T_g_solids + k * w_w * self.T_g_water) / (1.0 - w_w + k * w_w)
+        return gordon_taylor(X, self.T_g_solids, self.T_g_water, self.gordon_taylor_k)
 
     def stickiness_margin(self, ref: DryerReference | None = None) -> np.ndarray:
         """``T_p - T_g(X)`` along the tower, K.

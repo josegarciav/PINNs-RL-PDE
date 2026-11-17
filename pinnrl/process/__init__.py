@@ -3,12 +3,19 @@
 * :mod:`pinnrl.process.evaporator` — a falling-film evaporator tube (J01).
 * :mod:`pinnrl.process.droplet` — a single drying droplet with a drying-rate closure (J07).
 * :mod:`pinnrl.process.dryer` — a co-current spray-drying tower: the droplet coupled to its air (J11).
+* :mod:`pinnrl.process.counter_dryer` — a counter-current tower, steady (a boundary-value problem) and transient (J13).
+* :mod:`pinnrl.process.line` — the line: a multi-pass evaporator feeding the dryer, with its error propagation (J10).
 * :mod:`pinnrl.process.ekf` — an extended Kalman filter and RTS smoother (J05).
 * :mod:`pinnrl.process.mhe` — moving-horizon estimation with bounds on states and disturbances.
 * :mod:`pinnrl.process.historian` — plant-historian exports and a tag map to inputs and sensors.
 * :mod:`pinnrl.process.monitor` — the evaporator's fouling monitor: bands and the time to clean (J06).
 """
 
+from pinnrl.process.counter_dryer import (
+    CounterCurrentDryer,
+    CounterCurrentProfile,
+    CounterCurrentTransient,
+)
 from pinnrl.process.droplet import DropletReference, DryingDroplet
 from pinnrl.process.dryer import DryerReference, SprayDryer
 from pinnrl.process.ekf import (
@@ -21,6 +28,7 @@ from pinnrl.process.ekf import (
 )
 from pinnrl.process.evaporator import EvaporatorReference, FallingFilmEvaporator
 from pinnrl.process.historian import Historian, TwinData
+from pinnrl.process.line import LineReference, ProcessLine
 from pinnrl.process.mhe import MovingHorizonEstimator
 from pinnrl.process.monitor import (
     FoulingMonitor,
@@ -31,6 +39,9 @@ from pinnrl.process.monitor import (
 )
 
 __all__ = [
+    "CounterCurrentDryer",
+    "CounterCurrentProfile",
+    "CounterCurrentTransient",
     "DropletReference",
     "DryerReference",
     "SprayDryer",
@@ -41,7 +52,9 @@ __all__ = [
     "FilterResult",
     "FoulingMonitor",
     "Historian",
+    "LineReference",
     "MovingHorizonEstimator",
+    "ProcessLine",
     "ThresholdTime",
     "TwinData",
     "augment_local_linear_trend",
