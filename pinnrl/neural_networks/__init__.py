@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pinnrl.config import Config
 
+import math
+
 import torch
 
 from .attention import AttentionNetwork, SelfAttention
@@ -183,18 +185,21 @@ class PINNModel(BaseNetwork):
             x = 2.0 * (x - self._in_lo) / self._in_span - 1.0
         return self._out_offset + self._out_scale * self.model(x)
 
-    def jets(self, x, first=(), second=()):
+    def jets(self, x, derivatives=()):
         """Value and derivatives by the compiled kernel, or ``None`` when it does not apply.
 
-        ``(u, du, d2u)`` with ``du[c]`` the derivative of every output with
-        respect to input column ``c`` (for ``c`` in ``first`` and ``second``)
-        and ``d2u[c]`` the pure second derivative (``c`` in ``second``), each
-        ``(N, output_dim)`` and differentiable with respect to the weights
-        once. The non-dimensionalization of the inputs and outputs is applied.
-        The kernel covers a feed-forward stack of ``Linear`` and ``tanh``, with
-        or without layer normalization, in float32 on the CPU (:mod:`pinnrl.native`); for any other network, on
-        another device, or where the kernel cannot be built, this returns
-        ``None`` and the caller differentiates by autograd.
+        ``(u, du)`` with ``du[columns]`` the derivative of every output with
+        respect to the input columns in the tuple ``columns`` (``(0,)`` for
+        the first derivative along column 0, ``(0, 0)`` for the second,
+        ``(0, 1)`` for the mixed one, ``(0, 0, 0)`` for the third, any order),
+        for the requested ``derivatives`` and the lower ones they are built
+        from, each ``(N, output_dim)`` and differentiable with respect to the
+        weights once. The non-dimensionalization of the inputs and outputs is
+        applied. The kernel covers a feed-forward stack of ``Linear`` and
+        ``tanh``, with or without layer normalization, in float32 on the CPU
+        (:mod:`pinnrl.native`); for any other network, on another device, or
+        where the kernel cannot be built, this returns ``None`` and the caller
+        differentiates by autograd.
         """
         from pinnrl import native
 
@@ -211,12 +216,10 @@ class PINNModel(BaseNetwork):
         if self.scaled and self._in_lo is not None:
             z = 2.0 * (x - self._in_lo) / self._in_span - 1.0
             slope = 2.0 / self._in_span  # dz/dx per input column
-        u, du, d2u = native.mlp_jets(linears, z, first, second, norms)
+        u, du = native.mlp_jets(linears, z, derivatives, norms)
         if self.scaled:
             u = self._out_offset + self._out_scale * u
             du = {c: self._out_scale * g for c, g in du.items()}
-            d2u = {c: self._out_scale * g for c, g in d2u.items()}
         if slope is not None:
-            du = {c: g * slope[c] for c, g in du.items()}
-            d2u = {c: g * slope[c] ** 2 for c, g in d2u.items()}
-        return u, du, d2u
+            du = {c: g * math.prod(float(slope[k]) for k in c) for c, g in du.items()}
+        return u, du

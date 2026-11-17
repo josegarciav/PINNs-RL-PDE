@@ -216,6 +216,27 @@ The same heat PINN step (a 4 × 64 `tanh` network, 5,120 points, Adam) written t
 
 See `experiments/I11_native_pinn/`.
 
+## The kernel on third, fourth and mixed derivatives (experiment I13)
+
+The same step on five equations, with autograd and with the kernel now carrying general Taylor coefficients (one stream per multi-index the residual needs), one thread, medians of three seeds.
+
+![I13](assets/benchmarks/i13_native_higher_order.png)
+
+| Equation | plain `tanh` network | with layer normalization |
+|---|---|---|
+| heat, $u_{xx}$ | 2.1× | 3.1× |
+| KdV, $u_{xxx}$ | 3.1× | 5.0× |
+| BBM, $u_{xxt}$ | 2.0× | 3.6× |
+| Euler–Bernoulli beam, $w_{xxxx}$ | 3.7× | 7.1× |
+| Cahn–Hilliard, $u_{xxxx}$ | 4.0× | 7.2× |
+
+- **Residual, loss and weight gradient agree with autograd** to $10^{-7}$–$10^{-5}$ relative on every equation, through fourth order and the mixed $u_{xxt}$.
+- **The gain grows with the order:** autograd nests a graph per derivative, the kernel adds a stream per multi-index.
+- **A mixed derivative costs its closure:** $u_{xxt}$ brings $u_{xt}$ and $u_{xx}$ with it, five streams, as many as KdV.
+- The general loops cost under 5 % against the special-cased kernel of I11/I12 on the heat streams, after the passes over the chunk arrays were pared (the first version was 45 % slower).
+
+See `experiments/I13_native_higher_order/`.
+
 ## The evaporator reference and its PINN (experiments J01, J02)
 
 `pinnrl.process.FallingFilmEvaporator`: liquid flow and solids fraction transported along a heated tube with boiling-point elevation, fouling and measured feed and steam signals; a steady-state ODE solver, a first-order method-of-lines dynamic solver, and the same model as a `CustomPDE`. Details in `experiments/J01_evaporator_reference/README.md`.

@@ -82,14 +82,16 @@ class Fields:
         coordinates: Sequence[str],
         device: torch.device,
         unknowns: Mapping[str, UnknownFunction] | None = None,
-        jets: tuple[Sequence[str], Sequence[str]] | None = None,
+        jets: Sequence[Sequence[str]] | None = None,
     ):
         """Evaluate ``model`` at ``x, t`` (fresh leaf copies that require grad).
 
-        ``jets = (first, second)`` names the coordinates whose first and pure
-        second derivatives the residual needs; when the model can supply them
-        by its compiled kernel (``model.jets``, :mod:`pinnrl.native`) they are
-        taken from there and nothing is differentiated by autograd.
+        ``jets`` lists the derivatives the residual needs, each a tuple of
+        coordinate names (``("x", "x")`` for ``u_xx``, ``("x", "t")`` for
+        ``u_xt``, ``("x", "x", "x")`` for ``u_xxx``); when the model can
+        supply them by its compiled kernel (``model.jets``,
+        :mod:`pinnrl.native`) they are taken from there and nothing is
+        differentiated by autograd.
         """
         self._x = x.detach().to(device).requires_grad_(True)
         self._t = t.detach().to(device).requires_grad_(True)
@@ -104,17 +106,14 @@ class Fields:
         if jets is not None and model_jets is not None:
             columns = {c: i for i, c in enumerate(self._spatial)}
             columns["t"] = self._x.shape[1]  # an ODE keeps a dummy spatial column
-            got = model_jets(
-                inp.detach(), [columns[c] for c in jets[0]], [columns[c] for c in jets[1]]
-            )
+            got = model_jets(inp.detach(), [tuple(columns[c] for c in d) for d in jets])
             if got is not None:
-                self._u, du, d2u = got
+                self._u, du = got
                 names = {i: c for c, i in columns.items()}
                 for j, field in enumerate(self._fields):
-                    for col, g in du.items():
-                        self._cache[(field, (names[col],))] = g[:, j : j + 1]
-                    for col, g in d2u.items():
-                        self._cache[(field, (names[col], names[col]))] = g[:, j : j + 1]
+                    for cols, g in du.items():
+                        key = tuple(sorted(names[c] for c in cols))
+                        self._cache[(field, key)] = g[:, j : j + 1]
                 self.native = True
                 return
         self._u = model(inp)
@@ -598,8 +597,9 @@ class CustomPDE(PDEBase):
         ``derivatives="native"`` takes the residual's derivatives from the
         compiled kernel of :mod:`pinnrl.native` instead of autograd, about
         two to three times as fast per step where it applies: a feed-forward
-        ``tanh`` network (with or without layer normalization) on the CPU, equations given as
-        text with first and pure second derivatives, macOS. Where it does not
+        ``tanh`` network (with or without layer normalization) on the CPU,
+        equations given as text (derivatives of any order, mixed ones
+        included), macOS. Where it does not
         apply the residual falls back to autograd without notice;
         ``pde.native_active(trainer.model)`` says which one runs.
 
@@ -672,30 +672,24 @@ class CustomPDE(PDEBase):
         """Parameter name to value: the live ``nn.Parameter`` for trainable ones."""
         return {name: self.get_parameter(name) for name in self.parameters}
 
-    def _native_request(self) -> tuple[list[str], list[str]] | None:
+    def _native_request(self) -> list[tuple[str, ...]] | None:
         """The derivatives to ask the compiled kernel for, or ``None`` to use autograd.
 
-        Only with ``derivatives == "native"``, equations given as text, no
-        unknown functions, and nothing beyond first and pure second
-        derivatives of the fields.
+        Only with ``derivatives == "native"``, equations given as text and no
+        unknown functions. Each entry is a tuple of coordinate names, sorted,
+        of any order (``("x", "x", "x")`` for ``u_xxx``, ``("t", "x")`` for ``u_xt``).
         """
         if getattr(self, "derivatives", "autograd") != "native":
             return None
         if self._residual_fn is not None or len(self.unknown_functions) > 0:
             return None
-        first: list[str] = []
-        second: list[str] = []
+        wanted: list[tuple[str, ...]] = []
         for expr in self._equations:
             for field, coords in expr.derivatives:
                 if field not in self.fields:
                     return None
-                if len(coords) == 1:
-                    first.append(coords[0])
-                elif len(coords) == 2 and coords[0] == coords[1]:
-                    second.append(coords[0])
-                else:
-                    return None
-        return list(dict.fromkeys(first)), list(dict.fromkeys(second))
+                wanted.append(tuple(sorted(coords)))
+        return list(dict.fromkeys(wanted))
 
     def native_active(self, model: torch.nn.Module) -> bool:
         """Whether the residual of ``model`` is computed by the compiled kernel on this machine."""
@@ -704,7 +698,7 @@ class CustomPDE(PDEBase):
         if request is None or model_jets is None:
             return False
         probe = torch.zeros(1, int(getattr(self, "dimension", 1)) + 1, device=self.device)
-        return model_jets(probe, [], []) is not None
+        return model_jets(probe, []) is not None
 
     def compute_residual(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor

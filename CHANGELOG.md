@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Derivatives of any order in the compiled kernel** (roadmap v0.8, I13). `pinnrl.native` carries general Taylor coefficients through `tanh` and layer normalization, so residuals with mixed, third and fourth derivatives (`u_xt`, `u_xxx` for KdV, `u_xxxx` for the beam and Cahn–Hilliard) now run through `build_trainer(derivatives="native")` instead of falling back to autograd. `native.mlp_jets(linears, x, derivatives, norms)` takes tuples of input columns of any order and returns `(u, {columns: derivative})`; `native.taylor_streams` lists the streams a request needs; `PINNModel.jets(x, derivatives)` follows. Residual, loss and weight gradient agree with autograd to rounding on five equations; the step gains 2–4× on a plain network and 3–7× with the packaged layer normalization, the more the higher the order, and the problems of I11/I12 lose under 5 %. See [Benchmarks](docs/benchmarks.md#the-kernel-on-third-fourth-and-mixed-derivatives-experiment-i13).
+
+### Changed
+- `native.mlp_jets` no longer takes `first=` and `second=`; pass `derivatives=[(col,), (col, col)]`. The kernel's `pinn_jets_forward` and `pinn_jets_backward` take the multi-index streams instead of the first and parent lists (a compiled cache from 0.7.0 is rebuilt on first use).
+
 ## [0.7.0] — 2026-11-12
 
 The process-twins release: classical estimators next to the PINN twin (moving-horizon estimation, a trend drift model, a fouling monitor with calibrated intervals), a plant-historian adapter and the dashboard's Process view, a spray-dryer tower with its stickiness margin, linear-Gaussian measurement design, an anchor constraint and a misfit test for learned closures, and an optional compiled kernel that halves the training step (threefold on the default network). It also fixes the weight gradient through layer normalization, which PyTorch's own layer gets wrong for losses with second derivatives ([pytorch/pytorch#204478](https://github.com/pytorch/pytorch/issues/204478)).

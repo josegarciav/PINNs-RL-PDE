@@ -2,19 +2,19 @@
 
 A residual such as ``u_t - alpha u_xx`` is usually built by reverse-mode autograd applied
 twice, and the weight gradient by a third pass through that graph. For a plain ``tanh``
-multilayer perceptron the same numbers come from one forward pass that carries the first and
-second derivatives next to the value (Taylor mode) and one hand-written reverse pass.
+multilayer perceptron the same numbers come from one forward pass that carries the derivatives
+next to the value as Taylor coefficients (Taylor mode) and one hand-written reverse pass.
 :func:`mlp_jets` does that in a small C++ kernel (``jets.cpp``, compiled on first use and
 cached), wrapped as a :class:`torch.autograd.Function` so the rest of the loss stays ordinary
-PyTorch. Experiment I11 measures the step at roughly half the autograd time on Apple silicon.
+PyTorch. Experiments I11–I13 measure the step at a half to a third of the autograd time on Apple silicon.
 
 It is opt-in (``pde.build_trainer(..., derivatives="native")``) and narrow by design:
 
 * macOS with the Accelerate framework and a C++ compiler (``clang++``);
 * a feed-forward network of ``Linear`` layers and ``tanh``, with or without ``LayerNorm``
   before each ``tanh``, float32, on the CPU;
-* first derivatives and pure second derivatives (``u_x``, ``u_t``, ``u_xx``; not ``u_xt`` or
-  ``u_xxx``);
+* derivatives of any order with respect to the inputs, mixed ones included (``u_x``, ``u_xx``,
+  ``u_xt``, ``u_xxx``, ``u_xxxx``), each as a tuple of input columns;
 * gradients with respect to the weights only, once (no Hessian-vector products).
 
 Anything else falls back to autograd; :func:`available` says whether the kernel can be used here.
@@ -24,7 +24,9 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import itertools
 import logging
+import math
 import os
 import shutil
 import subprocess
@@ -60,7 +62,7 @@ def _load() -> ctypes.CDLL | None:
         _FAILED = "no C++ compiler found (install the Xcode command line tools)"
         return None
     source = _SOURCE.read_bytes()
-    tag = hashlib.sha256(source + b"flags-2").hexdigest()[:16]
+    tag = hashlib.sha256(source + b"flags-3").hexdigest()[:16]
     lib_path = _cache_dir() / f"jets-{tag}.dylib"
     if not lib_path.exists():
         lib_path.parent.mkdir(parents=True, exist_ok=True)
@@ -123,14 +125,14 @@ def _give(buffer: torch.Tensor) -> None:
 
 
 class _Jets(torch.autograd.Function):
-    """``(S N, k)`` output jets of the MLP.
+    """``(S N, k)`` output streams of the MLP: the value and the Taylor coefficients.
 
     ``params`` are ``(W0, b0, W1, b1, ...)`` followed, with layer normalization,
     by ``(gamma0, beta0, gamma1, beta1, ...)`` for the hidden layers.
     """
 
     @staticmethod
-    def forward(ctx, x, first, parent, n_layers, eps, *params):  # noqa: D102
+    def forward(ctx, x, cols, alphas, n_layers, eps, *params):  # noqa: D102
         lib = _load()
         assert lib is not None
         linear, norm = params[: 2 * n_layers], params[2 * n_layers :]
@@ -140,18 +142,19 @@ class _Jets(torch.autograd.Function):
         betas = [p.detach().contiguous() for p in norm[1::2]]
         n = x.shape[0]
         sizes = [x.shape[1]] + [w.shape[0] for w in weights]
-        streams = 1 + len(first) + len(parent)
+        streams, dims = len(alphas), len(cols)
+        flat_alpha = [a for alpha in alphas for a in alpha]
         c_sizes = _int_array(sizes)
         work = _take(lib.pinn_jets_work_size(n, n_layers, c_sizes, streams, int(bool(gammas))))
         out = torch.empty(streams * n, sizes[-1])
         x = x.detach().contiguous()
         lib.pinn_jets_forward(
             ctypes.c_void_p(x.data_ptr()), n, n_layers, c_sizes, _pointer_array(weights),
-            _pointer_array(biases), len(first), _int_array(first), len(parent), _int_array(parent),
+            _pointer_array(biases), streams, dims, _int_array(cols), _int_array(flat_alpha),
             _pointer_array(gammas) if gammas else None, _pointer_array(betas) if gammas else None,
             ctypes.c_float(eps), ctypes.c_void_p(work.data_ptr()), ctypes.c_void_p(out.data_ptr()),
         )  # fmt: skip
-        ctx.jet_state = (work, weights, gammas, eps, sizes, n, tuple(first), tuple(parent))
+        ctx.jet_state = (work, weights, gammas, eps, sizes, n, dims, tuple(flat_alpha))
         return out
 
     @staticmethod
@@ -159,8 +162,8 @@ class _Jets(torch.autograd.Function):
     def backward(ctx, grad_out):  # noqa: D102
         lib = _load()
         assert lib is not None
-        work, weights, gammas, eps, sizes, n, first, parent = ctx.jet_state
-        streams = 1 + len(first) + len(parent)
+        work, weights, gammas, eps, sizes, n, dims, flat_alpha = ctx.jet_state
+        streams = len(flat_alpha) // dims if dims else 1
         grad_w = [torch.empty_like(w) for w in weights]
         grad_b = [torch.empty(w.shape[0]) for w in weights]
         grad_gamma = [torch.empty_like(g) for g in gammas]
@@ -168,8 +171,8 @@ class _Jets(torch.autograd.Function):
         scratch = _take(2 * streams * n * max(sizes))
         grad_out = grad_out.contiguous()
         lib.pinn_jets_backward(
-            n, len(weights), _int_array(sizes), _pointer_array(weights), len(first), len(parent),
-            _int_array(parent), _pointer_array(gammas) if gammas else None, ctypes.c_float(eps),
+            n, len(weights), _int_array(sizes), _pointer_array(weights), streams, dims,
+            _int_array(flat_alpha), _pointer_array(gammas) if gammas else None, ctypes.c_float(eps),
             ctypes.c_void_p(work.data_ptr()), ctypes.c_void_p(grad_out.data_ptr()),
             _pointer_array(grad_w), _pointer_array(grad_b),
             _pointer_array(grad_gamma) if gammas else None,
@@ -232,30 +235,60 @@ def supported_layers(layers: Sequence[torch.nn.Module]) -> list[torch.nn.Linear]
     return None if stack is None else stack[0]
 
 
+def taylor_streams(
+    derivatives: Sequence[Sequence[int]],
+) -> tuple[list[int], list[tuple[int, ...]]]:
+    """The input columns and the multi-indices the kernel carries for ``derivatives``.
+
+    Each derivative is a tuple of input columns (``(0, 0, 1)`` for
+    ``d^3u / dx_0^2 dx_1``). The multi-indices (over the sorted distinct
+    columns) are the downward closure of the requested ones, the zero index
+    first and then by total degree, which is the order the kernel's
+    recurrences need.
+    """
+    cols = sorted({c for d in derivatives for c in d})
+    index = {c: j for j, c in enumerate(cols)}
+    alphas = {tuple([0] * len(cols))}
+    for d in derivatives:
+        top = [0] * len(cols)
+        for c in d:
+            top[index[c]] += 1
+        alphas.update(itertools.product(*(range(k + 1) for k in top)))
+    return cols, sorted(alphas, key=lambda a: (sum(a), a))
+
+
+def _columns(cols: Sequence[int], alpha: Sequence[int]) -> tuple[int, ...]:
+    return tuple(c for c, k in zip(cols, alpha, strict=True) for _ in range(k))
+
+
 def mlp_jets(
     linears: Sequence[torch.nn.Linear],
     x: torch.Tensor,
-    first: Sequence[int] = (),
-    second: Sequence[int] = (),
+    derivatives: Sequence[Sequence[int]] = (),
     norms: Sequence[torch.nn.LayerNorm] = (),
-) -> tuple[torch.Tensor, dict[int, torch.Tensor], dict[int, torch.Tensor]]:
+) -> tuple[torch.Tensor, dict[tuple[int, ...], torch.Tensor]]:
     """Value and derivatives of a tanh MLP at ``x`` through the compiled kernel.
 
     Args:
         linears: The ``Linear`` layers in order (``tanh`` between them).
-        x: Inputs, ``(N, d)``, float32 on the CPU; treated as data (no gradient flows to it).
-        first: Input columns to differentiate once.
-        second: Input columns to differentiate twice (each is added to ``first`` if missing).
+        x: Inputs ``(N, d)``, float32 on the CPU.
+        derivatives: The derivatives wanted, each a tuple of input columns:
+            ``(0,)`` for ``du/dx_0``, ``(1, 1)`` for ``d2u/dx_1^2``, ``(0, 1)``
+            for ``d2u/dx_0 dx_1``, ``(0, 0, 0)`` for the third derivative along
+            ``x_0``. Any order; a derivative brings every lower one it is built
+            from (``(0, 0, 0)`` gives ``(0,)`` and ``(0, 0)`` too).
         norms: The ``LayerNorm`` after each hidden ``Linear`` (before its ``tanh``), or none.
 
     Returns:
-        ``(u, du, d2u)``: the output ``(N, k)``, ``{column: du/dx_column}`` and
-        ``{column: d2u/dx_column^2}``, all differentiable with respect to the weights.
+        ``(u, du)``: the output ``(N, k)`` and ``{columns: derivative}`` with
+        the columns sorted, for the requested derivatives and those they are
+        built from, all differentiable with respect to the weights.
 
     Raises:
         RuntimeError: When the kernel is not available (see :func:`unavailable_reason`) or the
             input is not float32 on the CPU.
-        ValueError: When ``norms`` does not have one entry per hidden layer.
+        ValueError: When ``norms`` does not have one entry per hidden layer, or a derivative
+            names a column ``x`` does not have.
     """
     if not available():
         raise RuntimeError(unavailable_reason())
@@ -263,23 +296,32 @@ def mlp_jets(
         raise RuntimeError("the native kernel needs float32 inputs on the CPU")
     if norms and len(norms) != len(linears) - 1:
         raise ValueError("norms needs one LayerNorm per hidden layer")
-    first_cols = list(dict.fromkeys([*first, *second]))
-    parent = [first_cols.index(c) for c in second]
+    cols, alphas = taylor_streams(derivatives)
+    if cols and (cols[0] < 0 or cols[-1] >= x.shape[1]):
+        raise ValueError(f"derivative columns must be in 0..{x.shape[1] - 1}, got {cols}")
     params: list[torch.Tensor] = []
     for lin in linears:
         params += [lin.weight, lin.bias]
     for norm in norms:
         params += [norm.weight, norm.bias]
     eps = float(norms[0].eps) if norms else 0.0
-    out = _Jets.apply(x, tuple(first_cols), tuple(parent), len(linears), eps, *params)
+    out = _Jets.apply(x, tuple(cols), tuple(alphas), len(linears), eps, *params)
     n = x.shape[0]
-    u = out[:n]
-    du = {c: out[(1 + i) * n : (2 + i) * n] for i, c in enumerate(first_cols)}
-    d2u = {
-        c: out[(1 + len(first_cols) + j) * n : (2 + len(first_cols) + j) * n]
-        for j, c in enumerate(second)
-    }
-    return u, du, d2u
+    du: dict[tuple[int, ...], torch.Tensor] = {}
+    for s, alpha in enumerate(alphas):
+        if s == 0:
+            continue
+        factorial = math.prod(math.factorial(k) for k in alpha)
+        block = out[s * n : (s + 1) * n]
+        du[_columns(cols, alpha)] = block * factorial if factorial != 1 else block
+    return out[:n], du
 
 
-__all__ = ["available", "mlp_jets", "supported_layers", "supported_stack", "unavailable_reason"]
+__all__ = [
+    "available",
+    "mlp_jets",
+    "supported_layers",
+    "supported_stack",
+    "taylor_streams",
+    "unavailable_reason",
+]
