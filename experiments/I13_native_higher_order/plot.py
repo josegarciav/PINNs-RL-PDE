@@ -68,7 +68,7 @@ for ax, layer_norm in zip(axes, (False, True), strict=True):
     ax.set_axisbelow(True)
 axes[0].legend(frameon=False, loc="lower right")
 fig.suptitle(
-    "I13: the compiled kernel on third, fourth and mixed derivatives (4 × 64 network, 5,120 points, M4 under load)",
+    "I13: the compiled kernel on third, fourth and mixed derivatives (4 × 64 network, 5,120 points, Apple M4)",
     fontsize=12,
 )
 fig.tight_layout()

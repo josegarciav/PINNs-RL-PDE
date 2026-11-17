@@ -224,10 +224,10 @@ The same step on five equations, with autograd and with the kernel now carrying 
 
 | Equation | plain `tanh` network | with layer normalization |
 |---|---|---|
-| heat, $u_{xx}$ | 2.1× | 3.1× |
-| KdV, $u_{xxx}$ | 3.1× | 5.0× |
+| heat, $u_{xx}$ | 1.9× (11.1 → 5.7 ms) | 3.0× (33.8 → 11.1 ms) |
+| KdV, $u_{xxx}$ | 2.6× | 4.7× |
 | BBM, $u_{xxt}$ | 2.0× | 3.6× |
-| Euler–Bernoulli beam, $w_{xxxx}$ | 3.7× | 7.1× |
+| Euler–Bernoulli beam, $w_{xxxx}$ | 3.8× | 7.1× |
 | Cahn–Hilliard, $u_{xxxx}$ | 4.0× | 7.2× |
 
 - **Residual, loss and weight gradient agree with autograd** to $10^{-7}$–$10^{-5}$ relative on every equation, through fourth order and the mixed $u_{xxt}$.
@@ -237,7 +237,9 @@ The same step on five equations, with autograd and with the kernel now carrying 
 
 See `experiments/I13_native_higher_order/`.
 
-**On Linux with OpenBLAS (experiment I14)**, the same source builds with `g++` and the tests pass; in Docker's VM on the same M4 the step gains 1.3× (heat, plain) to 3.0× (KdV, layer normalization) against 2.1–5.0× under Accelerate. OpenBLAS's `sgemm` is as fast as `torch.mm` there; the difference is that Taylor mode does about as many matrix-product flops as double backward and saves the elementwise work, and without Apple's AMX units the twelve matrix products of a step are two thirds of it. See `experiments/I14_native_linux/`.
+**On Linux with OpenBLAS (experiment I14)**, the same source builds with `g++` and the tests pass; in Docker's VM on the same M4 the step gains 1.4× (heat, plain) to 3.0× (KdV, layer normalization) against 1.9–4.7× under Accelerate. OpenBLAS's `sgemm` is as fast as `torch.mm` there; the difference is that Taylor mode does about as many matrix-product flops as double backward and saves the elementwise work, and without Apple's AMX units the twelve matrix products of a step are two thirds of it. See `experiments/I14_native_linux/`.
+
+**The registry's classes and one value pass (experiment I15).** `pde.derivatives = "native"` routes `PDEBase.compute_derivatives` through the kernel, so the registry's `heat`, `kdv`, `burgers` and `pendulum` gain 1.7×, 2.7×, 2.0× and 1.7× on a plain network and 2.5×, 4.7×, 3.1× and 2.3× with layer normalization (idle M4, residuals to 1e-6). Evaluating every boundary face and the initial points in one kernel call is worth 2 % of the heat step; the step with the kernel stands at 5.7 ms against the 3.6 ms of the framework-free program, the rest being the trainer's bookkeeping and the loss arithmetic in PyTorch. See `experiments/I15_native_value_pass/`.
 
 ## The evaporator reference and its PINN (experiments J01, J02)
 

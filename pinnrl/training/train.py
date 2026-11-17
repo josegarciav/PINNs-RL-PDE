@@ -243,7 +243,9 @@ def create_pde(config_dict, device):
         observation_data=pde_cfg.get("observation_data"),
     )
 
-    return _attach_synthetic_observations(pde_cls(config=pde_config), config_dict)
+    pde = pde_cls(config=pde_config)
+    pde.derivatives = config_dict.get("model", {}).get("derivatives", "autograd")
+    return _attach_synthetic_observations(pde, config_dict)
 
 
 def _attach_synthetic_observations(pde, config_dict):
@@ -459,7 +461,7 @@ def main():
         choices=["autograd", "native"],
         default="autograd",
         help=(
-            "With --pde-file: 'native' takes the residual's derivatives from the compiled kernel "
+            "'native' takes the residual's derivatives from the compiled kernel "
             "(pinnrl.native: macOS or Linux, a feed-forward tanh network with or without layer norm, CPU, derivatives "
             "of any order), two to three times as fast per step; autograd wherever it does not apply."
         ),

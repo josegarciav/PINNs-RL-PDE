@@ -84,6 +84,11 @@ class PDEBase:
 
     time_order = 1
 
+    #: ``"autograd"`` or ``"native"``: where the residual's derivatives come from. With
+    #: ``"native"`` :meth:`compute_derivatives` asks the network's compiled kernel
+    #: (:mod:`pinnrl.native`) and falls back to autograd where it does not apply.
+    derivatives: str = "autograd"
+
     def __init__(self, config: PDEConfig, bandit_sampler=None):
         """Initialize PDE with given configuration.
 
@@ -190,6 +195,10 @@ class PDEBase:
         )
         self.boundary_conditions = self._parse_boundary_conditions(config.boundary_conditions or {})
         self._fixed_points: dict[tuple[str, int], Any] = {}
+        #: Values of the boundary and initial points of the current step, evaluated in one
+        #: pass by :meth:`compute_loss` when the network's compiled kernel is on; see
+        #: :meth:`_batched_values`.
+        self._value_stash: dict[tuple[str, int], Any] = {}
 
         # Setup neural network parameters if not specified
         if self.config.input_dim is None:
@@ -533,8 +542,11 @@ class PDEBase:
         for axis, x_lo, x_hi, t in self._seeded_points("boundary", n):
             x_lo = x_lo.clone().requires_grad_(needs_grad)
             x_hi = x_hi.clone().requires_grad_(needs_grad)
-            u_lo = model(torch.cat([x_lo, t], dim=1))
-            u_hi = model(torch.cat([x_hi, t], dim=1))
+            if ("boundary", axis) in self._value_stash:
+                u_lo, u_hi = self._value_stash[("boundary", axis)]
+            else:
+                u_lo = model(torch.cat([x_lo, t], dim=1))
+                u_hi = model(torch.cat([x_hi, t], dim=1))
             if needs_grad:
                 du_lo = self._grad(u_lo, x_lo)[:, axis : axis + 1]
                 du_hi = self._grad(u_hi, x_hi)[:, axis : axis + 1]
@@ -556,7 +568,10 @@ class PDEBase:
         n = int(self._training_option("num_initial_points", 100))
         x, t = self._seeded_points("initial", n)
         t = t.clone().requires_grad_(self.time_order == 2)
-        u = model(torch.cat([x, t], dim=1))
+        if ("initial", 0) in self._value_stash:
+            u = self._value_stash[("initial", 0)]
+        else:
+            u = model(torch.cat([x, t], dim=1))
         loss = self._apply_loss_fn(u - self.initial_condition(x, t.detach()))
         if self.time_order == 2:
             velocity = float(self.config.initial_condition.get("velocity", 0.0))
@@ -645,6 +660,9 @@ class PDEBase:
                 f"Spatial derivative order {spatial[-1]} is not supported. Maximum order is 4."
             )
 
+        native = self._native_derivatives(model, x, t, temporal, spatial)
+        if native is not None:
+            return native
         x, t, u = self._prepare_inputs(model, x, t)
         derivatives = {"u": u}
 
@@ -666,6 +684,46 @@ class PDEBase:
                     key = "d" + f"x{dim + 1}" * order
                 derivatives[key] = current
 
+        if 2 in spatial:
+            if self.dimension == 1:
+                derivatives["laplacian"] = derivatives["dx2"]
+            else:
+                derivatives["laplacian"] = sum(
+                    derivatives["d" + f"x{d + 1}" * 2] for d in range(self.dimension)
+                )
+        return derivatives
+
+    def _native_derivatives(
+        self,
+        model: torch.nn.Module,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        temporal: list[int],
+        spatial: list[int],
+    ) -> dict[str, torch.Tensor] | None:
+        """:meth:`compute_derivatives` through the compiled kernel, or ``None`` for autograd."""
+        model_jets: Callable[..., Any] | None = getattr(model, "jets", None)
+        if self.derivatives != "native" or model_jets is None:
+            return None
+        x = x.detach().to(self.device)
+        t = t.detach().to(self.device)
+        t_col = x.shape[1]
+        wanted = [tuple([t_col] * o) for o in temporal]
+        wanted += [tuple([d] * o) for d in range(self.dimension) for o in spatial]
+        got = model_jets(torch.cat([x, t], dim=1), wanted)
+        if got is None:
+            return None
+        u, du = got
+        derivatives = {"u": u}
+        for order in temporal:
+            derivatives["dt" if order == 1 else f"dt{order}"] = du[tuple([t_col] * order)]
+        for dim in range(self.dimension):
+            for order in spatial:
+                if self.dimension == 1:
+                    key = "dx" if order == 1 else f"dx{order}"
+                else:
+                    key = "d" + f"x{dim + 1}" * order
+                derivatives[key] = du[tuple([dim] * order)]
         if 2 in spatial:
             if self.dimension == 1:
                 derivatives["laplacian"] = derivatives["dx2"]
@@ -912,12 +970,16 @@ class PDEBase:
         adaptive weighting enabled the physics weights here are 1 and the
         trainer re-weights the total.
         """
-        losses = {
-            "residual": self._apply_loss_fn(self.compute_residual(model, x, t)),
-            "boundary": self._boundary_loss(model),
-            "initial": self._initial_loss(model),
-            "data": self._compute_data_loss(model),
-        }
+        self._value_stash = self._batched_values(model)
+        try:
+            losses = {
+                "residual": self._apply_loss_fn(self.compute_residual(model, x, t)),
+                "boundary": self._boundary_loss(model),
+                "initial": self._initial_loss(model),
+                "data": self._compute_data_loss(model),
+            }
+        finally:
+            self._value_stash = {}
 
         weights = self._training_option("loss_weights") or {}
         adaptive = self._training_option("adaptive_weights")
@@ -931,6 +993,61 @@ class PDEBase:
             )
         losses["total"] = self.weighted_total(losses, *physics_weights)
         return losses
+
+    def _value_points_need_grad(self) -> bool:
+        """Whether a boundary or initial term differentiates the network at its points."""
+        kinds = set(self.boundary_conditions or ())
+        return bool(kinds & {"neumann", "periodic"}) or self.time_order >= 2
+
+    def _batched_values(self, model: torch.nn.Module) -> dict[tuple[str, int], Any]:
+        """The network at every boundary and initial point of a step, in one call.
+
+        Only when the network evaluates plain values through the compiled kernel
+        (``model.native_values``) and no term differentiates at those points; the
+        kernel's cost is mostly per call, so the faces of every axis and the
+        initial points go together. Returns ``{("boundary", axis): (u_lo, u_hi),
+        ("initial", 0): u}``, or ``{}`` when the terms evaluate the network themselves.
+        """
+        if not getattr(model, "native_values", False) or self._value_points_need_grad():
+            return {}
+        groups: list[tuple[tuple[str, int], list[torch.Tensor]]] = []
+        if self._has_boundary_terms():
+            n = int(self._training_option("num_boundary_points", 100))
+            for axis, x_lo, x_hi, t in self._seeded_points("boundary", n):
+                if axis >= getattr(self, "_n_physical", self.dimension):
+                    continue
+                groups.append(
+                    (("boundary", axis), [torch.cat([x_lo, t], dim=1), torch.cat([x_hi, t], dim=1)])
+                )
+        if self.initial_condition is not None:
+            n = int(self._training_option("num_initial_points", 100))
+            x, t = self._seeded_points("initial", n)
+            groups.append((("initial", 0), [torch.cat([x, t], dim=1)]))
+        blocks = [b for _, bs in groups for b in bs]
+        if len(blocks) < 2:
+            return {}
+        values = model(torch.cat(blocks))
+        out: dict[tuple[str, int], Any] = {}
+        start = 0
+        for key, bs in groups:
+            parts = []
+            for b in bs:
+                parts.append(values[start : start + b.shape[0]])
+                start += b.shape[0]
+            out[key] = tuple(parts) if len(parts) == 2 else parts[0]
+        return out
+
+    def _has_boundary_terms(self) -> bool:
+        """Whether any boundary condition is configured (per field or shared)."""
+        return bool(self.boundary_conditions)
+
+    def native_active(self, model: torch.nn.Module) -> bool:
+        """Whether the residual of ``model`` is computed by the compiled kernel on this machine."""
+        model_jets: Callable[..., Any] | None = getattr(model, "jets", None)
+        if self.derivatives != "native" or model_jets is None:
+            return False
+        probe = torch.zeros(1, int(self.dimension) + 1, device=self.device)
+        return model_jets(probe, []) is not None
 
     def weighted_total(self, losses, w_residual, w_boundary, w_initial) -> torch.Tensor:
         """Combine loss components under ``training.mode``.

@@ -270,6 +270,92 @@ def test_mixed_derivative_residual_agrees_with_autograd():
     assert torch.allclose(r_a, r_n, rtol=1e-3, atol=1e-4 * r_a.abs().max().item())
 
 
+def _registry_pair(key, derivatives="native", hidden=(16, 16), layer_norm=False):
+    """A registry problem (``HeatEquation``, ...) with the packaged model builder, in both modes."""
+    import yaml
+
+    from pinnrl.config import DEFAULT_CONFIG_PATH
+    from pinnrl.training.train import build_config_dict, build_model, create_pde
+
+    with open(DEFAULT_CONFIG_PATH) as f:
+        base = yaml.safe_load(f)
+    cfg = build_config_dict(base, key, "feedforward")
+    cfg["architectures"]["feedforward"].update(
+        {"hidden_dims": list(hidden), "layer_norm": layer_norm}
+    )
+    cfg["training"].update({"num_boundary_points": 32, "num_initial_points": 32})
+    cfg["model"]["derivatives"] = derivatives
+    device = torch.device("cpu")
+    torch.manual_seed(0)
+    model, _ = build_model(cfg, device)
+    return create_pde(cfg, device), model
+
+
+@pytest.mark.parametrize("key", ["heat", "wave", "burgers", "kdv", "pendulum"])
+def test_registry_classes_run_through_the_kernel(key):
+    """``PDEBase.compute_derivatives`` takes the registry's residuals from the kernel (I15)."""
+    pde_n, model = _registry_pair(key)
+    pde_a, _ = _registry_pair(key, derivatives="autograd")
+    assert pde_n.derivatives == "native" and model.native_values
+    assert pde_n.native_active(model) and not pde_a.native_active(model)
+    lo, hi = pde_a.domain[0]
+    t0, t1 = pde_a.time_domain
+    x = lo + (hi - lo) * torch.rand(64, pde_a.dimension)
+    t = t0 + (t1 - t0) * torch.rand(64, 1)
+    r_n, r_a = pde_n.compute_residual(model, x, t), pde_a.compute_residual(model, x, t)
+    assert torch.allclose(r_n, r_a, rtol=1e-3, atol=1e-4 * r_a.abs().max().item() + 1e-6)
+    model.native_values = False  # the autograd arm evaluates plain values by PyTorch
+    loss_a = pde_a.compute_loss(model, x, t)["total"]
+    grads_a = torch.autograd.grad(loss_a, list(model.parameters()), allow_unused=True)
+    model.native_values = True
+    loss_n = pde_n.compute_loss(model, x, t)["total"]
+    grads_n = torch.autograd.grad(loss_n, list(model.parameters()), allow_unused=True)
+    assert loss_n.item() == pytest.approx(loss_a.item(), rel=1e-3)
+    for a, n in zip(grads_a, grads_n, strict=True):
+        if a is not None:
+            assert torch.allclose(a, n, rtol=5e-3, atol=1e-3 * a.abs().max().item() + 1e-7)
+
+
+def test_boundary_and_initial_points_go_through_one_value_pass():
+    """With the kernel on, every boundary face and the initial points share one model call (I15)."""
+    (_, _), (pde_n, tr_n) = _pair(lambda: from_catalog("heat"))
+    model = tr_n.model
+    stash = pde_n._batched_values(model)
+    assert set(stash) == {("boundary", 0), ("initial", 0)}
+    (axis, x_lo, x_hi, t), *_ = pde_n._seeded_points("boundary", 64)
+    u_lo, u_hi = stash[("boundary", 0)]
+    assert torch.allclose(u_lo, model(torch.cat([x_lo, t], dim=1)), atol=1e-6)
+    assert torch.allclose(u_hi, model(torch.cat([x_hi, t], dim=1)), atol=1e-6)
+    x0, t0 = pde_n._seeded_points("initial", 64)
+    assert torch.allclose(stash[("initial", 0)], model(torch.cat([x0, t0], dim=1)), atol=1e-6)
+    calls = []
+    original = model.forward
+    model.forward = lambda inp: calls.append(inp.shape[0]) or original(inp)
+    x, t = torch.rand(16, 1), torch.rand(16, 1)
+    pde_n.compute_loss(model, x, t)
+    assert 3 * 64 in calls  # the two faces and the initial points in one call
+    assert pde_n._value_stash == {}  # cleared after the step
+    model.native_values = False
+    assert pde_n._batched_values(model) == {}
+    # the registry's heat problem is periodic and the wave equation second order in time:
+    # both differentiate at their value points, so they evaluate the network themselves
+    periodic, model_p = _registry_pair("heat")
+    assert periodic.boundary_conditions == {"periodic": {}}
+    assert periodic._batched_values(model_p) == {}
+    wave, model_w = _registry_pair("wave")
+    assert wave._batched_values(model_w) == {}
+    neumann = CustomPDE(
+        "u_t - u_xx",
+        domain={"x": (0, 1), "t": (0, 1)},
+        initial_condition="cos(pi*x)",
+        boundary_conditions={"neumann": {"value": 0.0}},
+    )
+    trainer = neumann.build_trainer(
+        "feedforward", model={"hidden_dims": [8, 8]}, derivatives="native", **SETTINGS
+    )
+    assert neumann._batched_values(trainer.model) == {}
+
+
 def test_falls_back_to_autograd_where_the_kernel_does_not_apply():
     def build(pde, **model):
         torch.manual_seed(0)

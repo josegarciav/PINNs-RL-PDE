@@ -973,12 +973,22 @@ class CustomPDE(PDEBase):
             None if right is None else self._boundary_target(right, x_hi, t),
         )
 
+    def _conditions_per_field(self) -> dict[str, Any]:
+        """The boundary conditions of every field (shared ones repeated per field)."""
+        if self._per_field_bcs is None:
+            return {f: self.boundary_conditions for f in self.fields}
+        return dict(self.boundary_conditions)
+
+    def _has_boundary_terms(self) -> bool:
+        return any(self._conditions_per_field().values())
+
+    def _value_points_need_grad(self) -> bool:
+        kinds = {k for conds in self._conditions_per_field().values() for k in conds}
+        return bool(kinds & {"neumann", "periodic"}) or self.time_order >= 2
+
     def _boundary_loss(self, model: torch.nn.Module) -> torch.Tensor:
         """Mean loss over every condition on every face, per field when the conditions are."""
-        if self._per_field_bcs is None:
-            conditions = {f: self.boundary_conditions for f in self.fields}
-        else:
-            conditions = self.boundary_conditions
+        conditions = self._conditions_per_field()
         if not any(conditions.values()):
             return torch.tensor(0.0, device=self.device)
         n = int(self._training_option("num_boundary_points", 100))
@@ -991,7 +1001,9 @@ class CustomPDE(PDEBase):
                 continue
             x_lo = x_lo.clone().requires_grad_(needs_grad)
             x_hi = x_hi.clone().requires_grad_(needs_grad)
-            if not needs_grad and getattr(model, "native_values", False):
+            if ("boundary", axis) in self._value_stash:  # one pass for every value point
+                u_lo, u_hi = self._value_stash[("boundary", axis)]
+            elif not needs_grad and getattr(model, "native_values", False):
                 # one call for both faces: the compiled kernel's cost is mostly per call
                 both = model(torch.cat([torch.cat([x_lo, t], dim=1), torch.cat([x_hi, t], dim=1)]))
                 u_lo, u_hi = both[: x_lo.shape[0]], both[x_lo.shape[0] :]
@@ -1033,7 +1045,10 @@ class CustomPDE(PDEBase):
         n = int(self._training_option("num_initial_points", 100))
         x, t = self._seeded_points("initial", n)
         t = t.clone().requires_grad_(self.time_order >= 2)
-        u = model(torch.cat([x, t], dim=1))
+        if ("initial", 0) in self._value_stash:
+            u = self._value_stash[("initial", 0)]
+        else:
+            u = model(torch.cat([x, t], dim=1))
         loss = self._apply_loss_fn(self._weighted(u - self.initial_condition(x, t.detach())))
         if self.time_order >= 2:
             velocity = self._evaluate_map(self._velocity, self._velocity_fn, x, None)
