@@ -7,7 +7,7 @@
 [![PyPI](https://img.shields.io/pypi/v/pinnrl.svg)](https://pypi.org/project/pinnrl/)
 [![Checks](https://github.com/josegarciav/PINNs-RL-PDE/actions/workflows/checks.yml/badge.svg)](https://github.com/josegarciav/PINNs-RL-PDE/actions/workflows/checks.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/josegarciav/PINNs-RL-PDE/blob/main/LICENSE)
 
 **Physics-informed neural networks for forward and inverse PDE problems, evaluated against numerical references.**
 
@@ -58,15 +58,15 @@ For a well-posed forward problem in low dimension, classical solvers are faster 
 
 ## Documentation
 
-**[josegarciav.github.io/PINNs-RL-PDE](https://josegarciav.github.io/PINNs-RL-PDE/)**: concepts, the equations, guides, benchmarks, the API reference and the roadmap. The tutorials are in [`notebooks/`](notebooks/), and research studies in [`experiments/`](experiments/).
+**[josegarciav.github.io/PINNs-RL-PDE](https://josegarciav.github.io/PINNs-RL-PDE/)**: concepts, the equations, guides, benchmarks, the API reference and the roadmap. The tutorials are in [`notebooks/`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/notebooks), and research studies in [`experiments/`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). In short: `uv sync --all-extras`, `uv run pytest`, conventional commits, and physics changes must keep `tests/unit_tests/test_physics_consistency.py` green.
+See [CONTRIBUTING.md](https://github.com/josegarciav/PINNs-RL-PDE/blob/main/CONTRIBUTING.md). In short: `uv sync --all-extras`, `uv run pytest`, conventional commits, and physics changes must keep `tests/unit_tests/test_physics_consistency.py` green.
 
 ## Citation
 
-`pinnrl` started as the MSc thesis *On Solving Partial Differential Equations (PDEs) Using Physics-Informed Neural Networks (PINNs)* (University of the Basque Country UPV/EHU, 2025); the thesis is at [docs/assets/thesis.pdf](docs/assets/thesis.pdf).
+`pinnrl` started as the MSc thesis *On Solving Partial Differential Equations (PDEs) Using Physics-Informed Neural Networks (PINNs)* (University of the Basque Country UPV/EHU, 2025); the thesis is at [docs/assets/thesis.pdf](https://josegarciav.github.io/PINNs-RL-PDE/assets/thesis.pdf).
 
 ```bibtex
 @software{garcia_pinnrl,
