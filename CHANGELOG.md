@@ -7,7 +7,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [0.8.0] — 2026-11-18
+
+The performance and the PINN's-case release. The compiled kernel now takes derivatives of any order (mixed, third, fourth), builds on Linux against OpenBLAS and runs the registry's PDE classes, 1.9–7× a training step over autograd; the evaporator's reference solve runs in C++ (a batch fit of the fouling from 106 s to 0.7 s, the filters 1.6×). Two process units close the roadmap: a counter-current spray dryer, whose steady state is a boundary-value problem and whose transient is a hyperbolic system, the first unit where the PINN twin's case could be tested against a classical fit (it is not made: least squares in 10 s against a twin that fails the misfit test), and the line twin, three evaporator passes feeding the dryer with each unit's uncertainty propagated to the powder (information flows downstream only).
 
 ### Added
 - **Derivatives of any order in the compiled kernel** (roadmap v0.8, I13). `pinnrl.native` carries general Taylor coefficients through `tanh` and layer normalization, so residuals with mixed, third and fourth derivatives (`u_xt`, `u_xxx` for KdV, `u_xxxx` for the beam and Cahn–Hilliard) now run through `build_trainer(derivatives="native")` instead of falling back to autograd. `native.mlp_jets(linears, x, derivatives, norms)` takes tuples of input columns of any order and returns `(u, {columns: derivative})`; `native.taylor_streams` lists the streams a request needs; `PINNModel.jets(x, derivatives)` follows. Residual, loss and weight gradient agree with autograd to rounding on five equations; the step gains 1.9–4× on a plain network and 3–7× with the packaged layer normalization, the more the higher the order, and the problems of I11/I12 lose under 5 %. See [Benchmarks](docs/benchmarks.md#the-kernel-on-third-fourth-and-mixed-derivatives-experiment-i13).

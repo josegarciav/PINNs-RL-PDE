@@ -43,7 +43,7 @@ The goal is to estimate unknown physics with known validity conditions and calib
 - [x] Bayesian measurement design for sensors and lab sampling (J09; P24). *Done: `pinnrl.analysis.posterior_covariance`, `target_std`, `information_gain` and `greedy_design`; on the evaporator with every instrument error admitted, the steam offset and the four mass-balance instruments jointly limit the fouling estimate (10.6 %), no single calibration pays, a condensate meter halves it and with a 4 K steam swing reaches 2.8 %; lab samples buy little and are best at the end, a quarter and past the middle of the window. See [Benchmarks](benchmarks.md#measurement-design-for-the-fouling-estimate-experiment-j09).*
 - [x] Type checking (mypy) across the package. *Done: `uv run mypy` passes on the 66 modules of `pinnrl` (default strictness, configured in `pyproject.toml`) and runs in CI next to ruff.*
 
-## v0.8: performance and the PINN's case (complete, unreleased)
+## v0.8: performance and the PINN's case (released 2026-11-18)
 
 - [x] Time breakdown of a step, and the same step in C++ and Rust (I01, I11). *Done: the step is arithmetic (sampling, optimizer and bookkeeping under a tenth); `tanh` and the double-backward passes dominate; a framework-free step on Accelerate takes 3.6 ms in either language against 8.8 ms in PyTorch and 10.6 ms in the trainer.*
 - [x] The kernel in the trainer. *Done: `pinnrl.native` and `build_trainer(derivatives="native")`, 10.6 → 5.4 ms a step on the benchmark problem with the same gradients to rounding; opt-in; macOS, plain `tanh` networks, first and pure second derivatives.*
@@ -55,6 +55,84 @@ The goal is to estimate unknown physics with known validity conditions and calib
 - [x] A process unit whose forward solve is not a cheap initial-value problem (a transient or counter-current dryer, a droplet size distribution, wall deposition): the first place the PINN twin's case can be tested, after three units on which the classical estimator through the reference solver won. *Done: `pinnrl.process.CounterCurrentDryer` (J13), the air against the falling droplets: the steady state is a boundary-value problem solved by shooting (100 ms, twenty times the co-current tower) and the transient a hyperbolic system with characteristics both ways, which the method of lines with a sparse Jacobian integrates in 0.04–0.6 s. The PINN's case is not made: a fit of the curve's two parameters and the wall loss from one transient record takes 10 s and lands within the linear prediction, while the PINN twin fails the misfit test on every run (its forward solve, with the equations scaled and the residual weight tuned, stays at 12–15 % on the moisture). What it would take is a model with no method-of-lines form at all.*
 - [x] The line-level twin: a multi-pass evaporator feeding the dryer, with errors propagated across the units (J10). *Done: `pinnrl.process.ProcessLine` chains evaporator passes into the dryer (the concentrate sets the droplets' solids and the solids flow) with `steady`, `reference`, `records` and `propagate` (the variance budget of the powder by source, linear and Monte Carlo). On a four-hour shift with three fouling passes, the powder inherits the feed flow and the droplet size once the fouling is monitored, but propagation is the wrong estimator for it: the dryer's own records determine the powder to ±0.005 against ±0.09 by propagation (±0.001 with every record), information flows downstream only (the dryer's records leave the fouling at its prior), and the first pass's fouling is one unknown with the feed's calibration; ten simulated shifts confirm the linear predictions.*
 
+## Where this goes after v0.8
+
+Eight releases built three things: a PINN trainer whose derivatives run in a compiled kernel, an inverse-modelling toolbox that says when an estimate can be trusted (identifiability, stability, calibrated intervals, a misfit test), and four process simulators with their classical estimators. Two findings shape what comes next:
+
+- **On every unit with a cheap reference solve, the classical estimator beat the PINN twin** (J05, J07d, J11, J13). The PINN's case is narrower than the literature claims: models with no trusted forward solve, unknown functions inside the equations, and amortised or parametric use, where one network replaces thousands of solves.
+- **The "RL" in `pinnrl` is one contextual bandit** that chooses collocation cells and does not beat uniform sampling at equal cost (B01/B06). Meanwhile the package owns what reinforcement learning is usually short of: fast, validated, physically meaningful simulators (a line shift in 1.6 s, an evaporator solve in milliseconds) with realistic sensors, hidden states and economic stakes.
+
+The direction follows from both: **`pinnrl` becomes the place where physics-informed models and sequential decisions meet.** PINNs estimate what the plant does not measure; reinforcement learning and optimal control decide what to do about it (how to run, when to clean, what to measure next), in environments built from the same equations, graded against the classical controller as the estimators were graded against the Kalman filter.
+
+| Theme | Release | What a user gains |
+|---|---|---|
+| The kernel as the default engine | v0.9 | The fastest PINN step available on a CPU without asking for it; custom networks at the same speed; twins that run outside Python |
+| `pinnrl.gym`: process environments and control | v0.10 | Standard RL environments of real unit operations, with baselines (PID, MPC) and a twin in the loop |
+| Decisions that serve the inverse problem | v0.11 | What to measure, where to sample and how to train, learned as policies and compared with the greedy designs |
+| Discovering unknown physics | v0.12 | From a learned closure to an equation with an error bar; model-form error named instead of absorbed |
+| Simulation at scale | v0.13 | One network across operating points; new units and geometries; inference in microseconds |
+| The plant | v1.0 | Live data in, advice with intervals out, validated on a real line |
+
+## v0.9: the kernel as the default engine (next)
+
+The compiled kernel is 1.9–7× autograd on the step's derivatives, but it is opt-in, covers `tanh` feed-forward networks only, and its general any-order passes cost more than a step written for one equation (5.5 ms in the trainer, 4.8 of them in the kernel's two passes, against 3.6 ms for the whole hand-specialised step of I11). The aim is that installing `pinnrl` gives the fastest PINN step on a CPU by default, measured against every alternative.
+
+- **A head-to-head with the alternatives (I17).** The same step (heat, KdV, Cahn–Hilliard; 4 × 64 and the packaged default network) in eager PyTorch, `torch.compile`, `torch.func` forward-over-reverse, JAX with `jax.experimental.jet` (Taylor mode, the closest published technique), DeepXDE and PhysicsNeMo. A first probe already rules one out: `torch.compile` refuses the step in PyTorch 2.10 ("does not currently support double backward"), so the eager 9.5 ms is PyTorch's number. *Gain: the claim "fastest on a CPU" either stands with numbers or names what to fix. Done when the table is in [Benchmarks](benchmarks.md) and the kernel is first or the gap is explained.*
+- **`derivatives="auto"` as the default.** The kernel wherever it applies, autograd elsewhere, silently. The tools that differentiate the loss twice (`analysis.spectrum`, `analysis.surrogate`, the Laplace approximation) switch the model back to autograd for their own passes. *Gain: every user gets the speed-up, not the ones who read the flag's documentation.*
+- **The whole step in the kernel, specialised.** The loss reduction, Adam and the collocation draw in C++, so a step is one call, and the passes generated for the equation's own derivative set instead of the general multi-index streams (the 5.5 → 3.6 ms gap); L-BFGS on the kernel's gradients in float64, since L-BFGS is what does the learning on the stiff process problems (J13). *Gain: 1.5× on top of today's kernel, and second-order training at kernel speed.*
+- **Custom architectures.** A declarative network description (blocks, widths, activations, normalization, input embeddings, skip connections) that both the autograd path and the kernel run; activations beyond `tanh` (`sin` for SIREN, `gelu`, `silu`) by their Taylor recurrences; Fourier features; `UnknownFunction` and the inverse mode's trainable parameters through the compiled step. *Gain: the inverse problems, which are the package's purpose, at kernel speed; a user's architecture is not a reason to fall back.*
+- **Many networks in one call.** Ensembles, the swarm of `pinnrl.uq`, restarts and hyperparameter sweeps trained as a batch of networks through one threaded kernel call. *Gain: a calibrated ensemble for the price of a few single runs; `train_with_restarts` in parallel.*
+- **Inference outside Python.** Export a trained twin to a dependency-free C source or shared library (values and derivatives), and to ONNX; a throughput benchmark (evaluations per second per core). *Gain: a soft sensor that runs in a PLC gateway, a historian calculation or a spreadsheet plug-in at plant rate.*
+- **Prebuilt wheels.** Platform wheels with the kernels compiled (macOS arm64/x86, Linux x86/aarch64), so no compiler is needed. *Gain: `pip install pinnrl` is enough.*
+- *Stretch:* a Metal/CUDA backend for large batches; the kernel is a CPU design and small networks are where it wins.
+
+## v0.10: `pinnrl.gym`, process environments and control
+
+The simulators become environments with the Gymnasium interface, so any RL library can train on them, and the package ships the baselines that an RL result must beat.
+
+- **The environments.** `Evaporator-v0` (actions: steam temperature, feed flow; hidden: fouling), `SprayDryer-v0` and `CounterCurrentDryer-v0` (actions: inlet air temperature, feed rate; constraint: the stickiness margin), `Line-v0` (the passes and the dryer together). Observations are the plant's sensors with their noise, delays and lab assays that arrive hourly, so the problems are partially observed as a plant is. Disturbances come from a model or from a historian export replayed. *Done when each environment passes Gymnasium's checker and a random policy runs at a stated number of steps per second.*
+- **Tasks with money in them.** Setpoint tracking of the powder moisture; energy per kilogram of powder under a moisture specification and a stickiness limit (a constrained problem); **when to clean** (the fouling monitor's time-to-threshold turned into an optimal-stopping decision against production lost); start-up and product changeover. Each task has a reward in physical units and a documented constraint.
+- **Throughput.** Vectorised environments on the compiled integrators; the dryer's steady and transient solves in C++ as the evaporator's are (I16). *Gain: millions of environment steps an hour on a laptop, which is what RL needs and what a CFD-based environment cannot give.*
+- **Baselines first.** PID loops, linear MPC on the linearised model and nonlinear MPC through the reference solver, each with the EKF or MHE as its state estimator. *Rule, as for the estimators: an RL policy is reported against MPC with the same information, and where MPC wins the documentation says so.*
+- **Agents.** Adapters for Stable-Baselines3 and CleanRL, and one reference PPO and SAC in the package for reproducibility; the existing DQN becomes one agent behind the same interface.
+- **The twin in the loop.** Policies that act on the estimator's state and its interval (the EKF's fouling and band, the powder soft sensor), and training under the uncertainty the inverse tools quantify: domain randomisation over the equivalence region of `pinnrl.uq` instead of over arbitrary ranges. *Gain: a policy robust to exactly the model errors the data cannot rule out, the sim-to-real gap stated in the units of the identifiability analysis.*
+- **Safe and offline RL.** Constrained policies for the stickiness margin (a shield from the twin's interval); offline RL from historian data with the simulator as the evaluation ground truth. *Gain: a path to a plant, where exploration on the equipment is not allowed.*
+- **PINN world models.** Where an environment has no cheap solve, a parametric PINN as the differentiable model inside model-based RL, with policy gradients through the surrogate. *This is the PINN's case restated for control, and it is tested where it belongs: against the solver-based environment on a unit that has one.*
+
+## v0.11: decisions that serve the inverse problem
+
+The inverse problem contains decisions that are made greedily or by hand today. They become policies, each with its greedy baseline already in the package.
+
+- **Sequential experiment design.** Which operating point to run next and when to pull a lab sample, to identify a closure or a fouling law fastest. Baseline: `analysis.greedy_design` (J09, J12), which is myopic and linear-Gaussian; candidates: Bayesian optimal design and an RL policy on the design environment. *Gain: a campaign plan for a pilot tower in fewer runs, with the expected interval before the first run is made.*
+- **Sensor placement and maintenance.** Where to put a thermocouple, which instrument to recalibrate, as a budgeted decision under the same information currency.
+- **A training gym (`PINNTraining-v0`).** The PINN's own training as an environment: actions are the sampling distribution, the loss weights, the learning rate and when to restart; the reward is the error gained per residual evaluation. The bandit, RAD, the adaptive weights and the schedules become policies in one interface, and classical bandits (UCB, Thompson, EXP3; C07) and a policy-gradient sampler (C09) join them. *Gain: the sampling study (B01–B08) becomes a leaderboard anyone can add to, and a learned training controller is tested for transfer across equations (C10).*
+- **Acceptance and restarts as a policy.** `train_with_restarts` chooses the next seed blindly; a policy that reads the misfit and the loss curve chooses whether to continue, restart or switch optimizer.
+
+## v0.12: discovering unknown physics
+
+The package identifies parameters and free-form functions. The step beyond is to say what the function is, whether the model's form is wrong, and how the plant is being run.
+
+- **From a learned closure to an equation.** Sparse regression of a fitted `UnknownFunction` on a library of candidate terms (the SINDy idea applied to the closure, not the whole equation), with the candidates' identifiability checked first and the selected form refitted through the reference solver and judged by the misfit test. *Gain: a drying-rate law an engineer can read and publish, with an interval on every coefficient.*
+- **Model-form error, named.** A structured discrepancy term next to the known physics, constrained so it cannot absorb what the parameters explain (F08); a report that separates "the parameters are uncertain" from "the equations are wrong". Model selection between candidate closures by Laplace evidence and held-out misfit.
+- **Hybrid models.** Known balances with learned terms where the physics is missing (wall deposition, agglomeration), using the anchor and monotonicity constraints so the learned part stays physical.
+- **Units without a method-of-lines form.** A droplet size distribution (population balance) and wall deposition in the dryer, the first models where the PINN twin has no cheap classical rival. *This is the open item of J13: the place the PINN's case can still be made.*
+- **Ways of working.** From historian data: operating regimes and transitions (changepoints and clustering on the twin's states, not on raw tags), the differences between shifts or recipes expressed as differences in estimated parameters, and drift that precedes a quality excursion. *Gain: the twin explains how the line is actually run, which is the question a plant asks first.*
+- **Amortised identification.** A network trained on simulated records that maps a new record to parameters and intervals in one pass (simulation-based inference), checked for calibration as J06 checked the filters. *Gain: identification in milliseconds for a fleet of units.*
+
+## v0.13: simulation at scale
+
+- **Parametric surrogates.** One network across operating points, geometries and parameters (inputs beyond `x, t`), trained against the reference solver where one exists and by the residual where none does. *Gain: what-if studies and design sweeps without a solve per point, and the world model v0.10 needs.*
+- **Hard constraints and decomposition.** Exact initial and boundary conditions by output transform (D09); domain decomposition and time marching for long horizons and sharp fronts; separable networks for 2-D and 3-D (E09).
+- **A unit library with a plugin interface.** Wiped-film evaporators (P22), plate heat exchangers, membrane filtration, fluidised-bed drying, the cleaning cycle itself; a documented base class so a user's unit gets the reference solver, the PINN form, the estimators and a gym environment from one definition. *Gain: the method leaves food powders for pharmaceuticals, batteries and chemicals without a rewrite.*
+- **Pretraining on The Well.** The dataset loader is in place; operator backbones pretrained on simulation data and fine-tuned with a residual, tested on whether pretraining buys accuracy at equal compute.
+
+## v1.0: the plant
+
+- **Live data.** OPC UA and MQTT connectors next to the historian adapter; the monitor as a service that runs for weeks, with alarms on the misfit test.
+- **Advice with intervals (P25).** Setpoint recommendations and cleaning schedules from v0.10's controllers, shown in the dashboard with what they are expected to gain and how sure the twin is.
+- **Validation on a real line (P26).** The simulated-plant results repeated on plant data, with the failures reported.
+- **A stable API.** Deprecation policy, semantic versioning that means it, and the software paper (P06).
+
 ## Not planned
 
-A hosted service and monetization (until the research results justify it); a custom PDE-builder UI; operator learning beyond the existing FNO-style layers.
+A hosted service and monetization (until the research results justify it); a custom PDE-builder UI; a general-purpose RL library (the agents come from the libraries that exist; `pinnrl` supplies the environments, the baselines and the twin); CFD-scale solvers.
