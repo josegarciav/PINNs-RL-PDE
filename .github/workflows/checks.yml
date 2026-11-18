@@ -31,7 +31,7 @@ jobs:
           PINNRL_REQUIRE_NATIVE: "1"
         run: >
           uv run pytest -q
-          ${{ matrix.python-version == '3.12' && '--cov=pinnrl --cov-report=term-missing --cov-fail-under=80' || '' }}
+          ${{ matrix.python-version == '3.12' && '--cov=pinnrl --cov-report=term-missing --cov-fail-under=90' || '' }}
 
   lint:
     name: Lint, format, lockfile

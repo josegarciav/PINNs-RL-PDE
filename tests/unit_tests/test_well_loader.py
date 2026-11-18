@@ -86,7 +86,9 @@ def test_resolve_path_passthrough_for_local_dir():
 
 def test_load_well_slice_raises_when_dependency_missing(monkeypatch):
     # Pretend the dependency is absent — _load_well_dataset should re-raise.
+    # The submodule too: once another test has imported the real package it stays cached.
     monkeypatch.setitem(sys.modules, "the_well", None)
+    monkeypatch.setitem(sys.modules, "the_well.data", None)
     with pytest.raises(TheWellNotInstalledError):
         load_well_slice(
             "active_matter", n_traj=1, n_points=8, seed=0, device="cpu", use_cache=False
