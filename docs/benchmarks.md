@@ -1,13 +1,6 @@
 # Benchmarks
 
-This page holds every measured result of `pinnrl`, one section per experiment, each with the command that reproduces it. Read it to check a claim made elsewhere in the docs, or to see where a PINN wins and where a classical method wins.
-
-`pinnrl-benchmark` has two parts:
-
-- **Classical baselines** (`fdm`): a reference point for PINN accuracy.
-- **Sampling study** (`sampling`): a multi-seed, fair comparison of collocation samplers.
-
-Every section has the same shape: question, setup, result, what it shows, reproduce, source.
+This page holds every measured result of `pinnrl`, one section per experiment. Read it to check a claim made elsewhere in the docs, or to see where a PINN wins and where a classical method wins. To reproduce a result, run the command shown or the `run.py` of the section's source folder.
 
 ## Index of experiments
 
@@ -52,22 +45,15 @@ Every section has the same shape: question, setup, result, what it shows, reprod
 
 ## Terms used on this page
 
-- **PINN**: a physics-informed neural network, trained to make the equation's residual small.
 - **Residual**: what is left when the network is put into the equation.
 - **Collocation point**: a point where the residual is evaluated. A **sampler** places them.
 - **Relative L2 error**: $\lVert u_w - u \rVert_2 / \lVert u \rVert_2$, with $u_w$ the network and $u$ the reference.
-- **Forward problem**: solve with known coefficients. **Inverse problem**: find a coefficient from observations.
-- **Surrogate**: the trained network, used in place of the solution.
-- **Surrogate floor**: the parameter error that remains with perfect data.
-- **MLP 4 × 64**: a network with 4 hidden layers of 64 units.
-- **Adam**, **L-BFGS**: a first-order and a quasi-Newton optimizer.
-- **Seed**: one random initialization. **Paired seeds** give every arm the same one.
+- **Surrogate**: the trained network, used in place of the solution. **Surrogate floor**: the parameter error that remains with perfect data.
+- **Paired seeds**: every arm gets the same random initialization.
 - **Fisher information** $F = J^\top J / \sigma^2$: what the records say about the parameters, with $J = \partial u / \partial\theta$ and $\sigma$ the noise.
 - **Cramér–Rao bound**: the smallest standard deviation of an unbiased estimate, $\sqrt{(F^{-1})_{ii}}$.
 - **$\kappa(F)$**: the condition number of $F$; large when parameters cannot be told apart.
 - **Coverage**: the fraction of data sets whose interval contains the truth.
-- **Reference solver**: a classical numerical solver used as the truth.
-- **Method of lines**: discretize space, then integrate the ODEs in time.
 - **Twin**: a model of a plant unit kept in step with its records.
 - **Swarm**: a particle swarm that samples the parameters fitting the data (`pinnrl.uq`).
 
@@ -88,10 +74,6 @@ Every section has the same shape: question, setup, result, what it shows, reprod
 | heat, default | about $7 \times 10^{-4}$ | about 30 ms | second order |
 
 - **Second order**: doubling the points at a fixed diffusion number ($\alpha\,\Delta t / \Delta x^2$) cuts the error about four-fold.
-
-**What it shows**
-
-- That's the bar a PINN is measured against on forward problems.
 
 **Reproduce**
 
@@ -118,12 +100,6 @@ pinnrl-benchmark fdm --pde wave     # leap-frog, periodic 1-D travelling wave
 | `burgers_reference` | Cole–Hopf integral evaluated by a log-sum-exp trapezoid rule | Reproduces Basdevant et al. (1986): $u_x(0, 1.6037/\pi) = -152.00516$ for $\nu = 0.01/\pi$; agrees with a fine finite-difference solve to $7 \times 10^{-5}$ |
 | `allen_cahn_reference` | Second-order finite differences plus adaptive Runge–Kutta (method of lines) on a grid 8× finer than the output | Grid-converged: doubling the solver grid changes the field by less than $10^{-5}$ (relative) |
 
-**What it shows**
-
-- PINNs are scored against these high-accuracy numerical references.
-
-**Reproduce:** call the two functions of `pinnrl.benchmarks.reference`.
-
 **Source:** `pinnrl/benchmarks/reference.py`.
 
 ## Sampling study (experiments B01 and B06)
@@ -132,7 +108,7 @@ pinnrl-benchmark fdm --pde wave     # leap-frog, periodic 1-D travelling wave
 
 **Setup**
 
-- **Problems**: Burgers ($\nu = 0.01/\pi$) and Allen–Cahn ($u_t = 0.001\,u_{xx} + 5(u - u^3)$, $u_0 = x^2\cos\pi x$).
+- **Problems**: Burgers ($\nu = 0.01/\pi$) and Allen–Cahn ($u_0 = x^2\cos\pi x$), the equations of [Reference solutions](#reference-solutions).
 - **Network and budget**: tanh MLP (4 × 64), 15,000 Adam steps on 1,000 points, 10 paired seeds (identical initial weights across samplers).
 - **Five samplers**: uniform and stratified, fresh points every step; uniform refreshed every 100 steps (a control for how often points change); RAD (k = 1, c = 1) and the RL bandit, also every 100 steps.
 - **Accounting**: each run records the relative L2 error and the residual evaluations spent, including the sampler's own (RAD +20 %, bandit +0.3 %).
@@ -157,9 +133,7 @@ Terms:
 | | RAD | 0.533 | **10/10, p = 0.002** | 0.547 | **10/10, p = 0.002** |
 | | RL bandit | 0.520 | **10/10, p = 0.002** | 0.518 | **10/10, p = 0.002** |
 
-- Errors are medians over 10 seeds.
-- "6/10" counts the seeds on which the sampler beat uniform.
-- p is from a Wilcoxon signed-rank test (a paired test).
+- Errors are medians over 10 seeds; "6/10" counts the seeds on which the sampler beat uniform; p is from a Wilcoxon signed-rank test (paired).
 
 **What it shows**
 
@@ -173,7 +147,7 @@ Terms:
 pinnrl-benchmark sampling --seeds 10 --steps 15000 --checkpoints 50 --workers 4
 ```
 
-**Source:** [`experiments/B01_sampling_equal_compute`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B01_sampling_equal_compute), with the IQRs, the same-cadence control and the follow-ups it motivates (optimizer settling, resampling frequency, Allen–Cahn failure modes).
+**Source:** [`experiments/B01_sampling_equal_compute`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B01_sampling_equal_compute) (IQRs and the same-cadence control).
 
 ## Identification baseline (experiment F01)
 
@@ -184,7 +158,6 @@ pinnrl-benchmark sampling --seeds 10 --steps 15000 --checkpoints 50 --workers 4
 - **Problem**: 1-D heat, $u_t = \alpha\,u_{xx}$, truth $\alpha = 0.1$, started at 0.5; the `heat` entry of the [catalogue](custom_equations.md#the-catalogue) with `alpha` trainable.
 - **Data**: 20 to 1,000 noisy observations of the exact solution, noise standard deviation σ from 0 to 0.1.
 - **Network and budget**: 4 × 64 MLP, 5,000 Adam steps, loss weights residual / BC / IC / data = 1 / 10 / 10 / 10.
-- **Seeds**: 10.
 
 **Result**
 
@@ -218,7 +191,7 @@ pinnrl-benchmark sampling --seeds 10 --steps 15000 --checkpoints 50 --workers 4
 python experiments/F01_heat_alpha_recovery/run.py --seeds 10 --steps 5000 --workers 4
 ```
 
-**Source:** [`experiments/F01_heat_alpha_recovery`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F01_heat_alpha_recovery) (IQRs, the spread against the bound per cell, and the follow-ups: the floor after optimizer settling, K01 Fisher information, K39 likelihood weighting), [`experiments/F04_initial_guess`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F04_initial_guess), [`experiments/F05_fixed_sensors`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F05_fixed_sensors).
+**Source:** [`experiments/F01_heat_alpha_recovery`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F01_heat_alpha_recovery) (IQRs, the spread against the bound per cell), [`experiments/F04_initial_guess`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F04_initial_guess), [`experiments/F05_fixed_sensors`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F05_fixed_sensors).
 
 ## Conditioning diagnostics (experiment K01)
 
@@ -283,8 +256,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 - The architecture sets the conditioning, not the operator order.
 - No run is at a minimum.
 
-**Reproduce:** `python experiments/K03_training_conditioning/run.py --seeds 2 --steps 3000`
-
 **Source:** [`experiments/K03_training_conditioning`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K03_training_conditioning).
 
 ## Disturbance and stability (experiments K05–K07)
@@ -318,12 +289,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 - The field error is the resolution of a trained surrogate.
 - For the beam the boundary and initial mismatches are the binding terms.
 
-**Reproduce**
-
-- `python experiments/K05_data_disturbance/run.py --seeds 5 --steps 5000 --workers 4`
-- `python experiments/K06_problem_disturbance/run.py --seeds 3 --steps 3000 --workers 4`
-- `python experiments/K07_stability_constants/run.py --seeds 2 --workers 4`
-
 **Source:** [`K05_data_disturbance`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K05_data_disturbance), [`K06_problem_disturbance`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K06_problem_disturbance), [`K07_stability_constants`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K07_stability_constants).
 
 ## Calibrated uncertainty (experiments F06, K10, K39, K46)
@@ -334,7 +299,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 
 - **Data**: 30 synthetic data sets.
 - **Laplace posterior** (`pinnrl.uq.laplace_posterior`): a Gaussian from the surrogate's Fisher information.
-- **Ensemble**: networks trained from different initializations.
 - **Likelihood-ratio region**: the parameters whose exact misfit is close enough to the best, sampled by the swarm.
 
 **Result**
@@ -355,12 +319,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 - The Laplace interval misses only because every estimate is 2 % low (the surrogate floor).
 - The residual of a trained PINN is a systematic approximation error, not noise (K39).
 - The balance weight is set by the surrogate's floor relative to the noise.
-
-**Reproduce**
-
-- `python experiments/F06_coverage/run.py --datasets 30 --members 8 --steps 5000 --workers 4`
-- `python experiments/K39_likelihood_weighting/run.py --seeds 10 --steps 5000 --workers 4`
-- `python experiments/K46_swarm_equivalence/run.py --datasets 10`
 
 **Source:** [`F06_coverage`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/F06_coverage) (F06 and K10), [`K39_likelihood_weighting`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K39_likelihood_weighting), [`K46_swarm_equivalence`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/K46_swarm_equivalence).
 
@@ -384,18 +342,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 | B03, Burgers | Good RAD settings lie on $c \approx k/2$. A zero uniform floor with a sharp exponent is three times worse than uniform. |
 | B03, Allen–Cahn | Every setting is equally and modestly better than uniform. |
 | B08 | The error falls as about $N^{-1/3}$ on Burgers, for uniform and RAD alike, and not at all on Allen–Cahn. Cost is linear in $N$. |
-
-**What it shows**
-
-- The cadence matters more than the sampler.
-- More points cost linearly and buy little.
-
-**Reproduce**
-
-- `python experiments/B02_more_pdes/run.py --seeds 5 --steps 10000 --workers 4`
-- `python experiments/B03_rad_grid/run.py --seeds 3 --steps 10000 --workers 4`
-- `python experiments/B04_resampling_frequency/run.py --seeds 5 --steps 10000 --workers 4`
-- `python experiments/B08_point_count/run.py --seeds 3 --steps 5000 --workers 4`
 
 **Source:** [`B02_more_pdes`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B02_more_pdes), [`B03_rad_grid`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B03_rad_grid), [`B04_resampling_frequency`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B04_resampling_frequency), [`B08_point_count`](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/experiments/B08_point_count).
 
@@ -428,8 +374,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 - A field is identified only where the solution feels it (through the flux $\alpha u_x$) and only to the surrogate's accuracy. The two-layer medium, whose solution no constant reproduces within 20 %, is recovered. The centred bump, which a constant reproduces to 4 % (twice the surrogate's field error), is not, although the data alone would determine its modes (K48). The check is one call to `heat_variable_reference`.
 - The optimizer's weight decay had been acting on the unknowns; PDE unknowns now train without it.
 
-**Reproduce:** `python experiments/F09_field_unknowns/run.py --seeds 5 --steps 10000 --workers 5`
-
 **Source:** `experiments/F09_field_unknowns/README.md`.
 
 ## Sensor layout vs conditioning (experiment K02)
@@ -440,7 +384,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 
 - **Layout's Fisher information**: from `sensor_jacobian` on closed forms (heat $\alpha$; KdV $\alpha, \beta$).
 - **Training**: $\alpha$ identified from 1–8 probes, against the bound of each layout.
-- **Probe**: a sensor at a fixed position $x_0$.
 
 **Result**
 
@@ -458,10 +401,7 @@ python experiments/K01_fisher_information/run.py --seeds 3
 
 **What it shows**
 
-- Placement beats count.
 - Sensor design pays until the bound reaches the forward model's accuracy.
-
-**Reproduce:** `python experiments/K02_sensor_layout/run.py --seeds 5 --steps 5000 --workers 5`
 
 **Source:** `experiments/K02_sensor_layout/README.md`.
 
@@ -495,8 +435,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 - **Convection.** A small residual with a large initial error, which the residual-based estimate does not see. The bound holds only with the condition terms.
 - **Cost.** A dimension costs per point, not in the quadrature.
 
-**Reproduce:** `python experiments/K08_dimension_scaling/run.py --seeds 2 --steps 4000 --workers 3`
-
 **Source:** `experiments/K08_dimension_scaling/README.md`.
 
 ## Reduced bases for field unknowns (experiment K48)
@@ -507,7 +445,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 
 - **Fields**: the F09 fields in a cosine basis (one coefficient per **mode**).
 - **Data limit**: the Fisher spectrum of the modes from the reference solver, and the swarm over the coefficients.
-- **Trained unknown**: a 6-mode basis against a network.
 
 **Result**
 
@@ -526,8 +463,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 
 - F09's collapse of the bump is the surrogate's limit, not the data's.
 - Forward accuracy, not the representation, is the bottleneck of field identification.
-
-**Reproduce:** `python experiments/K48_reduced_bases/run.py --seeds 3 --steps 10000 --workers 3`
 
 **Source:** `experiments/K48_reduced_bases/README.md`.
 
@@ -557,8 +492,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 - The switch point hardly matters when both phases work.
 - The trainer needs a step safeguard before `adam_lbfgs` becomes a default.
 
-**Reproduce:** `python experiments/D01_optimizer_baseline/run.py --seeds 3 --floor-seeds 5 --budget 120 --workers 4`
-
 **Source:** `experiments/D01_optimizer_baseline/README.md`.
 
 ## The swarm as a posterior sample (experiment K47)
@@ -583,8 +516,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 - Importance weights cannot recover tails the swarm never visits.
 - The accepted set, widened by K46's factor, is the usable interval.
 - For a density, use a sampler, with the parametric surrogate (K45) as its cheap forward model.
-
-**Reproduce:** `python experiments/K47_swarm_posterior/run.py`
 
 **Source:** `experiments/K47_swarm_posterior/README.md`.
 
@@ -616,7 +547,6 @@ python experiments/K01_fisher_information/run.py --seeds 3
 
 **What it shows**
 
-- One surrogate covers the range.
 - The swarm on the surrogate is the swarm on the closed form: the surrogate's forward error is well below the scatter the data impose.
 - Where the surrogate's error exceeds the data scatter, the region is biased. The check is one dedicated network at the best fit.
 
@@ -662,18 +592,12 @@ python experiments/K45_parametric_surrogate/run.py --seeds 2 --datasets 10 --wor
 
 **What it shows**
 
-- **The network's arithmetic is the cost**, and `tanh` is the most expensive single operation in PyTorch here. C++ and Rust are indistinguishable.
+- **The network's arithmetic is the cost.** C++ and Rust are indistinguishable.
 - **Taylor-mode derivatives do not pay in tensor operations**; they pay with fused loops in compiled code.
 - **The kernel is in the package**, with the same loss and gradients to rounding. It is now the default: [`build_trainer(derivatives="auto")`](custom_equations.md#a-faster-step-the-compiled-kernel), with `"autograd"` to switch it off and `"native"` (the table's name) as an old alias. The default is unreleased (v0.9 in progress) and covers `tanh` feed-forward networks on macOS (Accelerate) and Linux (OpenBLAS, I14).
 - **A PyTorch defect found on the way:** `torch.nn.LayerNorm` returns a wrong weight gradient for any loss with second derivatives of the network (exact for first-order residuals). The package's networks now use [`ExactLayerNorm`](api/neural_networks.md#neural_networks.base_network.ExactLayerNorm), the same function written in elementary operations, at the same cost.
 
-**Reproduce**
-
-1. `python experiments/I11_native_pinn/bench_python.py`
-2. `python experiments/I11_native_pinn/run.py` (builds the C++ and Rust programs; needs `clang++` and `rustc`)
-3. `python experiments/I11_native_pinn/bench_trainer.py`
-
-**Source:** `experiments/I11_native_pinn/`.
+**Source:** `experiments/I11_native_pinn/` (`bench_python.py`; `run.py`, which builds the C++ and Rust programs and needs `clang++` and `rustc`; `bench_trainer.py`).
 
 ## The kernel on third, fourth and mixed derivatives (experiment I13)
 
@@ -714,13 +638,7 @@ python experiments/K45_parametric_surrogate/run.py --seeds 2 --datasets 10 --wor
 - **A mixed derivative costs its closure:** $u_{xxt}$ brings $u_{xt}$ and $u_{xx}$ with it, five streams, as many as KdV.
 - The general loops cost under 5 % against the special-cased kernel of I11/I12 on the heat streams, after the passes over the chunk arrays were pared (the first version was 45 % slower).
 
-**Reproduce**
-
-- `python experiments/I13_native_higher_order/run.py`
-- `python experiments/I15_native_value_pass/run.py`
-- I14: the Docker command in `experiments/I14_native_linux/README.md`.
-
-**Source:** `experiments/I13_native_higher_order/`, `experiments/I14_native_linux/`, `experiments/I15_native_value_pass/`.
+**Source:** `experiments/I13_native_higher_order/`, `experiments/I14_native_linux/` (the Docker command is in its README), `experiments/I15_native_value_pass/`.
 
 ## The step against the alternatives (experiment I17)
 
@@ -794,7 +712,6 @@ python experiments/K45_parametric_surrogate/run.py --seeds 2 --datasets 10 --wor
 **Setup**
 
 - **Model**: the falling-film evaporator's method-of-lines model, one hour at 11, 51 and 201 cells.
-- **BDF**: SciPy's implicit, variable-order integrator for stiff ODEs.
 - **SDIRK4**: a fourth-order implicit Runge–Kutta integrator, compiled in `pinnrl.native.evaporator`; its implicit stages are solved exactly by one sweep downstream.
 
 **Result**
@@ -812,9 +729,7 @@ python experiments/K45_parametric_surrogate/run.py --seeds 2 --datasets 10 --wor
 - **The batch estimator through the reference solver is now as cheap as the filter.** The filter's remaining time is its own finite-difference Jacobian and matrix exponential.
 - **The compiled path splines the sampled inputs.** Against SciPy's linear interpolation of a noisy record that is a modelling difference of 2 × 10⁻⁵ in the outlet solids, a hundredth of the record's noise.
 
-**Reproduce:** `python experiments/I16_native_evaporator/run.py` (about 4 min).
-
-**Source:** `experiments/I16_native_evaporator/`.
+**Source:** `experiments/I16_native_evaporator/` (about 4 min).
 
 ## The evaporator reference and its PINN (experiments J01, J02)
 
@@ -842,9 +757,6 @@ python experiments/K45_parametric_surrogate/run.py --seeds 2 --datasets 10 --wor
 **What it shows**
 
 - The outlet alone cannot tell fouling from a steam or feed change.
-- The L-BFGS safeguard is the next engineering item.
-
-**Reproduce:** `python experiments/J01_evaporator_reference/run.py --seeds 3 --workers 3`
 
 **Source:** `experiments/J01_evaporator_reference/README.md`.
 
@@ -869,7 +781,7 @@ python experiments/K45_parametric_surrogate/run.py --seeds 2 --datasets 10 --wor
 
 **What it shows**
 
-- **A change point is identifiable to the bound** with the clean configuration; $b$ is at the truth within its bound.
+- With the clean configuration, $b$ is also at the truth within its bound.
 - The parametrised step beats the network's ramp at every noise level.
 - Under the defaults the failure is the regularization, not the estimator.
 
@@ -908,7 +820,6 @@ python experiments/F11_change_point/run.py --seeds 5 --steps 10000 --workers 5 -
 
 **What it shows**
 
-- **With the inputs known, the outlet determines the whole time course.**
 - **$U$ and the constant fouling are one unknown** ($1/U + R_f$): a monitor estimates the change of resistance since a reference state, never its absolute value.
 - **The steam temperature is the nuisance that matters.** With the three input biases free together, the leftover direction masquerades as a drift.
 - The twin needs the steam temperature to 0.1 K, or a heat-duty signal.
@@ -945,7 +856,6 @@ python experiments/J04_plant_sensors/run.py --datasets 5 --modes 6
 
 **What it shows**
 
-- **A drifting coefficient is a function to identify.**
 - **It lands at the surrogate's limit, not the data's.** Its excursions follow the steam signal: the surrogate's imperfect response to the recorded input is absorbed by the unknown.
 - **Sensor misfits are now taken in units of the field's scale.** The first pass ignored the records because the flow sensor's units (kg/s, scale 0.02) made its misfit 2,500 times too weak in the normalized loss.
 
@@ -1004,7 +914,6 @@ python experiments/K09_linearized_stability/run.py --seeds 2 --steps 2000 --work
 - **Filter**: `pinnrl.process.ExtendedKalmanFilter`, which corrects a model's state with each new record. A Rauch–Tung–Striebel **smoother** then revises past states with later records.
 - **Model**: a lumped method-of-lines model of the evaporator with 6–51 cells, the fouling as a random-walk state.
 - **Data**: J03's records and seeds.
-- **Arms**: against the PINN twin, and with the steam and feed biases of J04.
 
 **Result**
 
@@ -1026,7 +935,6 @@ python experiments/K09_linearized_stability/run.py --seeds 2 --steps 2000 --work
 
 **What it shows**
 
-- **With the model known, the filter beats the PINN twin by a wide margin at a thousandth of the cost.**
 - **The tuning is one number**, the random-walk intensity.
 - **The inputs bound both estimators alike.**
 - The PINN's case is the partly unknown model (a closure, a field), not this one. The EKF stays as the control on every later comparison.
@@ -1048,7 +956,6 @@ python experiments/J05_ekf_baseline/run.py --seeds 3
 - **Estimator**: `pinnrl.process.MovingHorizonEstimator` fits the states over the last records (the horizon) by optimization, which allows constraints.
 - **Control**: the extended Kalman filter on J05's records; the same 11-cell model, $Q$ (process noise), $R$ (measurement noise) and prior.
 - **Arms**: horizons of 6 to 24 records, with and without the constraint that the fouling only grows.
-- **Stress tests**: a random walk ten times too loose, and a confident wrong prior.
 
 **Result**
 
@@ -1082,8 +989,6 @@ python experiments/J05_ekf_baseline/run_mhe.py --seeds 3 --workers 3
 
 - **Batch fit**: Gauss–Newton through the reference solver, with 2 or 6 Legendre modes (2 modes assume a ramp).
 - **Filters**: the Kalman filters of J05 on 11 and 51 cells, with the fouling as a random walk or as a level and a rate (the **trend filter**).
-- **PINN twin**: the twin of J03.
-- **Scenarios**: the inputs exact, a steam record uncertain by 0.3 K, and a fouling curve that saturates.
 
 **Result**
 
@@ -1159,11 +1064,8 @@ python experiments/J06_fouling_intervals/run.py --part pinn --pinn-datasets 12 -
 - **Two sources limit the estimate, and one is invisible one instrument at a time.** The evaporation rate carries the fouling and the records give it twice, by the flow balance and by the solids balance. All four instruments together cost as much as the steam offset, so no single calibration pays.
 - **A condensate meter is the measurement to buy.** It reports the evaporation directly, not as the difference of two flows eight times larger, and with its gain unknown to 2 % it beats exact instruments without it.
 - **The steam swing is the free remedy.** A change of the steam temperature changes the flux by $\Delta T_s/(1/U + R_f)$ whatever the offset. A swing as slow as the window is worth almost nothing, since that is what a change of fouling looks like.
-- **The prediction holds** over the simulated fits.
 
-**Reproduce:** `python experiments/J09_measurement_design/run.py` (about 1.5 min on 6 workers).
-
-**Source:** `experiments/J09_measurement_design/`.
+**Source:** `experiments/J09_measurement_design/` (about 1.5 min on 6 workers).
 
 ## A drying droplet and its closure (experiment J07)
 
@@ -1202,7 +1104,6 @@ The J07b figure is `assets/benchmarks/j07b_closure.png`.
 
 The passes:
 
-- **Second pass (J07b)**: the PINN started from the pointwise closure; a misfit check against the start catches the seed it destroys.
 - **The guard (J07c)**: `DryingDroplet.record_misfit` solves the droplet with a closure by the reference solver and returns the reduced $\chi^2$ of the record (about 1 when the closure explains the record to its noise).
 - **Shooting (J07d), the classical control**: a monotone piecewise-linear closure on 24 knots, fitted through the reference solver by bounded least squares.
 - **The anchored closure (J07e)**: `UnknownFunction(anchor={"at": X_eq, "value": 0.0})` with `monotone` holds $f(X_{eq}) = 0$ by construction.
@@ -1250,9 +1151,7 @@ python experiments/J07_droplet_drying/run.py --seeds 3 --steps 12000 --lbfgs-ste
 - **The prediction does not need it.**
 - **For the twin:** identify the closure on a droplet rig, carry it to the tower, and estimate at dryer scale the few numbers its records determine, with the droplet size as the nuisance to design for.
 
-**Reproduce:** `python experiments/J11_dryer_closure/run.py` (about 6 min on 6 workers).
-
-**Source:** `experiments/J11_dryer_closure/`.
+**Source:** `experiments/J11_dryer_closure/` (about 6 min on 6 workers).
 
 ## A soft sensor for the stickiness margin (experiment J08)
 
@@ -1284,16 +1183,9 @@ python experiments/J07_droplet_drying/run.py --seeds 3 --steps 12000 --lbfgs-ste
 
 **What it shows**
 
-- **The water balance cannot see the powder.**
-- **The twin beats the assay it replaces and is not late.**
 - **The caveat:** these are estimation errors of a model whose structure is the plant's. Against a real dryer the first comparison is the twin's moisture against the lab's over a campaign.
 
-**Reproduce**
-
-1. `python experiments/J11_dryer_closure/run.py` (the campaign fits this experiment reuses).
-2. `python experiments/J08_stickiness/run.py` (about 10 s).
-
-**Source:** `experiments/J08_stickiness/`.
+**Source:** `experiments/J08_stickiness/` (about 10 s; run `experiments/J11_dryer_closure/run.py` first, for the campaign fits it reuses).
 
 ## Measurement and campaign design for the dryer (experiment J12)
 
@@ -1303,7 +1195,6 @@ python experiments/J07_droplet_drying/run.py --seeds 3 --steps 12000 --lbfgs-ste
 
 - **Method**: J09's calculation on the tower.
 - **Errors admitted**: eight inputs at their accuracies.
-- **Check**: 60 fitted campaigns per design.
 
 **Result**
 
@@ -1321,9 +1212,7 @@ python experiments/J07_droplet_drying/run.py --seeds 3 --steps 12000 --lbfgs-ste
 - **Behind them the six balance inputs limit jointly, none alone.**
 - **The best five points depend on the target:** next to the operating limit for the margin, the corners of the window at high load for the curve.
 
-**Reproduce:** `python experiments/J12_dryer_design/run.py` (about 2.5 min on 6 workers).
-
-**Source:** `experiments/J12_dryer_design/`.
+**Source:** `experiments/J12_dryer_design/` (about 2.5 min on 6 workers).
 
 ## The counter-current tower (experiment J13)
 
@@ -1362,12 +1251,7 @@ python experiments/J07_droplet_drying/run.py --seeds 3 --steps 12000 --lbfgs-ste
 - **The PINN forward solve needs the problem scaled.** The package's residual normalization assumes the fields change over the whole window; `custom_pde` now divides each equation by its own scale. L-BFGS does all the learning, and the kink of the drying curve at the critical moisture is what the network does not resolve.
 - **The twin cannot identify the curve from a transient; the classical fit can.** The unknowns are the critical moisture, the exponent and the wall loss, from five thermocouples, the outlet humidity and hourly powder samples over ten minutes. The PINN twin's parameters absorb the physics the network does not resolve.
 
-**Reproduce**
-
-1. `python experiments/J13_counter_current_dryer/run.py --arms cost` (1 min).
-2. `python experiments/J13_counter_current_dryer/run.py --arms forward,identify` (about 15 min on 3 workers).
-
-**Source:** `experiments/J13_counter_current_dryer/`.
+**Source:** `experiments/J13_counter_current_dryer/` (`run.py --arms cost`, 1 min; `run.py --arms forward,identify`, about 15 min on 3 workers).
 
 ## The line-level twin (experiment J10)
 
@@ -1410,9 +1294,7 @@ python experiments/J07_droplet_drying/run.py --seeds 3 --steps 12000 --lbfgs-ste
 - **Information flows downstream only.** The dryer's records leave the fouling at its prior. A line twin estimates each unit's unknowns on that unit's instruments and uses the downstream unit's instruments for its product.
 - **The first pass's fouling is one unknown with the feed.**
 
-**Reproduce:** `python experiments/J10_line_twin/run.py` (monitors and joint fit in 2 min; validation about 20 min on 3 workers).
-
-**Source:** `experiments/J10_line_twin/`.
+**Source:** `experiments/J10_line_twin/` (monitors and joint fit in 2 min; validation about 20 min on 3 workers).
 
 ## Time-marching windows (experiment H04)
 
@@ -1438,8 +1320,6 @@ python experiments/J07_droplet_drying/run.py --seeds 3 --steps 12000 --lbfgs-ste
 **What it shows**
 
 - **Time marching rescues SIR**: a window short against the feature keeps the network off the trivial branch.
-- **The pendulum was a budget problem.**
-- **Lorenz**: a chaotic trajectory with a growth of $e^{23}$ is not one network's job.
 - **The droplet's sharp transition is a resolution problem.**
 
 **Reproduce**

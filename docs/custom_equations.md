@@ -2,39 +2,11 @@
 
 This page shows how to write your own PDE, ODE or system as text and train it with `CustomPDE`. Read it when the equation you need is not one of the [shipped ones](equations.md).
 
-$$
-\mathcal{N}(u;\, x, t, \theta) = 0
-$$
-
-- **Residual** $\mathcal{N}$: the equation with every term on the left-hand side. You write it as text; [SymPy](https://www.sympy.org) parses it.
-- **Field** $u$: an unknown of the equation, one output of the network.
-- **Coordinate** $x, t$: an independent variable, one input of the network.
-- **Parameter** $\theta$: a named constant (`alpha`, `nu`).
+- **Residual**: the equation with every term on the left-hand side. You write it as text; [SymPy](https://www.sympy.org) parses it.
 - **`PDEBase`**: the class of every problem. A `CustomPDE` is one, so the training loop, samplers, optimizers, inverse-problem machinery, `pinnrl-train` and the dashboard treat it like a shipped equation.
 - **Derivatives**: taken by the [compiled kernel](#a-faster-step-the-compiled-kernel) where it applies, by autograd elsewhere.
 
-| I want to ... | Section |
-|---|---|
-| train one equation written as text | [A first equation](#a-first-equation) |
-| read or write `u_xx`, `nu`, `sin` | [Notation](#notation) |
-| solve an ODE, a steady or a second-order-in-time problem | [Domains and kinds of problem](#domains-and-kinds-of-problem) |
-| set initial values, boundary values, an exact solution | [Initial, boundary and exact solutions](#initial-boundary-and-exact-solutions) |
-| couple several equations | [Systems](#systems) |
-| write a residual the text cannot express | [A residual in Python](#a-residual-in-python) |
-| identify a parameter from data | [Inverse problems](#inverse-problems) |
-| identify a coefficient that is a function | [Unknown functions](#unknown-functions) |
-| drive the model with a recorded signal | [Measured inputs](#measured-inputs) |
-| describe probes, flux meters and averages | [Sensors](#sensors) |
-| train once for a range of a parameter | [Parametric surrogates](#parametric-surrogates) |
-| train a problem in physical units | [Non-dimensionalization](#non-dimensionalization) |
-| know which engine computes the step | [A faster step: the compiled kernel](#a-faster-step-the-compiled-kernel) |
-| train from a YAML file | [From the command line](#from-the-command-line) |
-| copy a working example | [Examples of every kind](#examples-of-every-kind), [The catalogue](#the-catalogue) |
-| know what is not supported | [Limits](#limits) |
-
 ## A first equation
-
-The heat equation on the unit interval, trained and checked against its exact solution.
 
 $$
 u_t - \alpha\, u_{xx} = 0, \qquad u(x, 0) = \sin \pi x, \qquad u(0, t) = u(1, t) = 0, \qquad u_{\text{exact}} = e^{-\alpha \pi^2 t} \sin \pi x
@@ -61,10 +33,7 @@ print(f"relative L2 error: {pde.validate(trainer.model)['l2_error']:.2e}")
 `CustomPDE`:
 
 - **First argument**: the residual, the left-hand side of `expression = 0`.
-- **`domain`**: each coordinate with its `(lo, hi)` range.
 - **`parameters`**: a value for every parameter in the text.
-- **`boundary_conditions`**: here **Dirichlet** (the field's value is prescribed), 0 on both faces.
-- **`exact_solution`**: optional; enables `validate()`.
 
 `build_trainer` returns a `PDETrainer`:
 
@@ -95,17 +64,13 @@ You can equally build a `PINNModel` and `PDETrainer` yourself, as in [Getting st
 
 - **Time-dependent PDE:** `{"x": (0, 1), "t": (0, 1)}`, with an `initial_condition`.
 - **Second order in time** (wave, oscillators): detected from `_tt` in the equations; `initial_velocity` gives `u_t(x, t0)` (default 0).
-- **ODE:** a domain with only `t`, e.g. `{"t": (0, 10)}`. The network receives a dummy spatial input that the solution does not depend on, as the shipped pendulum does.
+- **ODE:** a domain with only `t`, e.g. `{"t": (0, 10)}`. The network receives a dummy spatial input that the solution does not depend on.
 - **Steady problem** (Poisson, Helmholtz): a domain without `t`. There is no initial term and `t` is fixed at 0.
 - **Higher dimension:** `{"x": (0, 1), "y": (0, 1), "t": (0, 2)}`; `u_xx + u_yy` is the Laplacian.
 
 ## Initial, boundary and exact solutions
 
-$$
-u(x, t_0) = u_0(x), \qquad u_t(x, t_0) = v_0(x), \qquad u\big|_{\text{face}} = g
-$$
-
-`initial_condition` ($u_0$), `initial_velocity` ($v_0$) and `exact_solution` take:
+`initial_condition`, `initial_velocity` and `exact_solution` take:
 
 - **A string**, for a scalar problem: an expression in the coordinates and parameters. Only the exact solution may use `t`.
 - **A list or `{field: expression}`**, for a system. Fields left out are 0.
@@ -148,10 +113,8 @@ pde = CustomPDE(
 )
 ```
 
-- **Residual**: shape `(N, 2)`. The residual loss averages over both equations.
-- **Residual-based sampling**: uses the norm over the equations at each point.
-- **Shared conditions**: `{kind: options}` applies to every field.
-- **Conditions per field**: `boundary_conditions={"u": {"dirichlet": {"value": 1.0}}, "v": {"neumann": {"value": 0.0}}}`. A field left out has none.
+- **Residual**: shape `(N, 2)`. The loss averages over both equations; residual-based sampling uses their norm at each point.
+- **Conditions per field**: `boundary_conditions={"u": {"dirichlet": {"value": 1.0}}, "v": {"neumann": {"value": 0.0}}}`. A field left out has none. `{kind: options}` applies to every field.
 - **`field_weights`**: `field_weights={"v": 10.0}` multiplies that field's residual, initial and boundary errors in the loss. Use it when one component is small or slow and the optimizer would ignore it.
 - **Test case for both**: the catalogue entry `reaction_diffusion_pair`, two heat equations exchanging mass at rate `k`, with a closed form.
 
@@ -163,7 +126,7 @@ $$
 u_t - \alpha\, u_{xx} - s(x) = 0, \qquad s(x) = \begin{cases} 1 & x < 0.5 \\ 0 & \text{otherwise} \end{cases}
 $$
 
-- **`f`**: a `Fields` accessor with the notation above as attributes (`f.u`, `f.u_xx`, `f.x`, `f.t`, `f.d("u", "x", "t")`, `f.laplacian("u")`). Each derivative is computed once by autograd and cached.
+- **`f`**: a `Fields` accessor with the notation above as attributes (`f.u`, `f.u_xx`, `f.x`, `f.t`, `f.d("u", "x", "t")`, `f.laplacian("u")`). Each derivative is computed once and cached.
 - **`p`**: the parameter dict, with `nn.Parameter` values for the ones being identified.
 - **Return**: an `(N, k)` tensor or a list of `(N, 1)` tensors.
 - **`time_order=2`**: pass it with a callable that is second order in time; for text it is detected.
@@ -229,10 +192,10 @@ $$
 u_t - \alpha(t)\, u_{xx} = 0, \qquad \alpha(t) = 0.05 + 0.1\, t \ \text{ to be recovered}
 $$
 
-- **[`UnknownFunction`](api/pdes.md#pdes.unknowns.UnknownFunction)**: a small network of the inputs you name (coordinates or fields). Its weights train with the data in inverse mode.
+- **[`UnknownFunction`](api/pdes.md#pdes.unknowns.UnknownFunction)**: a small network of the inputs you name (coordinates or fields), trained with the data in inverse mode.
 - **Closure**: a term that depends on the solution itself, such as a reaction rate $f(u)$.
 - **Use**: give it as an `unknown_functions` entry and write its name in the equation like a parameter.
-- **Subscripts**: `alpha_x` is the derivative of the learned function, by autograd. The conservative form of a heterogeneous diffusion is `u_t - alpha_x*u_x - alpha*u_xx`.
+- **Subscripts**: `alpha_x` is the derivative of the learned function. The conservative form of a heterogeneous diffusion is `u_t - alpha_x*u_x - alpha*u_xx`.
 
 Keys of an entry. The constraints are built into the output, so training never leaves the admissible set.
 
@@ -242,7 +205,7 @@ Keys of an entry. The constraints are built into the output, so training never l
 | `bounds: [lo, hi]` | a sigmoid into the interval |
 | `monotone: {u: increasing}` | non-negative weights on every path from that input, for a closure such as a reaction rate that grows with concentration |
 | `anchor: {at: {X: 0.05}, value: 0.0}` | a value the function is known to take at one point, held exactly by subtracting the network's own value there (a drying rate that vanishes at the equilibrium moisture, a fouling that starts at zero) |
-| `initial` | the constant the function starts at, the counterpart of a scalar's initial guess; an anchored function starts at its anchor value |
+| `initial` | the constant the function starts at; an anchored function starts at its anchor value |
 | `truth` | an expression in the inputs: the function the synthetic data came from |
 
 - **Anchor with `monotone`**: fixes the sign everywhere. A closure anchored at zero and increasing is non-negative above its anchor, without a softplus that would keep it from reaching zero.
@@ -267,7 +230,7 @@ print(pde.unknown_function_error("alpha"))          # relative L2 of the recover
 alpha_hat = pde.evaluate_unknown("alpha", x, t)     # the function itself, at any points
 ```
 
-- **Fixed basis**: `{"alpha": {"inputs": ["x"], "basis": {"type": "cosine", "modes": 6}}}` (or `legendre`) replaces the network. The unknown is then the coefficient vector `fn.coefficients`, one scalar per mode, so each mode's identifiability can be analysed like a parameter and the coefficients can be sampled by the swarm (K48).
+- **Fixed basis**: `{"alpha": {"inputs": ["x"], "basis": {"type": "cosine", "modes": 6}}}` (or `legendre`) replaces the network. The unknown is then the coefficient vector `fn.coefficients`, so each mode's identifiability can be analysed like a parameter and the coefficients can be sampled by the swarm (K48).
 - **Closure of the field**: takes the field as input and a range to normalise it, `{"f": {"inputs": ["u"], "input_ranges": {"u": [-1, 1]}, "monotone": "increasing"}}`, used as `u_t - D*u_xx - f`.
 - **No closed form**: pass a numerical reference as `exact_solution`. `pinnrl.benchmarks.heat_variable_reference(alpha)` solves `u_t = (alpha(x, t) u_x)_x` by the method of lines and `.as_exact_solution()` interpolates it.
 - **Experiment [F09](benchmarks.md#field-valued-unknowns-experiment-f09)**: recovers a drifting `alpha(t)` and a two-layer `alpha(x)` this way, and shows which fields the data cannot determine.
@@ -284,7 +247,7 @@ $$
 
 - $q(t)$, $T_{\text{in}}(t)$: records, given as `inputs` entries and used by name in the equations or in boundary values.
 - **[`TimeSeries`](api/pdes.md#pdes.inputs.TimeSeries)**: a record, built from a CSV or NPZ file (`{"path": "left.csv", "time_column": "t", "value_column": "T_left"}`) or from arrays.
-- **Reading**: at the time of every collocation or boundary point, by linear interpolation; held constant outside the record.
+- **Reading**: by linear interpolation at the time of every collocation or boundary point; held constant outside the record.
 - **Boundary values**: accept expressions in the coordinates, parameters and inputs, so `dirichlet: {left: "q", right: "0.2*t"}` and `neumann: {value: "sin(2*pi*t)"}` work alongside plain numbers.
 
 <!-- doctest: skip -->
@@ -351,7 +314,7 @@ J = sensor_jacobian(pde, ["alpha"])
 print(fisher_information(J, sensor_noise_vector(pde.sensors), ["alpha"]).std)
 ```
 
-- **Fisher information**: how much the records say about a parameter. The last two lines print the standard deviation of `alpha` this layout allows, from the closed form.
+- **Fisher information**: how much the records say about a parameter. The last two lines print the standard deviation of `alpha` this layout allows.
 - `pde.evaluate_expression("-alpha*u_x", model, x, t)` is the same machinery for your own derived quantities.
 - `sensor.set_values(records)` attaches real measurements.
 - `pinnrl-train --pde-file` records synthetic ones when a spec's sensors carry none.
@@ -366,11 +329,7 @@ $$
 - **Chi-square** $\chi^2$: the misfit of the records $y_k$ under the network's readings $\hat{y}_k$, in units of each sensor's noise, against its 99.9 % limit ([`SensorMisfit`](api/pdes.md#pdes.sensors.SensorMisfit)).
 - A twin whose fields miss the records has also missed the unknown: every failed run of J06 and J07b fails this test.
 
-[`train_with_restarts`](api/training.md#training.restarts.train_with_restarts) builds on it:
-
-1. Train and test.
-2. While the test fails, start again from the next seed.
-3. Keep the best of the attempts.
+[`train_with_restarts`](api/training.md#training.restarts.train_with_restarts) trains and tests; while the test fails it starts again from the next seed, and it keeps the best of the attempts.
 
 <!-- doctest: skip -->
 ```python
@@ -387,13 +346,7 @@ print(result.misfit, result.accepted, result.n_attempts)
 
 ## Parametric surrogates
 
-One training can cover a whole range of a parameter.
-
-$$
-u_w(x, t;\, \alpha) \approx u(x, t;\, \alpha), \qquad \alpha \in [0.02,\ 0.5]
-$$
-
-- **Parametric surrogate**: a network with the parameter as an extra input. It answers any `alpha` in the range at the cost of one forward pass.
+- **Parametric surrogate**: a network with the parameter as an extra input. One training covers a range of it, and any value in the range costs one forward pass.
 
 1. List the parameter under `parametric` with its range: `from_catalog("heat", parameters={}, parametric={"alpha": (0.02, 0.5)})`.
 2. Train. `alpha` is sampled uniformly with the collocation points and used in the expressions like a coordinate.
@@ -438,12 +391,7 @@ pde = CustomPDE(
 trainer = pde.build_trainer("feedforward", normalize=True, num_epochs=1000)
 ```
 
-| Model | Maximum error | Source |
-|---|---|---|
-| Raw, 1,000 Adam steps | 248 K (about 250 K) | `test_normalization.py` |
-| Normalized, 1,000 Adam steps | 2 K | `test_normalization.py` |
-
-- The same problem on the unit square trains to a few percent.
+- Result (`test_normalization.py`): after 1,000 Adam steps the maximum error is 248 K for the raw model and 2 K for the normalized one. The same problem on the unit square trains to a few percent.
 - The run snapshot keeps the bounds and scales in its `model` block, so `load_run` rebuilds the scaled model.
 
 ## A faster step: the compiled kernel
@@ -453,23 +401,14 @@ trainer = pde.build_trainer("feedforward", normalize=True, num_epochs=1000)
 **What it is**
 
 - **General kernel**: carries the derivatives forward through the layers next to the value, then takes the weight gradient by one reverse pass.
-- **Compiled step**: C++ written for your equations, compiled once (about 1.5 s per equation and machine) and cached. One call returns the mean squared residual and its gradient, as a tracing compiler such as JAX's does for a whole step.
+- **Compiled step**: C++ written for your equations, compiled once (about 1.5 s per equation and machine) and cached. It takes over at evaluation 32, so a short run never waits for the compiler.
 - **Default**: `build_trainer` and `pinnrl-train` use it wherever it applies and autograd everywhere else, without notice. Loss and gradients are the same to rounding.
 
 **When it applies**
 
-The general kernel runs where all of these hold:
-
-- macOS (Accelerate) or Linux (OpenBLAS, `apt install libopenblas-dev`) with a C++ compiler;
-- a feed-forward network of `Linear` and `tanh`, with or without `LayerNorm` before each `tanh`, float32 on the CPU;
-- equations given as text, with derivatives of any order, mixed ones included (`u_xx`, `u_xt`, `u_xxx` for KdV, `u_xxxx` for Cahn–Hilliard and the beam), and no unknown functions. The registry's classes (`HeatEquation`, `KdVEquation`, ...) use it too.
-
-The compiled step runs on top of it:
-
-- **Needs**: equations given as text, a time-dependent problem and the squared loss.
-- **Covers**: trainable parameters, measured inputs, unknown functions of the coordinates, input or output scaling (`normalize=True`) and layer normalization.
-- **Stays on autograd**: an unknown function of a field, or a derivative of one. Anywhere else the general kernel carries on.
-- **Takes over at evaluation 32**: until then the general kernel runs while the compiler works, so a short run never waits. The switch is at exactly that evaluation, so a run does not depend on how long the build took.
+- **General kernel**: equations given as text (or a registry class such as `HeatEquation`), derivatives of any order, no unknown functions; a feed-forward network of `Linear` and `tanh`, with or without `LayerNorm`, float32 on the CPU; macOS (Accelerate) or Linux (OpenBLAS, `apt install libopenblas-dev`) with a C++ compiler.
+- **Compiled step**: also needs a time-dependent problem and the squared loss. It covers trainable parameters, measured inputs, unknown functions of the coordinates, `normalize=True` and layer normalization.
+- **Stays on autograd**: an unknown function of a field, or a derivative of one.
 
 The full list is in [engine.md](engine.md#where-it-does-not-apply).
 
@@ -486,23 +425,16 @@ trainer = pde.build_trainer("feedforward", derivatives="autograd")   # never the
 - `derivatives="autograd"`: never the kernel. From the command line: `pinnrl-train --pde-file spec.yaml --derivatives autograd`.
 - `derivatives="native"`: the earlier name of the default, still accepted.
 - `PINNRL_NATIVE_SPECIALIZE=off`: keeps the general kernel. An integer sets the number of evaluations before the switch.
-- `pde.native_active(trainer.model)`: `True` where the kernel runs. [engine.md](engine.md#which-engine-ran) shows how to tell the compiled step apart.
+- [engine.md](engine.md#which-engine-ran) shows how to tell the compiled step apart.
 
 **Measured step times**
 
-| Step | Before | After | Experiment |
-|---|---|---|---|
-| Heat, packaged network (layer normalization on): autograd to kernel | 32 ms | 10.4 ms | [I11](benchmarks.md#the-cost-of-a-training-step-pytorch-c-and-rust-experiment-i11) |
-| Heat, no layer normalization: autograd to kernel | 10.6 ms | 5.4 ms | I11 |
-| Heat, 4 × 64 network: general kernel to compiled step | 4.8 ms | 3.7 ms | [I17](benchmarks.md#the-step-against-the-alternatives-experiment-i17) |
-| Cahn–Hilliard, 4 × 64 network: general kernel to compiled step | 9.6 ms | 5.7 ms | I17 |
-
-I17 sets the step against PyTorch, JAX, DeepXDE and PhysicsNeMo. On an Apple M4 the compiled step is ahead of JAX on every equation measured; on Linux x86 JAX's forward mode is a few percent ahead on plain networks at low order.
+- [I11](benchmarks.md#the-cost-of-a-training-step-pytorch-c-and-rust-experiment-i11): heat with the packaged network (layer normalization on), 32 ms by autograd, 10.4 ms by the kernel.
+- [I17](benchmarks.md#the-step-against-the-alternatives-experiment-i17): heat with a 4 × 64 network, 4.8 ms by the general kernel, 3.7 ms by the compiled step. On an Apple M4 the compiled step is ahead of JAX on every equation measured; on Linux x86 JAX's forward mode is a few percent ahead on plain networks at low order.
 
 **What the rest of the package sees**
 
-- Nothing downstream has to know which engine ran. A gradient that is itself differentiated (`create_graph=True`, as in the Hessian spectrum and the sensitivity analyses of `pinnrl.analysis`) is taken by autograd on the same function, and inside a `torch.func` transform the network is the ordinary PyTorch module.
-- With the kernel on, the boundary faces and the initial points of a step are evaluated in one call.
+Nothing downstream has to know which engine ran. A gradient that is itself differentiated (`create_graph=True`, as in the Hessian spectrum and the sensitivity analyses of `pinnrl.analysis`) is taken by autograd on the same function.
 
 ## From the command line
 
@@ -510,7 +442,7 @@ I17 sets the step against PyTorch, JAX, DeepXDE and PhysicsNeMo. On an Apple M4 
 2. Pass it with `--pde-file` in place of `--pde`.
 3. Use every other flag as usual, including `--mode inverse --identify r`.
 
-The Fisher–KPP equation, $u_t - D\, u_{xx} - r\, u (1 - u) = 0$:
+The Fisher–KPP equation:
 
 ```yaml
 # fisher_kpp.yaml
@@ -534,7 +466,7 @@ pinnrl-train --pde-file fisher_kpp.yaml --arch fourier --epochs 2000
 
 ## Examples of every kind
 
-Each of these is a complete, trainable problem. They are all entries of the shipped catalogue (next section), so `from_catalog(key)` gives the same object.
+Each is a complete, trainable problem and an entry of the shipped catalogue (next section), so `from_catalog(key)` gives the same object.
 
 **A nonlinear scalar PDE** (Burgers; shock formation for small ν):
 
@@ -564,7 +496,7 @@ pde = CustomPDE("u_tt + 2*gamma*u_t - c^2*u_xx", domain={"x": (0, 1), "t": (0, 1
                 exact_solution="exp(-gamma*t)*cos(sqrt(c^2*pi^2 - gamma^2)*t)*sin(pi*x)")
 ```
 
-**A third-order dispersive equation** (KdV soliton; derivatives of any order are one subscript):
+**A third-order dispersive equation** (KdV soliton):
 
 $$
 u_t + 6\, u\, u_x + u_{xxx} = 0
@@ -619,13 +551,11 @@ pde = CustomPDE(["S_t + beta*S*I", "I_t - beta*S*I + gamma*I", "R_t - gamma*I"],
                 initial_condition={"S": "0.99", "I": "0.01", "R": "0"})
 ```
 
-**A process model** (a continuous stirred-tank reactor with an Arrhenius rate; parameters named as an engineer would):
+**A process model** (a continuous stirred-tank reactor with an Arrhenius rate $k$, which grows with temperature):
 
 $$
 \dot{C} = \frac{C_{\text{in}} - C}{\tau} - k\, C, \qquad \dot{T} = \frac{T_{\text{in}} - T}{\tau} + \Delta H\, k\, C - UA\, (T - T_c), \qquad k = k_0\, e^{-E_a / (R T)}
 $$
-
-- **Arrhenius rate** $k$: a reaction rate that grows with temperature.
 
 <!-- doctest: skip -->
 ```python
@@ -704,8 +634,7 @@ pde = from_catalog("burgers", parameters={"nu": 0.1})   # override any entry
 print(len(CATALOG), sorted(CATALOG)[:5])
 ```
 
-- Every entry with a closed-form solution is checked by the test suite: the exact solution, used as the network, must zero the residual and match the initial condition.
-- The catalogue is therefore the regression test of the expression framework as well as a set of ready problems.
+Every entry with a closed-form solution is checked by the test suite: the exact solution, used as the network, must zero the residual and match the initial condition. The catalogue is thus also the regression test of the expression framework.
 
 ## Limits
 

@@ -1,6 +1,6 @@
 # Datasets (The Well)
 
-This page shows how to train on the simulation datasets of The Well and use their snapshots as observations. Read it if you want a neural surrogate of reference data, not only of analytical test problems.
+This page shows how to train on the simulation datasets of The Well and use their snapshots as observations.
 
 $$
 \mathcal{L}_{\text{data}}(\theta) = \frac{1}{N} \sum_{i=1}^{N} \bigl\lVert u_\theta(x_i, t_i) - u_i \bigr\rVert^2
@@ -9,7 +9,6 @@ $$
 - **[The Well](https://github.com/PolymathicAI/the_well)**: a collection of large, high-fidelity PDE simulation datasets (Polymathic AI, BSD-3). `pinnrl` registers 11 of them.
 - **$(x_i, t_i, u_i)$**: a sampled point of a simulation snapshot and the field values stored there.
 - **$u_\theta$**: the network. Fitted to the snapshots alone, it is a **neural surrogate** of the simulation.
-- **$\lVert\cdot\rVert^2$**: the squared error, the default loss function (`mse`).
 - **Channel**: one stored field component. The network has one output per channel.
 
 ```bash
@@ -23,7 +22,7 @@ pinnrl-train --pde heat --dataset active_matter --arch fno --epochs 200 --datase
 How a run reads the data:
 
 1. Data streams from the Hugging Face mirror (`hf://datasets/polymathic-ai/`).
-2. The run reads the first `--dataset-steps` time steps of each of `--dataset-traj` trajectories from `--dataset-split`.
+2. The run reads the first `--dataset-steps` time steps of each of `--dataset-traj` trajectories (simulation runs) from `--dataset-split` (`train`, `valid` or `test`).
 3. It samples `--dataset-points` `(x, t, u)` tuples. `--dataset-seed` fixes the sample.
 4. The slice is cached in `~/.cache/pinnrl/well`. Set `PINNRL_WELL_CACHE` to change that.
 
@@ -34,15 +33,9 @@ How a run reads the data:
 | Dashboard | the launch form has a matching "Time steps" field |
 | Fewer steps | a much smaller download: notebook 04 reads 9 steps, about 26 MB per trajectory instead of about 230 MB |
 
-- **Trajectory**: one simulation run, stored as a sequence of time steps.
-- **Split**: the `train`, `valid` or `test` part of a dataset.
-
 ## Registered datasets
 
-Domains, time steps and channel counts are taken from each dataset's own files.
-
-- **Spatial domain**: the same in every file.
-- **`dt × steps`**: the time step and the number of stored steps of the first training file. Five datasets have files that differ:
+Domains, time steps and channel counts are taken from each dataset's own files. The spatial domain is the same in every file. `dt × steps` is the time step and the number of stored steps of the first training file. Five datasets have files that differ:
 
 | Dataset | How its files differ |
 |---|---|
@@ -75,15 +68,10 @@ Limits of the registry:
 
 ## Modes
 
-$$
-\mathcal{L} = \mathcal{L}_{\text{data}} + \underbrace{\mathcal{L}_{\text{residual}} + \mathcal{L}_{\text{boundary}} + \mathcal{L}_{\text{initial}}}_{\text{dropped in data-only mode}}
-$$
-
-- **`data_only`**: plain regression on the snapshots, which gives a neural surrogate.
+- **`data_only`**: plain regression on the snapshots; the residual, boundary and initial terms are dropped.
 - **`data_augmented`**: the snapshots plus the residual of a PDE.
 - **`inverse`**: as `data_augmented`, with trainable parameters in the PDE.
 
-- Use `data_augmented` and `inverse` with your own observations of a system that one of the [shipped equations](equations.md) governs.
-- `--mode` overrides the dataset's recommendation. A Well dataset can still be combined with a PDE as an explicit modelling choice, as notebook 04 shows.
+Use `data_augmented` and `inverse` with your own observations of a system that one of the [shipped equations](equations.md) governs. `--mode` overrides the dataset's recommendation, so a Well dataset can still be combined with a PDE as an explicit modelling choice, as notebook 04 shows.
 
 From Python, `pinnrl.datasets.load_well_slice(name, split, n_traj, n_points, seed, n_steps=...)` returns the same `{"x", "t", "u"}` tensors, usable as `PDEConfig.observation_data`. Notebook 04 trains an FNO-style network on `active_matter` end to end.

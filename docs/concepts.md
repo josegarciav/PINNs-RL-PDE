@@ -1,6 +1,6 @@
 # Concepts
 
-This page defines the ideas behind each component of `pinnrl`, one equation and one line at a time. Read it if you are new to physics-informed neural networks (PINNs); derivations are in the [cited papers](#references).
+This page defines the ideas behind each component of `pinnrl`. Read it if you are new to physics-informed neural networks (PINNs); derivations are in the [cited papers](#references).
 
 ## The PINN loss
 
@@ -10,12 +10,11 @@ $$
 \mathcal{N}[u] = 0, \qquad r_\theta(x, t) = \mathcal{N}[u_\theta](x, t)
 $$
 
-- **$u_\theta$**: the network; its weights $\theta$ are the unknowns.
 - **$\mathcal{N}$**: the differential operator of the equation, for example $\mathcal{N}[u] = u_t - \alpha u_{xx}$.
 - **Residual $r_\theta$**: what is left when the network is put into the equation. It is zero for an exact solution.
 - **Collocation point**: a point $(x_j, t_j)$ inside the domain where the residual is evaluated.
 
-Training minimizes a weighted sum of four terms by gradient descent:
+Training minimizes a weighted sum of four terms over the weights $\theta$:
 
 $$
 \mathcal{L}(\theta) = w_r\,\mathcal{L}_r + w_b\,\mathcal{L}_b + w_i\,\mathcal{L}_i + w_d\,\mathcal{L}_d
@@ -29,24 +28,14 @@ $$
 | Data | $\mathcal{L}_d = \operatorname{mean} \lvert u_\theta(x_\text{obs}, t_\text{obs}) - u_\text{obs} \rvert^2$ | observations; zero unless data is attached (inverse and data modes) |
 
 - **Loss weights $w_r, w_b, w_i, w_d$**: fixed numbers under `loss_weights` (15, 20, 10, 10 in `config.yaml`), or [adapted during training](#loss-weighting).
-- **Mean squared error**: the form of each term with the default `loss_function: mse`.
 - **Mesh-free**: nothing ties the network to a grid, so the same code handles irregular domains and higher dimensions.
 
-Accuracy depends on three knobs, covered below:
-
-1. Where the residual is evaluated (sampling).
-2. How the terms are balanced (weighting).
-3. What the network can represent (architecture).
+Accuracy depends on where the residual is evaluated (sampling), how the terms are balanced (weighting) and what the network can represent (architecture).
 
 ### Automatic differentiation
 
-The derivatives in $\mathcal{N}[u_\theta]$ come from the chain rule applied to the network itself:
+The derivatives in $\mathcal{N}[u_\theta]$ are exact: the chain rule applied to the network, with no finite-difference step.
 
-$$
-u_x = \frac{\partial u_\theta}{\partial x}, \qquad u_{xx} = \frac{\partial}{\partial x}\!\left(\frac{\partial u_\theta}{\partial x}\right)
-$$
-
-- **Automatic differentiation**: exact derivatives by the chain rule, with no finite-difference step.
 - **Engine**: the code that computes them. The default, `derivatives="auto"` in `build_trainer` and `pinnrl-train`, is a compiled kernel wherever it applies; `"autograd"` switches it off. See [The native engine](engine.md).
 
 ### Forward and inverse problems
@@ -68,24 +57,17 @@ $$
 | Periodic | $u$ and $\partial u/\partial x_i$ match across opposite faces | `periodic: {}` |
 
 - Every spatial axis gets the condition on both faces.
-- **Second order in time** (wave, pendulum): the initial loss adds the initial velocity,
+- An unknown condition type raises an error; it is not silently ignored.
+- **Second order in time** (wave, pendulum): the initial loss adds the initial velocity $v_0$ (`initial_condition.velocity`, default 0). Without it the problem is not well posed.
 
 $$
 \mathcal{L}_i = \operatorname{mean}\lvert u_\theta(x, t_0) - u_0 \rvert^2 + \operatorname{mean}\lvert \partial_t u_\theta(x, t_0) - v_0 \rvert^2
 $$
 
-- **$v_0$**: `initial_condition.velocity`, default 0. Without it the problem is not well posed.
-- An unknown condition type raises an error; it is not silently ignored.
-
 ## Collocation sampling
 
-The residual is only enforced where it is evaluated:
+The residual is only enforced where it is evaluated. The sampler is the rule $p$ that draws the $N$ collocation points of a batch.
 
-$$
-\mathcal{L}_r = \frac{1}{N} \sum_{j=1}^{N} \lvert r_\theta(x_j, t_j) \rvert^2, \qquad (x_j, t_j) \sim p
-$$
-
-- **Sampler**: the rule $p$ that draws the $N$ collocation points of a batch.
 - **Sharp feature**: a shock, interface or boundary layer. It fills a small part of the domain, so uniform points can under-resolve the place where the error is.
 
 | Strategy | Rule | Idea | Cost |
@@ -102,44 +84,31 @@ $$
 - **Cell**: one of 16 × 8 space-time boxes; each is one action of the bandit.
 - **Contextual bandit**: a DQN with discount 0. Its value $Q$ regresses onto the reward, a cell's mean $\lvert r \rvert$ from probes relative to the other probed cells.
 
-Adaptive sampling is not free: it has to pay for its overhead and beat a strong uniform baseline at equal budget. [Benchmarks](benchmarks.md) reports how the strategies compare.
+Adaptive sampling has to pay for its overhead and beat a strong uniform baseline at equal budget. [Benchmarks](benchmarks.md) reports how the strategies compare.
 
 ## Architectures
 
-A plain network learns the smooth part of a solution first:
-
-$$
-u(z) = \sum_k a_k\, e^{\mathrm{i} k \cdot z}: \quad \text{small } \lvert k \rvert \text{ is fitted first, large } \lvert k \rvert \text{ last}
-$$
-
-- **MLP**: multilayer perceptron, a stack of layers $h \mapsto \sigma(W h + b)$ on the input $z = (x, t)$.
 - **Spectral bias**: MLPs learn low-frequency components first and struggle with high-frequency or multiscale solutions (Rahaman et al., 2019). Most of the alternatives exist to counter it.
 
 | Key | Layer | Idea | Use it for |
 |---|---|---|---|
 | `feedforward` | $\tanh(W h + b)$ | Tanh MLP, the standard PINN baseline | smooth solutions; the first thing to try |
 | `resnet` | $\sigma\big(h + F(h)\big)$ | MLP blocks $F$ with skip connections | deeper networks that still train stably |
-| `fourier` | $[\sin(zB), \cos(zB)]$ | Random Fourier features before the MLP (Tancik et al., 2020); one hidden layer per `hidden_dims` entry | oscillatory or high-frequency solutions |
+| `fourier` | $[\sin(zB), \cos(zB)]$ | Random Fourier features of the input $z = (x, t)$ before the MLP (Tancik et al., 2020); one hidden layer per `hidden_dims` entry | oscillatory or high-frequency solutions |
 | `siren` | $\sin\big(\omega_0 (W h + b)\big)$ | Sine activations with frequency `omega_0` (Sitzmann et al., 2020) | wave-like solutions; sensitive to `omega_0` |
-| `fno` | $\sigma\big(\operatorname{LN}(K h + W h + h)\big)$ | Fourier-neural-operator-style spectral layers $K$ on point-wise inputs (Li et al., 2021) | experimentation |
-| `attention` | $\operatorname{LN}\big(h + A(h)\big)$ | Self-attention blocks $A$ over a learned embedding | experimentation |
-| `autoencoder` | $z \to \text{latent} \to u$ | An encoder–latent–decoder MLP | experimentation |
+| `fno` | spectral layer with a skip connection and layer normalization | Fourier-neural-operator-style spectral layers on point-wise inputs (Li et al., 2021) | experimentation |
+| `attention` | self-attention block with a skip connection and layer normalization | Self-attention blocks over a learned embedding | experimentation |
+| `autoencoder` | encoder, latent, decoder | An encoder–latent–decoder MLP | experimentation |
 
-- **Skip connection**: the input $h$ of a block added back to its output.
 - **$B$**: a fixed random matrix, $B_{ij} \sim \mathcal{N}(0, \sigma^2)$; $\sigma$ = `scale` sets the frequency band.
-- **LN**: layer normalization.
 - **`fno` is not operator learning**: the FFT runs over each point's hidden features, and the network maps $(x, t)$ to $u$, not functions to functions.
 
 ## Optimizers
 
-$$
-\theta \leftarrow \theta - \eta\, \nabla_\theta \mathcal{L}(\theta)
-$$
-
-- **Learning rate $\eta$**: the step size. Schedules: `cosine`, `reduce_lr` (on plateau) or `constant`, with optional linear warmup.
 - **Adam**: the robust default.
 - **L-BFGS**: quasi-Newton with a strong-Wolfe line search. It often sharpens the final convergence of smooth problems but can stall early. Each step works on one sampled batch, so it behaves best with a single batch per epoch (`batch_size` = `num_collocation_points`).
 - **`adam_lbfgs`**: Adam for a fraction of the epochs (`adam_lbfgs_switch_ratio`), then L-BFGS. A common recipe in the PINN literature.
+- **Schedules**: `cosine`, `reduce_lr` (on plateau) or `constant`, with optional linear warmup.
 
 ## Loss weighting
 
@@ -152,7 +121,6 @@ $$
 $$
 
 - **$\bar g_i$**: a running average of the gradient norm of term $i$, with retention factor $\alpha$ = `alpha`.
-- The weights sum to 1, so no term dominates the update.
 - This is a simplified form of the learning-rate annealing of Wang, Teng & Perdikaris (2021), which scales each term by the ratio of the residual's maximum gradient to that term's mean gradient.
 
 **`rbw`: relative loss balancing**
@@ -161,11 +129,11 @@ $$
 \bar L_i \leftarrow \alpha\, \bar L_i + (1 - \alpha)\, \mathcal{L}_i, \qquad w_i \leftarrow \alpha\, w_i + (1 - \alpha)\, \frac{\bar L_i}{\sum_j \bar L_j + \epsilon}
 $$
 
-- **$\bar L_i$**: a running average of the loss of term $i$.
-- The weights sum to 1 and are smoothed again over steps. The terms with the largest loss get the most weight.
+- **$\bar L_i$**: a running average of the loss of term $i$. The terms with the largest loss get the most weight.
 
 Both strategies:
 
+- give weights that sum to 1;
 - replace the `loss_weights` of the residual, boundary and initial terms; the data weight stays fixed;
 - are switched off during L-BFGS, where the three terms then have weight 1.
 
@@ -177,13 +145,9 @@ Both strategies:
 | `mae` | $\operatorname{mean}\, \lvert e \rvert$ |
 | `huber` | $e^2/2$ for $\lvert e \rvert \le \delta$, else $\delta\,(\lvert e \rvert - \delta/2)$, with $\delta$ = `huber_delta` |
 
-- **Robust loss**: `mae` and `huber` reduce the influence of outliers, for example noisy observations.
+`mae` and `huber` reduce the influence of outliers, for example noisy observations.
 
 ## Inverse problems
-
-$$
-\min_{\theta,\,\lambda}\; w_r\,\mathcal{L}_r(\theta, \lambda) + w_b\,\mathcal{L}_b + w_i\,\mathcal{L}_i + w_d \operatorname{mean} \lvert u_\theta(x_\text{obs}, t_\text{obs}) - u_\text{obs} \rvert^2
-$$
 
 1. Mark the PDE parameters $\lambda$ as trainable. They become `torch.nn.Parameter`s.
 2. Supply observations. They add the data term.
@@ -202,8 +166,6 @@ See [Inverse problems](inverse_problems.md).
 | `inverse` | residual + BC + IC + data, with trainable parameters | Identify parameters from data |
 | `data_augmented` | residual + BC + IC + data | Fit reference data while respecting the physics |
 | `data_only` | data | A neural surrogate of a dataset (e.g. The Well) |
-
-- **BC, IC**: boundary and initial conditions.
 
 ## Code map
 

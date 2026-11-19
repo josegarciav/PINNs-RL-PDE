@@ -1,6 +1,6 @@
 # Getting started
 
-This page takes a new user from installation to a first trained PINN, on the command line and in Python. Read it before the guides.
+This page takes a new user from installation to a first trained PINN, on the command line and in Python.
 
 ## Install
 
@@ -10,11 +10,9 @@ pip install pinnrl            # or: uv add pinnrl
 
 - **Python**: 3.10–3.13.
 - **PyTorch**: installed as a dependency. It runs on CPU, Apple GPU (`mps`) or CUDA.
-- **Compiled engine**: the default training step is compiled C++ and needs a C++ compiler at first use. Without one, everything runs on autograd. See [The native engine](engine.md).
-- **Autograd**: PyTorch's automatic differentiation, the fallback engine.
-- **Extra**: an optional group of dependencies, installed as `pip install 'pinnrl[name]'`.
+- **Compiled engine**: the default training step is compiled C++ and needs a C++ compiler at first use. Without one, everything runs on PyTorch autograd. See [The native engine](engine.md).
 
-| Extra | Adds |
+| Extra (`pip install 'pinnrl[name]'`) | Adds |
 |---|---|
 | `pinnrl[well]` | Loaders for [The Well](datasets.md) benchmark datasets |
 | `pinnrl[notebooks]` | Jupyter, for the tutorial notebooks in the repository |
@@ -26,12 +24,11 @@ pip install pinnrl            # or: uv add pinnrl
 pinnrl-train --pde burgers --arch fourier --epochs 2000 --device cpu
 ```
 
-- **`--pde`**: the equation to solve. It takes a key (`heat`, `heat_2d`, `wave`, `burgers`, `convection`, `kdv`, `allen_cahn`, `cahn_hilliard`, `black_scholes`, `pendulum`) or the display name (`"Burgers Equation"`).
+- **`--pde`**: a key (`heat`, `heat_2d`, `wave`, `burgers`, `convection`, `kdv`, `allen_cahn`, `cahn_hilliard`, `black_scholes`, `pendulum`) or the display name (`"Burgers Equation"`).
 - **`--arch`**: the network architecture, here Fourier features.
-- **`--epochs`**: the number of passes of the optimizer over the sampled points.
-- **`--device`**: where PyTorch runs. A device that is not available falls back to CPU.
+- **`--device`**: a device that is not available falls back to CPU.
 - **Other settings**: they come from the packaged `config.yaml`. Override them with flags (see [Training](training.md)), or pass `--config my.yaml`.
-- **Engine**: `--derivatives auto` is the default and uses the compiled engine where it applies. `--derivatives autograd` switches it off.
+- **Engine**: `--derivatives auto` (the default) uses the compiled engine where it applies. `--derivatives autograd` switches it off.
 
 Each run writes a folder under `./runs/` in the current directory:
 
@@ -45,7 +42,6 @@ Each run writes a folder under `./runs/` in the current directory:
 | `visualizations/final_training_history.png`, `final_solution_comparison.png`, `collocation_evolution.png` | Plots |
 
 - **Inverse mode**: training that also identifies parameters of the equation from measurements.
-- **Residual**: what is left when the network is put into the equation.
 
 ## Dashboard
 
@@ -54,28 +50,18 @@ pinnrl-dashboard                 # opens http://127.0.0.1:8050/
 pinnrl-dashboard --port 8051 --no-browser
 ```
 
-The dashboard does three things:
-
-1. It configures and launches runs.
-2. It shows the solution and residual surfaces as training proceeds.
-3. It compares finished runs.
-
-See [Dashboard](dashboard.md).
+The [dashboard](dashboard.md) configures and launches runs, shows the solution and residual surfaces as training proceeds, and compares finished runs.
 
 ## Python API
 
-The shortest route is your equation as text. Here it is the heat equation with a known exact solution:
+The shortest route is your equation as text. Here it is the heat equation with diffusivity $\alpha = 0.1$ and a known exact solution $u^*$:
 
 $$
 u_t - \alpha\, u_{xx} = 0, \qquad u(x, 0) = \sin(2\pi x), \qquad u^*(x, t) = e^{-4\alpha\pi^2 t}\sin(2\pi x)
 $$
 
-- **$u_t$, $u_{xx}$**: the time derivative and the second space derivative of $u$.
-- **$\alpha$**: the diffusivity, here 0.1.
-- **$u^*$**: the exact solution, used to measure the error.
 - **`CustomPDE`**: builds the problem from the text.
 - **`build_trainer`**: builds a trainer with the packaged defaults.
-- **Collocation point**: a sampled point where the residual is evaluated.
 
 ```python
 from pinnrl import CustomPDE
@@ -91,11 +77,7 @@ print(f"relative L2 error: {pde.validate(trainer.model)['l2_error']:.2e}")
 
 See [Custom equations](custom_equations.md) for systems, ODEs, callables and the YAML form.
 
-The same pieces, spelled out:
-
-1. A shipped PDE class (`HeatEquation`) with its `PDEConfig`.
-2. A `PINNModel`.
-3. A `PDETrainer`.
+The same pieces, spelled out: a shipped PDE class (`HeatEquation`) with its `PDEConfig`, a `PINNModel` and a `PDETrainer`.
 
 ```python
 import torch
@@ -148,21 +130,11 @@ print(f"relative L2 error: {metrics['l2_error']:.2e}")
 
 `validate` returns four metrics:
 
-$$
-\text{relative L2 error} = \frac{\lVert u - u^* \rVert}{\lVert u^* \rVert}
-$$
-
-- **`l2_error`**: the relative L2 error of the network $u$ against the exact solution $u^*$.
+- **`l2_error`**: the relative L2 error $\lVert u - u^* \rVert / \lVert u^* \rVert$ of the network $u$ against the exact solution $u^*$.
 - **`mse`, `max_error`, `mean_error`**: the mean squared, maximum and mean errors.
 
 ## Next
 
 - [Concepts](concepts.md) explains the loss, sampling and architecture choices behind these settings.
 - [When to use a PINN](when_to_use.md) says which problems suit the method.
-- The [tutorial notebooks](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/notebooks) walk through:
-    1. a first PINN;
-    2. an architecture comparison;
-    3. the RL sampler;
-    4. The Well;
-    5. inverse problems;
-    6. notebooks 06, 07 and 08: the identification-baseline, conditioning, and stability-and-uncertainty experiments, reviewed from their raw results.
+- The [tutorial notebooks](https://github.com/josegarciav/PINNs-RL-PDE/tree/main/notebooks) cover a first PINN, an architecture comparison, the RL sampler, The Well, inverse problems, and (06–08) the identification-baseline, conditioning, and stability-and-uncertainty experiments, reviewed from their raw results.

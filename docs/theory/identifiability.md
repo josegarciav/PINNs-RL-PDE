@@ -2,8 +2,7 @@
 
 This page states when sensor data determine the parameters of an equation, and how precisely. Read it before trusting a parameter a PINN estimated, or before placing sensors.
 
-- **$\theta$**: the $p$ unknown parameters of the equation.
-- **$u_\theta$**: the solution for those parameters.
+- **$\theta$**: the $p$ unknown parameters of the equation; **$u_\theta$**: the solution for those parameters.
 - **$\mathcal{H}$**: the sensor operator; $\mathcal{H}u$ is what the sensors read from the field $u$.
 - **Surrogate**: the trained network $u_w$, with weights $w$, that stands in for the solution.
 
@@ -21,18 +20,11 @@ No amount of data identifies:
 - two parameters that only ever appear as a product;
 - a rate that only acts in a regime the sensors never see.
 
-Small models are decided symbolically (Chiş, Banga & Balsa-Canto, 2011):
-
-1. Differentiate the observations with respect to time.
-2. Solve the resulting algebraic relations for $\theta$.
-
-Experiment K11 (planned, not run yet) does this with SymPy for the catalogue entries that have a closed form.
+Small models are decided symbolically (Chiş, Banga & Balsa-Canto, 2011): differentiate the observations with respect to time, then solve the resulting algebraic relations for $\theta$. Experiment K11 (planned, not run yet) does this with SymPy for the catalogue entries that have a closed form.
 
 **For a PINN:** no network or optimizer recovers a parameter that fails this test; change the sensors or the experiment.
 
 ## Practical identifiability
-
-Identifiable in principle is not identifiable in practice.
 
 $$
 F = J^\top \Sigma^{-1} J, \qquad J_{ij} = \frac{\partial (\mathcal{H}u_\theta)_i}{\partial \theta_j}
@@ -47,11 +39,10 @@ $$
 $$
 
 - **Cramér–Rao bound**: no unbiased estimator $\hat\theta$ has a covariance below $F^{-1}$ (Cramér, 1946).
-- **Diagonal of $F^{-1}$**: its square root is the smallest standard deviation each parameter can have.
-- **Correlations of $F^{-1}$**: which parameters the data confuse.
+- **$F^{-1}$**: the square root of its diagonal is the smallest standard deviation each parameter can have; its correlations show which parameters the data confuse.
 - **Practically identifiable**: the bound is small compared with the parameter itself, for the sensors and noise one actually has (Raue et al., 2009; Wieland et al., 2021).
 
-[`pinnrl.analysis.closed_form_bound`](../api/analysis.md) computes $J$ by symbolic differentiation of a closed-form solution. It returns $F$, $F^{-1}$, the standard deviations, the correlation matrix and the eigen-decomposition.
+[`pinnrl.analysis.closed_form_bound`](../api/analysis.md) computes $J$ by symbolic differentiation of a closed-form solution.
 
 Example, the heat diffusivity $\alpha$:
 
@@ -59,8 +50,7 @@ $$
 \frac{\partial u}{\partial \alpha} = -\pi^2 t\, u
 $$
 
-- The information sits at late times and mid-domain.
-- A probe at $x = 0.5$ carries more of it than one near the wall.
+- The information sits at late times and mid-domain: a probe at $x = 0.5$ carries more of it than one near the wall.
 - F01: the spread of the PINN estimate across noise draws matched this bound to about 20 % once the noise dominated the surrogate's own error.
 
 **For a PINN:** the bound is the best error bar these sensors allow, and the PINN reaches it only when its own error is below the noise.
@@ -71,8 +61,7 @@ $$
 F = \sum_{k=1}^{p} \lambda_k\, v_k v_k^\top, \qquad \kappa(F) = \frac{\lambda_{\max}}{\lambda_{\min}}
 $$
 
-- **$v_k$** (eigenvector): a combination of parameters.
-- **$\lambda_k$** (eigenvalue): how well the data determine that combination.
+- **$v_k$**, **$\lambda_k$**: a combination of parameters, and how well the data determine it.
 - **Stiff / sloppy direction**: a combination with a large / small $\lambda_k$.
 - **$\kappa(F)$** (condition number): how much a relative error in the data can grow into a relative error along the sloppiest direction. It is the first diagnostic to report.
 
@@ -85,11 +74,10 @@ Two conditionings appear in a PINN inverse problem and should not be confused:
 | the *inverse problem* | $F$ | new sensors or a prior; no solver |
 | *training* | the loss Hessian or the neural tangent kernel | optimizers and preconditioning (Wang, Teng & Perdikaris, 2021; Wang, Yu & Perdikaris, 2022) |
 
-- **Loss Hessian**: the second derivatives of the training loss with respect to the weights.
 - **Neural tangent kernel**: the matrix that sets how fast each error component decays in gradient training.
 - The differential operator drives the training conditioning: high-order derivatives stiffen it.
 
-Roadmap item 3 computes both (`pinnrl.analysis`, released; see [History](../history.md)). The second is the subject of K03 (done) and K04 (planned).
+`pinnrl.analysis` computes both (roadmap item 3, released; see [History](../history.md)). The second is the subject of K03 (done) and K04 (planned).
 
 **For a PINN:** slow training and a poorly determined parameter are different problems; check $\kappa(F)$ first, because no optimizer fixes it.
 
@@ -99,19 +87,11 @@ $$
 \mathrm{PL}(\theta_j) = \min_{\theta_{k \ne j},\; w} \ \mathcal{L}(w, \theta)
 $$
 
-- **$\mathcal{L}$**: the loss.
-- **$\mathrm{PL}(\theta_j)$** (profile): the smallest loss reachable with parameter $j$ held fixed.
-
-The Fisher bound is local. When the posterior is far from Gaussian, or a direction is nearly flat, the profile is the honest check (Raue et al., 2009):
-
-1. Fix one parameter on a grid of values.
-2. Re-optimize everything else at each value.
-3. Plot the minimal loss against the fixed value.
-
+- **$\mathrm{PL}(\theta_j)$** (profile): the smallest loss $\mathcal{L}$ reachable with parameter $j$ held fixed, plotted over a grid of its values.
 - **Flat profile**: the parameter is not practically identifiable.
 - **Asymmetric profile**: the Gaussian error bar is wrong on one side.
 
-F07 does this by retraining the PINN at each grid value.
+The Fisher bound is local. When the posterior is far from Gaussian, or a direction is nearly flat, the profile is the honest check (Raue et al., 2009). F07 does this by retraining the PINN at each grid value.
 
 **For a PINN:** the profile costs one training run per grid value and assumes no parabola.
 
@@ -128,8 +108,7 @@ $$
 $$
 
 - **$w^*(\theta)$**: the weights that minimize the loss for the parameters $\theta$.
-- **$H_{ww}$, $H_{w\theta}$**: blocks of the loss Hessian $H$.
-- **Hessian-vector product**: $H$ times a vector, computed without forming $H$; both blocks are applied this way.
+- **$H_{ww}$, $H_{w\theta}$**: blocks of the loss Hessian $H$, applied through Hessian-vector products without forming $H$.
 
 Each route is validated against the exact layer on a catalogue entry with a closed form before it is trusted elsewhere.
 
@@ -137,16 +116,13 @@ Each route is validated against the exact layer on a catalogue entry with a clos
 
 ## Field-valued unknowns
 
-When the unknown is a function, $\alpha(x)$ or $\alpha(t)$, the parameter space is infinite-dimensional and the questions above are asked of its modes. For the heat equation in conservative form, $u_t = (\alpha(x)\, u_x)_x$:
+When the unknown is a function, $\alpha(x)$ or $\alpha(t)$, the parameter space is infinite-dimensional and the questions above are asked of its modes (the components of the field in a basis). For the heat equation in conservative form, $u_t = (\alpha(x)\, u_x)_x$:
 
 $$
 \delta u_t = (\alpha\, \delta u_x)_x + (\delta\alpha\, u_x)_x
 $$
 
-- **$\delta\alpha$**: a perturbation of the unknown field.
-- **$\delta u$**: the first-order response of the solution.
-- **$\delta\alpha\, u_x$**: the flux through which the perturbation acts.
-- **Mode**: one component of the field in a basis.
+- **$\delta\alpha$**, **$\delta u$**: a perturbation of the unknown field and the first-order response of the solution. The perturbation acts through the flux $\delta\alpha\, u_x$.
 
 Consequences:
 
@@ -155,7 +131,7 @@ Consequences:
 - Modes of $\alpha$ that are oscillatory, or supported where the gradient is small, lie in the sloppy directions of the (now infinite) Fisher matrix.
 - A time-varying $\alpha(t)$ is better placed: it changes the decay rate of every mode at once, and $\int_0^t \alpha$ is read directly from the amplitude of the solution.
 
-The practical test is the one of the previous section with the function in place of the parameter. Compare the solution for the true field with the one for the best constant (or the best low-order polynomial) $\bar\alpha$:
+The practical test compares the solution for the true field with the one for the best constant (or the best low-order polynomial) $\bar\alpha$:
 
 $$
 \|u_{\alpha} - u_{\bar\alpha}\| \lesssim \text{the surrogate's own field error} \quad\Longrightarrow\quad \text{the recovered field collapses to } \bar\alpha
@@ -163,12 +139,7 @@ $$
 
 - This holds however expressive the network, even when the Fisher information of the data (with an exact forward model) says the modes are determined.
 - The forward error, not the sensors, is the limit. The remedy is forward accuracy.
-
-| Field (F09, heat) | Its solution vs the best constant's | Result |
-|---|---|---|
-| two-layer $\alpha(x)$ | 20 % away | recovered in shape |
-| centred bump | reproduced to 4 % | not recovered |
-
+- F09 (heat): a two-layer $\alpha(x)$, whose solution is 20 % away from the best constant's, is recovered in shape; a centred bump, reproduced to 4 %, is not ([benchmarks](../benchmarks.md#field-valued-unknowns-experiment-f09)).
 - A smooth network turns a jump in $\alpha(t)$ into a ramp: the finite resolution of a surrogate with a few hundred weights.
 - Reduced bases for the field (K48, since run; see [equivalence regions](equivalence_regions.md)) and pointwise intervals (K47, not built) are the next steps.
 

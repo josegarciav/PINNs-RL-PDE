@@ -2,26 +2,19 @@
 
 This page is for anyone who trains a network with `pinnrl`, from the command line or from Python. It states the loss, lists every option with its packaged default, and gives the workflows as steps.
 
-Training minimises a weighted sum of four terms over the network weights $\theta$:
-
 $$
-\mathcal{L}(\theta) = w_r\,\mathcal{L}_r + w_b\,\mathcal{L}_b + w_i\,\mathcal{L}_i + w_d\,\mathcal{L}_d
-$$
-
-$$
+\mathcal{L}(\theta) = w_r\,\mathcal{L}_r + w_b\,\mathcal{L}_b + w_i\,\mathcal{L}_i + w_d\,\mathcal{L}_d,
+\qquad
 \mathcal{L}_r = \frac{1}{N_r}\sum_{j=1}^{N_r} \ell\big(\mathcal{N}[u_\theta](x_j, t_j)\big)
 $$
 
-- **$u_\theta$**: the network, an approximation of the solution $u(x, t)$.
-- **$\mathcal{N}[u]$**: the residual, the left-hand side of the equation written as $\mathcal{N}[u] = 0$.
+- **$\mathcal{N}[u_\theta]$**: the residual of the equation $\mathcal{N}[u] = 0$ on the network $u_\theta$.
 - **Collocation point**: a point $(x_j, t_j)$ inside the domain where the residual is evaluated. A batch holds $N_r$ of them.
-- **$\mathcal{L}_r$**: the residual loss, the mean of $\ell$ over the collocation points.
-- **$\mathcal{L}_b$, $\mathcal{L}_i$**: the same mean for the boundary-condition error and the initial-condition error.
-- **$\mathcal{L}_d$**: the data loss, the mean of $\ell(u_\theta - u_\text{obs})$ over the observations. It is zero when no observations are attached.
-- **$\ell$**: the reduction applied to each error: its square (`mse`, the default), its absolute value (`mae`) or the Huber function (`huber`).
+- **$\mathcal{L}_b$, $\mathcal{L}_i$, $\mathcal{L}_d$**: the same mean for the boundary-condition error, the initial-condition error and the misfit $u_\theta - u_\text{obs}$ to the observations. $\mathcal{L}_d$ is zero when none are attached.
+- **$\ell$**: the error's square (`mse`, the default), its absolute value (`mae`) or the Huber function (`huber`).
 - **$w_r, w_b, w_i, w_d$**: the loss weights `residual`, `boundary`, `initial` and `data`.
 
-The mode selects which terms count:
+The mode selects which terms count. The physics terms are $\mathcal{L}_r$, $\mathcal{L}_b$ and $\mathcal{L}_i$.
 
 | `mode` | Terms in the loss | Trained |
 |---|---|---|
@@ -30,8 +23,7 @@ The mode selects which terms count:
 | `data_augmented` | physics terms and data | $\theta$ |
 | `data_only` | data only | $\theta$ |
 
-- **Physics terms**: $\mathcal{L}_r$, $\mathcal{L}_b$ and $\mathcal{L}_i$.
-- Outside `forward`, a data weight of zero or less is replaced by 1.
+Outside `forward`, a data weight of zero or less is replaced by 1.
 
 ## Command line
 
@@ -64,8 +56,6 @@ pinnrl-train --pde burgers --arch fourier --epochs 3000 \
 pinnrl-train --pde heat_2d --arch fourier --adaptive-weights lrw
 ```
 
-Where the run goes:
-
 - Each run is saved in `./runs/<timestamp>_<PDE display name>_<arch>_<rl|no_rl>/`.
 - A Well run has the dataset name in place of the PDE (see [Getting started](getting_started.md#first-run-from-the-command-line)).
 - Early-stopping `patience` is counted in epochs. Validation runs every `validation_frequency` epochs.
@@ -97,10 +87,8 @@ Defaults are the values of the `training` block of the packaged `config.yaml`. T
 | `gradient_clipping` | `--gradient-clipping` | 1.0 | Largest gradient norm of the network weights; 0 disables it. Not in the file: it is the default of `TrainingConfig` |
 | `lbfgs` | none | `history_size` 50, `max_iter` 20, `line_search_fn` `strong_wolfe`, `tolerance_grad` 1e-7, `tolerance_change` 1e-9 | Passed to `torch.optim.LBFGS` |
 
-- **Adam**: a first-order optimizer that takes one step per batch.
-- **L-BFGS**: a quasi-Newton optimizer that uses curvature and a line search. It runs without gradient clipping, weight decay or adaptive weights.
-- **Weight decay**: a pull of the weights toward zero. Parameters of the equation that are being identified never receive it.
-- **Gradient clipping**: rescaling the gradient when its norm exceeds a limit.
+- L-BFGS runs without gradient clipping, weight decay or adaptive weights.
+- Parameters of the equation that are being identified never receive weight decay.
 - **L-BFGS safeguard**: a step whose loss is not finite, or more than 10 times the loss before it, is rolled back and the L-BFGS rate is halved. After 3 such steps in a row the trainer returns to Adam.
 
 **Learning-rate schedule**
@@ -111,8 +99,8 @@ Defaults are the values of the `training` block of the packaged `config.yaml`. T
 | `warmup_epochs` | none | 0 | Epochs of linear ramp before the schedule starts |
 | `reduce_lr_params` | none | `factor` 0.5, `patience` 50, `min_lr` 1e-6 | The plateau schedule, and the floor of the cosine one |
 
-- **`cosine`**: the rate falls along a cosine from `learning_rate` to `min_lr` over `num_epochs - warmup_epochs`.
-- **`reduce_lr`**: the rate is multiplied by `factor` when the epoch training loss has not improved for `patience` epochs.
+- `cosine` runs from `learning_rate` to `min_lr` over `num_epochs - warmup_epochs`.
+- `reduce_lr` watches the epoch training loss.
 - While L-BFGS runs, any schedule other than `constant` is replaced by `reduce_lr`.
 
 **Sampler**
@@ -121,10 +109,9 @@ Defaults are the values of the `training` block of the packaged `config.yaml`. T
 |---|---|---|
 | `uniform` | yes | Uniformly at random in the domain |
 | `stratified` | no | Each axis cut into equal bins with one random sample per bin (Latin-hypercube style) |
-| `residual_based` | no | RAD: from a uniform pool of 4 times the batch, with probability $p \propto \lvert r\rvert^k / \overline{\lvert r\rvert^k} + c$, with $k = 1$, $c = 0$ |
+| `residual_based` | no | RAD, residual-based adaptive distribution (Wu et al., 2023): from a uniform pool of 4 times the batch, with probability $p \propto \lvert r\rvert^k / \overline{\lvert r\rvert^k} + c$ in the residual $r$, with $k = 1$, $c = 0$ |
 | `adaptive` (`--rl`) | no | Experimental bandit on a 16 × 8 grid of $(x, t)$ cells, 1-D equations only; half the points from the policy, half uniform |
 
-- **RAD**: residual-based adaptive distribution (Wu et al., 2023). Points are drawn where the residual $r$ is large.
 - `residual_based` falls back to `uniform` when the residual cannot be computed or the weights are not finite.
 
 **Loss**
@@ -152,10 +139,8 @@ Defaults are the values of the `training` block of the packaged `config.yaml`. T
 
 | Option | Flag | Default | Meaning |
 |---|---|---|---|
-| `derivatives` | `--derivatives` | `auto` | `auto` takes the residual's derivatives from the compiled engine where it applies and from autograd elsewhere; `autograd` switches the engine off |
+| `derivatives` | `--derivatives` | `auto` | `auto` takes the residual's derivatives from the compiled engine (the C++ kernel `pinnrl.native`, see [The native engine](engine.md)) where it applies and from autograd elsewhere; `autograd` switches the engine off |
 | `normalize` | `--normalize` | off | Network inputs mapped from the domain to $[-1, 1]$, outputs scaled by the `scales` of the equation's spec, loss terms in those units |
-
-- **Compiled engine**: the C++ kernel `pinnrl.native`. See [The native engine](engine.md) for where it applies.
 
 ## Python
 
@@ -185,27 +170,18 @@ The two loops apply exactly the same update:
 | Sampler | the configured one | the configured one, or `sample_fn(model, progress) -> (x, t)` |
 | Evaluation along the way | every `validation_frequency` epochs | `checkpoints` and `on_checkpoint` |
 
-- Each `train()` call plans its own schedule: the learning rate restarts from `training.learning_rate`.
-- The cosine period and the `adam_lbfgs` switch epoch follow that call's `num_epochs`.
+- Each `train()` call plans its own schedule: the learning rate restarts from `training.learning_rate`, and the cosine period and the `adam_lbfgs` switch epoch follow that call's `num_epochs`.
 - `trainer.history` holds per-epoch entries, including `loss_weights` when adaptive weighting is on.
 
 ### Time-marching
 
-A network trained on the whole time span at once can settle on a wrong solution with a small residual. Two typical cases are a trivial solution close to the initial condition and a smoothed-out sharp transition. `train_windows` trains on a growing time window instead:
-
-$$
-[t_0, c_1] \;\to\; [t_0, c_2] \;\to\; \dots \;\to\; [t_0, T]
-$$
-
-- **Cutoff $c_k$**: the end of window $k$. The last one is the end of the time domain $T$.
+A network trained on the whole time span at once can settle on a wrong solution with a small residual: a trivial solution close to the initial condition, or a smoothed-out sharp transition. `train_windows` trains on a growing time window $[t_0, c_k]$ instead, where the last cutoff $c_k$ is the end of the time domain.
 
 <!-- doctest: skip -->
 ```python
 cutoffs = [2.5, 5.0, 10.0]                         # the last one is the end of the time domain
 out = trainer.train_windows(cutoffs, steps_per_window=4000, resample_every=50, lbfgs_steps=500)
 ```
-
-What it does:
 
 1. For each cutoff, it sets `pde.time_cutoff`, which restricts the collocation samplers, the observations and the sensor records to the window.
 2. It trains `steps_per_window` steps. The network and the identified unknowns carry over to the next window.
@@ -239,8 +215,7 @@ Steps:
 | `level` | 0.999 | The chi-square quantile a run must stay under |
 | `seed` | 0 | The first seed; attempt $k$ uses `seed + k` |
 
-- In J06, 22 of 36 runs collapsed to a constant fouling or stuck at a bound. In J07b, one closure in three left the basin its start had put it in.
-- The misfit test caught every one of those failures. See [Process twins](process_twins.md).
+In J06, 22 of 36 runs collapsed to a constant fouling or stuck at a bound. In J07b, one closure in three left the basin its start had put it in. The misfit test caught every one of those failures. See [Process twins](process_twins.md).
 
 ### Reloading a run
 

@@ -2,9 +2,7 @@
 
 This page is for anyone who wants to estimate parameters or functions of an equation from measurements. It states the loss, the workflow, the settings an inverse run needs, and the conditions under which the answer can be trusted.
 
-- **Forward problem**: find $u(x, t)$ given the PDE and its parameters.
-- **Inverse problem**: find the parameters given measurements of $u$.
-- Examples: a thermal diffusivity from temperature traces, a wave speed from surface seismograms, a fouling resistance from evaporator temperatures, a volatility from option prices.
+Examples: a thermal diffusivity from temperature traces, a wave speed from surface seismograms, a fouling resistance from evaporator temperatures, a volatility from option prices.
 
 A PINN learns the solution and the parameters in one optimization:
 
@@ -13,19 +11,12 @@ $$
 + w_d \operatorname{mean} \lvert u_\theta(x_\text{obs}, t_\text{obs}) - u_\text{obs} \rvert^2
 $$
 
-- **$\theta$**: the network weights. $u_\theta$ is the network's approximation of the solution.
-- **$\lambda$**: the unknown parameters of the equation. They are trainable tensors, updated with the weights.
-- **$\mathcal{L}_\text{residual}$**: the mean squared residual $\mathcal{N}[u_\theta; \lambda]$ of the equation at the collocation points. It ties $\lambda$ to physically consistent solutions.
-- **Collocation point**: a point inside the domain where the residual is evaluated.
-- **$\mathcal{L}_\text{boundary}$, $\mathcal{L}_\text{initial}$**: the mean squared error on the boundary and initial conditions.
-- **Data term**: the last term, the mean squared misfit at the $N$ observations $(x_\text{obs}, t_\text{obs}, u_\text{obs})$. It pulls the solution toward the measurements.
+- **$\lambda$**: the unknown parameters of the equation. They are trainable tensors, updated with the network weights $\theta$.
+- **$\mathcal{L}_\text{residual}$**: the mean squared residual $\mathcal{N}[u_\theta; \lambda]$ of the equation at the collocation points (sampled points inside the domain). It ties $\lambda$ to physically consistent solutions.
+- **Data term**: the last term, the misfit at the observations $(x_\text{obs}, t_\text{obs}, u_\text{obs})$. It pulls the solution toward the measurements.
 - **$w_r, w_b, w_i, w_d$**: the loss weights `residual`, `boundary`, `initial` and `data`.
 
-How this differs from classical approaches:
-
-- Classical methods run a forward solver many times, plus its adjoint for gradient-based methods.
-- Ensemble Kalman filters avoid the adjoint at the cost of an ensemble of solves.
-- A PINN needs neither: one optimization returns $u_\theta$ and $\lambda$.
+Classical methods run a forward solver many times, plus its adjoint or an ensemble of solves. A PINN needs neither: one optimization returns $u_\theta$ and $\lambda$.
 
 ## Command line
 
@@ -53,8 +44,6 @@ What the run does:
 The command above keeps the packaged weight decay and gradient clipping. Add `--weight-decay 0 --gradient-clipping 0` for an accurate estimate (see [below](#regularisation-defaults-for-inverse-runs)).
 
 ## Python
-
-The steps:
 
 1. Build a `TrainingConfig` with `mode="inverse"`, no weight decay and no gradient clipping.
 2. Build the PDE with `trainable_parameters` and `parameter_initial_guesses`.
@@ -121,26 +110,14 @@ The packaged defaults are forward-fit defaults. An inverse run must start from `
 | `optimizer_config.weight_decay` | 0.0005 | 0 | It pulls the network toward zero and the parameter absorbs the bias (F01, D01) |
 | `gradient_clipping` | 1.0 (the default of `TrainingConfig`; not in `config.yaml`) | 0 | Clipping at norm 1 slows the network and leaves a field error the parameter absorbs (F01, D01) |
 | Weight decay on the unknowns $\lambda$ | always 0 | always 0 | The trainer puts identified parameters and unknown functions in their own Adam group without decay (found in F09) |
-| `optimizer` | `adam` | Adam, then an L-BFGS finish | The finish halves the error and the bias again (D01) |
+| `optimizer` | `adam` | Adam, then an L-BFGS finish (`optimizer="adam_lbfgs"`, or `lbfgs_steps` in `train_windows`; see [Training](training.md)) | The finish halves the error and the bias again (D01) |
 | `loss_weights.data` | 10 | search 10–100 | See [When the inversion is well posed](#when-the-inversion-is-well-posed) |
 
-- **Weight decay**: an L2 pull of the network weights toward zero.
-- **Gradient clipping**: rescaling the gradient when its norm exceeds a limit.
-- **L-BFGS**: a quasi-Newton optimizer with a line search (`optimizer="adam_lbfgs"`, or `lbfgs_steps` in `train_windows`; see [Training](training.md)).
-- **Cramér–Rao bound**: the smallest standard deviation any unbiased estimate can have for the given sensors and noise.
+The evidence, on the heat diffusivity $\alpha$ ([F01](benchmarks.md#identification-baseline-experiment-f01), [D01](benchmarks.md#optimizers-and-the-floor-experiments-d01-d02)):
 
-The experiments that showed it (heat diffusivity $\alpha$, [F01](benchmarks.md#identification-baseline-experiment-f01) and [D01](benchmarks.md#optimizers-and-the-floor-experiments-d01-d02)):
-
-| Configuration | Relative error of $\hat\alpha$ | Field error | Source |
-|---|---|---|---|
-| Packaged decay and clipping, clean or lightly noisy data ($\sigma \le 0.01$) | 1.5–2 % whatever the number of observations, every seed at $\hat\alpha \approx 0.098$ | 2–3 % | F01 |
-| Both off, same Adam run, clean data | 0.1–0.2 % | 0.2 % | F01 (`--clean` rerun) |
-| Both off, median over the F01 grid | 0.6 %, down from 2.2 % | | F01 |
-| Both off, Adam 5,000 steps, 200 observations, noise 0.01 | 0.4 % (median of 5 seeds) | 0.23 % | D01 |
-| Both off, Adam 3,500 steps then L-BFGS 75 steps | 0.2 % | 0.1 % | D01 |
-
-- With both off and $\sigma = 0.01$, the error falls with the number of observations along the Cramér–Rao bound: 1.0 %, 0.7 %, 0.24 %, 0.22 % against bounds of 1.1 %, 0.7 %, 0.35 %, 0.16 % (F01).
-- D01's ablation attributes about half of the old floor to each of the two settings.
+- **Packaged defaults**: the relative error of $\hat\alpha$ stays at 1.5–2 % whatever the number of observations (F01).
+- **Both off**: 0.1–0.2 % on clean data (F01). With noise 0.01 the error falls with the number of observations along the Cramér–Rao bound, the smallest standard deviation any unbiased estimate can have for the given sensors and noise.
+- **Both off, with an L-BFGS finish**: 0.2 %, against 0.4 % for Adam alone (D01). D01's ablation attributes about half of the old floor to each of the two settings.
 - F11 (change point) saw the same effect: under the defaults a 3.6 % field error was absorbed into a smaller jump placed early, and three times the training did not help.
 - The packaged defaults are unchanged, so set both to 0 yourself. [Troubleshooting](troubleshooting.md) lists the symptom under "An identified parameter stalls 1–2 % from the truth".
 
@@ -159,12 +136,10 @@ $$
 
 What this recovers on the heat equation ([F09](benchmarks.md#field-valued-unknowns-experiment-f09)):
 
-| Unknown | Result |
-|---|---|
-| A linear drift $\alpha(t)$ | Recovered to a few percent |
-| A step in $\alpha(t)$ | Recovered as a steep ramp |
-| A two-layer field $\alpha(x)$ | Recovered to its shape |
-| A centred bump in $\alpha(x)$ | Not recovered: the solution hardly depends on it |
+- a linear drift $\alpha(t)$, to a few percent;
+- a step in $\alpha(t)$, as a steep ramp;
+- a two-layer field $\alpha(x)$, to its shape;
+- not a centred bump in $\alpha(x)$: the solution hardly depends on it.
 
 ## Your own measurements
 
@@ -181,8 +156,7 @@ $$
 \mathcal{L}_\text{data} \mathrel{+}= w_s \operatorname{mean} \left\lvert \frac{H_s[u_\theta] - y_s}{c_s} \right\rvert^2
 $$
 
-- **Sensor**: a measurement with an operator $H_s$: a probe at a fixed place read over time, a wall flux, an integral. Each has its noise and delay.
-- **$y_s$**: the sensor's records.
+- **Sensor**: records $y_s$ with an operator $H_s$: a probe at a fixed place read over time, a wall flux, an integral. Each has its noise and delay.
 - **$w_s$, $c_s$**: its `weight` (default 1) and `scale` (default 1, or the field's scale when the problem is normalised).
 - **Fisher information**: how much a sensor layout says about the unknowns, computed from the sensitivities of the readings.
 
@@ -205,9 +179,4 @@ $$
 
 - $\alpha$ is invisible where $u_x$ vanishes.
 - A localized perturbation is smoothed by diffusion before it reaches the sensors.
-- The check: compare the truth's solution with the one of the best constant (`heat_variable_reference` makes this one line). If they differ by less than the surrogate's own error, the data cannot resolve the field.
-
-Terms used above:
-
-- **Identifiable**: the sensors determine the unknown uniquely.
-- **Surrogate**: the trained network standing in for the solution.
+- The check: compare the truth's solution with the one of the best constant (`heat_variable_reference` makes this one line). If they differ by less than the trained network's own error, the data cannot resolve the field.

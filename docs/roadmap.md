@@ -77,6 +77,8 @@ $$
 - **A warning for R6.** In one benchmark of predictive control on reactors, PINN surrogates were slower than the mechanistic model in every case, because of the cost of derivatives. R6 exists to remove that cost and must be judged against that result.
 - **For industry.** No PINN validated on plant data for an evaporator or a spray dryer was found; plants run grey-box models with predictive control. Readiness there is a lifecycle matter (historian validation, shadow mode, drift monitoring, change control), which is what v6.0 and v7.0 are for.
 
+**R1 has a research plan and a first prototype** in `experiments/D10_least_squares_optimizer/` (`PLAN.md`, `run.py`). The plan goes beyond Levenberg–Marquardt: nine moves that use what a physics-informed loss is (the residual's flow integrated like a stiff ODE, a coarse classical solve as the preconditioner, training as filtering over a stream of fresh points, small blocks solved exactly with the sampler choosing them, the linear layer solved and the basis grown, continuation in a physical parameter, the equation's own time as the training loop, multipliers in place of loss weights) and an agent that chooses among them, which is R4 widened from damping to moves. Each has a test and a condition under which it is dropped.
+
 Order of work: R1 as a prototype in plain PyTorch first (to measure what it buys), then in the engine; R2 and R3 on top; R5 throughout; R4 and R6 last, because R4 needs R1 and R6 needs R2. The review is in the repository's `reports/` folder when it is kept there.
 
 ### R6. A network designed for the loop

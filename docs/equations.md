@@ -1,6 +1,6 @@
 # Equations
 
-This page lists the ten equations that ship with `pinnrl` (the keys of `pinnrl-train --pde`): each equation, its symbols, its default problem and its exact solution. Read it to pick a test problem or to check what a key solves.
+This page lists the ten equations that ship with `pinnrl` (the keys of `pinnrl-train --pde`): each equation, its symbols, its default problem and its exact solution.
 
 | Key | PDE | Where it arises | What makes it hard for a PINN |
 |---|---|---|---|
@@ -14,11 +14,9 @@ This page lists the ten equations that ship with `pinnrl` (the keys of `pinnrl-t
 | `black_scholes` | $V_\tau = \tfrac12 \sigma^2 S^2 V_{SS} + r S V_S - r V$, with $\tau$ the time to maturity | European option pricing | A kink in the payoff at the strike; spatial and temporal scales that differ by orders of magnitude. |
 | `pendulum` | $\theta'' + b\,\theta' + (g/L)\sin\theta = 0$ | A nonlinear oscillator: mechanics, control, robotics | An ODE posed as a PINN. Long time horizons accumulate phase error. |
 
-- **Subscripts**: $u_t = \partial u/\partial t$, $u_{xx} = \partial^2 u/\partial x^2$, and so on.
-- **$\nabla^2$**: the Laplacian, the sum of the second derivatives over the spatial axes.
-- **Exact solution**: a formula that satisfies the equation and its conditions. Training is scored against it.
+Subscripts are derivatives: $u_t = \partial u/\partial t$, $u_{xx} = \partial^2 u/\partial x^2$.
 
-Each shipped exact solution is verified by `tests/unit_tests/test_physics_consistency.py`. It must satisfy, up to float32 round-off:
+Training is scored against the exact solution. `tests/unit_tests/test_physics_consistency.py` verifies that each one satisfies, up to float32 round-off:
 
 - the PDE: relative residual below 1e-4;
 - the initial condition: error below 1e-6;
@@ -28,7 +26,7 @@ Two are evaluated numerically: Burgers (the Cole–Hopf solution) and the pendul
 
 ## The equations one by one
 
-The domains, parameters and conditions below are the defaults of `config.yaml`.
+The domains, parameters, conditions and architectures below are the defaults of `config.yaml`.
 
 ### Heat (`heat`)
 
@@ -38,8 +36,9 @@ $$
 
 - **$u$**: temperature. **$\alpha$**: thermal diffusivity, 0.01.
 - **Domain**: $x \in [0, 2]$, $t \in [0, 10]$.
-- **Conditions**: periodic in $x$; $u(x, 0) = \sin(2\pi x)$.
+- **Conditions**: periodic in $x$; $u(x, 0) = \sin(2\pi x)$ (`frequency: 2` periods on [0, 2]).
 - **Exact solution** (`sin_exp_decay`): in general $A \prod_d \sin(2\pi k x_d / L_d)\, e^{-\alpha \sum_d (2\pi k / L_d)^2 t}$, with $k$ = `frequency` periods over the axis length $L_d$.
+- **Architecture**: `fourier`.
 
 ### Heat in 2-D (`heat_2d`)
 
@@ -51,6 +50,7 @@ $$
 - **Domain**: $(x, y) \in [0, 1]^2$, $t \in [0, 5]$.
 - **Conditions**: $u = 0$ on the four faces; $u(x, y, 0) = \sin(2\pi x)\sin(2\pi y)$.
 - **Exact solution** (`sine_2d`): in general $A \sin(k_x \pi x)\sin(k_y \pi y)\, e^{-\alpha \pi^2 (k_x^2 + k_y^2) t}$.
+- **Architecture**: `fourier`.
 
 ### Wave (`wave`)
 
@@ -62,6 +62,7 @@ $$
 - **Domain**: $x \in [0, 1]$, $t \in [0, 1]$.
 - **Conditions**: $u = 0$ at both ends; $u(x, 0) = \sin(\pi x)$, released from rest ($u_t(x, 0) = 0$).
 - **Exact solution** (`sine`): a standing wave; in $d$ dimensions $A \prod_d \sin(k\pi x_d)\cos(\omega t)$ with $\omega = c k \pi \sqrt{d}$.
+- **Architecture**: `siren`.
 
 ### Burgers (`burgers`)
 
@@ -74,6 +75,7 @@ $$
 - **Domain**: $x \in [-1, 1]$, $t \in [0, 1]$.
 - **Conditions**: $u(\pm 1, t) = 0$; $u_0(x) = -\sin(\pi x)$.
 - **Exact solution** (`cole_hopf`, 1-D): the Cole–Hopf quotient above with $\varphi_0(y) = \exp\big(-\cos(\pi y)/(2\pi\nu)\big)$, integrated by the trapezoid rule (`pinnrl.benchmarks.reference.burgers_cole_hopf`).
+- **Architecture**: `resnet`.
 
 ### Convection (`convection`)
 
@@ -86,6 +88,7 @@ $$
 - **Domain**: $x \in [0, 2]$, $t \in [0, 1]$.
 - **Conditions**: periodic in $x$; $u(x, 0) = \sin(\pi x)$.
 - **Exact solution** (`sin`): the initial profile moved with the flow, $u_0(x - vt)$.
+- **Architecture**: `fourier`.
 
 ### Korteweg–de Vries (`kdv`)
 
@@ -97,7 +100,8 @@ $$
 - **Soliton**: a single pulse that keeps its shape and moves at speed $c$ (`speed`, 1) from $x_0$ (`position`, 0).
 - **Domain**: $x \in [-15, 15]$, $t \in [0, 5]$. 1-D only.
 - **Conditions**: $u = 0$ at both ends; the soliton at $t = 0$.
-- **Exact solution** (`soliton`): the formula above.
+- **Exact solution**: `soliton`.
+- **Architecture**: `siren`.
 
 ### Allen–Cahn (`allen_cahn`)
 
@@ -109,8 +113,9 @@ $$
 - **Kink**: a stationary front between the two phases.
 - **Domain**: $x \in [-1, 1]$, $t \in [0, 1]$.
 - **Conditions**: boundary values taken from the exact solution; the kink at $t = 0$.
-- **Exact solution** (`tanh`): the kink above. It does not move.
+- **Exact solution** (`tanh`): the kink. It does not move.
 - **No exact solution**: the `x2_cos` initial condition, $u_0 = x^2 \cos(\pi x)$ (see [below](#shipped-defaults)).
+- **Architecture**: `fourier`.
 
 ### Cahn–Hilliard (`cahn_hilliard`)
 
@@ -121,8 +126,9 @@ $$
 - **$u$**: concentration. **$M$**: mobility (`mobility`), 1. **$\kappa$**: gradient energy (`kappa`), 0.01.
 - **Domain**: $x \in [-1, 1]$, $t \in [0, 1]$.
 - **Conditions**: boundary values from the exact solution and $u_x = 0$ on each face (fourth order needs two); the kink at $t = 0$.
-- **Exact solution** (`tanh`): the stationary kink above.
+- **Exact solution** (`tanh`): the stationary kink.
 - **No exact solution**: the `random` initial condition for spinodal-decomposition runs.
+- **Architecture**: `resnet`.
 
 ### Black–Scholes (`black_scholes`)
 
@@ -138,7 +144,8 @@ $$
 - **$\sigma$**: volatility, 0.2. **$r$**: risk-free rate, 0.05. **$K$**: strike, 100. **$\Phi$**: the standard normal distribution function.
 - **Domain**: $S \in [0, 200]$, $\tau \in [0, 1]$.
 - **Conditions**: boundary values from the exact solution; the call payoff $V(S, 0) = \max(S - K, 0)$.
-- **Exact solution** (`black_scholes`, 1-D): the European call price above. For `option_type: put`, $V = K e^{-r\tau}\,\Phi(-d_2) - S\,\Phi(-d_1)$.
+- **Exact solution** (`black_scholes`, 1-D): the European call price. For `option_type: put`, $V = K e^{-r\tau}\,\Phi(-d_2) - S\,\Phi(-d_1)$.
+- **Architecture**: `feedforward`.
 
 ### Pendulum (`pendulum`)
 
@@ -150,26 +157,26 @@ $$
 - **Domain**: $t \in [0, 10]$, with a dummy $x$ the solution does not depend on.
 - **Conditions**: $\theta(0) = 0.5$ rad, $\theta'(0) = 0$; periodic in the dummy $x$.
 - **Exact solution** (`ode`): none in closed form. The trajectory is integrated with `scipy` to a relative tolerance of 1e-11.
+- **Architecture**: `resnet`.
 
 ## Shipped defaults
 
-The defaults in `config.yaml` are each PDE's domain, parameters and recommended architecture. Override them with flags or your own config.
+Override any default with flags or your own config.
 
-| Key | Domain × time | Parameters | BC | IC | Architecture |
-|---|---|---|---|---|---|
-| `heat` | [0, 2] × [0, 10] | α = 0.01 | periodic | $\sin(2\pi x)$ (`frequency: 2` periods on [0, 2]) | fourier |
-| `heat_2d` | [0, 1]² × [0, 5] | α = 0.01 | Dirichlet 0 | $\sin(2\pi x)\sin(2\pi y)$ | fourier |
-| `wave` | [0, 1] × [0, 1] | c = 1 | Dirichlet 0 | $\sin(\pi x)$, at rest | siren |
-| `burgers` | [−1, 1] × [0, 1] | ν = 0.01 | Dirichlet 0 | $-\sin(\pi x)$ | resnet |
-| `convection` | [0, 2] × [0, 1] | v = 1 | periodic | $\sin(\pi x)$ | fourier |
-| `kdv` | [−15, 15] × [0, 5] | α = 6, β = 1 | Dirichlet 0 | soliton, c = 1 | siren |
-| `allen_cahn` | [−1, 1] × [0, 1] | ε = 0.1, r = 1 | exact | kink $\tanh\big(\sqrt{r}\,x/(\sqrt2\,\varepsilon)\big)$ | fourier |
-| `cahn_hilliard` | [−1, 1] × [0, 1] | M = 1, κ = 0.01 | exact + Neumann 0 | kink $\tanh\big(x/\sqrt{2\kappa}\big)$ | resnet |
-| `black_scholes` | S ∈ [0, 200] × τ ∈ [0, 1] | σ = 0.2, r = 0.05 | exact | call payoff $\max(S-K, 0)$, K = 100 | feedforward |
-| `pendulum` | t ∈ [0, 10] | g = 9.81, L = 1, b = 0.1 | periodic in a dummy $x$ (θ depends on t only) | θ0 = 0.5 rad, at rest | resnet |
+| Key | Domain × time | Details |
+|---|---|---|
+| `heat` | [0, 2] × [0, 10] | [Heat](#heat-heat) |
+| `heat_2d` | [0, 1]² × [0, 5] | [Heat in 2-D](#heat-in-2-d-heat_2d) |
+| `wave` | [0, 1] × [0, 1] | [Wave](#wave-wave) |
+| `burgers` | [−1, 1] × [0, 1] | [Burgers](#burgers-burgers) |
+| `convection` | [0, 2] × [0, 1] | [Convection](#convection-convection) |
+| `kdv` | [−15, 15] × [0, 5] | [Korteweg–de Vries](#kortewegde-vries-kdv) |
+| `allen_cahn` | [−1, 1] × [0, 1] | [Allen–Cahn](#allencahn-allen_cahn) |
+| `cahn_hilliard` | [−1, 1] × [0, 1] | [Cahn–Hilliard](#cahnhilliard-cahn_hilliard) |
+| `black_scholes` | S ∈ [0, 200] × τ ∈ [0, 1] | [Black–Scholes](#blackscholes-black_scholes) |
+| `pendulum` | t ∈ [0, 10] | [Pendulum](#pendulum-pendulum) |
 
-- **BC, IC**: boundary and initial conditions. **Dirichlet**: a fixed value of $u$. **Neumann**: a fixed value of $u_x$. **exact**: values taken from the exact solution.
-- The Allen–Cahn and Cahn–Hilliard defaults start from their stationary kinks. That makes them consistency checks, not hard dynamics problems.
+The Allen–Cahn and Cahn–Hilliard defaults start from their stationary kinks. That makes them consistency checks, not hard dynamics problems.
 
 The dynamic Allen–Cahn benchmark (as in Wu et al., 2023) is
 
@@ -177,7 +184,7 @@ $$
 u_t = 0.001\,u_{xx} + 5\,(u - u^3), \qquad u_0 = x^2\cos(\pi x), \qquad u(\pm 1, t) = -1, \qquad t \in [0, 1]
 $$
 
-- `pinnrl-benchmark sampling` runs it in rescaled time $\tau = 5t$, that is $\varepsilon^2 = 0.0002$, $r = 1$ and $\tau \in [0, 5]$.
+`pinnrl-benchmark sampling` runs it in rescaled time $\tau = 5t$, that is $\varepsilon^2 = 0.0002$, $r = 1$ and $\tau \in [0, 5]$.
 
 To set it up yourself:
 
