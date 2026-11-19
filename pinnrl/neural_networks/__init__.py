@@ -41,6 +41,14 @@ __all__ = [
 ]
 
 
+def _inside_function_transform() -> bool:
+    """Whether a ``torch.func`` transform (``jvp``, ``vmap``, ``grad``) is active."""
+    try:
+        return torch._C._functorch.maybe_current_level() is not None
+    except AttributeError:  # an older or newer torch without the hook: let the kernel decide
+        return False
+
+
 class PINNModel(BaseNetwork):
     """Physics-Informed Neural Network model factory.
 
@@ -154,7 +162,8 @@ class PINNModel(BaseNetwork):
         self.model = self.model.to(self.device)
         self.to(self.device)
         #: Evaluate inputs that do not require grad through the compiled kernel
-        #: (:mod:`pinnrl.native`) when it applies; set by ``build_trainer(derivatives="native")``.
+        #: (:mod:`pinnrl.native`) when it applies; set by ``build_trainer`` unless
+        #: ``derivatives="autograd"``.
         self.native_values = False
 
     def forward(self, x):
@@ -194,7 +203,8 @@ class PINNModel(BaseNetwork):
         ``(0, 1)`` for the mixed one, ``(0, 0, 0)`` for the third, any order),
         for the requested ``derivatives`` and the lower ones they are built
         from, each ``(N, output_dim)`` and differentiable with respect to the
-        weights once. The non-dimensionalization of the inputs and outputs is
+        weights (a gradient that is itself differentiated is taken by autograd
+        on the same function). The non-dimensionalization of the inputs and outputs is
         applied. The kernel covers a feed-forward stack of ``Linear`` and
         ``tanh``, with or without layer normalization, in float32 on the CPU
         (:mod:`pinnrl.native`); for any other network, on another device, or
@@ -207,6 +217,8 @@ class PINNModel(BaseNetwork):
         if not isinstance(self.model, FeedForwardNetwork) or layers is None:
             return None
         if x.device.type != "cpu" or x.dtype != torch.float32 or not native.available():
+            return None
+        if _inside_function_transform():  # torch.func (jvp, vmap, grad): autograd's business
             return None
         stack = native.supported_stack(list(layers))
         if stack is None or stack[0][0].weight.dtype != torch.float32:

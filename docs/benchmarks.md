@@ -211,7 +211,7 @@ The same heat PINN step (a 4 × 64 `tanh` network, 5,120 points, Adam) written t
 - **`tanh` is the most expensive single operation in PyTorch** here: 2.6 ns an element, twenty times the matrix product next to it, a third of the trainer's step.
 - **Taylor-mode derivatives do not pay in tensor operations** (9.3–12.4 ms against 8.8 for double backward); they pay with fused loops in compiled code.
 - **C++ and Rust are indistinguishable**, 2.4 times faster than the PyTorch step on the same BLAS and five times slower than it without one.
-- **The kernel is in the package:** [`build_trainer(derivatives="native")`](custom_equations.md#a-faster-step-the-compiled-kernel) halves the trainer's step (10.6 → 5.4 ms) and, with the packaged network's layer normalization, cuts it threefold (32 → 10.4 ms), with the same loss and gradients to rounding. It is opt-in, for `tanh` feed-forward networks, on macOS (Accelerate) and Linux (OpenBLAS, I14).
+- **The kernel is in the package:** [`build_trainer(derivatives="native")`](custom_equations.md#a-faster-step-the-compiled-kernel) halves the trainer's step (10.6 → 5.4 ms) and, with the packaged network's layer normalization, cuts it threefold (32 → 10.4 ms), with the same loss and gradients to rounding. It is the default since v0.9, for `tanh` feed-forward networks, on macOS (Accelerate) and Linux (OpenBLAS, I14).
 - **A PyTorch defect found on the way:** `torch.nn.LayerNorm` returns a wrong weight gradient for any loss with second derivatives of the network (2–3 % off in norm on this problem, 1–9 % in single directions against finite differences; exact for first-order residuals). The package's networks now use [`ExactLayerNorm`](api/neural_networks.md#neural_networks.base_network.ExactLayerNorm), the same function written in elementary operations, at the same cost.
 
 See `experiments/I11_native_pinn/`.
@@ -240,6 +240,32 @@ See `experiments/I13_native_higher_order/`.
 **On Linux with OpenBLAS (experiment I14)**, the same source builds with `g++` and the tests pass; in Docker's VM on the same M4 the step gains 1.4× (heat, plain) to 3.0× (KdV, layer normalization) against 1.9–4.7× under Accelerate. OpenBLAS's `sgemm` is as fast as `torch.mm` there; the difference is that Taylor mode does about as many matrix-product flops as double backward and saves the elementwise work, and without Apple's AMX units the twelve matrix products of a step are two thirds of it. See `experiments/I14_native_linux/`.
 
 **The registry's classes and one value pass (experiment I15).** `pde.derivatives = "native"` routes `PDEBase.compute_derivatives` through the kernel, so the registry's `heat`, `kdv`, `burgers` and `pendulum` gain 1.7×, 2.7×, 2.0× and 1.7× on a plain network and 2.5×, 4.7×, 3.1× and 2.3× with layer normalization (idle M4, residuals to 1e-6). Evaluating every boundary face and the initial points in one kernel call is worth 2 % of the heat step; the step with the kernel stands at 5.7 ms against the 3.6 ms of the framework-free program, the rest being the trainer's bookkeeping and the loss arithmetic in PyTorch. See `experiments/I15_native_value_pass/`.
+
+## The step against the alternatives (experiment I17)
+
+The same training step (a 4 × 64 `tanh` network, 5,120 points, Adam) in `pinnrl`, PyTorch, JAX and DeepXDE, on three equations of rising order, one thread on an Apple M4, milliseconds per step.
+
+![I17](assets/benchmarks/i17_step_head_to_head.png)
+
+| Implementation | heat, $u_{xx}$ | KdV, $u_{xxx}$ | Cahn–Hilliard, $u_{xxxx}$ |
+|---|---|---|---|
+| JAX, `jit`, forward mode (nested `jvp`) | **4.2** | **6.1** | 10.6 |
+| JAX, `jit`, Taylor mode (`jax.experimental.jet`) | 5.1 | 7.7 | **10.2** |
+| **`pinnrl`, the default (compiled kernel)** | 5.4 | 7.4 | 10.3 |
+| JAX, `jit`, reverse over reverse | 5.8 | 16.0 | 58.9 |
+| PyTorch, nested `autograd.grad` | 8.7 | 17.6 | 43.6 |
+| DeepXDE (PyTorch backend) | 10.2 | 21.9 | 58.3 |
+| `pinnrl`, `derivatives="autograd"` | 10.4 | 19.5 | 45.7 |
+| `torch.func`, nested `jvp` | 16.9 | 35.7 | 92.5 |
+| `torch.compile` | fails | fails | fails |
+
+- **In the PyTorch ecosystem the kernel is the fastest step:** 1.6–4.2× the textbook loop and 1.9–5.6× DeepXDE, more as the order rises. `torch.compile` refuses the step (no double backward in PyTorch 2.10) and `torch.func`'s forward mode is slower than eager reverse mode.
+- **JAX in forward mode is faster still on low orders:** 1.3× on heat, 1.2× on KdV, level on Cahn–Hilliard. XLA compiles the whole step for the equation; the kernel is a general pass called from Python.
+- **The technique decides:** every compiled forward- or Taylor-mode arm is within 30 % of the others, and reverse over reverse is 1.5–6× behind in either framework.
+- **The gap has a known source:** a step specialised by hand for heat runs in 3.6 ms (I11), under JAX's 4.2. Generating the kernel's passes per equation is the next item of the [roadmap](roadmap.md).
+- PhysicsNeMo was not run; it differentiates with PyTorch autograd, so the eager row is its floor by inference.
+
+See `experiments/I17_step_head_to_head/`.
 
 ## The evaporator's reference solve in C++ (experiment I16)
 

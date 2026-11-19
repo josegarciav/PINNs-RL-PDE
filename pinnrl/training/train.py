@@ -223,7 +223,7 @@ def create_pde(config_dict, device):
         )
         # A normalized run scales the loss terms by the field scales too.
         pde._normalized = config_dict.get("model", {}).get("input_bounds") is not None
-        pde.derivatives = config_dict.get("model", {}).get("derivatives", "autograd")
+        pde.derivatives = config_dict.get("model", {}).get("derivatives", "auto")
         return _attach_synthetic_observations(pde, config_dict)
     pde_cls = get_pde_spec(pde_cfg["name"]).cls
 
@@ -244,7 +244,7 @@ def create_pde(config_dict, device):
     )
 
     pde = pde_cls(config=pde_config)
-    pde.derivatives = config_dict.get("model", {}).get("derivatives", "autograd")
+    pde.derivatives = config_dict.get("model", {}).get("derivatives", "auto")
     return _attach_synthetic_observations(pde, config_dict)
 
 
@@ -285,7 +285,7 @@ def build_model(config_dict, device):
             setattr(config_obj.model, key, config_dict["model"][key])
     config_obj.training = TrainingConfig.from_dict(config_dict["training"])
     model = PINNModel(config=config_obj, device=device).to(device)
-    model.native_values = config_dict["model"].get("derivatives", "autograd") == "native"
+    model.native_values = config_dict["model"].get("derivatives", "auto") != "autograd"
     return model, config_obj
 
 
@@ -458,12 +458,14 @@ def main():
     )
     parser.add_argument(
         "--derivatives",
-        choices=["autograd", "native"],
-        default="autograd",
+        choices=["auto", "autograd", "native"],
+        default="auto",
         help=(
-            "'native' takes the residual's derivatives from the compiled kernel "
-            "(pinnrl.native: macOS or Linux, a feed-forward tanh network with or without layer norm, CPU, derivatives "
-            "of any order), two to three times as fast per step; autograd wherever it does not apply."
+            "'auto' (default) takes the residual's derivatives from the compiled kernel "
+            "(pinnrl.native: macOS or Linux, a feed-forward tanh network with or without layer "
+            "norm, CPU, derivatives of any order), two to three times as fast per step, and "
+            "autograd wherever it does not apply; 'autograd' never uses the kernel; 'native' is "
+            "the earlier name of 'auto'."
         ),
     )
     parser.add_argument(

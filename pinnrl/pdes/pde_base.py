@@ -84,10 +84,11 @@ class PDEBase:
 
     time_order = 1
 
-    #: ``"autograd"`` or ``"native"``: where the residual's derivatives come from. With
-    #: ``"native"`` :meth:`compute_derivatives` asks the network's compiled kernel
-    #: (:mod:`pinnrl.native`) and falls back to autograd where it does not apply.
-    derivatives: str = "autograd"
+    #: ``"auto"`` or ``"autograd"``: where the residual's derivatives come from. With
+    #: ``"auto"`` :meth:`compute_derivatives` asks the network's compiled kernel
+    #: (:mod:`pinnrl.native`) and falls back to autograd where it does not apply;
+    #: ``"native"`` is the earlier name of ``"auto"``.
+    derivatives: str = "auto"
 
     def __init__(self, config: PDEConfig, bandit_sampler=None):
         """Initialize PDE with given configuration.
@@ -703,7 +704,7 @@ class PDEBase:
     ) -> dict[str, torch.Tensor] | None:
         """:meth:`compute_derivatives` through the compiled kernel, or ``None`` for autograd."""
         model_jets: Callable[..., Any] | None = getattr(model, "jets", None)
-        if self.derivatives != "native" or model_jets is None:
+        if self.derivatives == "autograd" or model_jets is None:
             return None
         x = x.detach().to(self.device)
         t = t.detach().to(self.device)
@@ -1044,7 +1045,7 @@ class PDEBase:
     def native_active(self, model: torch.nn.Module) -> bool:
         """Whether the residual of ``model`` is computed by the compiled kernel on this machine."""
         model_jets: Callable[..., Any] | None = getattr(model, "jets", None)
-        if self.derivatives != "native" or model_jets is None:
+        if self.derivatives == "autograd" or model_jets is None:
             return False
         probe = torch.zeros(1, int(self.dimension) + 1, device=self.device)
         return model_jets(probe, []) is not None

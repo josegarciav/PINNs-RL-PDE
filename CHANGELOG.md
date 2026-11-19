@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Changed
+- **The compiled kernel is the default engine.** `derivatives="auto"` is the default of `build_trainer`, `pinnrl-train` and the registry's PDE classes: the residual's derivatives come from `pinnrl.native` wherever it applies (a feed-forward `tanh` network, float32, CPU, macOS or Linux with a compiler) and from autograd elsewhere. `derivatives="autograd"` switches it off; `"native"` is kept as the earlier name of `"auto"`. A run that used the default before now takes a different rounding path, so its loss curve differs in the last digits.
+- **The kernel's gradient can be differentiated again.** With `create_graph=True`, or on a second pass through a retained graph, the weight gradient is taken by autograd on the same function (`pinnrl.native.autograd_streams`), so Hessian-vector products, `analysis.loss_hessian_spectrum` and `analysis.surrogate_sensitivities` work on a model trained with the kernel. Inside a `torch.func` transform (`jvp`, `vmap`, `grad`) the network is evaluated by PyTorch.
+
+### Added
+- **Experiment I17**, the training step against the alternatives: the same step in `pinnrl`, eager PyTorch, `torch.compile`, `torch.func`, JAX (reverse, forward and Taylor mode) and DeepXDE on heat, KdV and Cahn–Hilliard (`experiments/I17_step_head_to_head/`).
+
+---
+
 ## [0.8.0] — 2026-11-18
 
 The performance and the PINN's-case release. The compiled kernel now takes derivatives of any order (mixed, third, fourth), builds on Linux against OpenBLAS and runs the registry's PDE classes, 1.9–7× a training step over autograd; the evaporator's reference solve runs in C++ (a batch fit of the fouling from 106 s to 0.7 s, the filters 1.6×). Two process units close the roadmap: a counter-current spray dryer, whose steady state is a boundary-value problem and whose transient is a hyperbolic system, the first unit where the PINN twin's case could be tested against a classical fit (it is not made: least squares in 10 s against a twin that fails the misfit test), and the line twin, three evaporator passes feeding the dryer with each unit's uncertainty propagated to the powder (information flows downstream only).

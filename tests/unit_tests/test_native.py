@@ -132,10 +132,6 @@ def test_value_only_and_validation():
     assert du == {} and torch.allclose(u, _forward(linears, x), atol=1e-6)
     with pytest.raises(RuntimeError, match="float32"):
         native.mlp_jets(linears, x.double())
-    with pytest.raises(RuntimeError, match="does not require grad|differentiate twice"):
-        u, du = native.mlp_jets(linears, x, [(0,)])
-        g = torch.autograd.grad(du[(0,)].sum(), linears[0].weight, create_graph=True)[0]
-        g.sum().backward()
     tanh, lin = torch.nn.Tanh, torch.nn.Linear
     assert native.supported_layers([lin(2, 4), tanh(), lin(4, 1)]) is not None
     assert (
@@ -382,5 +378,91 @@ def test_falls_back_to_autograd_where_the_kernel_does_not_apply():
     trainer = build(unknown, layer_norm=False)
     assert not unknown.native_active(trainer.model)
     assert torch.isfinite(unknown.compute_residual(trainer.model, x, t)).all()
-    with pytest.raises(ValueError, match="'autograd' or 'native'"):
+    with pytest.raises(ValueError, match="'auto' or 'autograd'"):
         heat.build_trainer("feedforward", derivatives="fast")
+
+
+@pytest.mark.parametrize("layer_norm", [False, True])
+def test_a_gradient_of_the_kernel_can_be_differentiated_again(layer_norm):
+    linears = _mlp([2, 12, 12, 2])
+    norms = [ExactLayerNorm(12) for _ in range(2)] if layer_norm else []
+    for norm in norms:
+        torch.nn.init.normal_(norm.weight, 1.0, 0.2)
+        torch.nn.init.normal_(norm.bias, 0.0, 0.2)
+    params = [p for lin in linears for p in (lin.weight, lin.bias)]
+    params += [p for norm in norms for p in (norm.weight, norm.bias)]
+    x = torch.rand(40, 2)
+    wanted = [(1,), (0, 0), (0, 0, 1)]
+    cols, alphas = native.taylor_streams(wanted)
+    eps = float(norms[0].eps) if norms else 0.0
+
+    def loss_kernel():
+        u, du = native.mlp_jets(linears, x, wanted, norms)
+        return ((du[(1,)] - 0.3 * du[(0, 0)] + u * du[(0, 0, 1)]) ** 2).mean()
+
+    def loss_autograd():
+        out = native.autograd_streams(x, cols, alphas, len(linears), eps, params)
+        n = x.shape[0]
+        block = {a: out[i * n : (i + 1) * n] for i, a in enumerate(alphas)}
+        u, u_t, u_xx, u_xxt = block[(0, 0)], block[(0, 1)], 2 * block[(2, 0)], 2 * block[(2, 1)]
+        return ((u_t - 0.3 * u_xx + u * u_xxt) ** 2).mean()
+
+    def flat(grads):
+        return torch.cat([g.reshape(-1) for g in grads])
+
+    v = torch.randn(sum(p.numel() for p in params))
+    products = []
+    for loss_fn in (loss_kernel, loss_autograd):
+        grad = flat(torch.autograd.grad(loss_fn(), params, create_graph=True))
+        first = flat(torch.autograd.grad(grad @ v, params, retain_graph=True))
+        again = flat(torch.autograd.grad(grad @ v, params))
+        assert torch.equal(first, again)
+        products.append((grad.detach(), first))
+    (g_kernel, h_kernel), (g_ref, h_ref) = products
+    assert (g_kernel - g_ref).norm() < 1e-4 * g_ref.norm()
+    assert (h_kernel - h_ref).norm() < 1e-4 * h_ref.norm()
+    # a retained graph gives the same gradient a second time
+    loss = loss_kernel()
+    once = flat(torch.autograd.grad(loss, params, retain_graph=True))
+    twice = flat(torch.autograd.grad(loss, params))
+    assert (once - twice).norm() < 1e-4 * once.norm()
+    assert (once - g_ref).norm() < 1e-4 * g_ref.norm()
+
+
+def test_the_kernel_is_the_default_and_the_analysis_tools_run_on_it():
+    from torch.func import functional_call, jvp
+
+    from pinnrl.analysis import loss_hessian_spectrum
+
+    torch.manual_seed(0)
+    heat = from_catalog("heat")
+    trainer = heat.build_trainer("feedforward", model={"hidden_dims": [8, 8]}, **SETTINGS)
+    model = trainer.model
+    assert heat.derivatives == "auto" and model.native_values
+    assert heat.native_active(model)
+    off = from_catalog("heat")
+    plain = off.build_trainer(
+        "feedforward", model={"hidden_dims": [8, 8]}, derivatives="autograd", **SETTINGS
+    )
+    assert not off.native_active(plain.model) and not plain.model.native_values
+    plain.model.load_state_dict(model.state_dict())
+
+    x, t = torch.rand(64, 1), torch.rand(64, 1)
+    spectra = []
+    for pde, net in ((heat, model), (off, plain.model)):
+        parameters = [p for p in net.parameters() if p.requires_grad]
+        spectra.append(
+            loss_hessian_spectrum(
+                lambda pde=pde, net=net: (pde.compute_residual(net, x, t) ** 2).mean(),
+                parameters,
+                iterations=8,
+            )
+        )
+    assert spectra[0].largest == pytest.approx(spectra[1].largest, rel=1e-3)
+
+    # torch.func transforms see the ordinary network, not the kernel
+    inputs = torch.cat([x, t], dim=1)
+    base = {n: p.detach() for n, p in model.named_parameters()}
+    tangent = {n: torch.ones_like(p) for n, p in base.items()}
+    value, du = jvp(lambda params: functional_call(model, params, (inputs,)), (base,), (tangent,))
+    assert torch.allclose(value, model(inputs), atol=1e-6) and torch.isfinite(du).all()

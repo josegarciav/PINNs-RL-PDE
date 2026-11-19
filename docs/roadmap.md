@@ -71,15 +71,17 @@ The direction follows from both: **`pinnrl` becomes the place where physics-info
 | Decisions that serve the inverse problem | v0.11 | What to measure, where to sample and how to train, learned as policies and compared with the greedy designs |
 | Discovering unknown physics | v0.12 | From a learned closure to an equation with an error bar; model-form error named instead of absorbed |
 | Simulation at scale | v0.13 | One network across operating points; new units and geometries; inference in microseconds |
-| The plant | v1.0 | Live data in, advice with intervals out, validated on a real line |
+| A stable platform | v1.0 | An API that does not move under a user; the software paper |
+| The platform matured (see below) | v2.0–v6.0 | Control, discovery, scale and an autonomous twin, each proven on simulated plants |
+| The plant | v7.0 | Live data in, advice with intervals out, validated on a real line |
 
 ## v0.9: the kernel as the default engine (next)
 
-The compiled kernel is 1.9–7× autograd on the step's derivatives, but it is opt-in, covers `tanh` feed-forward networks only, and its general any-order passes cost more than a step written for one equation (5.5 ms in the trainer, 4.8 of them in the kernel's two passes, against 3.6 ms for the whole hand-specialised step of I11). The aim is that installing `pinnrl` gives the fastest PINN step on a CPU by default, measured against every alternative.
+The compiled kernel is 1.9–7× autograd on the step's derivatives, but it covers `tanh` feed-forward networks only, and its general any-order passes cost more than a step written for one equation (5.5 ms in the trainer, 4.8 of them in the kernel's two passes, against 3.6 ms for the whole hand-specialised step of I11). The aim is that installing `pinnrl` gives the fastest PINN step on a CPU by default, measured against every alternative.
 
-- **A head-to-head with the alternatives (I17).** The same step (heat, KdV, Cahn–Hilliard; 4 × 64 and the packaged default network) in eager PyTorch, `torch.compile`, `torch.func` forward-over-reverse, JAX with `jax.experimental.jet` (Taylor mode, the closest published technique), DeepXDE and PhysicsNeMo. A first probe already rules one out: `torch.compile` refuses the step in PyTorch 2.10 ("does not currently support double backward"), so the eager 9.5 ms is PyTorch's number. *Gain: the claim "fastest on a CPU" either stands with numbers or names what to fix. Done when the table is in [Benchmarks](benchmarks.md) and the kernel is first or the gap is explained.*
-- **`derivatives="auto"` as the default.** The kernel wherever it applies, autograd elsewhere, silently. The tools that differentiate the loss twice (`analysis.spectrum`, `analysis.surrogate`, the Laplace approximation) switch the model back to autograd for their own passes. *Gain: every user gets the speed-up, not the ones who read the flag's documentation.*
-- **The whole step in the kernel, specialised.** The loss reduction, Adam and the collocation draw in C++, so a step is one call, and the passes generated for the equation's own derivative set instead of the general multi-index streams (the 5.5 → 3.6 ms gap); L-BFGS on the kernel's gradients in float64, since L-BFGS is what does the learning on the stiff process problems (J13). *Gain: 1.5× on top of today's kernel, and second-order training at kernel speed.*
+- [x] **A head-to-head with the alternatives (I17).** *Done: the same step in eager PyTorch, `torch.compile`, `torch.func`, JAX (reverse, forward and Taylor mode) and DeepXDE on heat, KdV and Cahn–Hilliard ([Benchmarks](benchmarks.md#the-step-against-the-alternatives-experiment-i17)). The kernel is the fastest step in the PyTorch ecosystem (1.6–4.2× eager, 1.9–5.6× DeepXDE; `torch.compile` refuses the step), and it is not first overall: JAX in forward mode under `jit` is 1.3× ahead on heat, 1.2× on KdV and level at fourth order. The gap is the kernel's generality, which the specialised step below removes. PhysicsNeMo was not run.*
+- [x] **`derivatives="auto"` as the default.** *Done: the kernel wherever it applies, autograd elsewhere, silently. A gradient of the kernel that is differentiated again (`analysis.spectrum`, `analysis.surrogate`, any Hessian-vector product) is taken by autograd on the same function, and `torch.func` transforms see the ordinary module, so no tool has to know which engine ran.*
+- **The whole step in the kernel, specialised.** The loss reduction, Adam and the collocation draw in C++, so a step is one call, and the passes generated for the equation's own derivative set instead of the general multi-index streams (the 5.5 → 3.6 ms gap); L-BFGS on the kernel's gradients in float64, since L-BFGS is what does the learning on the stiff process problems (J13). *Gain: 1.5× on top of today's kernel, which is what puts it ahead of JAX's 4.2 ms on heat (I17), and second-order training at kernel speed.*
 - **Custom architectures.** A declarative network description (blocks, widths, activations, normalization, input embeddings, skip connections) that both the autograd path and the kernel run; activations beyond `tanh` (`sin` for SIREN, `gelu`, `silu`) by their Taylor recurrences; Fourier features; `UnknownFunction` and the inverse mode's trainable parameters through the compiled step. *Gain: the inverse problems, which are the package's purpose, at kernel speed; a user's architecture is not a reason to fall back.*
 - **Many networks in one call.** Ensembles, the swarm of `pinnrl.uq`, restarts and hyperparameter sweeps trained as a batch of networks through one threaded kernel call. *Gain: a calibrated ensemble for the price of a few single runs; `train_with_restarts` in parallel.*
 - **Inference outside Python.** Export a trained twin to a dependency-free C source or shared library (values and derivatives), and to ONNX; a throughput benchmark (evaluations per second per core). *Gain: a soft sensor that runs in a PLC gateway, a historian calculation or a spreadsheet plug-in at plant rate.*
@@ -126,12 +128,33 @@ The package identifies parameters and free-form functions. The step beyond is to
 - **A unit library with a plugin interface.** Wiped-film evaporators (P22), plate heat exchangers, membrane filtration, fluidised-bed drying, the cleaning cycle itself; a documented base class so a user's unit gets the reference solver, the PINN form, the estimators and a gym environment from one definition. *Gain: the method leaves food powders for pharmaceuticals, batteries and chemicals without a rewrite.*
 - **Pretraining on The Well.** The dataset loader is in place; operator backbones pretrained on simulation data and fine-tuned with a residual, tested on whether pretraining buys accuracy at equal compute.
 
-## v1.0: the plant
+## v1.0: a stable platform
+
+The 0.x releases may still move the API. 1.0 is the promise that they stop.
+
+- **A stable API.** A deprecation policy, semantic versioning that means it, and one documented public surface for the trainer, the inverse tools, the process units and the gym.
+- **The software paper (P06).** The package described and benchmarked in one citable place, with the head-to-head of v0.9 and the control baselines of v0.10.
+- **Reproducibility.** Every figure in the documentation regenerated by one command from a pinned environment.
+
+## v2.0 to v6.0: the platform before the plant
+
+The plant is not next. A twin that advises a real line has to be right when nobody can check it, so the platform first has to be far more capable, and proven on simulated plants where the truth is known. The major versions are the stages of that; their content will be set as the 0.x work shows what holds up.
+
+| Release | Stage | Done when |
+|---|---|---|
+| v2.0 | **Control that earns its place.** `pinnrl.gym` as a benchmark suite: tasks, baselines and a leaderboard for constrained, partially observed process control | A learned policy beats nonlinear MPC on at least one task at equal information, or the suite documents why none does |
+| v3.0 | **Discovery as a workflow.** Records in; parameters, closures as equations, model-form error and operating regimes out, with intervals | The workflow recovers planted physics on every unit of the library, blind |
+| v4.0 | **Scale.** Parametric and operator surrogates, 2-D and 3-D units, flowsheets of many units, a GPU backend where the batch justifies it | A whole line's what-if study runs interactively |
+| v5.0 | **The autonomous twin.** A twin that identifies itself, tests its own misfit, redesigns its measurements, retrains and says when it should not be trusted, unattended | It runs for simulated months through drift, faults and recipe changes without a silent failure |
+| v6.0 | **The plant rehearsal.** The whole stack against a simulated plant behind real interfaces (OPC UA, MQTT, a historian), with public pilot-scale data wherever it exists | Advice in shadow mode is scored against the simulated truth, and the failures are reported |
+
+## v7.0: the plant
+
+Deliberately far out: nothing here starts until v6.0's rehearsal has passed.
 
 - **Live data.** OPC UA and MQTT connectors next to the historian adapter; the monitor as a service that runs for weeks, with alarms on the misfit test.
-- **Advice with intervals (P25).** Setpoint recommendations and cleaning schedules from v0.10's controllers, shown in the dashboard with what they are expected to gain and how sure the twin is.
+- **Advice with intervals (P25).** Setpoint recommendations and cleaning schedules from the controllers, shown in the dashboard with what they are expected to gain and how sure the twin is.
 - **Validation on a real line (P26).** The simulated-plant results repeated on plant data, with the failures reported.
-- **A stable API.** Deprecation policy, semantic versioning that means it, and the software paper (P06).
 
 ## Not planned
 

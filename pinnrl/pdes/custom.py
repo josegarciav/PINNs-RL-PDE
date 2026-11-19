@@ -589,19 +589,21 @@ class CustomPDE(PDEBase):
         device: torch.device | str | None = None,
         model: Mapping[str, Any] | None = None,
         normalize: bool = False,
-        derivatives: str = "autograd",
+        derivatives: str = "auto",
         **training: Any,
     ):
         """A :class:`~pinnrl.training.trainer.PDETrainer` for this problem with packaged defaults.
 
-        ``derivatives="native"`` takes the residual's derivatives from the
-        compiled kernel of :mod:`pinnrl.native` instead of autograd, about
-        two to three times as fast per step where it applies: a feed-forward
-        ``tanh`` network (with or without layer normalization) on the CPU,
-        equations given as text (derivatives of any order, mixed ones
-        included), macOS or Linux. Where it does not
-        apply the residual falls back to autograd without notice;
+        ``derivatives="auto"`` (the default) takes the residual's derivatives
+        from the compiled kernel of :mod:`pinnrl.native` instead of autograd,
+        about two to three times as fast per step where it applies: a
+        feed-forward ``tanh`` network (with or without layer normalization)
+        on the CPU, equations given as text (derivatives of any order, mixed
+        ones included), macOS or Linux. Where it does not apply the residual
+        falls back to autograd without notice;
         ``pde.native_active(trainer.model)`` says which one runs.
+        ``derivatives="autograd"`` never uses the kernel; ``"native"`` is the
+        earlier name of ``"auto"``.
 
         ``normalize=True`` non-dimensionalizes the network: its inputs are
         mapped from the domain to ``[-1, 1]`` and its outputs are
@@ -634,8 +636,8 @@ class CustomPDE(PDEBase):
             training_cfg["mode"] = "inverse"
         architecture = architecture or self._architecture
         model = dict(model or {})
-        if derivatives not in ("autograd", "native"):
-            raise ValueError(f"derivatives must be 'autograd' or 'native', not {derivatives!r}")
+        if derivatives not in ("auto", "autograd", "native"):
+            raise ValueError(f"derivatives must be 'auto' or 'autograd', not {derivatives!r}")
         self.derivatives = derivatives
         self._normalized = bool(normalize)
         if normalize:
@@ -664,7 +666,7 @@ class CustomPDE(PDEBase):
         self.config.device = device
         self.unknown_functions.to(device)
         network = PINNModel(config=config, device=device).to(device)
-        network.native_values = derivatives == "native"
+        network.native_values = derivatives != "autograd"
         return PDETrainer(model=network, pde=self, config=config, device=device)
 
     # ------------------------------------------------------------------ physics
@@ -675,11 +677,11 @@ class CustomPDE(PDEBase):
     def _native_request(self) -> list[tuple[str, ...]] | None:
         """The derivatives to ask the compiled kernel for, or ``None`` to use autograd.
 
-        Only with ``derivatives == "native"``, equations given as text and no
+        Unless ``derivatives == "autograd"``; only for equations given as text and no
         unknown functions. Each entry is a tuple of coordinate names, sorted,
         of any order (``("x", "x", "x")`` for ``u_xxx``, ``("t", "x")`` for ``u_xt``).
         """
-        if getattr(self, "derivatives", "autograd") != "native":
+        if getattr(self, "derivatives", "auto") == "autograd":
             return None
         if self._residual_fn is not None or len(self.unknown_functions) > 0:
             return None
@@ -705,7 +707,7 @@ class CustomPDE(PDEBase):
     ) -> torch.Tensor:
         """Residuals of every equation at ``x, t``, shape ``(N, k)``.
 
-        With ``self.derivatives == "native"`` (``build_trainer(derivatives="native")``)
+        Unless ``self.derivatives == "autograd"`` (``build_trainer(derivatives="autograd")``)
         the derivatives come from the compiled kernel of :mod:`pinnrl.native`
         when the network and the equations allow it, and from autograd otherwise.
         """

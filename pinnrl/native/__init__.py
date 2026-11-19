@@ -8,14 +8,16 @@ next to the value as Taylor coefficients (Taylor mode) and one hand-written reve
 cached), wrapped as a :class:`torch.autograd.Function` so the rest of the loss stays ordinary
 PyTorch. Experiments I11–I14 measure the step at a half to a seventh of the autograd time.
 
-It is opt-in (``pde.build_trainer(..., derivatives="native")``) and narrow by design:
+The trainer uses it wherever it applies (``derivatives="auto"``, the default of
+``pde.build_trainer`` and ``pinnrl-train``; ``"autograd"`` switches it off). It is narrow by design:
 
 * macOS (the Accelerate framework, ``clang++``) or Linux (OpenBLAS, ``libopenblas-dev``, and ``g++``);
 * a feed-forward network of ``Linear`` layers and ``tanh``, with or without ``LayerNorm``
   before each ``tanh``, float32, on the CPU;
 * derivatives of any order with respect to the inputs, mixed ones included (``u_x``, ``u_xx``,
   ``u_xt``, ``u_xxx``, ``u_xxxx``), each as a tuple of input columns;
-* gradients with respect to the weights only, once (no Hessian-vector products).
+* gradients with respect to the weights only; a gradient that is itself differentiated
+  (``create_graph=True``: Hessian-vector products) is taken by autograd on the same function.
 
 Anything else falls back to autograd; :func:`available` says whether the kernel can be used here.
 """
@@ -35,7 +37,6 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import torch
-from torch.autograd.function import once_differentiable
 
 logger = logging.getLogger(__name__)
 
@@ -201,19 +202,26 @@ class _Jets(torch.autograd.Function):
         c_sizes = _int_array(sizes)
         work = _take(lib.pinn_jets_work_size(n, n_layers, c_sizes, streams, int(bool(gammas))))
         out = torch.empty(streams * n, sizes[-1])
-        x = x.detach().contiguous()
+        points = x.detach().contiguous()
         lib.pinn_jets_forward(
-            ctypes.c_void_p(x.data_ptr()), n, n_layers, c_sizes, _pointer_array(weights),
+            ctypes.c_void_p(points.data_ptr()), n, n_layers, c_sizes, _pointer_array(weights),
             _pointer_array(biases), streams, dims, _int_array(cols), _int_array(flat_alpha),
             _pointer_array(gammas) if gammas else None, _pointer_array(betas) if gammas else None,
             ctypes.c_float(eps), ctypes.c_void_p(work.data_ptr()), ctypes.c_void_p(out.data_ptr()),
         )  # fmt: skip
         ctx.jet_state = (work, weights, gammas, eps, sizes, n, dims, tuple(flat_alpha))
+        ctx.jet_call = (tuple(cols), tuple(alphas), n_layers, eps)
+        ctx.save_for_backward(x, *params)
         return out
 
     @staticmethod
-    @once_differentiable
     def backward(ctx, grad_out):  # noqa: D102
+        # The compiled reverse pass gives numbers, not a graph, and it consumes the work buffer.
+        # A gradient that must itself be differentiated (``create_graph=True``: Hessian-vector
+        # products, the loss spectrum, sensitivities) or a second pass through a retained graph
+        # is taken by autograd on the same function instead.
+        if torch.is_grad_enabled() or ctx.jet_state is None:
+            return _Jets._autograd_backward(ctx, grad_out)
         lib = _load()
         assert lib is not None
         work, weights, gammas, eps, sizes, n, dims, flat_alpha = ctx.jet_state
@@ -241,6 +249,72 @@ class _Jets(torch.autograd.Function):
         for gg, gb in zip(grad_gamma, grad_beta, strict=True):
             grads += [gg, gb]
         return tuple(grads)
+
+    @staticmethod
+    def _autograd_backward(ctx, grad_out):
+        x, *params = ctx.saved_tensors
+        cols, alphas, n_layers, eps = ctx.jet_call
+        if ctx.jet_state is not None:
+            _give(ctx.jet_state[0])
+            ctx.jet_state = None
+        create_graph = torch.is_grad_enabled()
+        with torch.enable_grad():
+            out = autograd_streams(x, cols, alphas, n_layers, eps, params)
+            wanted = [p for p in params if p.requires_grad]
+            got = iter(
+                torch.autograd.grad(
+                    out, wanted, grad_outputs=grad_out, create_graph=create_graph, allow_unused=True
+                )
+                if wanted
+                else ()
+            )
+        grads = [next(got) if p.requires_grad else None for p in params]
+        return (None, None, None, None, None, *grads)
+
+
+def autograd_streams(
+    x: torch.Tensor,
+    cols: Sequence[int],
+    alphas: Sequence[Sequence[int]],
+    n_layers: int,
+    eps: float,
+    params: Sequence[torch.Tensor],
+) -> torch.Tensor:
+    """The kernel's output streams by autograd: the same function, differentiable to any order.
+
+    ``(S N, k)``: for each multi-index of ``alphas`` (over the input columns
+    ``cols``) the Taylor coefficient ``D^alpha u / alpha!`` of the network
+    with the weights ``params`` (the layout of :func:`mlp_jets`). The kernel
+    uses it where a gradient has to carry a graph, and the tests as the
+    reference.
+    """
+    linear, norm = params[: 2 * n_layers], params[2 * n_layers :]
+    x = x.detach().requires_grad_(any(sum(a) for a in alphas))
+    h = x
+    for k in range(n_layers):
+        h = torch.nn.functional.linear(h, linear[2 * k], linear[2 * k + 1])
+        if k < n_layers - 1:
+            if norm:  # written out: nn.LayerNorm's third-order derivative is wrong
+                c = h - h.mean(dim=-1, keepdim=True)
+                h = c * torch.rsqrt(c.square().mean(dim=-1, keepdim=True) + eps)
+                h = norm[2 * k + 1] + norm[2 * k] * h
+            h = torch.tanh(h)
+    done: dict[tuple[int, ...], list[torch.Tensor]] = {
+        tuple([0] * len(cols)): [h[:, j] for j in range(h.shape[1])]
+    }
+    streams = []
+    for alpha in alphas:  # sorted by total degree, so one lower index is always there
+        alpha = tuple(alpha)
+        if alpha not in done:
+            j = next(i for i, a in enumerate(alpha) if a)
+            lower = alpha[:j] + (alpha[j] - 1,) + alpha[j + 1 :]
+            done[alpha] = [
+                torch.autograd.grad(f.sum(), x, create_graph=True)[0][:, cols[j]]
+                for f in done[lower]
+            ]
+        factorial = math.prod(math.factorial(a) for a in alpha)
+        streams.append(torch.stack(done[alpha], dim=1) / factorial)
+    return torch.cat(streams, dim=0)
 
 
 def supported_stack(
@@ -372,6 +446,7 @@ def mlp_jets(
 
 
 __all__ = [
+    "autograd_streams",
     "available",
     "evaporator_available",
     "evaporator_solve",

@@ -238,15 +238,25 @@ With 1,000 Adam steps the normalized model's maximum error is 2 K against 248 K 
 
 ## A faster step: the compiled kernel
 
-For a plain `tanh` network the derivatives a residual needs can be carried forward through the layers next to the value, and the weight gradient taken by one reverse pass, instead of differentiating by autograd twice and backpropagating through that graph. [`pinnrl.native`](api/native.md) does this in a small C++ kernel, compiled on first use, and `derivatives="native"` switches a problem to it:
+For a plain `tanh` network the derivatives a residual needs can be carried forward through the layers next to the value, and the weight gradient taken by one reverse pass, instead of differentiating by autograd twice and backpropagating through that graph. [`pinnrl.native`](api/native.md) does this in a small C++ kernel, compiled on first use. It is the default: `build_trainer` and `pinnrl-train` use it wherever it applies and autograd everywhere else, without notice.
 
 <!-- doctest: skip -->
 ```python
-trainer = pde.build_trainer("feedforward", derivatives="native")
-print(pde.native_active(trainer.model))      # True where the kernel applies; autograd otherwise
+trainer = pde.build_trainer("feedforward")
+print(pde.native_active(trainer.model))      # True where the kernel runs; autograd otherwise
+
+trainer = pde.build_trainer("feedforward", derivatives="autograd")   # never the kernel
 ```
 
-On the heat problem of experiment [I11](benchmarks.md#the-cost-of-a-training-step-pytorch-c-and-rust-experiment-i11) the step goes from 32 to 10.4 ms with the packaged network (layer normalization on) and from 10.6 to 5.4 ms without layer normalization, with the same loss and gradients to rounding. The kernel covers: macOS (Accelerate) or Linux (OpenBLAS, `apt install libopenblas-dev`) with a C++ compiler; a feed-forward network of `Linear` and `tanh`, with or without `LayerNorm` before each `tanh`, float32 on the CPU; equations given as text, with derivatives of any order, mixed ones included (`u_xx`, `u_xt`, `u_xxx` for KdV, `u_xxxx` for Cahn–Hilliard and the beam), and no unknown functions; the registry's classes (`HeatEquation`, `KdVEquation`, ...) use it too through `pde.derivatives = "native"`, which `pinnrl-train --derivatives native` sets. With the kernel on, the boundary faces and the initial points of a step are evaluated in one call. Anywhere else the residual is computed by autograd, without notice, so the option is safe to leave on. Its weight gradient cannot be differentiated again: the Hessian and sensitivity analyses of `pinnrl.analysis` need the default `derivatives="autograd"`. From the command line: `pinnrl-train --pde-file spec.yaml --derivatives native`.
+On the heat problem of experiment [I11](benchmarks.md#the-cost-of-a-training-step-pytorch-c-and-rust-experiment-i11) the step goes from 32 to 10.4 ms with the packaged network (layer normalization on) and from 10.6 to 5.4 ms without layer normalization, with the same loss and gradients to rounding; experiment [I17](benchmarks.md#the-step-against-the-alternatives-experiment-i17) sets it against PyTorch, JAX and DeepXDE.
+
+The kernel runs where all of these hold:
+
+- macOS (Accelerate) or Linux (OpenBLAS, `apt install libopenblas-dev`) with a C++ compiler;
+- a feed-forward network of `Linear` and `tanh`, with or without `LayerNorm` before each `tanh`, float32 on the CPU;
+- equations given as text, with derivatives of any order, mixed ones included (`u_xx`, `u_xt`, `u_xxx` for KdV, `u_xxxx` for Cahn–Hilliard and the beam), and no unknown functions. The registry's classes (`HeatEquation`, `KdVEquation`, ...) use it too.
+
+With the kernel on, the boundary faces and the initial points of a step are evaluated in one call. Nothing downstream has to know which engine ran: a gradient that is itself differentiated (`create_graph=True`, as in the Hessian spectrum and the sensitivity analyses of `pinnrl.analysis`) is taken by autograd on the same function, and inside a `torch.func` transform the network is the ordinary PyTorch module. `derivatives="native"` is the earlier name of the default and still accepted. From the command line: `pinnrl-train --pde-file spec.yaml --derivatives autograd` switches the kernel off.
 
 ## From the command line
 
