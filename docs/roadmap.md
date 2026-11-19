@@ -51,7 +51,7 @@ $$
 
 | Bet | The idea | Baseline to beat | It fails if |
 |---|---|---|---|
-| R1. A least-squares optimizer | Levenberg–Marquardt steps $\delta = -(J^\top J + \lambda I)^{-1} J^\top r$, solved matrix-free with the engine's $J v$ and $J^\top w$ | Adam then L-BFGS at equal time | $\varepsilon(T)$ is not at least 10 times lower on six of the nine equations |
+| R1. A least-squares optimizer | Levenberg–Marquardt steps $\delta = -(J^\top J + \lambda I)^{-1} J^\top r$, solved matrix-free with the engine's $J v$ and $J^\top w$ | Adam then L-BFGS at equal time | It does not reach the published Gauss–Newton errors (about $10^{-6}$ on heat) on one CPU core in minutes, or is not at least 100 times below Adam then L-BFGS at equal time on six of the nine equations |
 | R2. The last layer solved, not trained | With $u_\theta = \sum_j c_j \phi_j(x; \vartheta)$ and a linear equation, $r$ is linear in $c$: solve $c$ by least squares at every step and optimize only $\vartheta$ (variable projection) | R1 without it | No gain in $\varepsilon(T)$ on the linear problems (heat, 2-D heat) |
 | R3. Conditions built into the network | $u_\theta = g + d \cdot N_\theta$ with $g$ matching the initial and boundary data and $d$ vanishing there, compiled like the rest | Penalty terms with tuned weights | The error is not lower without any loss weight to tune |
 | R4. A learned training controller | A policy sets the damping $\lambda$, the resampling and the restarts of R1 from the loss history, trained across equations | Marquardt's and Nielsen's damping rules | It does not beat the rules on equations it was not trained on |
@@ -62,7 +62,22 @@ $$
 - **Matrix-free**: the linear system is solved by conjugate gradients, which needs only products with $J$ and $J^\top$.
 - **Variable projection**: eliminating the parameters a model is linear in, and optimizing over the rest.
 
-What is new and what is not: Gauss–Newton methods, variable projection and hard constraints for PINNs exist in the literature. The contribution here would be doing them matrix-free inside a compiled Taylor-mode engine on a CPU, and the measured $\varepsilon(T)$ against the alternatives. Order of work: R1 as a prototype in plain PyTorch first (to measure what it buys), then in the engine; R2 and R3 on top; R5 throughout; R4 and R6 last, because R4 needs R1 and R6 needs R2.
+**What is new and what is not** (from a literature review of November 2026; absence means "not found", not "proven absent"):
+
+| Bet | Already published | Not found, and what the bet has to show |
+|---|---|---|
+| R1 | Gauss–Newton, Levenberg–Marquardt, natural-gradient and self-scaled quasi-Newton methods for PINNs, matrix-free and with Taylor mode, three to five orders below Adam on GPUs in double precision | The same accuracy on one CPU core in comparable time; the measured cost of $Jv$ and $J^\top w$ against one gradient; where a dense solve beats the matrix-free one; single precision; inverse problems |
+| R2 | Random-feature and extreme-learning-machine solvers; variable projection on hidden weights | The solve timed in compiled code, and combined with R1 and R3 |
+| R3 | Distance-function and functional-connection ansatz, also paired with an exact last-layer solve | The three together with trained hidden weights; time-dependent nonlinear problems; inverse problems |
+| R4 | Learned damping on classical least squares, with thin evidence; adaptive sampling and loss weights, which rarely beat simple baselines at equal compute | Control of damping, switching and restarts for R1, trained across equations and tested on unseen ones, against Marquardt's and Nielsen's rules. A null result is worth reporting |
+| R5 | Suites that report final error (PINNacle, the jaxpi leaderboard) | Error against wall-clock time, CPU timings, a small-network track, inverse problems scored on identifiability and calibration |
+| R6 | The trunk-and-head form (DeepONet); online last-layer adaptation in flight control and Koopman control | Recursive least squares on a physics-trained cached basis; closed-form action gradients; latency on one CPU core; a policy trained on the model against one trained on the solver |
+
+- **The bar for R1 is higher than first written.** Published Gauss–Newton results reach errors near $10^{-6}$ on heat and $10^{-7}$ on Poisson in minutes on a GPU. Ten times better than Adam is not enough: R1 has to reach those errors on a CPU core.
+- **A warning for R6.** In one benchmark of predictive control on reactors, PINN surrogates were slower than the mechanistic model in every case, because of the cost of derivatives. R6 exists to remove that cost and must be judged against that result.
+- **For industry.** No PINN validated on plant data for an evaporator or a spray dryer was found; plants run grey-box models with predictive control. Readiness there is a lifecycle matter (historian validation, shadow mode, drift monitoring, change control), which is what v6.0 and v7.0 are for.
+
+Order of work: R1 as a prototype in plain PyTorch first (to measure what it buys), then in the engine; R2 and R3 on top; R5 throughout; R4 and R6 last, because R4 needs R1 and R6 needs R2. The review is in the repository's `reports/` folder when it is kept there.
 
 ### R6. A network designed for the loop
 
