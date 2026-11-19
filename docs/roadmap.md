@@ -1,61 +1,8 @@
 # Roadmap
 
-Package features, in the order the [research program](research.md) needs them. Each item has a done-criterion and names the experiments (`experiments/BACKLOG.md`) or papers (`experiments/PAPERS.md`) it serves. Within a release, items are worked top to bottom.
+What is planned, in the order the [research program](research.md) needs it. Each item states what a user gains and, where it can be said in advance, when it counts as done. Within a release, items are worked top to bottom. What is already built is on the [history page](history.md).
 
-## v0.4: clean, verified, documented (released 2026-10-24)
-
-- [x] Physics audit: every exact solution satisfies its PDE, IC and BC; real Dirichlet, Neumann and periodic BCs; correct 2-D derivatives. *Done: `test_physics_consistency.py` is green.*
-- [x] One training loop (`PDETrainer.train` / `train_steps`), one PDE registry, one entry point per action.
-- [x] A working, experimental RL bandit sampler; RAD with `k`/`c`.
-- [x] Numerical reference solutions. *Done: Burgers reproduces Basdevant et al. (1986), $u_x(0, 1.6037/\pi) = -152.00516$ for $\nu = 0.01/\pi$; the Allen–Cahn solution is grid-converged.*
-- [x] B01/B06 sampling benchmark, 10 seeds at equal steps and equal evaluations. *Done: [Benchmarks](benchmarks.md), `experiments/B01_sampling_equal_compute/`.*
-- [x] Docs rewritten and audited against the code; ruff with docstring linting; strict docs build.
-- [x] Bug batch from the documentation audit (Well loader coordinates, LRW zero-gradient weighting, network defaults, dashboard plots). *Done: each fix has a test that fails without it (`test_audit_regressions.py`, `test_well_loader.py`).*
-- [x] Release. *Done: CI and `scripts/verify_release.sh` are green, and v0.4.0 is on PyPI via trusted publishing.*
-
-## v0.5: the inverse-modelling core (released 2026-10-26)
-
-The goal is to estimate unknown physics with known validity conditions and calibrated uncertainty. Diagnostics come before UQ methods, because an unidentifiable or ill-conditioned problem has no meaningful error bar.
-
-0. **User-defined equations.** `CustomPDE`: any PDE, ODE, steady problem or system from its residual as text (SymPy-parsed, autograd derivatives) or a Python callable, with expression-valued initial and exact solutions, identifiable parameters, and `pinnrl-train --pde-file`. Every later module (diagnostics, UQ, the process models of v0.7) is written against it rather than against one class per equation. *Done: `test_custom_pde.py` checks parity with the shipped Heat, Burgers and pendulum residuals; see [Custom equations](custom_equations.md).*
-1. ~~**Theory pages.**~~ Well-posedness and conditional stability; structural vs practical identifiability; the Bayesian view (loss = negative log-posterior, data weight = 1/σ²); sources of uncertainty; calibration; the numerical-analysis bridge (Lax equivalence, stability constants, PINN error estimates). *Done: [Theory](theory/index.md), four pages cited by DOI; the maintainer's reference papers are still to be added. Every later module cites the condition it relies on.*
-2. ~~**Identification baseline.**~~ Scalar parameters vs noise, sensors, initial guess and data weight. *Done: F01–F05 in `experiments/` and [Benchmarks](benchmarks.md). The surrogate floor is 2 % (heat), 20 % (KdV soliton) and 150 % (Burgers shock); above it the estimator is near-efficient. The data-weight question is K39.*
-3. ~~**`pinnrl.analysis`: conditioning diagnostics.**~~ The sensitivity Jacobian by the implicit-function theorem on the trained surrogate; Fisher information, Cramér–Rao bound, correlations and eigen-directions; the loss-Hessian (Lanczos) and tangent-kernel spectra. *Done: `pinnrl.analysis`; K01 (validated on heat and KdV, wrong on the unresolved Burgers shock), K03 and F07 are in `experiments/`. Profile likelihood is a driver (F07), not yet an API.*
-4. ~~**Disturbance and stability analysis.**~~ Perturbation suites for data and for the problem; the linear prediction of the estimate's shift; empirical stability constants. *Done: `pinnrl.analysis.disturbance`; K05 (bias and delay shifts match $F^{-1}J^\top\Sigma^{-1}\delta y$ to 20 %), K06 (the surrogate respects the equation's stability above its own field error) and K07 ($C \approx 1$ for linear evolution equations; the beam's error is set by its boundary terms) are in `experiments/`.*
-5. ~~**`pinnrl.uq`: calibrated uncertainty.**~~ A likelihood-based data term (σ sets the weight and the misfit tolerance); deep ensembles with a dispersion diagnostic; a Laplace approximation that reuses the Hessian machinery of `pinnrl.analysis`; the **region of equivalence** as the primary output, sampled by a cloud particle swarm over the parameters on a parametric surrogate $u_w(x, t; \theta)$, with intervals, percentiles and CDFs by counting ([theory](theory/equivalence_regions.md)); coverage, width and CRPS metrics. *Done: `pinnrl.uq`; F06/K10 (the Laplace width is exact for the random error, the 2 % bias costs coverage, ensembles over seeds cover 13 %, the physics region 90 %), K39 (the noise-model weight is worse than the tuned one because the surrogate's error is systematic) and K46 (the swarm confirms the ellipse at these noise levels and under-samples its edges) are in `experiments/`. K47 (the weighted swarm is centred but 0.5–0.7 as wide as the posterior) and K45 (one parametric surrogate covers the prior range to 0.2–2 % and the swarm on its misfit reproduces the closed-form region) complete the item.*
-6. ~~**Sampling follow-ups for P02.**~~ B02 (more PDEs), B03 (the RAD k, c grid), B04 (resampling frequency), B08 (point-count scaling). *Done: no sampler beats uniform significantly on smooth problems; the resampling cadence changes the Burgers error threefold and the study default moves to 10 steps; good RAD settings lie on c ≈ k/2 and a zero floor with a sharp exponent fails; the error scales as N^−1/3 on Burgers and not at all on Allen–Cahn. P02 can be drafted.*
-
-## v0.6: richer unknowns and inputs (released 2026-11-04)
-
-- [x] **Field-valued unknowns:** a learnable coefficient field $\alpha(x, t)$ or closure $f(u)$, with positivity and monotonicity constraints. *Done: `CustomPDE(unknown_functions=...)` with `UnknownFunction`; F09 recovers $\alpha(t)$ to 4 % and a two-layer $\alpha(x)$ in shape on heat, and shows which fields the data cannot determine.*
-- [x] **Coupled multi-field systems** (`output_dim > 1`) with per-field BCs and loss weights. *Done: `CustomPDE(boundary_conditions={field: ...}, field_weights=...)`; the catalogue's `reaction_diffusion_pair` trains to its closed form in `test_coupled_systems.py`.*
-- [x] **Measured inputs:** BCs and forcing from interpolated time series. *Done: `CustomPDE(inputs={"q": {"path": "left.csv"}}, boundary_conditions={"dirichlet": {"left": "q"}})`; `test_measured_inputs.py` trains heat with its boundary following a CSV.*
-- [x] **Sensor operators:** point, boundary and integral observations with per-sensor noise and delay. *Done: `CustomPDE(sensors=[PointSensor, BoundarySensor, IntegralSensor])`, `pde.observe`, `sensor_jacobian`; K02 ranks layouts by their Fisher information and trains on sensor records (F05's fixed probes are one `PointSensor` each; its results predate the module).*
-- [x] **Non-dimensionalization helpers** (a reference scale per variable). *Done: `CustomPDE(scales=...)` + `build_trainer(normalize=True)` / `--normalize`; a heat problem in millimetres, seconds and kelvin trains like the unit problem (`test_normalization.py`). J01 will be the first process model to use it.*
-- [x] **High-dimensional stability:** dimension sweeps of stability constants and quadrature error. *Done: K08, heat and convection in $d = 1 \ldots 5$; the quadrature gap is dimension-independent, the stability constant grows with the condition errors, and high-dimensional convection collapses to zero.*
-
-## v0.7: process twins (released 2026-11-12)
-
-- [x] `pinnrl.process`: the falling-film evaporator with its method-of-lines reference simulator and `custom_pde()` form (J01, J02 done); fouling estimation from outlet sensors (J03: the drift to 9–16 %, at the surrogate's limit) and its identifiability (J04: the data allow 5 % on the end value; U and the constant fouling are one unknown; the steam temperature is the nuisance that matters). The drying droplet (`pinnrl.process.DryingDroplet`, J07) is the second unit: its forward PINN solve reaches 8–14 %; the free-function closure collapses to a constant from a cold start and reaches 1.7–2.1 % from a pointwise estimate of the record (J07b), with a 1-in-3 risk of leaving the basin. The intervals are measured (J06, 100 data sets): a batch fit through the reference solver and a trend filter on 51 cells are calibrated (0.91–0.99) where the model is right and the fouling's assumed form contains the truth; an 11-cell model, a ramp assumed for a curve that bends, or a steam record trusted beyond its accuracy each break it, and the PINN twin fails to train on 22 of 36 runs and has no calibrated interval. A learned closure is checked by `DryingDroplet.record_misfit` through the reference solver (J07c catches every failure of J07b), and a monotone closure fitted by shooting reaches 1.5 % from a cold start on every seed (J07d): on the two units built so far the classical estimators win, and the PINN's case is a model without a cheap trusted forward solve. `UnknownFunction(anchor=...)` holds a value at a point (J07e: the closure zero at equilibrium by construction removes the pointwise start's 60–90-fold misfit, and the PINN refinement then adds nothing), and `pde.sensor_misfit` with `train_with_restarts` is the acceptance test and restart rule a twin applies to itself. The dryer-scale model is `pinnrl.process.SprayDryer`, the droplet coupled to its air in a co-current tower (J11): one solve takes 5 ms, so the estimator is again a fit through the reference; a tower's instruments determine the two parameters of a known curve form (±0.03 from five operating points) and 4–6 of a free-form closure's 11 directions, yet predict the powder moisture outside the campaign to 1–2 %. *Open: a tower whose forward solve is not a cheap initial-value problem (transient, counter-current, a size distribution, wall deposition), where the PINN's case can first be tested. The stickiness margin is `SprayDryer.stickiness_margin` (J08): the twin gives it at the outlet to 1.0–1.5 K where a lab assay gives 1.6–3.2 K and the air's water balance 23–59 K. K09 (linearized stability) is done: the physics is convectively stabilised and not stiff; the discretised operator's spectrum is a pseudospectrum.*
-- [x] Classical estimators on the same models: `pinnrl.process.ExtendedKalmanFilter` with an RTS smoother and `FallingFilmEvaporator.fouling_state_space` (J05: on a known model the filter beats the PINN twin by a wide margin at a thousandth of the cost; the PINN's case is the partly unknown model). `pinnrl.process.MovingHorizonEstimator` adds bounds on states and disturbances (J05b: the filter's accuracy on the evaporator at 10–35 times the cost; the growth constraint smooths without correcting). `augment_local_linear_trend`, `time_to_threshold` and `monitor_fouling` are the drift model, the time to the next cleaning and the packaged fouling monitor J06 arrives at.
-- [x] Historian adapter: CSV or Parquet plus a tag map to sensor definitions. *Done: `pinnrl.process.Historian` (wide and long exports, quality flags, dated timestamps, unit conversion, windows and resampling) and `Historian.apply(tag_map)`, which gives the inputs as `TimeSeries`, the sensors with their records, and `records()` for the filters; see [Process twins](process_twins.md).*
-- [x] A dashboard "Process" view: soft-sensor trends with uncertainty bands, and time to the next cleaning. *Done: the Process tab runs `monitor_fouling` on an export and a tag map and plots the fouling with its band, the projected cleaning time with its interval and the outlet records against the model; see [Dashboard](dashboard.md#process).*
-- [x] Bayesian measurement design for sensors and lab sampling (J09; P24). *Done: `pinnrl.analysis.posterior_covariance`, `target_std`, `information_gain` and `greedy_design`; on the evaporator with every instrument error admitted, the steam offset and the four mass-balance instruments jointly limit the fouling estimate (10.6 %), no single calibration pays, a condensate meter halves it and with a 4 K steam swing reaches 2.8 %; lab samples buy little and are best at the end, a quarter and past the middle of the window. See [Benchmarks](benchmarks.md#measurement-design-for-the-fouling-estimate-experiment-j09).*
-- [x] Type checking (mypy) across the package. *Done: `uv run mypy` passes on the 66 modules of `pinnrl` (default strictness, configured in `pyproject.toml`) and runs in CI next to ruff.*
-
-## v0.8: performance and the PINN's case (released 2026-11-18)
-
-- [x] Time breakdown of a step, and the same step in C++ and Rust (I01, I11). *Done: the step is arithmetic (sampling, optimizer and bookkeeping under a tenth); `tanh` and the double-backward passes dominate; a framework-free step on Accelerate takes 3.6 ms in either language against 8.8 ms in PyTorch and 10.6 ms in the trainer.*
-- [x] The kernel in the trainer. *Done: `pinnrl.native` and `build_trainer(derivatives="native")`, 10.6 → 5.4 ms a step on the benchmark problem with the same gradients to rounding; opt-in; macOS, plain `tanh` networks, first and pure second derivatives.*
-- [x] Layer normalization in the kernel, so the packaged default network benefits (I12). *Done: 32 → 10.4 ms a step on the default network. The check against autograd exposed a PyTorch defect, a wrong third-order derivative of `nn.LayerNorm` (weight gradients of second-order residuals 2–3 % off); the package's networks now use `ExactLayerNorm`.*
-- [x] Mixed and third- and fourth-order derivatives (KdV, Cahn–Hilliard) (I13). *Done: the kernel carries general Taylor coefficients through `tanh` and layer normalization; residual, loss and weight gradient agree with autograd to rounding on heat, KdV, a mixed $u_{xxt}$, the beam and Cahn–Hilliard, and the step gains 1.9–4× on the plain network and 3–7× with layer normalization, the more the higher the order; the special cases of I11/I12 lose under 5 %.*
-- [x] A Linux build on OpenBLAS, tested in CI (I14). *Done: the same source builds with `g++ -lopenblas` on first use, with a vectorised `tanh` of its own; CI installs OpenBLAS and fails rather than skips the kernel tests. On the same machine the Linux step gains 1.4–3.0× against 1.9–4.7× under Accelerate: Taylor mode saves the elementwise work, not the matrix products, and without Apple's AMX those are two thirds of the step.*
-- [x] One value pass for boundary and initial points; the registry's PDE classes through the kernel (I15). *Done: every face and the initial points share one kernel call (worth 2 % of the heat step), and `PDEBase.compute_derivatives` goes through the kernel for the registry's classes, which gain 1.7–2.7× on a plain network and 2.3–4.7× with layer normalization; `pinnrl-train --derivatives native` now applies to every problem.*
-- [x] Compiled right-hand sides for the method-of-lines reference solvers, which the classical estimators spend their time in (I16). *Done: the evaporator's model under a compiled SDIRK4 integrator with exact per-cell stage solves (`reference(method="native")`, `native_propagator`, `monitor_fouling(integrator="auto")`); 3–8× per solve on smooth inputs, 50–100× on a plant record whose kinks collapse BDF, a batch fit from 106 s to 0.7 s with the same estimate; the monitor 1.6×, its time now in the filter's Jacobian and matrix exponential.*
-- [x] A process unit whose forward solve is not a cheap initial-value problem (a transient or counter-current dryer, a droplet size distribution, wall deposition): the first place the PINN twin's case can be tested, after three units on which the classical estimator through the reference solver won. *Done: `pinnrl.process.CounterCurrentDryer` (J13), the air against the falling droplets: the steady state is a boundary-value problem solved by shooting (100 ms, twenty times the co-current tower) and the transient a hyperbolic system with characteristics both ways, which the method of lines with a sparse Jacobian integrates in 0.04–0.6 s. The PINN's case is not made: a fit of the curve's two parameters and the wall loss from one transient record takes 10 s and lands within the linear prediction, while the PINN twin fails the misfit test on every run (its forward solve, with the equations scaled and the residual weight tuned, stays at 12–15 % on the moisture). What it would take is a model with no method-of-lines form at all.*
-- [x] The line-level twin: a multi-pass evaporator feeding the dryer, with errors propagated across the units (J10). *Done: `pinnrl.process.ProcessLine` chains evaporator passes into the dryer (the concentrate sets the droplets' solids and the solids flow) with `steady`, `reference`, `records` and `propagate` (the variance budget of the powder by source, linear and Monte Carlo). On a four-hour shift with three fouling passes, the powder inherits the feed flow and the droplet size once the fouling is monitored, but propagation is the wrong estimator for it: the dryer's own records determine the powder to ±0.005 against ±0.09 by propagation (±0.001 with every record), information flows downstream only (the dryer's records leave the fouling at its prior), and the first pass's fouling is one unknown with the feed's calibration; ten simulated shifts confirm the linear predictions.*
-
-## Where this goes after v0.8
+## Where this goes
 
 Eight releases built three things: a PINN trainer whose derivatives run in a compiled kernel, an inverse-modelling toolbox that says when an estimate can be trusted (identifiability, stability, calibrated intervals, a misfit test), and four process simulators with their classical estimators. Two findings shape what comes next:
 
@@ -66,7 +13,10 @@ The direction follows from both: **`pinnrl` becomes the place where physics-info
 
 | Theme | Release | What a user gains |
 |---|---|---|
-| The kernel as the default engine | v0.9 | The fastest PINN step available on a CPU without asking for it; custom networks at the same speed; twins that run outside Python |
+| Accuracy per second (research bets, below) | v0.9–v0.10 | A lower error in the same time, by an optimizer, an architecture and a training controller built for physics-informed losses |
+| The engine, everywhere | v0.9 | The fastest PINN step on a CPU on every problem the package solves and on every machine; custom networks at the same speed; twins that run outside Python |
+| Tests that protect the architecture | every release | Nothing existing breaks when a component is added; dead code removed |
+| The dashboard as an experiment tracker | v0.9–v0.10 | Runs searched, compared and traced from data to result |
 | `pinnrl.gym`: process environments and control | v0.10 | Standard RL environments of real unit operations, with baselines (PID, MPC) and a twin in the loop |
 | Decisions that serve the inverse problem | v0.11 | What to measure, where to sample and how to train, learned as policies and compared with the greedy designs |
 | Discovering unknown physics | v0.12 | From a learned closure to an equation with an error bar; model-form error named instead of absorbed |
@@ -75,20 +25,121 @@ The direction follows from both: **`pinnrl` becomes the place where physics-info
 | The platform matured (see below) | v2.0–v6.0 | Control, discovery, scale and an autonomous twin, each proven on simulated plants |
 | The plant | v7.0 | Live data in, advice with intervals out, validated on a real line |
 
-## v0.9: the kernel as the default engine (next)
+## Research bets: accuracy per second
 
-The compiled kernel was 1.9–7× autograd on the step's derivatives at v0.8, but opt-in, for `tanh` feed-forward networks only, and general: its any-order passes cost more than a step written for one equation. The aim is that installing `pinnrl` gives the fastest PINN step on a CPU by default, measured against every alternative, and that the engine under it is the package's own, so everything later (control, design, discovery) is built on it.
+On an Apple M4 the engine leads on the time of a step ([I17](benchmarks.md#the-step-against-the-alternatives-experiment-i17)). A user feels something else: the error reached in a given time. The bets below aim at that number, and they come before any publication. Each is a claim that can fail.
 
-- [x] **A head-to-head with the alternatives (I17).** *Done: the same step in eager PyTorch, `torch.compile`, `torch.func`, JAX (reverse, forward and Taylor mode) and DeepXDE on nine equations ([Benchmarks](benchmarks.md#the-step-against-the-alternatives-experiment-i17)). The first run had JAX's forward mode 1.2–1.3× ahead of the kernel and named why (fused per-equation loops, a rational `tanh`); with both built in, `pinnrl` is first on all nine: 1.2–1.9× JAX, 2.5–8× eager PyTorch, 3–11× DeepXDE. PhysicsNeMo was not run.*
-- [x] **`derivatives="auto"` as the default.** *Done: the kernel wherever it applies, autograd elsewhere, silently. A gradient of the kernel that is differentiated again (`analysis.spectrum`, `analysis.surrogate`, any Hessian-vector product) is taken by autograd on the same function, and `torch.func` transforms see the ordinary module, so no tool has to know which engine ran.*
-- [x] **A step compiled per equation.** *Done: `pinnrl.native.specialize` writes C++ for the equations given as text (the Taylor recurrences through `tanh` as one fused loop for exactly the streams they use, the residual and its adjoint inlined by SymPy), compiles it once and caches it; the general kernel serves the first 32 evaluations, so a short run never waits. 1.4–1.8× over the general kernel.*
-- **The compiled step, everywhere.** What still runs on the general kernel or outside the compiled call, in the order of what it buys: layer normalization fused the same way (the packaged default network gains only 9.0 → 7.4 ms today); scaled networks (`normalize=True`), trainable parameters and `UnknownFunction` (the inverse problems, which are the package's purpose); the boundary and initial points, the loss reduction and Adam inside the same call (0.5 ms of heat's 3.5); L-BFGS on the compiled gradients in float64, since L-BFGS is what does the learning on the stiff process problems (J13); steady problems. *Gain: the 1.2–1.9× lead over JAX on every problem the package solves, not only on forward problems with plain networks.*
-- **Beyond one core.** The step's matrix products are single-threaded on Apple's matrix unit, where threads do not add. On Linux and x86 the blocks of the compiled step are independent and can run on a core each. *Gain: the lead held on the machines most users have; measured there first (I17 is one M4).*
-- **Custom architectures.** A declarative network description (blocks, widths, activations, normalization, input embeddings, skip connections) that both the autograd path and the kernel run; activations beyond `tanh` (`sin` for SIREN, `gelu`, `silu`) by their Taylor recurrences; Fourier features; `UnknownFunction` and the inverse mode's trainable parameters through the compiled step. *Gain: the inverse problems, which are the package's purpose, at kernel speed; a user's architecture is not a reason to fall back.*
+**The measure**
+
+$$
+\varepsilon(T) = \frac{\lVert u_\theta - u \rVert_2}{\lVert u \rVert_2} \quad \text{after wall-clock time } T \text{ on one CPU core}
+$$
+
+- **$u_\theta$**: the trained network.
+- **$u$**: the exact or reference solution.
+- **Protocol**: ten seeds, median and interquartile range, the nine equations of I17 plus published suites (PINNacle, PDEBench), the same machine for every method.
+
+**The structure the bets use**
+
+$$
+L(\theta) = \tfrac12 \lVert r(\theta) \rVert^2, \qquad r = \big(w_r\, r_{\text{pde}},\; w_b\, r_{\text{bc}},\; w_0\, r_{\text{ic}}\big)
+$$
+
+- **$r(\theta)$**: every residual of the problem stacked in one vector (equation, boundary, initial).
+- **Least-squares problem**: a loss that is a sum of squares. Adam and L-BFGS treat it as a generic function; the methods below use the squares.
+- **Jacobian $J = \partial r / \partial \theta$**: how each residual moves with each weight. The engine can apply $J$ and $J^\top$ to a vector at the cost of a step, without forming $J$.
+
+| Bet | The idea | Baseline to beat | It fails if |
+|---|---|---|---|
+| R1. A least-squares optimizer | Levenberg–Marquardt steps $\delta = -(J^\top J + \lambda I)^{-1} J^\top r$, solved matrix-free with the engine's $J v$ and $J^\top w$ | Adam then L-BFGS at equal time | $\varepsilon(T)$ is not at least 10 times lower on six of the nine equations |
+| R2. The last layer solved, not trained | With $u_\theta = \sum_j c_j \phi_j(x; \vartheta)$ and a linear equation, $r$ is linear in $c$: solve $c$ by least squares at every step and optimize only $\vartheta$ (variable projection) | R1 without it | No gain in $\varepsilon(T)$ on the linear problems (heat, 2-D heat) |
+| R3. Conditions built into the network | $u_\theta = g + d \cdot N_\theta$ with $g$ matching the initial and boundary data and $d$ vanishing there, compiled like the rest | Penalty terms with tuned weights | The error is not lower without any loss weight to tune |
+| R4. A learned training controller | A policy sets the damping $\lambda$, the resampling and the restarts of R1 from the loss history, trained across equations | Marquardt's and Nielsen's damping rules | It does not beat the rules on equations it was not trained on |
+| R5. A benchmark others accept | $\varepsilon(T)$ curves against DeepXDE and JAX baselines on public suites, scripts in the repository | The best published number per task | The lead of R1–R3 does not survive on problems the package was not tuned on |
+| R6. A network designed for the loop (below) | A trunk cached once and a small head per step, so a model queried millions of times in a reinforcement-learning loop costs microseconds and adapts by a least-squares update | A general network retrained by Adam; the reference solver as environment | The loop is not 10 times faster, or the policy is worse than one trained on the solver |
+
+- **Levenberg–Marquardt**: Gauss–Newton with a damping term $\lambda I$ that keeps the step inside the region where the linearization holds.
+- **Matrix-free**: the linear system is solved by conjugate gradients, which needs only products with $J$ and $J^\top$.
+- **Variable projection**: eliminating the parameters a model is linear in, and optimizing over the rest.
+
+What is new and what is not: Gauss–Newton methods, variable projection and hard constraints for PINNs exist in the literature. The contribution here would be doing them matrix-free inside a compiled Taylor-mode engine on a CPU, and the measured $\varepsilon(T)$ against the alternatives. Order of work: R1 as a prototype in plain PyTorch first (to measure what it buys), then in the engine; R2 and R3 on top; R5 throughout; R4 and R6 last, because R4 needs R1 and R6 needs R2.
+
+### R6. A network designed for the loop
+
+A reinforcement-learning loop calls the physics model at every step of every episode: millions of evaluations, each for a new state and action, often with a small update in between. A general network recomputes everything at each call. This bet is an architecture, built together with the engine, in which almost nothing has to be recomputed.
+
+$$
+u_\theta(x, t;\, z) \;=\; \sum_{j=1}^{m} c_j(z)\, \phi_j(x, t), \qquad c(z) = A\, h(z) + b
+$$
+
+- **$z$**: what changes at every step of the loop (the state, the action, the operating point, the estimated parameters).
+- **Trunk $\phi_j(x,t)$**: features of space and time and their derivative streams. They do not depend on $z$, so they are computed once and cached.
+- **Head $c(z)$**: a small map from the loop's variables to the coefficients. It is all that runs per step.
+- **Linear in $c$**: for a fixed trunk the residual is linear or low-order in the coefficients, so an update is a least-squares solve (R2), not a gradient-descent run.
+
+| Property | How the design gets it | Done when |
+|---|---|---|
+| A query costs microseconds | Cached trunk streams; the head is one small matrix product; batched over parallel environments in one call | One core serves a stated number of queries per second, with $\partial u / \partial z$ included |
+| The model adapts inside the loop | Recursive least squares on $c$ as new sensor data arrive, one rank update per measurement | The twin tracks a drifting parameter at every environment step |
+| The policy can differentiate through it | $\partial u / \partial z$ in closed form from the head, exact, no graph | A policy gradient through the model matches finite differences |
+| Rollouts stay stable | The network advances the state over one control interval, with the physics residual and a bound on its growth built in | A long rollout does not drift from the reference solver |
+| It runs outside Python | Fixed widths and block sizes chosen for the cache; exported as C with the engine's export | The exported model reproduces the Python one to rounding |
+
+- **Recursive least squares**: updating a least-squares solution when one more data point arrives, without solving again from the start.
+- **Rollout**: applying the model to its own output step after step, as a simulator does.
+- **Control interval**: the time between two actions of the controller.
+
+Baseline to beat: the same task with a general 4 × 64 network retrained by Adam, and with the reference solver as the environment. It fails if a policy trained on this model does not match one trained on the solver, or if the loop is not at least ten times faster than with the general network. It builds on R2 (the linear last layer) and feeds [`pinnrl.gym`](#v010-pinnrlgym-process-environments-and-control), where the PINN world model is planned.
+
+## v0.9: the engine, everywhere
+
+In progress. Already built in this release ([history](history.md#unreleased-v09-so-far)): the compiled kernel is the default engine; a benchmark against PyTorch, JAX and DeepXDE on nine equations ([I17](benchmarks.md#the-step-against-the-alternatives-experiment-i17)); a step compiled per equation, which covers forward and inverse problems, scaled networks and layer normalization (1.3–1.4× the general kernel with normalization on). The aim of what remains is that the engine's lead holds on every problem the package solves and on the machines most users have, and that everything later (control, design, discovery) is built on it.
+
+- **The rest of the step in the compiled call.** The boundary and initial points, the loss reduction and Adam inside the same call (0.5 ms of heat's 3.5); L-BFGS on the compiled gradients in float64, since L-BFGS is what does the learning on the stiff process problems (J13); steady problems; unknown functions of a field (a closure $f(u)$), which still run on autograd. *Gain: one call per step on every problem, and second-order training at engine speed.*
+- **Beyond one core, beyond one machine.** The step's matrix products are single-threaded on Apple's matrix unit, where threads do not add. On Linux and x86 the blocks of the compiled step are independent and can run on a core each. *Gain: the lead held on the machines most users have; timed there first, since I17's table is one Apple M4.*
+- **Custom architectures.** A declarative network description (blocks, widths, activations, normalization, input embeddings, skip connections) that both the autograd path and the kernel run; activations beyond `tanh` (`sin` for SIREN, `gelu`, `silu`) by their Taylor recurrences; Fourier features. *Gain: a user's architecture is not a reason to fall back.*
 - **Many networks in one call.** Ensembles, the swarm of `pinnrl.uq`, restarts and hyperparameter sweeps trained as a batch of networks through one threaded kernel call. *Gain: a calibrated ensemble for the price of a few single runs; `train_with_restarts` in parallel.*
 - **Inference outside Python.** Export a trained twin to a dependency-free C source or shared library (values and derivatives), and to ONNX; a throughput benchmark (evaluations per second per core). *Gain: a soft sensor that runs in a PLC gateway, a historian calculation or a spreadsheet plug-in at plant rate.*
 - **Prebuilt wheels.** Platform wheels with the kernels compiled (macOS arm64/x86, Linux x86/aarch64), so no compiler is needed. *Gain: `pip install pinnrl` is enough.*
 - *Stretch:* a Metal/CUDA backend for large batches; the kernel is a CPU design and small networks are where it wins.
+
+## Every release from v0.9: tests that protect the architecture
+
+A release must not break what exists. The suite today has about 900 tests and covers 96 % of the lines it measures, but it measures neither the dashboard, the launcher nor the training command line, and line coverage says little about whether a new component is caught when it breaks a contract.
+
+- **Contract test**: one test, written once, that every implementation of an extension point must pass (every equation, every network, every sampler, every process unit).
+- **Integration test**: a test that runs several parts together, as a user does (train, save, reload, analyse, display).
+- **Dead code**: code that no test, no entry point and no documented use reaches.
+
+| Step | What is built | Done when |
+|---|---|---|
+| T1. Contracts for the extension points | A registry-driven suite: a new equation, architecture, sampler, optimizer or process unit is picked up automatically and must satisfy the same contract (shapes; the exact solution has zero residual; the compiled step equals autograd; save and reload give the same output) | Adding a component without touching the tests still tests it |
+| T2. Engine equivalence by generation | Random equations (orders, mixed terms, fields, parameters, unknown functions) checked compiled step against autograd | A defect planted in the generator's output is caught |
+| T3. Pipelines end to end | Train, checkpoint, reload, analyse, and read the run in the dashboard, for the forward, inverse and process paths, through the command line and the Python API | Each documented workflow is one test |
+| T4. Compatibility | Run folders and checkpoints written by earlier releases still load | A fixture per released version |
+| T5. Coverage that counts everything | The dashboard, the launcher and the training command line come back into the measurement | Coverage of the whole package stays above 75 % (the present gate of 90 % on the measured part stays) |
+| T6. Tests judged by what they catch | Mutation testing on the core modules: a test that never fails when the code is altered is rewritten or removed | A mutation score is reported per module |
+| T7. Dead code removed | Unreached code found by coverage and a static scan, then deleted or given a test | The scan is clean and runs in CI |
+
+Rule for new tests: no assertion that restates the implementation. A test states a property a user relies on, or a contract a new component must meet.
+
+## The dashboard as an experiment-tracking tool
+
+Today the dashboard launches, monitors and compares runs. The aim is a tool a team can use to track experiments and follow their data from the record to the result.
+
+- **Run**: one training or estimation, with its configuration, metrics, checkpoints and figures.
+- **Lineage**: which data, which code version and which settings produced a result.
+- **Artifact**: a file a run produced (a model, a figure, a table).
+
+| Step | What a user gains | Done when |
+|---|---|---|
+| D1. A run store with a schema | Every run indexed: configuration, metrics, tags, code version, data fingerprint; search and filter over thousands of runs | A query over 5,000 runs returns in under a second |
+| D2. Compare and diff | Curves overlaid, configurations diffed, error against wall-clock time, seeds grouped with median and spread | Two runs can be explained apart from one screen |
+| D3. Lineage and artifacts | From a figure back to the run, the data and the commit; an artifact browser; export of a run as a report | Every number in a report links to its run |
+| D4. Live operation | Launch, queue, stop and resume runs; live loss, residual maps and engine status; alerts when the misfit test fails | A study of 100 runs is managed without a terminal |
+| D5. The process view, grown | Sensors, estimated states with intervals, fouling monitors and the line's variance budget, on recorded or replayed data | An engineer reads a shift from one page |
+| D6. Design and reliability | A design system (layout, colour, type), keyboard access, tested callbacks, a separate data layer under the pages | The pages are covered by T3 and usable on a laptop screen |
+| D7. Working with other tools | Import and export to MLflow and Weights & Biases formats | A run moves in and out without loss of its metrics |
 
 ## v0.10: `pinnrl.gym`, process environments and control
 

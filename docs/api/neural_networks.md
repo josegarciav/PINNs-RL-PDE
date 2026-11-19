@@ -49,3 +49,15 @@
 ## AutoEncoder
 
 ::: neural_networks.autoencoder.AutoEncoder
+
+::: neural_networks.attention.FeedForwardBlock
+
+## Types
+
+`NetworkConfig` is the dictionary a backend is built from; `InputType` and `OutputType` are what a network accepts and returns.
+
+::: neural_networks.base_network.NetworkConfig
+
+::: neural_networks.base_network.InputType
+
+::: neural_networks.base_network.OutputType

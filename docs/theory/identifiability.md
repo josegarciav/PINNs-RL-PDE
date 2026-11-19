@@ -1,53 +1,178 @@
 # Identifiability and conditioning
 
+This page states when sensor data determine the parameters of an equation, and how precisely. Read it before trusting a parameter a PINN estimated, or before placing sensors.
+
+- **$\theta$**: the $p$ unknown parameters of the equation.
+- **$u_\theta$**: the solution for those parameters.
+- **$\mathcal{H}$**: the sensor operator; $\mathcal{H}u$ is what the sensors read from the field $u$.
+- **Surrogate**: the trained network $u_w$, with weights $w$, that stands in for the solution.
+
 ## Structural identifiability
 
-Parameters are structurally identifiable when the noise-free observations determine them uniquely: $\mathcal{H}u_{\theta_1} = \mathcal{H}u_{\theta_2}$ on the sensor set implies $\theta_1 = \theta_2$ (Bellman & Åström, 1970). It is a property of the equation, the sensor operator and the experiment, not of the data quality. Two parameters that only ever appear as a product are not structurally identifiable from any amount of data; a rate that only acts in a regime the sensors never see is not identifiable either.
+$$
+\mathcal{H}u_{\theta_1} = \mathcal{H}u_{\theta_2} \ \text{on the sensor set} \quad\Longrightarrow\quad \theta_1 = \theta_2
+$$
 
-For small models, structural identifiability is decided symbolically (Chiş, Banga & Balsa-Canto, 2011): the observations are differentiated with respect to time and the resulting algebraic relations are solved for $\theta$. Experiment K11 does this with SymPy for the catalogue entries that have a closed form.
+- **Structurally identifiable**: the noise-free observations determine $\theta$ uniquely (Bellman & Åström, 1970).
+- It is a property of the equation, the sensor operator and the experiment, not of the data quality.
+
+No amount of data identifies:
+
+- two parameters that only ever appear as a product;
+- a rate that only acts in a regime the sensors never see.
+
+Small models are decided symbolically (Chiş, Banga & Balsa-Canto, 2011):
+
+1. Differentiate the observations with respect to time.
+2. Solve the resulting algebraic relations for $\theta$.
+
+Experiment K11 (planned, not run yet) does this with SymPy for the catalogue entries that have a closed form.
+
+**For a PINN:** no network or optimizer recovers a parameter that fails this test; change the sensors or the experiment.
 
 ## Practical identifiability
 
-Identifiable in principle is not identifiable in practice. With noise $\varepsilon \sim \mathcal{N}(0, \Sigma)$, the information the observations carry about $\theta$ near the truth is the Fisher matrix
+Identifiable in principle is not identifiable in practice.
 
 $$
-F = J^\top \Sigma^{-1} J, \qquad J_{ij} = \frac{\partial (\mathcal{H}u_\theta)_i}{\partial \theta_j},
+F = J^\top \Sigma^{-1} J, \qquad J_{ij} = \frac{\partial (\mathcal{H}u_\theta)_i}{\partial \theta_j}
 $$
 
-and the Cramér–Rao inequality bounds the covariance of any unbiased estimator from below by $F^{-1}$ (Cramér, 1946). Its diagonal gives the smallest standard deviation each parameter can have; its correlations say which parameters the data confuse. A parameter is practically identifiable when its bound is small compared with the parameter itself, for the sensors and the noise one actually has (Raue et al., 2009; Wieland et al., 2021).
+- **$J$** (sensitivity matrix): how much observation $i$ moves when parameter $j$ moves.
+- **$\Sigma$**: the covariance of the noise, $\varepsilon \sim \mathcal{N}(0, \Sigma)$.
+- **$F$** (Fisher matrix): the information the observations carry about $\theta$ near the truth.
 
-`pinnrl.analysis.closed_form_bound` computes $J$ by symbolic differentiation of a closed-form solution and returns $F$, $F^{-1}$, the standard deviations, the correlation matrix and the eigen-decomposition. For the heat diffusivity, $\partial u/\partial\alpha = -\pi^2 t\, u$: the information sits at late times and mid-domain, and a probe at $x = 0.5$ carries more of it than one near the wall. F01 found the spread of the PINN estimate across noise draws to match this bound to about 20 % once the noise dominated the surrogate's own error.
+$$
+\operatorname{Cov}(\hat\theta) \succeq F^{-1}
+$$
+
+- **Cramér–Rao bound**: no unbiased estimator $\hat\theta$ has a covariance below $F^{-1}$ (Cramér, 1946).
+- **Diagonal of $F^{-1}$**: its square root is the smallest standard deviation each parameter can have.
+- **Correlations of $F^{-1}$**: which parameters the data confuse.
+- **Practically identifiable**: the bound is small compared with the parameter itself, for the sensors and noise one actually has (Raue et al., 2009; Wieland et al., 2021).
+
+[`pinnrl.analysis.closed_form_bound`](../api/analysis.md) computes $J$ by symbolic differentiation of a closed-form solution. It returns $F$, $F^{-1}$, the standard deviations, the correlation matrix and the eigen-decomposition.
+
+Example, the heat diffusivity $\alpha$:
+
+$$
+\frac{\partial u}{\partial \alpha} = -\pi^2 t\, u
+$$
+
+- The information sits at late times and mid-domain.
+- A probe at $x = 0.5$ carries more of it than one near the wall.
+- F01: the spread of the PINN estimate across noise draws matched this bound to about 20 % once the noise dominated the surrogate's own error.
+
+**For a PINN:** the bound is the best error bar these sensors allow, and the PINN reaches it only when its own error is below the noise.
 
 ## Sloppy directions and conditioning
 
-The eigenvectors of $F$ are parameter combinations; the eigenvalues say how well the data determine each. A spectrum spanning many decades, with a few stiff directions and many sloppy ones, is the rule rather than the exception in models with several parameters (Gutenkunst et al., 2007). The condition number $\lambda_{\max}/\lambda_{\min}$ of $F$ is then the first diagnostic to report: it tells how much a relative error in the data can grow into a relative error along the sloppiest direction. Experiment F02 measures it for the two KdV coefficients, whose amplitude and width enter through $3/\alpha$ and $\sqrt{\beta}$ and are therefore correlated by the data.
+$$
+F = \sum_{k=1}^{p} \lambda_k\, v_k v_k^\top, \qquad \kappa(F) = \frac{\lambda_{\max}}{\lambda_{\min}}
+$$
 
-Two different conditionings appear in a PINN inverse problem and should not be confused:
+- **$v_k$** (eigenvector): a combination of parameters.
+- **$\lambda_k$** (eigenvalue): how well the data determine that combination.
+- **Stiff / sloppy direction**: a combination with a large / small $\lambda_k$.
+- **$\kappa(F)$** (condition number): how much a relative error in the data can grow into a relative error along the sloppiest direction. It is the first diagnostic to report.
 
-- the conditioning of the *inverse problem*, from $F$, which no solver can improve without new sensors or a prior;
-- the conditioning of *training*, from the loss Hessian or the neural tangent kernel, which the differential operator drives (high-order derivatives stiffen it) and which optimizers and preconditioning can improve (Wang, Teng & Perdikaris, 2021; Wang, Yu & Perdikaris, 2022).
+A spectrum spanning many decades, with a few stiff directions and many sloppy ones, is the rule in models with several parameters (Gutenkunst et al., 2007). F02 measures $\kappa(F)$ for the two KdV coefficients: amplitude and width enter through $3/\alpha$ and $\sqrt{\beta}$, so the data correlate them.
 
-Roadmap item 3 computes both; the second is the subject of experiments K03 and K04.
+Two conditionings appear in a PINN inverse problem and should not be confused:
+
+| Conditioning of | Comes from | What improves it |
+|---|---|---|
+| the *inverse problem* | $F$ | new sensors or a prior; no solver |
+| *training* | the loss Hessian or the neural tangent kernel | optimizers and preconditioning (Wang, Teng & Perdikaris, 2021; Wang, Yu & Perdikaris, 2022) |
+
+- **Loss Hessian**: the second derivatives of the training loss with respect to the weights.
+- **Neural tangent kernel**: the matrix that sets how fast each error component decays in gradient training.
+- The differential operator drives the training conditioning: high-order derivatives stiffen it.
+
+Roadmap item 3 computes both (`pinnrl.analysis`, released; see [History](../history.md)). The second is the subject of K03 (done) and K04 (planned).
+
+**For a PINN:** slow training and a poorly determined parameter are different problems; check $\kappa(F)$ first, because no optimizer fixes it.
 
 ## Profile likelihood
 
-The Fisher bound is local. When the posterior is far from Gaussian, or when a direction is nearly flat, the profile likelihood is the honest check (Raue et al., 2009): fix one parameter on a grid of values, re-optimize everything else, and plot the minimal loss against the fixed value. A flat profile means the parameter is not practically identifiable; an asymmetric one means the Gaussian error bar is wrong on one side. Experiment F07 does this by retraining the PINN at each grid value.
+$$
+\mathrm{PL}(\theta_j) = \min_{\theta_{k \ne j},\; w} \ \mathcal{L}(w, \theta)
+$$
+
+- **$\mathcal{L}$**: the loss.
+- **$\mathrm{PL}(\theta_j)$** (profile): the smallest loss reachable with parameter $j$ held fixed.
+
+The Fisher bound is local. When the posterior is far from Gaussian, or a direction is nearly flat, the profile is the honest check (Raue et al., 2009):
+
+1. Fix one parameter on a grid of values.
+2. Re-optimize everything else at each value.
+3. Plot the minimal loss against the fixed value.
+
+- **Flat profile**: the parameter is not practically identifiable.
+- **Asymmetric profile**: the Gaussian error bar is wrong on one side.
+
+F07 does this by retraining the PINN at each grid value.
+
+**For a PINN:** the profile costs one training run per grid value and assumes no parabola.
 
 ## Sensitivities without a closed form
 
-Most problems of interest have no closed-form solution, and the surrogate's output does not depend on $\theta$ directly: the parameters enter through the residual. Three routes to $J$ remain, in order of cost.
+Most problems have no closed-form solution, and the surrogate's output does not depend on $\theta$ directly: the parameters enter through the residual. Three routes to $J$ remain, in order of cost.
 
 1. **Finite differences of a numerical reference**, when one exists: F03 does this for Burgers with the Cole–Hopf solution at $\nu(1 \pm 1\,\%)$.
-2. **The implicit-function theorem at the trained optimum**: $\partial u_w/\partial\theta = -H_{ww}^{-1} H_{w\theta}$ with $H$ the loss Hessian, computed with Hessian-vector products. This is experiment K01, and it also yields the Laplace approximation of the [Bayesian view](bayesian.md).
+2. **The implicit-function theorem at the trained optimum** (formula below). This is experiment K01, and it also yields the Laplace approximation of the [Bayesian view](bayesian.md).
 3. **Retraining** at perturbed $\theta$, the brute-force check of the other two.
 
-Each is validated against the exact layer on a catalogue entry with a closed form before it is trusted elsewhere.
+$$
+\frac{\partial w^*}{\partial \theta} = -H_{ww}^{-1} H_{w\theta}, \qquad J = \frac{\partial (\mathcal{H}u_w)}{\partial w}\, \frac{\partial w^*}{\partial \theta}
+$$
+
+- **$w^*(\theta)$**: the weights that minimize the loss for the parameters $\theta$.
+- **$H_{ww}$, $H_{w\theta}$**: blocks of the loss Hessian $H$.
+- **Hessian-vector product**: $H$ times a vector, computed without forming $H$; both blocks are applied this way.
+
+Each route is validated against the exact layer on a catalogue entry with a closed form before it is trusted elsewhere.
+
+**For a PINN:** route 2 gives $J$ from one trained network through [`pinnrl.analysis.surrogate_sensitivities`](../api/analysis.md).
 
 ## Field-valued unknowns
 
-When the unknown is a function, $\alpha(x)$ or $\alpha(t)$, the parameter space is infinite-dimensional and the questions above are asked of its modes. For the heat equation in conservative form, $u_t = (\alpha(x) u_x)_x$, the first-order response of the solution to a perturbation $\delta\alpha$ solves $\delta u_t = (\alpha\, \delta u_x)_x + (\delta\alpha\, u_x)_x$: the perturbation acts through the flux $\delta\alpha\, u_x$, so $\alpha$ is invisible wherever $u_x$ vanishes, and a localized $\delta\alpha$ is diffused before it reaches the sensors. Modes of $\alpha$ that are oscillatory, or supported where the gradient is small, lie in the sloppy directions of the (now infinite) Fisher matrix. A time-varying $\alpha(t)$ is better placed: it changes the decay rate of every mode at once, and $\int_0^t \alpha$ is read directly from the amplitude of the solution.
+When the unknown is a function, $\alpha(x)$ or $\alpha(t)$, the parameter space is infinite-dimensional and the questions above are asked of its modes. For the heat equation in conservative form, $u_t = (\alpha(x)\, u_x)_x$:
 
-The practical test is the one of the previous section with the function in place of the parameter: compare the solution for the true field with the one for the best constant (or the best low-order polynomial). If the two differ by about the surrogate's own field error or less, the PINN cannot distinguish them and the recovered field will collapse to that constant, however expressive the network, even when the Fisher information of the data (with an exact forward model) says the modes are determined: the forward error, not the sensors, is the limit, and the remedy is forward accuracy. Experiment F09 shows both outcomes on heat: a two-layer $\alpha(x)$ whose solution is 20 % away from any constant is recovered in shape; a centred bump whose solution a constant reproduces to 4 % is not. A smooth network also turns a jump in $\alpha(t)$ into a ramp, the finite resolution of a surrogate with a few hundred weights. Reduced bases for the field (K48) and pointwise intervals (K47) are the next steps.
+$$
+\delta u_t = (\alpha\, \delta u_x)_x + (\delta\alpha\, u_x)_x
+$$
+
+- **$\delta\alpha$**: a perturbation of the unknown field.
+- **$\delta u$**: the first-order response of the solution.
+- **$\delta\alpha\, u_x$**: the flux through which the perturbation acts.
+- **Mode**: one component of the field in a basis.
+
+Consequences:
+
+- $\alpha$ is invisible wherever $u_x$ vanishes.
+- A localized $\delta\alpha$ is diffused before it reaches the sensors.
+- Modes of $\alpha$ that are oscillatory, or supported where the gradient is small, lie in the sloppy directions of the (now infinite) Fisher matrix.
+- A time-varying $\alpha(t)$ is better placed: it changes the decay rate of every mode at once, and $\int_0^t \alpha$ is read directly from the amplitude of the solution.
+
+The practical test is the one of the previous section with the function in place of the parameter. Compare the solution for the true field with the one for the best constant (or the best low-order polynomial) $\bar\alpha$:
+
+$$
+\|u_{\alpha} - u_{\bar\alpha}\| \lesssim \text{the surrogate's own field error} \quad\Longrightarrow\quad \text{the recovered field collapses to } \bar\alpha
+$$
+
+- This holds however expressive the network, even when the Fisher information of the data (with an exact forward model) says the modes are determined.
+- The forward error, not the sensors, is the limit. The remedy is forward accuracy.
+
+| Field (F09, heat) | Its solution vs the best constant's | Result |
+|---|---|---|
+| two-layer $\alpha(x)$ | 20 % away | recovered in shape |
+| centred bump | reproduced to 4 % | not recovered |
+
+- A smooth network turns a jump in $\alpha(t)$ into a ramp: the finite resolution of a surrogate with a few hundred weights.
+- Reduced bases for the field (K48, since run; see [equivalence regions](equivalence_regions.md)) and pointwise intervals (K47, not built) are the next steps.
+
+**For a PINN:** identify a field only when its solution differs from the best constant's by more than the network's forward error.
 
 ## References
 

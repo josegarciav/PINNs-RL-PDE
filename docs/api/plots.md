@@ -11,3 +11,5 @@
 ::: plots.plot_collocation_evolution
 
 ::: plots.save_training_plots
+
+::: plots.loss_curve_epochs

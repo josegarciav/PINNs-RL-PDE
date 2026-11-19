@@ -1,16 +1,42 @@
 # The Bayesian view and uncertainty
 
+This page reads the PINN loss as a probability statement and lists the ways to put an error bar on an identified parameter. Read it before reporting an interval, or before choosing loss weights.
+
 ## The loss is a negative log-posterior
 
-Take Gaussian observation noise, $y_i = (\mathcal{H}u)_i + \varepsilon_i$ with $\varepsilon_i \sim \mathcal{N}(0, \sigma_i^2)$, and a Gaussian belief that the residual, the boundary and the initial mismatch are zero with scales $\sigma_r$, $\sigma_b$, $\sigma_0$. Up to a constant, minus the log of the posterior over $(w, \theta)$ is
-
 $$
--\log p(w, \theta \mid y) = \frac{1}{2\sigma_r^2}\|\mathcal{N}_\theta[u_w]\|^2 + \frac{1}{2\sigma_b^2}\|\mathcal{B}u_w\|^2 + \frac{1}{2\sigma_0^2}\|u_w(\cdot, 0) - u_0\|^2 + \sum_i \frac{(y_i - (\mathcal{H}u_w)_i)^2}{2\sigma_i^2} - \log p(w, \theta).
+y_i = (\mathcal{H}u)_i + \varepsilon_i, \qquad \varepsilon_i \sim \mathcal{N}(0, \sigma_i^2)
 $$
 
-This is the PINN loss, with weights $1/\sigma^2$ (Kaipio & Somersalo, 2005; Stuart, 2010). Training finds the maximum-a-posteriori point, and the weights are not tuning knobs: the data weight is the inverse noise variance, and the physics weights encode how much model error one admits. Experiment K39 tests whether setting the data weight from the measured noise beats tuned weights, which F01 motivates: a fixed weight that ignores the noise level biased the estimate at few, noisy points.
+- **$y_i$**: measurement $i$.
+- **$\mathcal{H}$**: the sensor operator; $(\mathcal{H}u)_i$ is what sensor $i$ reads from the field $u$.
+- **$\sigma_i$**: the noise standard deviation of measurement $i$.
 
-Two things follow for pinnrl. A per-sensor noise level is a per-observation weight, which `fisher_information` already accepts. And a change of weights is a change of prior, so results obtained with different weights are not comparable without saying so.
+Add a Gaussian belief that the residual, the boundary mismatch and the initial mismatch are zero, with scales $\sigma_r$, $\sigma_b$, $\sigma_0$. Up to a constant:
+
+$$
+-\log p(w, \theta \mid y) = \frac{1}{2\sigma_r^2}\|\mathcal{N}_\theta[u_w]\|^2 + \frac{1}{2\sigma_b^2}\|\mathcal{B}u_w\|^2 + \frac{1}{2\sigma_0^2}\|u_w(\cdot, 0) - u_0\|^2 + \sum_i \frac{(y_i - (\mathcal{H}u_w)_i)^2}{2\sigma_i^2} - \log p(w, \theta)
+$$
+
+- **$w$, $\theta$**: the network weights and the unknown parameters of the equation.
+- **$u_w$**: the network (the surrogate of the solution).
+- **$\mathcal{N}_\theta[u_w]$**: the residual of the equation; **$\mathcal{B}u_w$**: the boundary mismatch; **$u_0$**: the initial condition.
+- **Posterior** $p(w, \theta \mid y)$: the probability of the unknowns given the data.
+- **Prior** $p(w, \theta)$: the belief about the unknowns before the data.
+
+This is the PINN loss with weights $1/\sigma^2$ (Kaipio & Somersalo, 2005; Stuart, 2010).
+
+- **Maximum a posteriori (MAP)**: the most probable point of the posterior. Training finds it.
+- **The weights are not tuning knobs.** The data weight is the inverse noise variance; the physics weights encode how much model error one admits.
+- **A per-sensor noise level is a per-observation weight**, which [`fisher_information`](../api/analysis.md) accepts. [`pinnrl.uq.likelihood_weights`](../api/uq.md) turns a noise level into loss weights.
+- **A change of weights is a change of prior.** Results obtained with different weights are not comparable without saying so.
+
+| Experiment | Finding |
+|---|---|
+| F01 | A fixed weight that ignores the noise level biased the estimate at few, noisy points. This motivated K39. |
+| K39 | Setting the data weight from the measured noise did not beat tuned weights (10 and 100): it was the worst, with bias up to −21 %, because the residual is systematic surrogate error, not Gaussian noise. |
+
+**For a PINN:** state the weights with every estimate, and do not expect the noise-model weight to help while the surrogate's own error exceeds the noise.
 
 ## Sources of uncertainty
 
@@ -21,37 +47,120 @@ An error bar on $\theta$ must say which of these it covers.
 | Aleatoric | measurement noise $\varepsilon$ | the spread across noise draws; bounded below by $F^{-1}$ |
 | Parametric epistemic | finite data, correlated parameters | the posterior width along sloppy directions |
 | Surrogate | the network's approximation error and the non-convex training | the bias of F01, the seed spread |
-| Model form | the equation is not the process | a residual structure the surrogate cannot remove (F08) |
+| Model form | the equation is not the process | a residual structure the surrogate cannot remove (F08, planned) |
 | Input | a recorded input with an offset (a steam temperature) | a shift of the estimate along the direction the input can be traded against; ignored, the interval is too narrow (J06) |
 
-The Fisher bound covers the first. Ensembles over seeds and over noise draws separate the first from the third. Model-form error is the one that no method internal to the model detects, and it is why a twin must report its residual against the plant.
+- **$F$**: the Fisher matrix of [identifiability](identifiability.md); $F^{-1}$ is the Cramér–Rao bound.
+- **Sloppy direction**: a parameter combination the data determine poorly.
+- **Seed**: the random initialization of one training run.
+
+What separates them:
+
+- The Fisher bound covers the first source only.
+- Ensembles over seeds and over noise draws separate the first from the third.
+- No method internal to the model detects model-form error. This is why a twin must report its residual against the plant.
+
+**For a PINN:** an interval from the Fisher matrix alone says nothing about the network's own bias or a wrong equation.
 
 ## Approximating the posterior
 
-- **Laplace.** Expand the loss to second order at the optimum; the posterior is Gaussian with covariance the inverse Hessian (MacKay, 1992). The block for $\theta$, after eliminating $w$, is the generalized Gauss–Newton approximation of $F^{-1}$. It reuses the sensitivities of [identifiability](identifiability.md), which is why the conditioning module comes first on the roadmap. Experiment K41 asks how much of the network the Hessian must cover.
-- **Deep ensembles.** Retrain from several initializations and treat the estimates as posterior samples (Lakshminarayanan, Pritzel & Blundell, 2017). The spread captures the surrogate's non-convexity, which Laplace does not, and misses nothing that retraining reveals. Experiments F06 and K40 measure coverage against the ensemble size.
-- **Sampling.** Hamiltonian Monte Carlo over $(w, \theta)$ (Yang, Meng & Karniadakis, 2021) is the reference posterior for small networks (K42) and too costly for the rest.
-- **Conformal intervals.** Hold out sensors, calibrate the residual quantile on them, and get finite-sample coverage with no distributional assumption (Vovk, Gammerman & Shafer, 2005). It bounds the *field* prediction rather than $\theta$ (K44).
+Four approximations, compared broadly on physics-informed models by Psaros et al. (2023).
 
-A broad comparison of these on physics-informed models is Psaros et al. (2023).
+### Laplace
+
+$$
+p(\theta \mid y) \approx \mathcal{N}\big(\hat\theta,\ \Sigma_\theta\big), \qquad \Sigma_\theta \approx \big(J^\top \Sigma^{-1} J\big)^{-1} = F^{-1}
+$$
+
+- **$\hat\theta$**: the trained estimate.
+- **$J$**: the sensitivities of the observations to $\theta$, evaluated on the surrogate.
+- **$\Sigma$**: the noise covariance.
+
+1. Expand the loss to second order at the optimum.
+2. The posterior is Gaussian, with covariance the inverse Hessian (MacKay, 1992).
+3. Eliminate $w$. The block for $\theta$ is the generalized Gauss–Newton approximation of $F^{-1}$.
+
+- **Generalized Gauss–Newton**: the Hessian with the second derivatives of the model dropped, which leaves $J^\top \Sigma^{-1} J$.
+- It reuses the sensitivities of [identifiability](identifiability.md), which is why the conditioning module came first on the roadmap. The function is [`pinnrl.uq.laplace_posterior`](../api/uq.md).
+- K41 (planned) asks how much of the network the Hessian must cover.
+
+### Deep ensembles
+
+$$
+\hat\theta^{(1)}, \dots, \hat\theta^{(M)} \ \text{from } M \text{ initializations}, \qquad \text{interval} = \text{percentiles of the } \hat\theta^{(m)}
+$$
+
+- **$M$**: the number of independently trained networks (members).
+
+Properties:
+
+- The estimates are treated as posterior samples (Lakshminarayanan, Pritzel & Blundell, 2017).
+- The spread captures the surrogate's non-convexity, which Laplace does not, and misses nothing that retraining reveals.
+- F06 measures coverage; K40 (planned) measures it against the ensemble size. The summary function is [`pinnrl.uq.ensemble_summary`](../api/uq.md).
+
+### Sampling
+
+- **Hamiltonian Monte Carlo**: a sampler that follows the gradient of the log-posterior, here over $(w, \theta)$ (Yang, Meng & Karniadakis, 2021).
+- It is the reference posterior for small networks (K42, planned) and too costly for the rest.
+
+### Conformal intervals
+
+$$
+\big[\, u_w(x) - q,\ u_w(x) + q \,\big], \qquad q = \text{the calibration quantile of } |y_i - (\mathcal{H}u_w)_i| \text{ on held-out sensors}
+$$
+
+1. Hold out sensors.
+2. Calibrate the residual quantile on them.
+3. Get finite-sample coverage with no distributional assumption (Vovk, Gammerman & Shafer, 2005).
+
+It bounds the *field* prediction rather than $\theta$ (K44, planned).
+
+**For a PINN:** Laplace is the cheapest interval and is valid where the surrogate resolves the solution; an ensemble shows the training scatter that Laplace cannot.
 
 ## Calibration
 
-An interval is calibrated when it contains the truth as often as it claims: a 90 % interval, over many data sets, should cover 90 % of the time. Coverage alone is not enough, since an interval that is always the whole real line is calibrated. The quantities pinnrl reports, from F06 and K10 onward, are:
+$$
+\Pr\big(\theta_{\text{true}} \in I_{90\,\%}\big) = 0.90 \quad \text{over many data sets}
+$$
 
-- **empirical coverage** of the nominal interval across synthetic data sets with known truth;
-- **width**, the sharpness, which should be as small as coverage allows (Gneiting, Balabdaoui & Raftery, 2007);
-- the **continuous ranked probability score**, a proper scoring rule that rewards both at once (Gneiting & Raftery, 2007).
+- **Calibrated interval**: it contains the truth as often as it claims.
+- **$I_{90\,\%}$**: the interval reported at the 90 % level.
+
+Coverage alone is not enough: an interval that is always the whole real line is calibrated. pinnrl reports three quantities, from F06 and K10 onward ([`pinnrl.uq.metrics`](../api/uq.md)):
+
+- **Empirical coverage**: the fraction of synthetic data sets, with known truth, whose nominal interval contains the truth.
+- **Width** (sharpness): it should be as small as coverage allows (Gneiting, Balabdaoui & Raftery, 2007).
+- **Continuous ranked probability score (CRPS)**: a proper scoring rule that rewards both at once (Gneiting & Raftery, 2007).
+
+$$
+\mathrm{CRPS}(P, y) = \int_{-\infty}^{\infty} \big(P(z) - \mathbb{1}\{z \ge y\}\big)^2\, dz
+$$
+
+- **$P$**: the predicted cumulative distribution; **$y$**: the true value. Lower is better.
+- **Proper scoring rule**: a score that the true distribution minimizes on average.
 
 A method is kept only where it is calibrated, and the page of each method states the regime in which that was checked.
 
-Experiment J06 measures, on the evaporator, the conditions under which the Fisher (Laplace) interval of an identified *function* is calibrated, and each is an assumption the interval inherits rather than something the data check for it:
+| Method (F06/K10, heat $\alpha$, 30 data sets) | Coverage |
+|---|---|
+| 8-member ensembles over seeds | 13 %: the members agree to 0.5 % while the estimate varies by 1.75 % across noise draws |
+| Laplace | 77 %: the width is right, a 2 % bias costs coverage |
+| the physics region (see [equivalence regions](equivalence_regions.md)) | 90 % |
 
-- **the form assumed for the unknown contains the truth.** A ramp assumed for a fouling curve that saturates gives a ±2.5 % interval around an estimate 25 % off. The form sets the width as much as the data do (±2 % for a ramp, ±8 % for six modes, on the same records), and only the misfit says when it is wrong;
-- **the model's own error is below the interval's width.** A lumped model biased by 2.7 % supports a ±7 % interval and not a ±2 % one;
-- **every input the unknown can be traded against is either measured to that accuracy or among the unknowns with its prior.** A steam record trusted to 0.3 K and taken at face value reduces coverage to 21–52 %; estimated under its prior, coverage returns at five times the width, and that width is the honest one.
+### Intervals for an identified function (J06)
 
-An interval reported for a process estimate should name the three: the form, the model, and the inputs it conditions on.
+J06 measures, on the evaporator, when the Fisher (Laplace) interval of an identified *function* is calibrated. Each condition is an assumption the interval inherits, not something the data check for it.
+
+| Condition | What J06 measured when it fails |
+|---|---|
+| **The form assumed for the unknown contains the truth.** | A ramp assumed for a fouling curve that saturates gives a ±2.5 % interval around an estimate 25 % off. |
+| **The model's own error is below the interval's width.** | A lumped model biased by 2.7 % supports a ±7 % interval and not a ±2 % one. |
+| **Every input the unknown can be traded against is either measured to that accuracy or among the unknowns with its prior.** | A steam record trusted to 0.3 K and taken at face value reduces coverage to 21–52 %. Estimated under its prior, coverage returns at five times the width, and that width is the honest one. |
+
+- The form sets the width as much as the data do: ±2 % for a ramp, ±8 % for six modes, on the same records.
+- Only the misfit says when the form is wrong.
+
+**For a PINN:** an interval reported for a process estimate should name the three: the form, the model, and the inputs it conditions on.
 
 ## References
 

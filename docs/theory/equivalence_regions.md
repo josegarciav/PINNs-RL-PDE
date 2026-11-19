@@ -1,50 +1,250 @@
 # Nonlinear uncertainty: equivalence regions and swarm sampling
 
-The Fisher bound and the Laplace approximation of the [Bayesian view](bayesian.md) are *linear* statements: they describe the posterior by an ellipse around one estimate. A body of work on geophysical inverse problems by Fernández-Martínez, García-Gonzalo and co-workers (University of Oviedo) argues that the object to report is not the estimate but the **region of equivalence**, the set of all parameters that fit the data within the noise, and that this region is sampled rather than linearized. This page summarizes the nine papers that make that case and what they change in the design of `pinnrl.uq`.
+This page defines the set of all parameters that fit the data within the noise, and the particle-swarm method that samples it. Read it when a Gaussian error bar is not enough: several parameters, a nonlinear model, or a best fit that may not be the truth.
+
+- The Fisher bound and the Laplace approximation of the [Bayesian view](bayesian.md) are *linear* statements: an ellipse around one estimate.
+- Fernández-Martínez, García-Gonzalo and co-workers (University of Oviedo), working on geophysical inverse problems, argue that the object to report is the **region of equivalence**, and that it is sampled rather than linearized.
+- The page summarizes the nine papers that make that case and what they change in the design of [`pinnrl.uq`](../api/uq.md).
 
 ## The region of equivalence
 
-With a forward map $F$, observations $d_{\text{obs}} = F(m_{\text{true}}) + \delta d$ and a tolerance $\mathrm{tol}$ set by the noise, the solution of an inverse problem is the set
+$$
+d_{\text{obs}} = F(m_{\text{true}}) + \delta d, \qquad
+M_{\mathrm{tol}} = \{\, m : \|F(m) - d_{\text{obs}}\| \le \mathrm{tol} \,\}
+$$
+
+- **$m$**: the model, that is the vector of unknown parameters ($\theta$ on the other pages).
+- **$F$** (forward map): takes parameters to predicted observations. On this page $F$ is not the Fisher matrix.
+- **$d_{\text{obs}}$**, **$\delta d$**: the observations and their noise.
+- **$\mathrm{tol}$**: a tolerance set by the noise.
+- **$M_{\mathrm{tol}}$** (region of equivalence): every model that fits the data within the tolerance.
+- **Misfit**: the distance $\|F(m) - d_{\text{obs}}\|$ between prediction and data.
+
+The solution of an inverse problem is this set, not its minimum-misfit member (Pallero et al., 2018, after Tarantola). Three facts carry over to PINN identification unchanged.
+
+### 1. The best-fit point is not the truth
 
 $$
-M_{\mathrm{tol}} = \{\, m : \|F(m) - d_{\text{obs}}\| \le \mathrm{tol} \,\},
+\nabla c(m_0) = 2 J^\top \delta d \ne 0
 $$
 
-not its minimum-misfit member (Pallero et al., 2018, after Tarantola). Three facts about it carry over to PINN identification unchanged:
+- **$m_0$**: the minimizer of the noisy misfit.
+- **$c$**: the noise-free misfit.
+- **$J$**: the Jacobian of $F$ (the sensitivity matrix of [identifiability](identifiability.md)).
 
-1. **The best-fit point is not the truth.** With noise, the minimizer $m_0$ of the perturbed misfit satisfies $\nabla c(m_0) = 2 J^\top \delta d \ne 0$ for the noise-free misfit $c$: the true model lies inside $M_{\mathrm{tol}}$ with a *higher* misfit than the best fit. Reporting the minimizer alone reports the noise.
-2. **The linearized region is only local.** The ellipse from the Jacobian at $m_0$ (the Fisher ellipse of [identifiability](identifiability.md)) matches $M_{\mathrm{tol}}$ near $m_0$ and nowhere else; for nonlinear forward maps the true region is a curved valley (the "banana") elongated along the small singular values of $J$, possibly disconnected, and the ellipse both includes models outside it and misses models inside it. F02 is such a case in `pinnrl`: the PINN's optimum for the two KdV coefficients sits 20 % from the truth with a tight Fisher ellipse around it.
-3. **Noise and regularization deform the region.** Noise shrinks the low-misfit part of the valley and may move the best fit into a different basin (Fernández-Martínez et al., 2014a, b); a Tikhonov term bounds the region anisotropically, most along the directions of highest uncertainty, and can create local minima. For a PINN the physics weights play the role of the regularization: F07 found that the soft physics term flattens the data-misfit profile 2.5–12×, which is the same deformation seen from inside the loss.
+The true model lies inside $M_{\mathrm{tol}}$ with a *higher* misfit than the best fit. Reporting the minimizer alone reports the noise.
+
+### 2. The linearized region is only local
+
+- **Linearized region**: the ellipse from the Jacobian at $m_0$, the Fisher ellipse of [identifiability](identifiability.md).
+- It matches $M_{\mathrm{tol}}$ near $m_0$ and nowhere else.
+- For a nonlinear forward map the true region is a curved valley (the "banana"), elongated along the small singular values of $J$, possibly disconnected.
+- The ellipse both includes models outside the region and misses models inside it.
+- F02 is such a case in `pinnrl`: the PINN's optimum for the two KdV coefficients sits 20 % from the truth with a tight Fisher ellipse around it.
+
+### 3. Noise and regularization deform the region
+
+- **Noise** shrinks the low-misfit part of the valley and may move the best fit into a different basin (Fernández-Martínez et al., 2014a, b).
+- **Tikhonov term**: a penalty on the distance to a reference model. It bounds the region anisotropically, most along the directions of highest uncertainty, and can create local minima.
+- **For a PINN the physics weights play the role of the regularization.** F07 found that the soft physics term flattens the data-misfit profile 2.5–12×, which is the same deformation seen from inside the loss.
+
+**For a PINN:** report the set of parameters that fit, with the trained estimate as one member; the estimate alone carries the noise and the physics weight.
 
 ## Sampling while optimizing
 
-The Oviedo group samples $M_{\mathrm{tol}}$ with particle swarms used in their *exploratory* form: a swarm of parameter vectors moves under
+The Oviedo group samples $M_{\mathrm{tol}}$ with particle swarms in their *exploratory* form. A swarm of parameter vectors moves under
 
 $$
-v_i^{k+1} = \omega\, v_i^k + \phi_1 (g^k - x_i^k) + \phi_2 (l_i^k - x_i^k), \qquad x_i^{k+1} = x_i^k + v_i^{k+1},
+v_i^{k+1} = \omega\, v_i^k + \phi_1 (g^k - x_i^k) + \phi_2 (l_i^k - x_i^k), \qquad x_i^{k+1} = x_i^k + v_i^{k+1}
 $$
 
-with $g^k$ the best position of the swarm, $l_i^k$ the best of particle $i$, $\phi_1, \phi_2$ random accelerations and $\omega$ the inertia; every evaluated position with misfit below the tolerance is kept as a sample. The method needs only forward solves (no gradient, no inverse operator, no regularization or reference model), and its exploration is controlled by one theory:
+- **$x_i^k$**, **$v_i^k$**: position (a parameter vector) and velocity of particle $i$ at iteration $k$.
+- **$g^k$**: the best position found by the swarm.
+- **$l_i^k$**: the best position found by particle $i$.
+- **$\phi_1, \phi_2$**: random accelerations; $\phi = \phi_1 + \phi_2$ and $\bar\phi$ is its mean.
+- **$\omega$**: the inertia.
+- **Sample**: every evaluated position with misfit below the tolerance is kept.
 
-- **PSO is a damped mass–spring system.** Each particle obeys the stochastic second-order difference equation $x^{k+1} + (\phi - \omega - 1) x^k + \omega x^{k-1} = \phi_1 g^k + \phi_2 l^k$, the discretization of $x'' + (1 - \omega) x' + \phi (x - o) = 0$ with a stochastic centre of attraction $o$ (Fernández-Martínez & García-Gonzalo, 2008, 2011). The *generalized* PSO uses a time step $\Delta t \ne 1$: larger steps explore, smaller steps freeze the swarm.
-- **A family from the discretization.** Centering or delaying the velocity and acceleration differences gives CC-PSO, CP-PSO, PP-PSO and RR-PSO (Fernández-Martínez & García-Gonzalo, 2009, 2012; García-Gonzalo et al., 2014). All are linearly isomorphic for the same delay; they differ in convergence rate and exploration. CC-PSO and PSO converge fastest; CP-PSO and PP-PSO are the most exploratory and the recommended samplers; RR-PSO performs best on benchmarks with its good parameters on the line $\phi = 3(\omega - 3/2)$.
-- **Stability regions replace tuning.** The mean trajectory is stable for $|\omega| < 1$, $0 < \bar\phi < 2(\omega + 1)$; the variance has its own, smaller region, whose upper border (the USL curve) is given analytically for any distribution of $(\omega, \phi_1, \phi_2)$ with finite first moments (García-Gonzalo & Fernández-Martínez, 2014). Good parameters lie just inside that border, where the variance is large and successive positions are uncorrelated: *high variance and temporal uncorrelation improve exploration of ill-posed problems* (2008). "Cloud" versions give every particle its own parameters drawn near the border, and its own time step, so nothing is tuned by hand. The history and the plea for uniformisation (García-Gonzalo & Fernández-Martínez, 2012; Fernández-Martínez & García-Gonzalo, 2013) argue that most published PSO variants are unnecessary once the stability analysis is understood.
-- **Collapse is the failure mode.** The swarm's dispersion, the median distance of the particles to their centre of gravity relative to its initial value, is monitored every iteration; when it collapses the sampling stops, exploration is raised (larger $\Delta t$, repulsive forces), or the collapsed particles are counted as one sample. The sampled set is an *approximation* of the posterior, not a posterior sample: whether and when PSO performs importance sampling is stated as the open question (2013).
-- **Posterior statistics by counting.** From the retained samples: min–max ranges per parameter, a mean or median model with its interquartile range, percentiles and empirical CDFs of any derived quantity, and histograms that reveal multimodality (Pallero et al., 2018, on a 300-parameter gravity inversion with 40,000 forward solves and 25,429 retained models).
-- **Model reduction before sampling.** An isotropic search space cannot be sampled efficiently beyond about ten dimensions, so field-valued unknowns are expanded in a reduced basis (principal components of prior scenarios, or the singular vectors of a model already in the low-misfit region, plus one high-frequency term) and the swarm moves in the coefficients (Pallero et al., 2018; Fernández-Martínez, 2015).
+The method needs only forward solves: no gradient, no inverse operator, no regularization and no reference model. One theory controls its exploration.
+
+### PSO is a damped mass–spring system
+
+$$
+x^{k+1} + (\phi - \omega - 1)\, x^k + \omega\, x^{k-1} = \phi_1 g^k + \phi_2 l^k
+\quad\longleftrightarrow\quad
+x'' + (1 - \omega)\, x' + \phi\, (x - o) = 0
+$$
+
+- **Left**: the stochastic second-order difference equation each particle obeys.
+- **Right**: the continuous system it discretizes, with damping $1 - \omega$ and stiffness $\phi$ (Fernández-Martínez & García-Gonzalo, 2008, 2011).
+- **$o$**: the stochastic centre of attraction, between $g$ and $l$.
+- **Generalized PSO**: the same discretization with a time step $\Delta t \ne 1$. Larger steps explore, smaller steps freeze the swarm.
+
+The step `pinnrl.uq` takes ([`sample_equivalence_region`](../api/uq.md)):
+
+$$
+v_i^{k+1} = \big(1 - (1 - \omega_i)\Delta t_i\big)\, v_i^k + \Delta t_i \big[\phi_1 (g^k - x_i^k) + \phi_2 (l_i^k - x_i^k)\big], \qquad x_i^{k+1} = x_i^k + \Delta t_i\, v_i^{k+1}
+$$
+
+- **$\omega_i$, $\Delta t_i$**: each particle has its own inertia and time step (the "cloud", below).
+
+### A family from the discretization
+
+Centering or delaying the velocity and acceleration differences gives CC-PSO, CP-PSO, PP-PSO and RR-PSO (Fernández-Martínez & García-Gonzalo, 2009, 2012; García-Gonzalo et al., 2014). All are linearly isomorphic for the same delay. They differ in convergence rate and exploration.
+
+| Variant | Behaviour |
+|---|---|
+| PSO, CC-PSO | converge fastest |
+| CP-PSO, PP-PSO | the most exploratory; the recommended samplers |
+| RR-PSO | best on benchmarks, with its good parameters on the line $\phi = 3(\omega - 3/2)$ |
+
+### Stability regions replace tuning
+
+$$
+|\omega| < 1, \qquad 0 < \bar\phi < 2(\omega + 1)
+$$
+
+- **First-order stability**: the mean trajectory of a particle stays bounded inside this region.
+- **Second-order stability**: the variance stays bounded. Its region is smaller.
+- **USL curve**: the upper border of the second-order region. It is given analytically for any distribution of $(\omega, \phi_1, \phi_2)$ with finite first moments (García-Gonzalo & Fernández-Martínez, 2014).
+
+For the classical PSO with uniformly distributed accelerations, the border that [`second_order_stable`](../api/uq.md) checks is
+
+$$
+\bar\phi < \frac{12\,(1 - \omega^2)}{7 - 5\,\omega}
+$$
+
+- Good parameters lie just inside that border, where the variance is large and successive positions are uncorrelated: *high variance and temporal uncorrelation improve exploration of ill-posed problems* (2008).
+- **Cloud versions**: every particle gets its own parameters drawn near the border, and its own time step. Nothing is tuned by hand.
+- The history and the plea for uniformisation (García-Gonzalo & Fernández-Martínez, 2012; Fernández-Martínez & García-Gonzalo, 2013) argue that most published PSO variants are unnecessary once the stability analysis is understood.
+
+### Collapse is the failure mode
+
+$$
+D^k = \frac{\operatorname{median}_i \|x_i^k - \bar{x}^k\|}{\operatorname{median}_i \|x_i^0 - \bar{x}^0\|}
+$$
+
+- **$D^k$** (dispersion): the median distance of the particles to their centre $\bar{x}^k$, relative to its initial value. It is monitored every iteration.
+- **Collapse**: $D^k$ falls toward zero and the swarm stops exploring.
+
+When it collapses, one of three things is done:
+
+1. The sampling stops.
+2. Exploration is raised (larger $\Delta t$, repulsive forces).
+3. The collapsed particles are counted as one sample.
+
+The sampled set is an *approximation* of the posterior, not a posterior sample. Whether and when PSO performs importance sampling is stated as the open question (2013).
+
+### Posterior statistics by counting
+
+From the retained samples (Pallero et al., 2018):
+
+- min–max ranges per parameter;
+- a mean or median model with its interquartile range;
+- percentiles and empirical CDFs of any derived quantity;
+- histograms that reveal multimodality.
+
+Their example is a 300-parameter gravity inversion with 40,000 forward solves and 25,429 retained models.
+
+### Model reduction before sampling
+
+- An isotropic search space cannot be sampled efficiently beyond about ten dimensions.
+- **Reduced basis**: a small set of modes in which a field-valued unknown is expanded. The modes are principal components of prior scenarios, or the singular vectors of a model already in the low-misfit region, plus one high-frequency term.
+- The swarm moves in the coefficients (Pallero et al., 2018; Fernández-Martínez, 2015).
+
+**For a PINN:** the swarm needs thousands of forward solves, so it needs a forward map far cheaper than a training run.
 
 ## What this changes in `pinnrl.uq`
 
-The roadmap's UQ module was planned as a likelihood-based data term, deep ensembles, a Laplace approximation and calibration metrics. The equivalence-region view adds four things and sharpens two.
+The roadmap's UQ module was planned as a likelihood-based data term, deep ensembles, a Laplace approximation and calibration metrics. The equivalence-region view adds four things and sharpens two. The module is released (item 5 in [History](../history.md)); each item below gives the design and what the experiments found.
 
-1. **Report regions, not points.** The primary output of an identification is the set of parameter values whose misfit is within the noise tolerance, $\mathrm{tol}^2 = (1 + \varepsilon)\, N \sigma^2$ for Gaussian noise, with the point estimate as one member. Intervals, percentiles and CDFs are derived from the set by counting. The Fisher ellipse and the Laplace Gaussian are reported next to it as the linear approximation, so the two can disagree visibly (the F02 case).
-2. **A swarm sampler over the parameters.** For $p \lesssim 10$ parameters a cloud CP-PSO over $\theta$ is the sampler: each particle's parameters drawn inside the second-order stability border, dispersion monitored, collapse handled. It needs a cheap forward map for each $\theta$, which is the real design question for a PINN, where a forward solve is a training run. Two routes: a **parametric surrogate** $u_w(x, t;\, \theta)$ with $\theta$ as a network input, trained once over the prior range and evaluated in microseconds (the forward emulator the swarm needs), or **warm-started retraining**, a few hundred steps from the nearest particle's weights (the F07 profile, generalized to $p$ dimensions and to a moving swarm). The parametric surrogate is the one to build first; the KdV pair and the Burgers viscosity are its test cases, since their regions are known to be displaced from the truth.
-3. **A tolerance from the noise model, and the physics weight as regularization.** The tolerance is set by $\sigma$ (K39), and the dependence of the region on the physics weight is measured and documented, since it plays the role Tikhonov's term plays in the papers: too strong, and the region shrinks anisotropically toward what the surrogate can represent; too weak, and the data are fitted by a field that violates the equation.
-4. **Reduced bases for fields.** When the unknown is a coefficient field or a closure (roadmap v0.6), it is parametrized by fewer than ten modes (principal components of prior scenarios, or Karhunen–Loève modes) and the swarm samples the coefficients. This is also the bridge to the measurement-design work: the modes the data do not constrain are the ones a new sensor should.
-5. **Ensembles are a swarm without dynamics.** Deep ensembles over seeds are a crude sample of $M_{\mathrm{tol}}$; the papers' dispersion diagnostic and the "collapsed particles count once" rule apply to them. K10 compares ensembles, the Laplace ellipse, the swarm sample and a reference posterior (K42) by coverage; the open question of when a swarm sample is a posterior sample is answered empirically there, by weighting retained samples with $\exp(-\text{misfit}/2\sigma^2)$ and checking coverage against HMC.
-6. **Optimizer stability from the same mathematics.** The second-order (variance) stability regions of a stochastically forced damped oscillator are the same analysis that sets a safe step for a momentum optimizer under gradient noise. D01/D02 can use it to choose the learning rate and momentum from the Hessian spectrum of K03 rather than by trial.
+### 1. Report regions, not points
 
-Backlog entries K45–K48 carry these items; the roadmap's item 5 lists the swarm sampler and the parametric surrogate next to the Laplace approximation.
+$$
+\mathrm{tol}^2 = (1 + \varepsilon)\, N \sigma^2
+$$
+
+- **$N$**: the number of observations; **$\sigma$**: the noise standard deviation (Gaussian noise).
+- **$\varepsilon$**: the margin above the expected misfit of the truth, $N\sigma^2$ ([`misfit_tolerance`](../api/uq.md), default 0.1).
+
+`sample_equivalence_region` uses the likelihood-ratio region when no tolerance is given:
+
+$$
+\{\, \theta : c(\theta) \le c_{\min} + \sigma^2\, \chi^2_p(\text{level}) \,\}
+$$
+
+- **$c(\theta)$**: the sum of squared residuals; **$c_{\min}$**: the best misfit found.
+- **$\chi^2_p(\text{level})$**: the chi-square quantile with $p$ degrees of freedom, $p$ the number of parameters (tabulated for $p \le 5$).
+- For Gaussian noise this is the asymptotic confidence region at that level, directly comparable with the Fisher ellipse.
+
+What is reported:
+
+- The primary output of an identification is this set, with the point estimate as one member.
+- Intervals, percentiles and CDFs are derived from the set by counting.
+- The Fisher ellipse and the Laplace Gaussian are reported next to it as the linear approximation, so the two can disagree visibly (the F02 case).
+
+### 2. A swarm sampler over the parameters
+
+For $p \lesssim 10$ parameters a cloud CP-PSO over $\theta$ is the sampler: each particle's parameters drawn inside the second-order stability border, dispersion monitored, collapse handled. It needs a cheap forward map for each $\theta$. This is the real design question for a PINN, where a forward solve is a training run. Two routes:
+
+| Route | What it is |
+|---|---|
+| **Parametric surrogate** $u_w(x, t;\, \theta)$ | $\theta$ is a network input; trained once over the prior range and evaluated in microseconds. Built first. |
+| **Warm-started retraining** | a few hundred steps from the nearest particle's weights (the F07 profile, generalized to $p$ dimensions and to a moving swarm) |
+
+The test cases are the KdV pair and the Burgers viscosity, since their regions are known to be displaced from the truth.
+
+| Experiment | Result |
+|---|---|
+| K45 | One parametric surrogate (heat $\alpha$, KdV $(\alpha, \beta)$, Burgers $\log\nu$, 2 seeds) is accurate to 0.2–0.3 % over the range on heat and Burgers and 0.2–2 % on KdV, at a quarter to a half of the cost of five dedicated networks. One 10,000-point evaluation takes 15–40 ms. The swarm on its misfit reproduces the closed-form region (best fit, width, coverage) on 10 data sets. |
+| K46 | On closed-form misfits (heat, KdV, saturation) the regions are ellipses at these noise levels, and the swarm under-samples their edges (width 0.6–0.8 of the ellipse). On the PINN's own misfit the region is the same as on the closed form. |
+
+### 3. A tolerance from the noise model, and the physics weight as regularization
+
+- The tolerance is set by $\sigma$ (K39).
+- The dependence of the region on the physics weight is measured and documented, since it plays the role Tikhonov's term plays in the papers.
+- **Too strong**: the region shrinks anisotropically toward what the surrogate can represent.
+- **Too weak**: the data are fitted by a field that violates the equation.
+
+### 4. Reduced bases for fields
+
+- When the unknown is a coefficient field or a closure (roadmap v0.6, released), it is parametrized by fewer than ten modes and the swarm samples the coefficients.
+- **Karhunen–Loève modes**: the principal directions of a random field's covariance; an alternative to principal components of prior scenarios.
+- This is also the bridge to the measurement-design work: the modes the data do not constrain are the ones a new sensor should.
+
+K48, on the F09 fields in a cosine basis of 8 modes:
+
+- The Fisher spectrum from the reference solver says 200 observations at noise 0.01 determine every mode to < 0.006. The bump's collapse in F09 is the surrogate's limit, not the data's.
+- A 4-mode swarm under-samples the likelihood region (0.2–0.7 of the Fisher half-widths).
+- The truncated basis's best fit sits 10 Fisher half-widths from the truth's projection.
+
+### 5. Ensembles are a swarm without dynamics
+
+- Deep ensembles over seeds are a crude sample of $M_{\mathrm{tol}}$. The papers' dispersion diagnostic and the "collapsed particles count once" rule apply to them ([`ensemble_summary`](../api/uq.md)).
+- K10 (with F06) compares ensembles, the Laplace ellipse and the swarm region by coverage, width and CRPS: ensembles over seeds cover 13 %, Laplace 77 %, the physics region 90 %. The reference posterior by HMC (K42) is not run yet.
+- The open question of when a swarm sample is a posterior sample is answered empirically in K47, by weighting retained samples:
+
+$$
+w_s \propto \exp\!\left(-\frac{\text{misfit}_s}{2\sigma^2}\right)
+$$
+
+- **$w_s$**: the weight of retained sample $s$.
+
+| Set (K47; heat $\alpha$, 30 data sets; pendulum $(k, b)$, 10) | Against the exact posterior on a grid |
+|---|---|
+| weighted | centred right but 0.5–0.7 as wide; coverage 80–87 % |
+| accepted | coverage 90–100 % |
+
+This holds only where the cloud covers the support.
+
+### 6. Optimizer stability from the same mathematics
+
+- The second-order (variance) stability regions of a stochastically forced damped oscillator are the same analysis that sets a safe step for a momentum optimizer under gradient noise.
+- D01/D02 can use it to choose the learning rate and momentum from the Hessian spectrum of K03 rather than by trial.
+
+Backlog entries K45–K48 carry these items. The roadmap's item 5 (released, see [History](../history.md)) lists the swarm sampler and the parametric surrogate next to the Laplace approximation.
+
+**For a PINN:** at the noise levels tested the region is the Fisher ellipse; the swarm confirms it but under-samples its edges, and the weighted set is too narrow to serve as a posterior.
 
 ## References
 

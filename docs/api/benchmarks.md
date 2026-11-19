@@ -19,3 +19,23 @@
 ::: benchmarks.fdm.solve_heat_1d
 
 ::: benchmarks.fdm.solve_wave_1d
+
+::: benchmarks.fdm.FDMResult
+
+## More of the reference solvers and the study
+
+The Cole–Hopf closed form that checks the Burgers reference, the reference a study case is scored against, and the study's records and outputs. `STUDY_PDES` and `STUDY_STRATEGIES` are the problems and samplers a study runs by default.
+
+::: benchmarks.reference.burgers_cole_hopf
+
+::: benchmarks.sampling_study.build_reference
+
+::: benchmarks.sampling_study.StudyRun
+
+::: benchmarks.sampling_study.StudySummary
+
+::: benchmarks.sampling_study.write_study_outputs
+
+::: benchmarks.sampling_study.STUDY_PDES
+
+::: benchmarks.sampling_study.STUDY_STRATEGIES

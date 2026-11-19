@@ -1,12 +1,26 @@
 # Research program
 
+This page is for readers who want to know what the project is trying to establish and in what order. It states the objective, the rules every result follows, and the papers planned.
+
 **Objective:** estimate **unknown physics** (parameters, coefficient fields, closures and hidden states of a real system) from its routine sensors, with uncertainty you can trust. The first application is digital twins of food-powder lines, meaning evaporators and spray dryers (see [Applications](applications.md)).
 
-Inverse modelling is the method. An estimate of unknown physics is only useful if three things hold:
+Inverse modelling is the method. An estimate $\hat\lambda$ of the unknowns $\lambda$ from data $y$ is only useful if three things hold:
 
-- the problem is **identifiable**: the sensors determine the unknowns;
-- it is **well conditioned and stable**: small disturbances in the data give small changes in the estimate;
-- the **uncertainty is calibrated**: a 95 % interval contains the truth about 95 % of the time.
+$$
+\underbrace{F = J^\top \Sigma^{-1} J \ \text{invertible}}_{\text{identifiable}}
+\qquad
+\underbrace{\lVert \delta\hat\lambda \rVert \le C\,\lVert \delta y \rVert}_{\text{stable}}
+\qquad
+\underbrace{P\big(\lambda \in I_{95}\big) \approx 0.95}_{\text{calibrated}}
+$$
+
+- **Identifiable**: the sensors determine the unknowns.
+- **Well conditioned and stable**: small disturbances $\delta y$ in the data give small changes $\delta\hat\lambda$ in the estimate. $C$ is the stability constant.
+- **Calibrated uncertainty**: a 95 % interval $I_{95}$ contains the truth about 95 % of the time.
+- **$J = \partial y / \partial \lambda$**: the sensitivity of the sensor readings to the unknowns.
+- **$\Sigma$**: the covariance of the measurement noise.
+- **$F$**: the Fisher information, how much the data say about $\lambda$.
+- **Closure**: a relation the equations need and the physics does not supply.
 
 The program establishes those conditions on problems with known answers before applying them to plant equipment.
 
@@ -14,12 +28,22 @@ The program establishes those conditions on problems with known answers before a
 
 - **Theory:** the [theory pages](theory/index.md) state the conditions (well-posedness, identifiability, calibration, stability) that the inverse-modelling modules rely on.
 - **Papers:** [`experiments/PAPERS.md`](https://github.com/josegarciav/PINNs-RL-PDE/blob/main/experiments/PAPERS.md) is the paper backlog: 27 papers in four tiers, each with its question, contribution, prerequisite papers, target venues and status.
-- **Experiments:** [`experiments/BACKLOG.md`](https://github.com/josegarciav/PINNs-RL-PDE/blob/main/experiments/BACKLOG.md) lists the 150 experiments behind them, tracks A–K. Track K holds the 50 conditioning, stability and UQ baselines for Tier 1. Each one runs in its own `experiments/<ID>_<slug>/` folder with its question, setup, result and conclusion.
-- **Rules for every result:**
-  - equal budgets with the method's own overhead counted;
-  - paired seeds (five for main claims), reported as median and IQR with a Wilcoxon test;
-  - a classical baseline wherever one exists (finite differences, Kalman filters, moving-horizon estimation, adjoint methods);
-  - stated validity conditions.
+- **Experiments:** [`experiments/BACKLOG.md`](https://github.com/josegarciav/PINNs-RL-PDE/blob/main/experiments/BACKLOG.md) lists the 166 experiments behind them, tracks A–K. Track K holds the 50 conditioning, stability and UQ baselines for Tier 1.
+- **Folders:** each experiment runs in its own `experiments/<ID>_<slug>/` folder with its question, setup, result and conclusion.
+
+Rules for every result:
+
+1. Equal budgets, with the method's own overhead counted.
+2. Paired seeds (five for main claims), reported as median and IQR with a Wilcoxon test.
+3. A classical baseline wherever one exists (finite differences, Kalman filters, moving-horizon estimation, adjoint methods).
+4. Stated validity conditions.
+
+Terms:
+
+- **UQ**: uncertainty quantification.
+- **IQR**: interquartile range, the spread between the 25th and 75th percentiles.
+- **Wilcoxon test**: a paired test of whether two methods differ across seeds.
+- **Classical baseline**: an established non-neural method run on the same problem.
 
 ## The four tiers
 
@@ -32,13 +56,13 @@ The program establishes those conditions on problems with known answers before a
 
 How the tiers depend on each other:
 
-- Tier 0 fixes the defaults every later paper uses.
-- Tier 1 supplies the theory and the tools: conditioning diagnostics, stability analysis and uncertainty quantification.
-- Tier 2 applies them to one unit at a time.
-- Tier 3 starts only after the Tier 2 estimators beat their classical baselines.
+1. Tier 0 fixes the defaults every later paper uses.
+2. Tier 1 supplies the theory and the tools: conditioning diagnostics, stability analysis and uncertainty quantification.
+3. Tier 2 applies them to one unit at a time.
+4. Tier 3 starts only after the Tier 2 estimators beat their classical baselines.
 
 ## Current focus
 
 1. **P02**, sampling at equal compute. The first result, B01/B06, is in [Benchmarks](benchmarks.md).
-2. **P07 → P08**, identification baseline, then identifiability and conditioning. This is the entry point of the inverse-modelling core and depends on the conditioning tools in the v0.5 [roadmap](roadmap.md).
+2. **P07 → P08**, identification baseline, then identifiability and conditioning. This is the entry point of the inverse-modelling core. It depends on the conditioning tools released in v0.5 (see [History](history.md)); future work is in the [roadmap](roadmap.md).
 3. **P06**, the software paper, once P01 and P02 are drafted (v0.8.0 is on PyPI).

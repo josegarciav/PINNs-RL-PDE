@@ -41,6 +41,23 @@ markdown_extensions:
   - toc:
       permalink: true
 
+# The linkedin drafts live under docs/ but are not part of the site.
+exclude_docs: |
+  linkedin/
+
+# With `mkdocs build --strict` every one of these is an error: a page that is not in the
+# navigation, a link to a file or a heading that does not exist, an absolute link.
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+    absolute_links: warn
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: warn
+    unrecognized_links: warn
+
 plugins:
   - search
   - mkdocstrings:
@@ -66,16 +83,11 @@ extra_javascript:
 
 nav:
   - Home: index.md
-  - Getting started: getting_started.md
-  - Concepts: concepts.md
-  - Equations: equations.md
-  - Theory:
-    - Overview: theory/index.md
-    - Well-posedness and stability: theory/well_posedness.md
-    - Identifiability and conditioning: theory/identifiability.md
-    - The Bayesian view and uncertainty: theory/bayesian.md
-    - The numerical-analysis bridge: theory/numerical_analysis.md
-    - Equivalence regions and swarm sampling: theory/equivalence_regions.md
+  - Start:
+    - Getting started: getting_started.md
+    - When to use a PINN: when_to_use.md
+    - Concepts: concepts.md
+    - Equations: equations.md
   - Guides:
     - Custom equations: custom_equations.md
     - Training: training.md
@@ -83,20 +95,38 @@ nav:
     - Process twins: process_twins.md
     - Datasets (The Well): datasets.md
     - Dashboard: dashboard.md
-    - Benchmarks: benchmarks.md
-  - Applications: applications.md
-  - Research program: research.md
-  - Roadmap: roadmap.md
-  - API reference:
-    - Overview: api/index.md
-    - Configuration: api/config.md
-    - Neural networks: api/neural_networks.md
-    - PDEs: api/pdes.md
-    - Training: api/training.md
-    - Native kernel: api/native.md
-    - RL sampler: api/rl.md
-    - Plots: api/plots.md
-    - Benchmarks: api/benchmarks.md
-    - Analysis: api/analysis.md
-    - Uncertainty: api/uq.md
-    - Process models: api/process.md
+    - Applications: applications.md
+    - Troubleshooting: troubleshooting.md
+  - Theory:
+    - Overview: theory/index.md
+    - Well-posedness and stability: theory/well_posedness.md
+    - Identifiability and conditioning: theory/identifiability.md
+    - The Bayesian view and uncertainty: theory/bayesian.md
+    - The numerical-analysis bridge: theory/numerical_analysis.md
+    - Equivalence regions and swarm sampling: theory/equivalence_regions.md
+  - Engine: engine.md
+  - Benchmarks: benchmarks.md
+  - Reference:
+    - Command line: reference/cli.md
+    - Configuration file: reference/config.md
+    - Environment variables: reference/environment.md
+    - API:
+      - Overview: api/index.md
+      - Configuration: api/config.md
+      - Neural networks: api/neural_networks.md
+      - PDEs: api/pdes.md
+      - Training: api/training.md
+      - Native engine: api/native.md
+      - RL sampler: api/rl.md
+      - Plots: api/plots.md
+      - Benchmarks: api/benchmarks.md
+      - Analysis: api/analysis.md
+      - Uncertainty: api/uq.md
+      - Process models: api/process.md
+      - Datasets: api/datasets.md
+      - Command-line entry points: api/cli.md
+  - Project:
+    - Roadmap: roadmap.md
+    - What has been built: history.md
+    - Research program: research.md
+    - Software paper: paper.md

@@ -31,3 +31,5 @@ Intervals for identified physics (`pinnrl.uq`): a Gaussian (Laplace) posterior f
 ::: uq.metrics.crps_gaussian
 
 ::: uq.metrics.crps_samples
+
+::: uq.swarm.chi2_quantile

@@ -1,6 +1,6 @@
 # Native kernel
 
-An optional compiled kernel for the derivatives of a `tanh` network (`pinnrl.native`); see [Custom equations](../custom_equations.md#a-faster-step-the-compiled-kernel) and experiments I11–I13.
+An optional compiled kernel for the derivatives of a `tanh` network (`pinnrl.native`); see [The native engine](../engine.md) for how it works, [Custom equations](../custom_equations.md#a-faster-step-the-compiled-kernel) for how to use it, and experiments I11–I17.
 
 ::: native.available
 
@@ -21,6 +21,10 @@ An optional compiled kernel for the derivatives of a `tanh` network (`pinnrl.nat
 `pinnrl.native.specialize` generates, compiles and caches the residual term of one set of equations: the loss term and its weight gradient in one call. [`CustomPDE`](pdes.md) uses it by default after the first evaluations of a problem; see [Custom equations](../custom_equations.md#a-faster-step-the-compiled-kernel).
 
 ::: native.specialize.tanh_program
+
+::: native.specialize.norm_program
+
+::: native.specialize.ResidualSpec
 
 ::: native.specialize.residual_code
 

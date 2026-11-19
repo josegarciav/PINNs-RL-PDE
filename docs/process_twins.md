@@ -1,6 +1,17 @@
 # Process twins
 
-`pinnrl.process` holds what the twin of a process unit is built from: reference simulators of the units, the same models as [`CustomPDE`](custom_equations.md) problems for the PINN, the classical estimators every PINN result is compared with, and an adapter for plant-historian data. This page shows how the pieces fit; the numbers behind the recommendations are in [Benchmarks](benchmarks.md) (experiments J01–J13).
+This page shows how to build the twin of a process unit with `pinnrl.process`: the model of each unit, what a plant measures on it, and which estimator recovers what it cannot measure. It is for readers who know machine learning and want the process-engineering side; the full results are in [Benchmarks](benchmarks.md) (experiments J01–J13).
+
+- **Twin**: a model of a running unit that is kept in step with its records and reports quantities no instrument measures.
+- **Reference solver**: a classical numerical solver of the unit's model. It plays the plant in the experiments and the forward model in the classical estimators.
+- **Classical estimator**: an estimator that needs no neural network (a Kalman filter, a least-squares fit through the reference solver). Every PINN result is compared with one.
+
+`pinnrl.process` holds four things:
+
+1. Reference simulators of the units.
+2. The same models as [`CustomPDE`](custom_equations.md) problems for the PINN.
+3. The classical estimators.
+4. An adapter for plant-historian data.
 
 ## The units
 
@@ -12,7 +23,61 @@
 | Counter-current tower (steady and transient) | [`CounterCurrentDryer`](api/process.md#process.counter_dryer.CounterCurrentDryer) | the curve's parameters and the wall loss, from a transient | the same, recorded over time |
 | The line: evaporator passes feeding the dryer | [`ProcessLine`](api/process.md#process.line.ProcessLine) | every unit's unknowns, and which one the powder inherits | each pass's outlet, the dryer's instruments, lab assays |
 
-Each class has a reference solver (`reference`, method of lines or an ODE integrator), which plays the plant in the experiments and the forward model in the classical estimators, and `custom_pde()`, which writes the same equations with their inputs, scales and sensors for the PINN.
+Each class has two faces:
+
+- `reference` (method of lines or an ODE integrator): the reference solver.
+- `custom_pde()`: the same equations with their inputs, scales and sensors, for the PINN.
+
+- **Method of lines**: replace the space derivatives by differences on a grid, which leaves a system of ODEs in time for a standard integrator.
+
+### The falling-film evaporator
+
+- **Falling film**: a thin liquid film that runs down the inside of a steam-heated tube and boils as it goes, which concentrates the liquid.
+- **Fouling**: a deposit that grows on the heated wall and adds a resistance $R_f$ to the heat flow. The tube is cleaned when $R_f$ reaches a limit.
+
+$$
+\begin{aligned}
+W_t + v\,W_z &= -\frac{P\,q}{\lambda}, \\
+X_t + v\,X_z &= \frac{X\,P\,q}{\lambda\,W}, \\
+q &= \frac{T_s(t) - T_b(X)}{1/U + R_f(t)}, \qquad T_b(X) = T_{sat} + k_{bpe}\,X .
+\end{aligned}
+$$
+
+- $W(z, t)$: liquid mass flow, kg/s. $X(z, t)$: solids mass fraction.
+- $z$: distance down the tube of length $L$ (10 m). $v$: film velocity (0.5 m/s, 20 s of residence).
+- $q$: wall heat flux, W/m². $P$: wetted perimeter. $\lambda$: latent heat of evaporation.
+- $T_s(t)$: steam temperature. $T_b$: boiling point of the film. $T_{sat}$: the solvent's saturation temperature. $k_{bpe}$: boiling-point elevation, the rise of the boiling point per unit of solids.
+- $U$: clean heat-transfer coefficient (2,000 W/m²K). $R_f(t)$: fouling resistance, m²K/W.
+- Inlet: $W(0, t) = W_{in}(t)$, $X(0, t) = X_{in}(t)$, the feed.
+
+Measured:
+
+- the inputs $T_s(t)$, $W_{in}(t)$, $X_{in}(t)$;
+- the outlet $X(L, t)$ and $W(L, t)$.
+
+Unknown:
+
+- $R_f(t)$. Only the sum $1/U + R_f$ enters, so a monitor estimates the change of resistance since a reference state ([J04](benchmarks.md#fouling-from-outlet-sensors-identifiability-experiment-j04)).
+
+| Estimator | What it needs | Measured accuracy on $R_f(t)$ | Experiment |
+|---|---|---|---|
+| Data limit (Fisher information of the records) | inputs known | 5 % at the end of the record | J04 |
+| Extended Kalman filter, random walk, 11 cells | the model, one tuning number | 3.5 % in L2, 2 % at the end, 0.2 s | J05 |
+| Smoother, 51 cells | the same, the whole record | 2.3 % in L2, 0.7 % at the end | J05 |
+| Trend filter, 51 cells | the same, a rate noise | 90 % interval covers 91–99 % of the time | [J06](benchmarks.md#calibrated-fouling-intervals-experiment-j06) |
+| Moving-horizon estimation, 11 cells | the filter's model, bounds | 3.4 % in L2, 2.1 % at the end, 10–35 times the filter's cost | [J05b](benchmarks.md#moving-horizon-estimation-experiment-j05b) |
+| Batch Gauss–Newton through the reference solver | the form of the drift (2 or 6 modes) | ±2 % (ramp) to ±8 % (six modes), coverage 0.92–0.96 | J06 |
+| PINN twin, $R_f(t)$ an unknown function | records as inputs and sensors, five minutes | 9–16 % in L2, 10–49 % at the end; fails to train on 22 of 36 runs | J03, J06 |
+
+- **L2 error**: the root-mean-square error over the record, relative to the truth.
+- **Coverage**: how often an interval contains the truth over repeated noise draws. A 90 % interval should cover 90 % of the time.
+- **Batch Gauss–Newton fit**: nonlinear least squares on the whole record at once, with $R_f(t)$ written as a few polynomial modes.
+
+Finding: with the model's structure known, the classical estimators reach the data limit at a thousandth of the PINN twin's cost. The steam temperature is the input that limits every estimator (J04).
+
+The other units have their model where the page uses them: the [droplet](#checking-a-learned-closure), the [co-current tower](#from-the-rig-to-the-tower), the [counter-current tower](#the-counter-current-tower) and [the line](#the-line).
+
+The block below simulates the plant used in the rest of the page: a fouling ramp, a recorded steam signal, noisy outlet records.
 
 ```python
 import numpy as np
@@ -31,7 +96,26 @@ records = np.stack(                                         # outlet solids and 
 
 ## Estimating a drifting parameter
 
-With the model's structure known and one slowly drifting unknown, a Kalman filter on a coarse method-of-lines model is the estimator to beat: experiment J05 has it at 3.5 % in 0.2 s against the PINN twin's 9–16 % in five minutes. The unknown is appended to the state. A *random walk* (`augment_random_walk`) suits a parameter that wanders; for one that drifts steadily it either lags or needs so much process noise that its band is several times wider than its error. A *local linear trend* (`augment_local_linear_trend`: a level and a rate, the rate a random walk) follows a ramp without lag and gives the rate a prognosis needs.
+$$
+\frac{ds}{dt} = f(t, s, \theta), \qquad y_k = h(t_k, s) + v_k, \qquad v_k \sim \mathcal{N}(0, R) .
+$$
+
+- $s$: the model's state (here $W$ and $X$ on a coarse grid). $\theta$: the drifting unknown (here $R_f$).
+- $y_k$: the record at time $t_k$. $R$: the measurement-noise covariance.
+- **Kalman filter**: an estimator that, at each record, corrects the model's prediction of the state by the record, weighting each by its uncertainty. It carries a mean and a covariance.
+- **Extended Kalman filter (EKF)**: the Kalman filter for a nonlinear model, linearized at the current estimate.
+- **Smoother**: a backward pass over the filter's results that gives the estimate at each time from the whole record (the hindsight estimate).
+- **Process noise** $Q$: how much each state may wander between records.
+
+With the model's structure known and one slowly drifting unknown, a Kalman filter on a coarse method-of-lines model is the estimator to beat. Experiment J05 has it at 3.5 % in 0.2 s against the PINN twin's 9–16 % in five minutes. The unknown is appended to the state in one of two ways:
+
+| Drift model | Equations | Suits | Limit |
+|---|---|---|---|
+| Random walk (`augment_random_walk`) | $\dot\theta = w$ | a parameter that wanders | on a steady drift it lags, or needs so much process noise that its band is several times wider than its error |
+| Local linear trend (`augment_local_linear_trend`) | $\dot\theta = \rho,\ \dot\rho = w$ | a parameter that drifts steadily | honest only while the rate changes slowly |
+
+- $w$: white noise of intensity $Q$. $\rho$: the drift's rate, itself a random walk.
+- The trend follows a ramp without lag and gives the rate a prognosis needs.
 
 ```python
 from pinnrl.process import ExtendedKalmanFilter, augment_local_linear_trend
@@ -53,7 +137,15 @@ lo, hi = res.interval(0.9)                                  # (K, n + 2) each
 print(f"R_f(T) = {res.filtered[-1, n]:.2e} in [{lo[-1, n]:.2e}, {hi[-1, n]:.2e}]  (truth 1.00e-04)")
 ```
 
-The level and the rate, with their block of the covariance, give the time until the unknown reaches a limit, here the fouling at which the tube is cleaned. The time is a ratio of two uncertain numbers, so [`time_to_threshold`](api/process.md#process.ekf.time_to_threshold) samples it: the interval is asymmetric, and when the rate is not clearly positive part of the draws never arrive (`probability < 1`, an infinite upper end).
+The level and the rate give the time until the unknown reaches a limit $\theta^*$, here the fouling at which the tube is cleaned:
+
+$$
+\tau = \frac{\theta^* - \theta}{\rho} .
+$$
+
+- $\tau$ is a ratio of two uncertain numbers, so [`time_to_threshold`](api/process.md#process.ekf.time_to_threshold) samples it from the level, the rate and their block of the covariance.
+- The interval is asymmetric.
+- When the rate is not clearly positive, part of the draws never arrive: `probability < 1` and an infinite upper end.
 
 ```python
 from pinnrl.process import time_to_threshold
@@ -65,9 +157,18 @@ print(f"cleaning in {tt.median / 60:.0f} min, 90 % interval "
       f"[{tt.lower / 60:.0f}, {tt.upper / 60:.0f}] min (truth 10 min)")
 ```
 
-Three conditions decide whether such an interval can be trusted; experiment [J06](benchmarks.md#calibrated-fouling-intervals-experiment-j06) measures each. The drift model has to fit the drift (a random walk's band is honest only where it is wide; a trend's only while the rate changes slowly). The model's own error has to be below the interval's width (a coarse grid biases the estimate by more than a tight interval allows). And every input the unknown can be traded against has to be either measured to that accuracy or estimated alongside: for the evaporator that is the steam temperature ([J04](benchmarks.md#fouling-from-outlet-sensors-identifiability-experiment-j04)), which enters the state as one more constant with its prior.
+Three conditions decide whether such an interval can be trusted. Experiment [J06](benchmarks.md#calibrated-fouling-intervals-experiment-j06) measures each.
 
-[`monitor_fouling`](api/process.md#process.monitor.monitor_fouling) packages this estimator for the evaporator: the trend filter on a 51-cell model, optionally with the steam record's offset as one more state, returning the fouling with its band at every record, the hindsight estimate, the records against the filter's predictions and the time to clean.
+1. **The drift model fits the drift.** A random walk's band is honest only where it is wide; a trend's only while the rate changes slowly.
+2. **The model's own error is below the interval's width.** A coarse grid biases the estimate by more than a tight interval allows.
+3. **Every input the unknown can be traded against is measured to that accuracy or estimated alongside.** For the evaporator that is the steam temperature ([J04](benchmarks.md#fouling-from-outlet-sensors-identifiability-experiment-j04)), which enters the state as one more constant with its prior.
+
+[`monitor_fouling`](api/process.md#process.monitor.monitor_fouling) packages this estimator for the evaporator. It runs the trend filter on a 51-cell model, optionally with the steam record's offset as one more state, and returns:
+
+- the fouling with its band at every record;
+- the hindsight estimate;
+- the records against the filter's predictions;
+- the time to clean.
 
 ```python
 from pinnrl.process import monitor_fouling
@@ -77,11 +178,28 @@ mon = monitor_fouling(FallingFilmEvaporator(T_s=steam), times, records,
 print(mon.summary())
 ```
 
-The filters and the batch fits spend their time in the reference solve. Experiment [I16](benchmarks.md#the-evaporators-reference-solve-in-c-experiment-i16) put the evaporator's method-of-lines model in C++ ([`pinnrl.native.evaporator`](api/native.md)): an L-stable fourth-order SDIRK integrator whose implicit stages are solved exactly by one sweep downstream, because the upwind Jacobian couples a cell to its upstream neighbour only. `reference(..., method="native")` uses it (the inputs sampled every 5 s and interpolated by a spline), `FallingFilmEvaporator.native_propagator(nz, steam_bias, trend)` gives the filters a `propagate(t0, t1, x)` for their state layout (`ExtendedKalmanFilter(..., propagate=...)`), and `monitor_fouling(..., integrator="auto")` takes it wherever it builds. SciPy's BDF remains the default of `reference` and the fallback everywhere.
+The filters and the batch fits spend their time in the reference solve. Experiment [I16](benchmarks.md#the-evaporators-reference-solve-in-c-experiment-i16) put the evaporator's method-of-lines model in C++ ([`pinnrl.native.evaporator`](api/native.md)).
+
+- **The integrator**: an L-stable fourth-order SDIRK scheme. Its implicit stages are solved exactly by one sweep downstream, because the upwind Jacobian couples a cell to its upstream neighbour only.
+- `reference(..., method="native")` uses it, with the inputs sampled every 5 s and interpolated by a spline.
+- `FallingFilmEvaporator.native_propagator(nz, steam_bias, trend)` gives the filters a `propagate(t0, t1, x)` for their state layout (`ExtendedKalmanFilter(..., propagate=...)`).
+- `monitor_fouling(..., integrator="auto")` takes it wherever it builds.
+- SciPy's BDF remains the default of `reference` and the fallback everywhere.
 
 ## Moving-horizon estimation
 
-[`MovingHorizonEstimator`](api/process.md#process.mhe.MovingHorizonEstimator) takes the same `f`, `h`, `Q` and `R` as the filter and re-solves the last `horizon` records at every record, as a bounded least-squares problem in the state at the window's start and one disturbance per record for each state with process noise. For a linear model without bounds it is the Kalman filter, whatever the horizon. Use it for what the filter cannot express: bounds on the states, and bounds on the disturbances, such as a fouling resistance that only grows.
+$$
+\min_{x_0,\ w_1..w_N}\ \lVert x_0 - \bar x_0 \rVert^2_{P_0^{-1}} + \sum_{k=1}^{N} \lVert w_k \rVert^2_{Q^{-1}} + \sum_{k=1}^{N} \lVert y_k - h(t_k, x_k) \rVert^2_{R^{-1}}
+\quad \text{with} \quad x^{lo} \le x_0 \le x^{hi},\quad w^{lo} \le w_k \le w^{hi} .
+$$
+
+- **Moving-horizon estimation (MHE)**: at every record, re-solve a least-squares problem over the last $N$ records (`horizon`) for the state at the window's start and the disturbances inside it.
+- $x_0$: the state at the window's start. $\bar x_0$, $P_0$: what the records before the window say about it (the arrival cost).
+- $w_k$: one disturbance per record for each state with process noise. $x_k$ follows the model from $x_0$ and the $w_k$.
+- $Q$, $R$, $f$, $h$: the same as the filter's.
+- Bounds: `lower` and `upper` on the state at the window's start, `noise_lower` and `noise_upper` on the disturbances.
+
+[`MovingHorizonEstimator`](api/process.md#process.mhe.MovingHorizonEstimator) solves this as a bounded least-squares problem. For a linear model without bounds it is the Kalman filter, whatever the horizon. Use it for what the filter cannot express: bounds on the states, and bounds on the disturbances, such as a fouling resistance that only grows.
 
 ```python
 from pinnrl.process import MovingHorizonEstimator, augment_random_walk
@@ -96,11 +214,24 @@ grow = mhe.run(times, records, np.concatenate([s0, [0.5e-4]]),
 print(grow.t[-1], grow.filtered[-1, -1])
 ```
 
-It costs 10 to 35 times the filter on the evaporator (about three linearizations of the window per solve; `stride` solves every few records). On the evaporator, whose nonlinearity is mild, it gives the filter's accuracy; the constraint is what it adds ([J05b](benchmarks.md#moving-horizon-estimation-experiment-j05b)).
+Results on the evaporator ([J05b](benchmarks.md#moving-horizon-estimation-experiment-j05b)):
+
+- **Cost**: 10 to 35 times the filter, about three linearizations of the window per solve. `stride` solves every few records.
+- **Accuracy**: the filter's, because the evaporator's nonlinearity is mild.
+- **What it adds**: the constraint.
 
 ## Plant data: a historian export and a tag map
 
-A historian export is a table of tag readings in plant units, with gaps and bad readings. [`Historian.from_file`](api/process.md#process.historian.Historian) reads the two usual layouts, a column per tag or a row per reading (with an optional quality flag), from CSV or Parquet (Parquet needs `pyarrow`), with numeric or dated timestamps. A *tag map* then says which tag is which signal of the model and how to convert it.
+- **Historian**: the plant's database of instrument readings over time.
+- **Tag**: the name of one instrument signal in the historian, such as `TT205.PV`.
+- **Historian export**: a table of tag readings in plant units, with gaps and bad readings.
+- **Tag map**: which tag is which signal of the model, and how to convert it.
+
+[`Historian.from_file`](api/process.md#process.historian.Historian) reads:
+
+- the two usual layouts: a column per tag, or a row per reading (with an optional quality flag);
+- CSV or Parquet (Parquet needs `pyarrow`);
+- numeric or dated timestamps.
 
 ```python
 import tempfile
@@ -126,7 +257,11 @@ data = Historian.from_file(export).apply(tag_map)
 print(data.t_max, data.inputs["T_s"], data.sensors)
 ```
 
-The result feeds both kinds of estimator. The inputs are `TimeSeries` and the sensors carry their records, which is what `custom_pde` takes for the PINN twin; `series.numpy` is the same signal as a plain function for a process model, and `data.records()` is the array a filter runs on.
+The result feeds both kinds of estimator:
+
+- **For the PINN twin**: the inputs are `TimeSeries` and the sensors carry their records, which is what `custom_pde` takes.
+- **For a process model**: `series.numpy` is the same signal as a plain function.
+- **For a filter**: `data.records()` is the array it runs on.
 
 ```python
 model = FallingFilmEvaporator(T_s=data.inputs["T_s"].numpy, R_f=0.0)
@@ -136,13 +271,74 @@ pde = model.custom_pde(t_max=data.t_max, sensors=data.sensors,
 print(hist_records.shape, len(pde.sensors))
 ```
 
-[`monitor_from_historian(data)`](api/process.md#process.monitor.monitor_from_historian) runs the fouling monitor on such a window directly, and the [dashboard's Process view](dashboard.md#process) does the same from the two file paths; `write_demo_export(folder)` writes a synthetic export and its tag map to start from.
+Shortcuts and options:
 
-A `window: [t0, t1]` in the map cuts an interval and shifts it to $t = 0$; `every` and `aggregate` (`interp`, `mean`, `last`) put a tag on a regular grid, which sensors need to share for `records()`. The map can be a YAML file with the same keys.
+- [`monitor_from_historian(data)`](api/process.md#process.monitor.monitor_from_historian) runs the fouling monitor on such a window directly.
+- The [dashboard's Process view](dashboard.md#process) does the same from the two file paths.
+- `write_demo_export(folder)` writes a synthetic export and its tag map to start from.
+- `window: [t0, t1]` in the map cuts an interval and shifts it to $t = 0$.
+- `every` and `aggregate` (`interp`, `mean`, `last`) put a tag on a regular grid, which sensors need to share for `records()`.
+- The map can be a YAML file with the same keys.
 
 ## Checking a learned closure
 
-When the unknown is a function, the network that produced it is not the judge of it: in experiment J07b a closure 20 % off came with fields that fitted the record to 1 %. Solve the model with the closure by the reference solver and compare with the record. [`DryingDroplet.record_misfit`](api/process.md#process.droplet.DryingDroplet) returns the reduced chi-square, about 1 when the closure explains the record to its noise.
+The unit here is the drying droplet: one droplet of a solids solution in hot air, as on a single-droplet rig.
+
+- **Closure**: a relation the balance equations need but do not supply, here the drying rate as a function of the moisture.
+- **Dry-basis moisture** $X$: kg of water per kg of solids.
+- **Characteristic drying curve** $f(X)$: the drying rate divided by the rate of a fully wet surface. It is 1 above the critical moisture $X_{cr}$ and falls to 0 at the equilibrium moisture $X_{eq}$.
+
+$$
+\begin{aligned}
+\frac{dX}{dt} &= -r, \qquad r = \frac{h_m A\,\big(\rho_{vs}(T) - Y \rho_a\big)}{m_s}\, f(X), \\
+\frac{dT}{dt} &= \frac{h A\,(T_a - T) - \lambda\, m_s\, r}{m_s\,(c_s + c_w X)}, \\
+f(X) &= \min\!\left(1,\ \left(\frac{X - X_{eq}}{X_{cr} - X_{eq}}\right)^{n}\right) .
+\end{aligned}
+$$
+
+- $T$: droplet temperature. $T_a$: air temperature. $Y$: humidity ratio of the air, kg of water per kg of dry air. $\rho_a$: air density.
+- $r$: drying rate per unit of solids. $m_s$: solids mass of the droplet.
+- $A$: droplet surface. $h$, $h_m$: heat- and mass-transfer coefficients (Ranz–Marshall correlations of the droplet's diameter).
+- $\rho_{vs}(T)$: vapour density at saturation at the droplet's temperature.
+- $\lambda$: latent heat. $c_s$, $c_w$: heat capacities of solids and water.
+- $f = 0$ below $X_{eq}$.
+- $n$: exponent of the falling-rate part of the curve. Defaults: $X_{eq} = 0.05$, $X_{cr} = 1.0$, $n = 1.5$.
+
+Measured:
+
+- the droplet's mass $m = m_s (1 + X)$;
+- its temperature $T$.
+
+Unknown:
+
+- the closure $f(X)$.
+
+| Estimator | What it needs | Measured accuracy on $f(X)$ | Experiment |
+|---|---|---|---|
+| Least squares, the right parametric form | the form of the curve | $n$ and $X_{cr}$ to 1 % in 0.2 s | J07 |
+| Least squares, a wrong form | a form | 5.5 % off, misfit 16 times larger | J07 |
+| Pointwise from the smoothed record (`closure_from_record`) | the record only | 2–3 %; record misfit 60–90 | J07b, J07c |
+| The same with the anchor $f(X_{eq}) = 0$ | what is known of the closure | record misfit about 2, in one second | J07e |
+| Shooting: a monotone piecewise-linear closure on 24 knots | the reference solver | 1.5–1.6 % on every seed, 8–10 s | J07d |
+| PINN, $f$ an unknown function, cold start | the record | collapses to a constant on every seed | J07 |
+| PINN refinement of the pointwise estimate | the pointwise start, six to eight minutes | 1.7–2.1 % on two seeds, destroys it on the third | J07b |
+
+- **Shooting**: adjust the unknowns until the reference solver's output matches the record.
+
+Finding: with an ODE model and a reference solver that takes a closure, an unknown function is a few dozen bounded parameters, and shooting beats the PINN (J07d).
+
+When the unknown is a function, the network that produced it is not the judge of it. In experiment J07b a closure 20 % off came with fields that fitted the record to 1 %. The check is independent of the network:
+
+1. Solve the model with the closure by the reference solver.
+2. Compare with the record by the reduced chi-square.
+
+$$
+\chi^2 = \frac{1}{N} \sum_{i=1}^{N} \left( \frac{y_i - \hat y_i}{\sigma_i} \right)^2 .
+$$
+
+- $y_i$: a reading. $\hat y_i$: the model's value. $\sigma_i$: the reading's noise.
+- **Reduced chi-square**: about 1 when the closure explains the record to its noise.
+- [`DryingDroplet.record_misfit`](api/process.md#process.droplet.DryingDroplet) returns it for the mass, the temperature and both.
 
 ```python
 from pinnrl.process import DryingDroplet
@@ -157,13 +353,31 @@ print(dr.record_misfit(t_rec, mass, temp, 0.005 * dr.m0, 0.5)["total"],         
       dr.record_misfit(t_rec, mass, temp, 0.005 * dr.m0, 0.5, closure=candidate)["total"])
 ```
 
-The rule from [J07c](benchmarks.md#a-drying-droplet-and-its-closure-experiment-j07): reject a refined closure whose misfit is above its start's, and read the level, since only a misfit near 1 says the closure reproduces the record.
+The rule from [J07c](benchmarks.md#a-drying-droplet-and-its-closure-experiment-j07):
 
-With the network class, give the closure what is known of it: `unknown_rate={"bounds": None, "anchor": {"at": dr.X_eq, "value": 0.0}}` in `custom_pde` makes it zero at the equilibrium moisture by construction, which alone takes a pointwise estimate's misfit from 60–90 to about 2 (J07e). For the network's own fit, `pde.sensor_misfit(trainer.model)` is the same test without a reference solver, and [`train_with_restarts`](api/training.md#training.restarts.train_with_restarts) restarts on it.
+1. Reject a refined closure whose misfit is above its start's.
+2. Read the level: only a misfit near 1 says the closure reproduces the record.
+
+With the network class, give the closure what is known of it:
+
+- **Anchor**: `unknown_rate={"bounds": None, "anchor": {"at": dr.X_eq, "value": 0.0}}` in `custom_pde` makes the closure zero at the equilibrium moisture by construction. That alone takes a pointwise estimate's misfit from 60–90 to about 2 (J07e).
+- **The network's own fit**: `pde.sensor_misfit(trainer.model)` is the same test without a reference solver.
+- **Restarts**: [`train_with_restarts`](api/training.md#training.restarts.train_with_restarts) restarts on that misfit.
 
 ## Which measurement to add
 
-Before buying a sensor or a calibration, price it. Around the operating point the posterior covariance of the unknowns is $(P_0^{-1} + J^\top R^{-1} J)^{-1}$ whatever the records turn out to be, so a design is judged from the sensitivities alone. Put every instrument error in the parameter vector with its accuracy as the prior; a calibration is then a tighter prior and a new measurement more rows of $J$.
+$$
+\Sigma = \left( P_0^{-1} + J^\top R^{-1} J \right)^{-1} .
+$$
+
+- $\Sigma$: posterior covariance of the unknowns around the operating point.
+- $P_0$: prior covariance. Each instrument error is an unknown with its accuracy as the prior.
+- $J$: sensitivities of the records to the unknowns. $R$: measurement-noise covariance.
+
+Before buying a sensor or a calibration, price it. $\Sigma$ does not depend on what the records turn out to be, so a design is judged from the sensitivities alone.
+
+- A calibration is a tighter prior.
+- A new measurement is more rows of $J$.
 
 ```python
 from pinnrl.analysis import greedy_design, information, posterior_covariance, target_std
@@ -192,11 +406,43 @@ lab = greedy_design(list(JX[11::12]), 0.0005, 2, prior_std=[np.inf, np.inf, 0.3]
 print([float(times[11::12][i]) for i in lab.chosen], [f"{c / 1e-4:.1%}" for c in lab.criterion])
 ```
 
-Experiment [J09](benchmarks.md#measurement-design-for-the-fouling-estimate-experiment-j09) does this for the evaporator with six instrument errors: the estimate is limited by the steam offset and, jointly, by the four mass-balance instruments; a condensate meter and a larger, faster steam swing are worth more than any calibration. Check a design that matters by fitting simulated records, as J09 does.
+Experiment [J09](benchmarks.md#measurement-design-for-the-fouling-estimate-experiment-j09) does this for the evaporator with six instrument errors:
+
+- The estimate is limited by the steam offset and, jointly, by the four mass-balance instruments.
+- A condensate meter and a larger, faster steam swing are worth more than any calibration.
+- Check a design that matters by fitting simulated records, as J09 does.
 
 ## From the rig to the tower
 
-A droplet rig records the droplet itself; a tower records the air. [`SprayDryer`](api/process.md#process.dryer.SprayDryer) is the droplet coupled to its air, and its `records()` are what a plant has at one operating point.
+A droplet rig records the droplet itself; a tower records the air. [`SprayDryer`](api/process.md#process.dryer.SprayDryer) is the droplet coupled to its air: a plug flow of equal droplets that travel down the tower with the air (co-current), at steady state.
+
+$$
+\begin{aligned}
+\frac{dX}{d\tau} &= -r, \\
+\frac{dT_p}{d\tau} &= \frac{h A\,(T_a - T_p) - \lambda\, m_s\, r}{m_s\,(c_s + c_w X)}, \\
+\frac{dY}{d\tau} &= \frac{F_s}{G}\, r, \\
+\frac{dT_a}{d\tau} &= -\frac{\dfrac{F_s}{m_s}\, h A\,(T_a - T_p) + G\, c_v\,(T_a - T_p)\,\dfrac{dY}{d\tau} + U_w\, \pi D\, v_p\,(T_a - T_{amb})}{G\,(c_a + c_v Y)} .
+\end{aligned}
+$$
+
+- $\tau = z / v_p$: residence time of the droplets. $z$: distance below the atomiser. $v_p$: droplet velocity.
+- $X$, $T_p$: moisture and temperature of the droplets. $Y$, $T_a$: humidity ratio and temperature of the air.
+- $r$: the droplet's drying rate, with the same closure $f(X)$ and the local $Y$.
+- $F_s$: solids flow, kg/s. $G$: dry-air flow, kg/s.
+- $c_a$, $c_v$: heat capacities of dry air and vapour.
+- $U_w$: wall loss coefficient. $D$: tower diameter. $T_{amb}$: ambient temperature.
+- Start: the droplets' state at the atomiser and the inlet air ($T_{in}$, $Y_{in}$).
+
+Measured (`records()`, one operating point):
+
+- air temperatures at six heights;
+- the outlet air's humidity;
+- the powder's moisture, from the lab.
+
+Unknown:
+
+- the closure $f(X)$, or the two parameters $X_{cr}$ and $n$ of a known form;
+- the nuisances: the wall loss and the droplet size.
 
 ```python
 from pinnrl.process import SprayDryer
@@ -210,11 +456,68 @@ print(tower.operating_point(T_in=438.15, solids_flow=0.012).records()["X_out"])
 print(tower.stickiness_margin(profile)[-1])                  # T_p - T_g(X) at the outlet, K
 ```
 
-Experiment [J11](benchmarks.md#the-closure-at-dryer-scale-experiment-j11) measures what those records determine: the two parameters of a known curve form from five operating points, about half the directions of a free-form closure, and, either way, the powder moisture at a new operating point to 1–2 %. Identify the closure on the rig and carry it to the tower; at dryer scale estimate a few numbers and the nuisances (J12 prices them: better thermocouples, more operating points and replicate lab assays pay; a droplet-size measurement does not). What the twin then gives that no instrument does is the stickiness margin, the particle temperature above its glass transition: to 1.0–1.5 K at the outlet, against 1.6–3.2 K for a lab assay hours later and tens of kelvin from the air's water balance ([J08](benchmarks.md#a-soft-sensor-for-the-stickiness-margin-experiment-j08)).
+What the twin gives that no instrument does is the stickiness margin:
+
+$$
+\Delta T = T_p - T_g(X), \qquad T_g = \frac{w_s\, T_{gs} + k\, w_w\, T_{gw}}{w_s + k\, w_w}, \qquad w_w = \frac{X}{1 + X},\quad w_s = 1 - w_w .
+$$
+
+- **Glass transition** $T_g$: the temperature above which an amorphous solid softens. Water lowers it (the Gordon–Taylor relation above).
+- **Stickiness margin** $\Delta T$: how far a particle is above its glass transition. Particles stick to the wall and cake when it passes a material limit.
+- $T_{gs}$, $T_{gw}$: glass transitions of the dry solids and of water. $k$: the Gordon–Taylor constant of the pair.
+
+| Estimator | What it needs | Measured accuracy | Experiment |
+|---|---|---|---|
+| Least squares through the reference, the curve's form known | five operating points | the two parameters identified; powder moisture at a new operating point to 1–2 % | [J11](benchmarks.md#the-closure-at-dryer-scale-experiment-j11) |
+| Least squares, a free-form closure | the same | about half the closure's directions; the same prediction to 1–2 % | J11 |
+| The twin as a soft sensor of the outlet margin | the identified closure, run forward | 1.0–1.5 K | [J08](benchmarks.md#a-soft-sensor-for-the-stickiness-margin-experiment-j08) |
+| Lab assay of the powder, hours later | a sample | 1.6–3.2 K | J08 |
+| Moisture from the air's water balance | the hygrometer | tens of kelvin | J08 |
+
+Finding: identify the closure on the rig and carry it to the tower; at dryer scale estimate a few numbers and the nuisances.
+
+J12 prices the measurements at dryer scale:
+
+- **Pay**: better thermocouples, more operating points, replicate lab assays.
+- **Does not pay**: a droplet-size measurement.
 
 ## The counter-current tower
 
-In a counter-current tower the air enters at the bottom against the falling droplets, so the droplets' state is known at the top and the air's at the bottom: the steady state is a two-point boundary-value problem, which [`CounterCurrentDryer.steady`](api/process.md#process.counter_dryer.CounterCurrentDryer) solves by shooting on the air's state at the top (about 100 ms, against 5 ms for the co-current tower), and the transient a system of transport equations whose characteristics run both ways, which `transient` integrates by the method of lines with a sparse Jacobian (0.05–0.6 s for ten minutes, by grid and tolerance). `custom_pde` writes the same four fields in $(z, t)$ for the PINN, with the inlet air as time-series inputs, the steady profiles as the initial condition and each equation divided by its own scale, and `identify=` names the parameters to estimate.
+In a counter-current tower the air enters at the bottom against the falling droplets. The droplets' state is known at the top and the air's at the bottom.
+
+$$
+\begin{aligned}
+X_t + v_p\, X_z &= -r, \\
+T_t + v_p\, T_z &= \frac{h A\,(T_a - T) - \lambda\, m_s\, r}{m_s\,(c_s + c_w X)}, \\
+Y_t - v_a\, Y_z &= \frac{v_a}{G}\, S, \\
+T_{a,t} - v_a\, T_{a,z} &= -\frac{v_a}{G}\, \frac{Q + c_v\,(T_a - T)\, S + U_w\, \pi D\,(T_a - T_{amb})}{c_a + c_v Y} .
+\end{aligned}
+$$
+
+- $z$: distance down from the atomiser. $T$: droplet temperature. The other fields are those of the co-current tower.
+- $v_p$: droplet velocity, downward. $v_a = G / (\rho_a A_{tower})$: air velocity, upward.
+- $S = (F_s / v_p)\, r$: water the droplets give to the air per metre of height.
+- $Q = \dfrac{F_s}{m_s v_p}\, h A\,(T_a - T)$: heat they take from it per metre.
+- Boundaries: $X$, $T$ at the top ($z = 0$); $Y$, $T_a$ at the bottom, the inlet air $T_{in}(t)$, $Y_{in}(t)$.
+- Time scales: the droplets cross the tower in 5.3 s, the air in 106 s.
+
+Measured (`records`, over a transient):
+
+- air temperatures at five heights;
+- the humidity of the air leaving at the top;
+- the moisture of the powder leaving at the bottom.
+
+Unknown:
+
+- the curve's parameters $X_{cr}$ and $n$;
+- the wall loss $U_w$.
+
+Solvers:
+
+- **Boundary-value problem**: an ODE problem with conditions at both ends, as the steady state here.
+- [`CounterCurrentDryer.steady`](api/process.md#process.counter_dryer.CounterCurrentDryer) solves it by shooting on the air's state at the top: about 100 ms, against 5 ms for the co-current tower.
+- `transient` integrates the transport equations, whose characteristics run both ways, by the method of lines with a sparse Jacobian. Ten minutes take 0.04–0.13 s for a smooth step and 0.34–1.3 s for an inlet record with 10 s knots, on 51 to 401 cells (J13).
+- `custom_pde` writes the same four fields in $(z, t)$ for the PINN: the inlet air as time-series inputs, the steady profiles as the initial condition, each equation divided by its own scale. `identify=` names the parameters to estimate.
 
 ```python
 import numpy as np
@@ -229,11 +532,50 @@ print(records["T_air"][:, -1] - 273.15, records["X_out"][[0, -1]])
 pde = tower.custom_pde(600.0, identify=["Xcr", "ncdc"], initial_guesses={"Xcr": 0.7, "ncdc": 1.0})
 ```
 
-Experiment [J13](benchmarks.md#the-counter-current-tower-experiment-j13) is the test the roadmap set for the PINN twin's case, a unit without a cheap initial-value solve. The steady state is one, but its transient is not: with the sparse Jacobian a ten-minute step response integrates in a tenth of a second, a least-squares fit of the curve's two parameters and the wall loss from one transient record takes seconds and lands within the linear prediction, and the PINN twin on the same record does not reach that. The forward PINN solve of the four coupled fields stays at about 10 % on the moisture even with the equations scaled and the residual weight tuned.
+Experiment [J13](benchmarks.md#the-counter-current-tower-experiment-j13) is the test the roadmap set for the PINN twin's case: a unit without a cheap initial-value solve.
+
+| Estimator | What it needs | Measured result | Experiment |
+|---|---|---|---|
+| Bounded least squares through the transient | one transient record, 10 s | $X_{cr}$, $n$, $U_w$ within the linear prediction (±0.011, ±0.015, ±0.003) on all three data sets | J13 |
+| PINN twin on the same record | 110–140 s | all six runs rejected by the misfit test (reduced chi-square 5–9) | J13 |
+| PINN forward solve of the four fields | equations scaled, residual weight tuned, 96 s | 12–15 % on the moisture, on two seeds of three | J13 |
+
+Finding: the steady state is a unit without a cheap initial-value solve, but its transient is not. With the sparse Jacobian a ten-minute step response integrates in a tenth of a second, the classical fit takes seconds, and the PINN twin on the same record does not reach it.
 
 ## The line
 
-A plant's units are coupled by what flows between them. [`ProcessLine`](api/process.md#process.line.ProcessLine) chains evaporator passes (each pass's outlet is the next pass's feed) and hands the concentrate to the dryer, whose droplets then have the concentrate's solids fraction and whose solids flow is the concentrate's; the dryer is quasi-steady against the evaporator's hours of fouling. `steady` is the line at an instant, `reference` the shift (the passes by the method of lines, the dryer at every output time), `records` what the line's instruments report, and `propagate` the linear and Monte-Carlo propagation of each unit's uncertainty to the concentrate, the powder's moisture and its stickiness margin, with the share of the variance each source owns.
+A plant's units are coupled by what flows between them. [`ProcessLine`](api/process.md#process.line.ProcessLine) chains evaporator passes and hands the concentrate to the dryer.
+
+$$
+\begin{aligned}
+W^{(k+1)}_{in}(t) &= W^{(k)}(L, t), \qquad X^{(k+1)}_{in}(t) = X^{(k)}(L, t), \\
+F_s(t) &= W_c(t)\, X_c(t), \qquad \text{droplet solids fraction} = X_c(t), \\
+\sigma_y^2 &= \sum_j \left( \frac{\partial y}{\partial \theta_j}\, \sigma_j \right)^2, \qquad \text{share}_j = \frac{1}{\sigma_y^2} \left( \frac{\partial y}{\partial \theta_j}\, \sigma_j \right)^2 .
+\end{aligned}
+$$
+
+- $W^{(k)}$, $X^{(k)}$: flow and solids of pass $k$, each pass an evaporator tube as above.
+- $W_c$, $X_c$: the concentrate, the outlet of the last pass. $F_s$: the dryer's solids flow.
+- $y$: a target (the concentrate's solids, the powder's moisture, its stickiness margin).
+- $\theta_j$, $\sigma_j$: an uncertain quantity of a unit and its standard deviation.
+- The dryer is quasi-steady: its residence time is seconds against the evaporator's hours of fouling.
+
+Methods:
+
+- `steady`: the line at an instant.
+- `reference`: the shift. The passes by the method of lines, the dryer at every output time.
+- `records`: what the line's instruments report.
+- `propagate`: the linear and Monte-Carlo propagation of each unit's uncertainty to the three targets, with the share of the variance each source owns.
+
+Measured:
+
+- each pass's outlet solids and flow;
+- the dryer's air temperatures and outlet humidity;
+- lab assays of the powder.
+
+Unknown:
+
+- every unit's unknowns (twelve in J10), and which one the powder inherits.
 
 ```python
 from pinnrl.process import ProcessLine
@@ -245,7 +587,20 @@ budget = line.propagate({"R_f_0": 6e-6, "R_f_1": 5e-6, "X_cr": 0.1, "d0": 25e-6,
 print(budget["linear"]["powder"])                                  # std of the powder moisture and the shares
 ```
 
-Experiment [J10](benchmarks.md#the-line-level-twin-experiment-j10) runs the fouling monitor on each pass with the previous pass's record as its inlet, propagates the end-of-shift bands with the dryer's campaign posterior to the powder, and compares that two-stage estimate with the linear-Gaussian posterior of all twelve unknowns from all records: the information flows downstream only (the dryer's instruments determine its powder but not the fouling behind it), the powder is determined far better by the dryer's own records than by propagating the upstream uncertainties, and the first pass's fouling is one unknown with the feed's calibration.
+Experiment [J10](benchmarks.md#the-line-level-twin-experiment-j10) compares two estimates of the powder moisture at the end of a shift.
+
+| Estimator | What it needs | Measured accuracy (std of the powder moisture) | Experiment |
+|---|---|---|---|
+| Two-stage: the fouling monitor on each pass (the previous pass's record as its inlet), then propagation with the dryer's campaign posterior | each pass's records, ten seconds | 0.094 | J10 |
+| Linear-Gaussian posterior from the dryer's online records | the dryer's instruments | 0.0054 | J10 |
+| The same with the lab's four assays | and the assays | 0.0022 | J10 |
+| Linear-Gaussian posterior of all twelve unknowns | every record of the line | 0.0011 | J10 |
+
+Findings:
+
+- **The information flows downstream only.** The dryer's instruments determine its powder but not the fouling behind it.
+- **The powder is determined far better by the dryer's own records** than by propagating the upstream uncertainties.
+- **The first pass's fouling is one unknown with the feed's calibration.**
 
 ## Which estimator
 

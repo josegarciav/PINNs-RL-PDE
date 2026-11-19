@@ -61,3 +61,15 @@ Every shipped PDE is registered once in `pdes.registry`, and both the CLI and th
 ::: pdes.black_scholes.BlackScholesEquation
 
 ::: pdes.pendulum_equation.PendulumEquation
+
+## Expressions and the registry table
+
+How a subscript such as `u_xxt` is read and spelled, how relative paths of measured inputs are resolved, and the table every shipped PDE is registered in.
+
+::: pdes.symbolic.split_derivative
+
+::: pdes.symbolic.derivative_name
+
+::: pdes.custom.resolve_input_paths
+
+::: pdes.registry.PDE_SPECS

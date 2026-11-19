@@ -1,38 +1,170 @@
 # The numerical-analysis bridge
 
+This page carries consistency, stability and convergence over from classical schemes to PINNs. Read it to understand how far the training residual can stand in for the error.
+
+Notation is shared with the [theory index](index.md): exact solution $u$, network $u_w$, parameters $\theta$.
+
 ## Consistency, stability, convergence
 
-For a linear well-posed evolution problem, a consistent discretization converges if and only if it is stable (Lax & Richtmyer, 1956). Consistency says the scheme's residual on the exact solution vanishes with the mesh; stability says the discrete solution operator is bounded uniformly in the mesh; convergence follows with the bound as the constant:
+For a linear well-posed evolution problem (Lax & Richtmyer, 1956):
 
 $$
-\|u - u_h\| \le C_{\text{stab}}\, \|\text{residual of } u_h\|.
+\text{consistency} + \text{stability} \iff \text{convergence},
+\qquad
+\|u - u_h\| \le C_{\text{stab}}\, \|\text{residual of } u_h\| .
 $$
 
-For explicit time-stepping, stability is the CFL condition (Courant, Friedrichs & Lewy, 1928): the explicit heat scheme in `pinnrl-benchmark fdm` needs $\alpha\,\Delta t/\Delta x^2 \le 1/2$, and von Neumann analysis gives the same number by asking that no Fourier mode grow. For nonlinear problems the role of the stability operator is played by an energy estimate, a bound on a norm of the solution that the equation preserves or decreases.
+- **$u_h$**: the discrete solution on a mesh of size $h$.
+- **Consistency**: the scheme's residual on the exact solution vanishes as the mesh is refined.
+- **Stability**: the discrete solution operator is bounded uniformly in the mesh.
+- **Convergence**: $u_h \to u$ as the mesh is refined.
+- **$C_{\text{stab}}$**: the stability bound, which becomes the constant of the error estimate.
+
+For explicit time-stepping, stability is the CFL condition (Courant, Friedrichs & Lewy, 1928). The explicit heat scheme in `pinnrl-benchmark fdm` needs
+
+$$
+\frac{\alpha\,\Delta t}{\Delta x^2} \le \frac{1}{2} .
+$$
+
+- **$\alpha$**: the diffusivity.
+- **$\Delta t$, $\Delta x$**: the time step and the grid spacing.
+- **CFL condition**: a bound on the time step in terms of the grid spacing.
+- **Von Neumann analysis**: requires that no Fourier mode grow. It gives the same number.
+- **Energy estimate**: a bound on a norm of the solution that the equation preserves or decreases. For nonlinear problems it plays the role of the stability operator.
+
+**For training:** a small residual implies a small error only through a stability constant, and that constant belongs to the equation.
 
 ## The same statement for a PINN
 
-A PINN has no mesh, but the structure survives. Mishra & Molinaro (2022) prove, for a class of forward problems, an estimate of the form
+A PINN has no mesh, but the structure survives. For a class of forward problems (Mishra & Molinaro, 2022):
 
 $$
-\|u - u_w\| \;\le\; C_{\text{stab}}\,\big(\,\mathcal{E}_{\text{train}} + \mathcal{E}_{\text{quad}}\,\big),
+\|u - u_w\| \;\le\; C_{\text{stab}}\,\big(\,\mathcal{E}_{\text{train}} + \mathcal{E}_{\text{quad}}\,\big).
 $$
 
-with $\mathcal{E}_{\text{train}}$ the residual and boundary mismatch on the collocation points (what training minimizes), $\mathcal{E}_{\text{quad}}$ the quadrature error of replacing the integral of the residual by a sample mean, and $C_{\text{stab}}$ the conditional-stability constant of the PDE. A companion result covers a class of inverse problems (Mishra & Molinaro, 2022b), with the data misfit added to the right-hand side and the stability constant now that of the inverse problem, the modulus $\omega$ of [well-posedness](well_posedness.md). De Ryck & Mishra (2024) survey the estimates; Shin, Darbon & Karniadakis (2020) give the convergence statement for linear second-order equations.
+- **Collocation point**: a point where the equation's residual is evaluated.
+- **$\mathcal{E}_{\text{train}}$**: the residual and the boundary mismatch on the collocation points. Training minimizes it.
+- **$\mathcal{E}_{\text{quad}}$**: the quadrature error of replacing the integral of the residual by a sample mean.
+- **$C_{\text{stab}}$**: the conditional-stability constant of the PDE.
+
+Related results:
+
+- **Inverse problems** (Mishra & Molinaro, 2022b): the data misfit is added to the right-hand side. The constant is that of the inverse problem, the modulus $\omega$ of [well-posedness](well_posedness.md).
+- **Survey**: De Ryck & Mishra (2024).
+- **Convergence for linear second-order equations**: Shin, Darbon & Karniadakis (2020).
+
+**For training:** the loss bounds the error only with the boundary and initial terms included, and only up to $C_{\text{stab}}$.
 
 Three things the package can measure follow.
 
-1. **The training residual is not the error.** The ratio of the two is an estimate of $C_{\text{stab}}$. Experiments K06 and K07 record it across the catalogue, and compare it with the constants the conditional-stability theory gives where one is known. A constant in the hundreds for Allen–Cahn, and near one for the heat equation, would explain the B01 finding that the Allen–Cahn error stayed above 0.5 for every sampler at a small residual.
-2. **Quadrature error scales with dimension.** A Monte Carlo sample mean of $N$ points has error $\mathcal{O}(N^{-1/2})$ in any dimension, but the constant grows with the variance of the residual over the domain, and the residual of a trained network is rough. In five dimensions the gallery of [custom equations](../custom_equations.md) needed four times the points for a worse result than in one, which is the quadrature term at work. Experiment K08 sweeps the dimension and reports both terms separately.
-3. **Causality.** Time-marching schemes respect the direction of information; a PINN trained on all of space-time at once does not, and can settle on a wrong solution that has a small residual (Krishnapriyan et al., 2021). The metastable Allen–Cahn solution of B01 is such a case. Causal weighting and time-marching (H03, H04) are the PINN equivalents of marching in time.
+### 1. The training residual is not the error
+
+$$
+C = \frac{\text{relative } L^2 \text{ error}}{\text{RMS residual}} \;\approx\; C_{\text{stab}} .
+$$
+
+- **$C$**: the empirical stability constant, computed on fresh points by [`stability_ratio`](../api/analysis.md#analysis.disturbance.stability_ratio).
+
+Measured in K07 ([benchmarks](../benchmarks.md#disturbance-and-stability-experiments-k05k07)); K06 measures the response of the trained field to a perturbed problem:
+
+| Equation | $C$ (K07) | Reading |
+|---|---|---|
+| heat, convection, wave, Klein–Gordon, heat 2-D | 0.8–1.3 | the residual on fresh points is a usable error estimate |
+| Poisson | 0.2–0.6 | the residual carries the scale of the source term |
+| sine-Gordon | 0.2 | the residual carries a large nonlinear term |
+| Burgers travelling wave | 0.4–0.5 | the error still tracks the residual |
+| KdV soliton | 1.3–3.8 | the error still tracks the residual |
+| Euler–Bernoulli beam | 0.8 to 3.9 | the error stalls at 4.5 % while the residual falls; the boundary and initial terms bind |
+
+- Allen–Cahn is not in K07. A constant in the hundreds for Allen–Cahn, against one near 1 for heat, would explain the B01 finding: the Allen–Cahn error stayed above 0.5 for every sampler at a small residual.
+- Where the conditional-stability theory gives a constant, the measured one is compared with it.
+
+**For training:** evaluate the residual on points the optimizer has not seen, and read it next to the boundary and initial mismatches.
+
+### 2. Quadrature error
+
+$$
+\mathcal{E}_{\text{quad}} = \mathcal{O}\big(N^{-1/2}\big) \quad \text{in any dimension}.
+$$
+
+- **$N$**: the number of collocation points in the Monte Carlo sample mean.
+- The constant grows with the variance of the residual over the domain, and the residual of a trained network is rough.
+- **Quadrature gap**: the relative difference between the mean-squared residual on a training pool and on a dense sample.
+
+Measured in K08 ([benchmarks](../benchmarks.md#dimension-scaling-experiment-k08)), which sweeps the dimension and reports both terms separately:
+
+| Points | Quadrature gap (K08) |
+|---|---|
+| 4,096, $d = 1 \ldots 5$ | 1–4 % in every dimension |
+| 36 and 216 | 10–14 % |
+
+The gap does not grow with dimension. A dimension costs through the terms listed under [High dimensions](#high-dimensions), as for the five-dimensional heat equation in the gallery of [custom equations](../custom_equations.md).
+
+**For training:** the number of collocation points need not grow with the dimension; a few thousand keep the quadrature term at a few percent.
+
+### 3. Causality
+
+- **Causality**: information in an evolution problem moves forward in time. Time-marching schemes respect this.
+- A PINN trained on all of space-time at once does not. It can settle on a wrong solution with a small residual (Krishnapriyan et al., 2021).
+- The metastable Allen–Cahn solution of B01 is such a case.
+- Causal weighting and time-marching (H03, H04) are the PINN equivalents of marching in time. H04 is in the [benchmarks](../benchmarks.md#time-marching-windows-experiment-h04); H03 is not run yet.
+
+**For training:** when the residual is small and the solution is wrong, train in time windows with `PDETrainer.train_windows` ([API](../api/training.md)).
 
 ## Linearized stability of coupled systems
 
-For a system $u_t = f(u; \theta)$ (the ODE entries, the reaction terms of Gray–Scott or the Brusselator, a process model with several balances), the Jacobian $\partial f/\partial u$ at an operating point gives the linearized dynamics. Its eigenvalues decide whether perturbations decay, and their ratio is the stiffness, which bounds the time step of an explicit method and stiffens the PINN loss in the same way a high-order derivative does. Experiment K09 computes the spectrum for the catalogue systems and for the evaporator model. Two cautions from it: the discretised transport operator of a process model is non-normal (an upwind scheme has one defective eigenvalue $-v/\Delta z$), so its computed spectrum is a pseudospectrum and the stiffness it suggests is the grid's, which a PINN never sees; and on ODEs the PINN's failures were trivial solutions close to the initial condition (pendulum, SIR, Lorenz), not the stiff systems. The process twins report the physical rates (residence, source) and the number of fast units in the window instead.
+For a system of balances, linearize at an operating point $u^\ast$:
+
+$$
+u_t = f(u; \theta), \qquad A = \frac{\partial f}{\partial u}\bigg|_{u^\ast}, \qquad \delta u_t = A\,\delta u, \qquad \text{stiffness} = \frac{\max_i |\operatorname{Re}\lambda_i|}{\min_i |\operatorname{Re}\lambda_i|} .
+$$
+
+- **$f$**: the right-hand side. Examples: the ODE entries, the reaction terms of Gray–Scott or the Brusselator, a process model with several balances.
+- **$A$**: the Jacobian at the operating point.
+- **$\delta u$**: a perturbation of the state.
+- **$\lambda_i$**: the eigenvalues of $A$. Perturbations decay when every $\operatorname{Re}\lambda_i < 0$.
+- **Stiffness**: the ratio of the fastest to the slowest rate. It bounds the time step of an explicit method, and it stiffens the PINN loss in the same way a high-order derivative does.
+
+Experiment K09 computes the spectrum for the catalogue systems and for the evaporator model ([benchmarks](../benchmarks.md#linearized-stability-experiment-k09)). Two cautions from it:
+
+1. **The transport operator is non-normal.** An upwind scheme has one defective eigenvalue $-v/\Delta z$, so the computed spectrum is a pseudospectrum. The stiffness it suggests is the grid's, which a PINN never sees.
+2. **On ODEs the PINN failed by the trivial solution, not by stiffness.** The failures (pendulum, SIR, Lorenz) were trivial solutions close to the initial condition.
+
+- **Non-normal operator**: one whose eigenvectors are not orthogonal, so its eigenvalues are sensitive to rounding.
+- **Pseudospectrum**: the eigenvalues of slightly perturbed copies of the operator, which is what the computation returns for a defective matrix.
+- **$v$, $\Delta z$**: the transport velocity and the grid spacing along the unit.
+- **Trivial solution**: a solution that satisfies the equation and ignores the initial condition, such as $u \equiv 0$.
+
+The process twins therefore report the physical rates (residence, source) and the number of fast units in the window, not the eigenvalues of the discretised operator.
+
+**For training:** before training on an ODE system, check whether a trivial solution lies near the initial condition; stiffness alone does not predict failure.
 
 ## High dimensions
 
-Both constants degrade with dimension: the quadrature constant through the variance of the residual, and the stability constant through the growth of the domain's boundary relative to its interior. Experiment K08 and paper P12 measure how. The maintainer's rule, applied to every system with many state variables, is to report the spectrum of the linearized dynamics and the two error terms before trusting a surrogate in that dimension.
+K08 measures the terms of the error estimate in $d = 1 \ldots 5$ space dimensions at a fixed budget ([benchmarks](../benchmarks.md#dimension-scaling-experiment-k08)).
+
+| Quantity (heat, K08) | $d = 1$ | $d = 5$ |
+|---|---|---|
+| Empirical constant $C$ | 0.8 | 8.4 |
+| Initial error | 0.009 | 0.076 |
+| Boundary error | 0.010 | 0.049 |
+| Quadrature gap | 0.030 | 0.032 |
+| Time per step | 14 ms | 122 ms |
+
+- **The stability constant grows.** For heat, $C = 0.8, 1.0, 1.3, 2.0, 8.4$ for $d = 1 \ldots 5$. The interior residual stays at 2–7 %.
+- **Cause 1, the conditions.** The boundary grows relative to the interior, and 512 fixed points cover the initial slab and the faces more thinly.
+- **Cause 2, normalisation.** The norm of the product solution shrinks as $2^{-d/2}$, which inflates the relative error (a factor 4 at $d = 5$).
+- **The quadrature term does not grow** at 4,096 points. The cost of a dimension is per point: one second-derivative pass per axis.
+- **Convection fails from $d = 2$ at this budget.** At $d = 4, 5$ the network converges to $u \approx 0$, with a small residual and an unpaid initial condition, and $C$ is meaningless there (5,947).
+- Paper P12 (planned) treats the scaling with dimension and with coupled fields.
+
+The maintainer's rule, for every system with many state variables:
+
+1. Report the spectrum of the linearized dynamics.
+2. Report the two error terms, with the initial and boundary errors next to them.
+3. Only then trust a surrogate in that dimension.
+
+**For training:** in many dimensions, spend points and loss weight on the initial and boundary conditions, not on more interior collocation points.
 
 ## References
 

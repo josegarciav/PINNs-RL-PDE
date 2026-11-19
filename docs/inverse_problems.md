@@ -1,15 +1,31 @@
 # Inverse problems
 
-A forward problem asks for `u(x, t)` given the PDE and its parameters. An **inverse problem** asks for the parameters given measurements of `u`. Examples include a material's thermal diffusivity from temperature traces, a wave speed from surface seismograms, a fouling resistance from evaporator temperatures, or a volatility from option prices.
+This page is for anyone who wants to estimate parameters or functions of an equation from measurements. It states the loss, the workflow, the settings an inverse run needs, and the conditions under which the answer can be trusted.
 
-Classical approaches need a forward solver run many times, plus its adjoint for gradient-based methods (ensemble Kalman filters avoid the adjoint at the cost of an ensemble of solves). A PINN learns the solution and the parameters in one optimization. The parameters become trainable tensors, and a data term joins the physics loss:
+- **Forward problem**: find $u(x, t)$ given the PDE and its parameters.
+- **Inverse problem**: find the parameters given measurements of $u$.
+- Examples: a thermal diffusivity from temperature traces, a wave speed from surface seismograms, a fouling resistance from evaporator temperatures, a volatility from option prices.
+
+A PINN learns the solution and the parameters in one optimization:
 
 $$
-\mathcal{L} = w_r\,\mathcal{L}_\text{residual} + w_b\,\mathcal{L}_\text{boundary} + w_i\,\mathcal{L}_\text{initial}
+\min_{\theta,\,\lambda}\; \mathcal{L} = w_r\,\mathcal{L}_\text{residual}(\theta, \lambda) + w_b\,\mathcal{L}_\text{boundary} + w_i\,\mathcal{L}_\text{initial}
 + w_d \operatorname{mean} \lvert u_\theta(x_\text{obs}, t_\text{obs}) - u_\text{obs} \rvert^2
 $$
 
-The residual ties the parameters to physically consistent solutions; the data term pulls the solution toward the measurements.
+- **$\theta$**: the network weights. $u_\theta$ is the network's approximation of the solution.
+- **$\lambda$**: the unknown parameters of the equation. They are trainable tensors, updated with the weights.
+- **$\mathcal{L}_\text{residual}$**: the mean squared residual $\mathcal{N}[u_\theta; \lambda]$ of the equation at the collocation points. It ties $\lambda$ to physically consistent solutions.
+- **Collocation point**: a point inside the domain where the residual is evaluated.
+- **$\mathcal{L}_\text{boundary}$, $\mathcal{L}_\text{initial}$**: the mean squared error on the boundary and initial conditions.
+- **Data term**: the last term, the mean squared misfit at the $N$ observations $(x_\text{obs}, t_\text{obs}, u_\text{obs})$. It pulls the solution toward the measurements.
+- **$w_r, w_b, w_i, w_d$**: the loss weights `residual`, `boundary`, `initial` and `data`.
+
+How this differs from classical approaches:
+
+- Classical methods run a forward solver many times, plus its adjoint for gradient-based methods.
+- Ensemble Kalman filters avoid the adjoint at the cost of an ensemble of solves.
+- A PINN needs neither: one optimization returns $u_\theta$ and $\lambda$.
 
 ## Command line
 
@@ -19,9 +35,32 @@ pinnrl-train --pde heat --arch fourier --epochs 3000 --device cpu \
   --obs-points 200 --obs-noise 0.01
 ```
 
-Without `--obs-path`, observations are sampled from the PDE's exact solution at the configured (true) parameters, with Gaussian noise. That makes it a recovery test whose answer is known. The run's `metadata.json` records the true and recovered values. Any scalar parameter of the PDE can be identified, and `--identify` can be repeated.
+What the run does:
+
+1. It makes `alpha` trainable, starting from 0.5.
+2. Without `--obs-path`, it samples observations from the PDE's exact solution at the configured (true) parameters and adds Gaussian noise. This is a recovery test whose answer is known.
+3. It trains the network and `alpha` together.
+4. It records the true and recovered values in the run's `metadata.json`.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--identify NAME` | none | A scalar parameter of the PDE to identify. Any one can be chosen, and the flag can be repeated |
+| `--initial-guess NAME=VALUE` | the configured value | Starting value of that parameter |
+| `--obs-points` | 200 | Number of synthetic observations |
+| `--obs-noise` | 0.01 | Standard deviation of their Gaussian noise |
+| `--obs-path file.npz` | none | Your own observations (see [Your own measurements](#your-own-measurements)) |
+
+The command above keeps the packaged weight decay and gradient clipping. Add `--weight-decay 0 --gradient-clipping 0` for an accurate estimate (see [below](#regularisation-defaults-for-inverse-runs)).
 
 ## Python
+
+The steps:
+
+1. Build a `TrainingConfig` with `mode="inverse"`, no weight decay and no gradient clipping.
+2. Build the PDE with `trainable_parameters` and `parameter_initial_guesses`.
+3. Attach observations (synthetic here).
+4. Build the model and train.
+5. Read the estimate with `pde.get_trainable_parameter_values()`.
 
 ```python
 import torch
@@ -73,19 +112,102 @@ PDETrainer(model, pde, config=config, device=device).train(progress=False)
 print(pde.get_trainable_parameter_values())          # notebook 05 recovers about 0.0499
 ```
 
+### Regularisation defaults for inverse runs
+
+The packaged defaults are forward-fit defaults. An inverse run must start from `weight_decay=0` and `gradient_clipping=0`.
+
+| Setting | Packaged default | Inverse runs | Why |
+|---|---|---|---|
+| `optimizer_config.weight_decay` | 0.0005 | 0 | It pulls the network toward zero and the parameter absorbs the bias (F01, D01) |
+| `gradient_clipping` | 1.0 (the default of `TrainingConfig`; not in `config.yaml`) | 0 | Clipping at norm 1 slows the network and leaves a field error the parameter absorbs (F01, D01) |
+| Weight decay on the unknowns $\lambda$ | always 0 | always 0 | The trainer puts identified parameters and unknown functions in their own Adam group without decay (found in F09) |
+| `optimizer` | `adam` | Adam, then an L-BFGS finish | The finish halves the error and the bias again (D01) |
+| `loss_weights.data` | 10 | search 10–100 | See [When the inversion is well posed](#when-the-inversion-is-well-posed) |
+
+- **Weight decay**: an L2 pull of the network weights toward zero.
+- **Gradient clipping**: rescaling the gradient when its norm exceeds a limit.
+- **L-BFGS**: a quasi-Newton optimizer with a line search (`optimizer="adam_lbfgs"`, or `lbfgs_steps` in `train_windows`; see [Training](training.md)).
+- **Cramér–Rao bound**: the smallest standard deviation any unbiased estimate can have for the given sensors and noise.
+
+The experiments that showed it (heat diffusivity $\alpha$, [F01](benchmarks.md#identification-baseline-experiment-f01) and [D01](benchmarks.md#optimizers-and-the-floor-experiments-d01-d02)):
+
+| Configuration | Relative error of $\hat\alpha$ | Field error | Source |
+|---|---|---|---|
+| Packaged decay and clipping, clean or lightly noisy data ($\sigma \le 0.01$) | 1.5–2 % whatever the number of observations, every seed at $\hat\alpha \approx 0.098$ | 2–3 % | F01 |
+| Both off, same Adam run, clean data | 0.1–0.2 % | 0.2 % | F01 (`--clean` rerun) |
+| Both off, median over the F01 grid | 0.6 %, down from 2.2 % | | F01 |
+| Both off, Adam 5,000 steps, 200 observations, noise 0.01 | 0.4 % (median of 5 seeds) | 0.23 % | D01 |
+| Both off, Adam 3,500 steps then L-BFGS 75 steps | 0.2 % | 0.1 % | D01 |
+
+- With both off and $\sigma = 0.01$, the error falls with the number of observations along the Cramér–Rao bound: 1.0 %, 0.7 %, 0.24 %, 0.22 % against bounds of 1.1 %, 0.7 %, 0.35 %, 0.16 % (F01).
+- D01's ablation attributes about half of the old floor to each of the two settings.
+- F11 (change point) saw the same effect: under the defaults a 3.6 % field error was absorbed into a smaller jump placed early, and three times the training did not help.
+- The packaged defaults are unchanged, so set both to 0 yourself. [Troubleshooting](troubleshooting.md) lists the symptom under "An identified parameter stalls 1–2 % from the truth".
+
 ## Unknown functions
 
-When the unknown is a function, a diffusivity that drifts as a surface fouls, a coefficient that varies along the equipment, or a closure $f(u)$, replace the scalar by an `unknown_functions` entry of a [`CustomPDE`](custom_equations.md#unknown-functions). The network that represents it trains with the data, under the constraints you declare (positive, bounded, monotone), and `pde.unknown_function_error(name)` grades it against the truth the synthetic data came from. [F09](benchmarks.md#field-valued-unknowns-experiment-f09) measures what this recovers on the heat equation: a linear drift $\alpha(t)$ to a few percent, a step to a steep ramp, a two-layer field $\alpha(x)$ to its shape, and a centred bump not at all, because the solution hardly depends on it.
+When the unknown is a function, replace the scalar by an `unknown_functions` entry of a [`CustomPDE`](custom_equations.md#unknown-functions):
+
+$$
+u_t = \big(\alpha(x)\,u_x\big)_x, \qquad \alpha(\cdot) \approx \text{a second network}
+$$
+
+- **Unknown function**: a coefficient that depends on the coordinates or on the solution. Examples: a diffusivity that drifts as a surface fouls, a coefficient that varies along the equipment, a closure $f(u)$.
+- **Closure**: a relation the equation needs and the physics does not supply.
+- **Constraints**: declare the function positive, bounded or monotone. Its network trains with the data under them.
+- **Grading**: `pde.unknown_function_error(name)` compares it with the truth the synthetic data came from.
+
+What this recovers on the heat equation ([F09](benchmarks.md#field-valued-unknowns-experiment-f09)):
+
+| Unknown | Result |
+|---|---|
+| A linear drift $\alpha(t)$ | Recovered to a few percent |
+| A step in $\alpha(t)$ | Recovered as a steep ramp |
+| A two-layer field $\alpha(x)$ | Recovered to its shape |
+| A centred bump in $\alpha(x)$ | Not recovered: the solution hardly depends on it |
 
 ## Your own measurements
 
-Provide an `.npz` file with arrays `x` of shape `(N, d)`, `t` of shape `(N, 1)` and `u` of shape `(N, 1)`. Pass it with `--obs-path`, in the dashboard (Observation source → File), or as `PDEConfig(observation_data={"path": ...})`. A [Well dataset](datasets.md) can also serve as the observation source.
+Point observations:
 
-Plant records are better described as [sensors](custom_equations.md#sensors): a probe at a fixed place read over time, a wall flux, an integral, each with its noise and delay. `CustomPDE(sensors=[PointSensor(x0, times), ...])` adds one misfit term per sensor to the data loss, `sensor.set_values(records)` attaches the readings, and `sensor_jacobian` gives the Fisher information of the layout so the sensors can be chosen before anything is trained.
+1. Save an `.npz` file with arrays `x` of shape `(N, d)`, `t` of shape `(N, 1)` and `u` of shape `(N, 1)`.
+2. Pass it with `--obs-path`, in the dashboard (Observation source → File), or as `PDEConfig(observation_data={"path": ...})`.
+
+A [Well dataset](datasets.md) can also serve as the observation source.
+
+Plant records are better described as [sensors](custom_equations.md#sensors). Each sensor $s$ adds its own misfit term to the data loss:
+
+$$
+\mathcal{L}_\text{data} \mathrel{+}= w_s \operatorname{mean} \left\lvert \frac{H_s[u_\theta] - y_s}{c_s} \right\rvert^2
+$$
+
+- **Sensor**: a measurement with an operator $H_s$: a probe at a fixed place read over time, a wall flux, an integral. Each has its noise and delay.
+- **$y_s$**: the sensor's records.
+- **$w_s$, $c_s$**: its `weight` (default 1) and `scale` (default 1, or the field's scale when the problem is normalised).
+- **Fisher information**: how much a sensor layout says about the unknowns, computed from the sensitivities of the readings.
+
+Steps:
+
+1. Declare the sensors: `CustomPDE(sensors=[PointSensor(x0, times), ...])`.
+2. Attach the readings: `sensor.set_values(records)`.
+3. Before training, compute `sensor_jacobian` to get the Fisher information of the layout and choose the sensors.
 
 ## When the inversion is well posed
 
-- **The data must excite the parameter.** Diffusivity can't be recovered from a steady state, because it leaves no signature there. Observations must cover the regime where the parameter acts.
-- **Balance the data weight.** If it's too small, the parameter barely moves from its initial guess. If it's too large, the network fits the noise and the physics stops constraining it. The example above (256 collocation points, 200 observations, noise 0.005) uses 50; 10–100 is a reasonable range to search.
+- **The data must excite the parameter.** Diffusivity cannot be recovered from a steady state, because it leaves no signature there. Observations must cover the regime where the parameter acts.
+- **Balance the data weight.** Too small, and the parameter barely moves from its initial guess. Too large, and the network fits the noise and the physics stops constraining it. The example above (256 collocation points, 200 observations, noise 0.005) uses 50; 10–100 is a reasonable range to search.
 - **Check identifiability before trusting a number.** Several parameters, or a parameter field, may not be uniquely determined by the sensors you have. The [theory pages](theory/identifiability.md) state the conditions, and `pinnrl.analysis` computes the Fisher bound when a closed form exists.
-- **A field is identified only where the solution feels it.** For $u_t = (\alpha(x) u_x)_x$ the sensitivity to a local change of $\alpha$ is proportional to the flux $\alpha u_x$ there, so $\alpha$ is invisible where $u_x$ vanishes, and a localized perturbation is smoothed by diffusion before it reaches the sensors. Compare the truth's solution with the one of the best constant (`heat_variable_reference` makes this a one-line check): if they differ by less than the surrogate's own error, the data cannot resolve the field.
+- **A field is identified only where the solution feels it.** For $u_t = (\alpha(x) u_x)_x$ the sensitivity to a local relative change $\delta\alpha / \alpha$ is proportional to the flux there:
+
+$$
+\frac{\delta u}{\delta \alpha / \alpha}(x) \;\propto\; \alpha\,u_x
+$$
+
+- $\alpha$ is invisible where $u_x$ vanishes.
+- A localized perturbation is smoothed by diffusion before it reaches the sensors.
+- The check: compare the truth's solution with the one of the best constant (`heat_variable_reference` makes this one line). If they differ by less than the surrogate's own error, the data cannot resolve the field.
+
+Terms used above:
+
+- **Identifiable**: the sensors determine the unknown uniquely.
+- **Surrogate**: the trained network standing in for the solution.

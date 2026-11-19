@@ -15,7 +15,7 @@ uv run pre-commit install       # ruff (lint + format), and output stripping for
 
 ```bash
 uv run pytest                                   # the full suite, about 30 s on a laptop
-uv run pytest --cov=pinnrl --cov-fail-under=80  # coverage gate
+uv run pytest --cov=pinnrl --cov-fail-under=90  # coverage gate
 uv run ruff format --check . && uv run ruff check .
 uv run mypy                                     # type check of the package (config in pyproject.toml)
 uv run mkdocs build --strict                    # docs, including the API reference

@@ -23,13 +23,15 @@ Arms (each in its own process, so one framework's threads and compiler do not to
     jax-forward       JAX, jit: nested jvp (forward mode) for the input derivatives, one reverse pass
     jax-jet           JAX, jit: jax.experimental.jet (Taylor mode), one reverse pass
     deepxde           DeepXDE with its PyTorch backend, dde.grad.jacobian
+    physicsnemo       NVIDIA PhysicsNeMo's PhysicsInformer with autodiff (second order at most)
 
 Every arm is timed at one thread: the best of ``--rounds`` rounds of ``--steps`` steps, after a
 warm-up that includes any compilation. The passes over the arms are repeated ``--passes`` times
 and each arm keeps its best.
 
 Usage:
-    uv run --with jax --with deepxde python experiments/I17_step_head_to_head/run.py
+    uv run --with jax --with deepxde --with nvidia-physicsnemo \
+        python experiments/I17_step_head_to_head/run.py
 An arm whose framework is not installed, or that fails, is recorded with its error.
 """
 
@@ -143,6 +145,7 @@ ARMS = [
     "jax-forward",
     "jax-jet",
     "deepxde",
+    "physicsnemo",
 ]
 
 
@@ -583,8 +586,81 @@ def arm_deepxde(problem, steps, rounds):
     return best, {"deepxde": dde.__version__, "points": "fixed (no resampling)"}
 
 
+# ------------------------------------------------------------------------- physicsnemo
+def arm_physicsnemo(problem, steps, rounds):
+    """NVIDIA PhysicsNeMo's own physics-informed loss: ``PhysicsInformer`` with autodiff.
+
+    The core package (``nvidia-physicsnemo``) installs without a GPU; ``nvidia-physicsnemo-sym``
+    does not (its build compiles a CUDA extension). ``PhysicsInformer`` names its coordinates
+    x, y, z and takes derivatives up to second order, so time is passed as its last axis and
+    a problem of higher order is recorded with the error it raises.
+    """
+    import sympy
+    import torch
+    from physicsnemo.sym.eq.pde import PDE
+    from physicsnemo.sym.eq.phy_informer import PhysicsInformer
+
+    if LAYER_NORM:
+        raise RuntimeError("not run with layer normalization")
+    spec = PROBLEMS[problem]
+    fields, names, _ = layout(problem)
+    axes = dict(zip(names, ["x", "y", "z"], strict=False))
+    if len(axes) < len(names):
+        raise RuntimeError("PhysicsInformer has three coordinates")
+    symbols = {c: sympy.Symbol(a) for c, a in axes.items()}
+    functions = {f: sympy.Function(f)(*symbols.values()) for f in fields}
+    named = {}
+    for name, fn in functions.items():
+        named[name] = fn
+        for chain in spec["chains"]:
+            for m in range(1, len(chain) + 1):
+                key = name + "_" + "".join(sorted(chain[:m]))
+                named[key] = fn.diff(*(symbols[c] for c in chain[:m]))
+    residuals = spec["residual"](named)
+
+    class Equations(PDE):
+        def __init__(self):
+            self.dim = len(names)
+            self.equations = {f"eq{i}": r for i, r in enumerate(residuals)}
+
+    informer = PhysicsInformer(
+        required_outputs=[f"eq{i}" for i in range(len(residuals))],
+        equations=Equations(),
+        grad_method="autodiff",
+    )
+    net = _torch_net(problem)
+    optimizer = torch.optim.Adam(net.parameters(), lr=LR)
+    # the residual must be the one the eager PyTorch arm computes
+    xt = _torch_points(problem)[0].requires_grad_(True)
+    out = net(xt)
+    got = informer.forward(
+        {"coordinates": xt, **{f: out[:, j : j + 1] for j, f in enumerate(fields)}}
+    )
+    mine = torch.cat([got[f"eq{i}"] for i in range(len(residuals))], dim=1)
+    reference = _residual_torch_eager(problem, net, xt.detach().clone())
+    assert (mine - reference).norm() < 5e-3 * reference.norm() + 1e-4, "PhysicsNeMo arm disagrees"
+
+    def step():
+        xt, ic, bc = _torch_points(problem)
+        xt.requires_grad_(True)
+        optimizer.zero_grad()
+        out = net(xt)
+        res = informer.forward(
+            {"coordinates": xt, **{f: out[:, j : j + 1] for j, f in enumerate(fields)}}
+        )
+        r = torch.cat([res[f"eq{i}"] for i in range(len(residuals))], dim=1)
+        u_ic = net(ic) - torch.exp(-(ic[:, 0:1] ** 2))
+        loss = (r**2).mean() + W_IC * (u_ic**2).mean() + W_BC * (net(bc) ** 2).mean()
+        loss.backward()
+        optimizer.step()
+
+    import physicsnemo
+
+    return best_of(step, steps, rounds), {"physicsnemo": physicsnemo.__version__}
+
+
 def run_arm(arm, problem, threads, steps, rounds):
-    if arm.startswith(("pinnrl", "torch", "deepxde")):
+    if arm.startswith(("pinnrl", "torch", "deepxde", "physicsnemo")):
         import torch
 
         if threads:
@@ -597,6 +673,8 @@ def run_arm(arm, problem, threads, steps, rounds):
         return arm_torch(problem, arm.split("-")[1], steps, rounds)
     if arm.startswith("jax-"):
         return arm_jax(problem, arm.split("-")[1], steps, rounds)
+    if arm == "physicsnemo":
+        return arm_physicsnemo(problem, steps, rounds)
     return arm_deepxde(problem, steps, rounds)
 
 
