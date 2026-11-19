@@ -80,6 +80,15 @@ _LOADED: dict[str, ctypes.CDLL] = {}
 _ERRORS: dict[str, str] = {}
 
 
+def _compiler() -> str | None:
+    return (
+        os.environ.get("CXX")
+        or shutil.which("clang++")
+        or shutil.which("g++")
+        or shutil.which("c++")
+    )
+
+
 def _load_library(name: str) -> ctypes.CDLL | None:
     """Compile (once per source version) and load one of the kernels; ``None`` when that fails."""
     if name in _LOADED:
@@ -87,12 +96,7 @@ def _load_library(name: str) -> ctypes.CDLL | None:
     if name in _ERRORS:
         return None
     main, sources, blas = _LIBRARIES[name]
-    compiler = (
-        os.environ.get("CXX")
-        or shutil.which("clang++")
-        or shutil.which("g++")
-        or shutil.which("c++")
-    )
+    compiler = _compiler()
     if compiler is None:
         _ERRORS[name] = (
             "no C++ compiler found (install the Xcode command line tools on macOS, g++ on Linux)"

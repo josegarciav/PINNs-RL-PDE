@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import copy
 import itertools
+import math
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
@@ -808,27 +809,141 @@ class CustomPDE(PDEBase):
         w = torch.tensor(mult, device=error.device, dtype=error.dtype)
         return error * w[: error.shape[1]]
 
-    def compute_loss(
+    def _residual_loss(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
-    ) -> dict[str, torch.Tensor]:
-        """As :meth:`PDEBase.compute_loss`, with the residual columns weighted by ``field_weights``."""
-        losses = super().compute_loss(model, x, t)
-        if any(m != 1.0 for m in self._multipliers("residual")):
-            losses["residual"] = self._apply_loss_fn(
-                self._weighted(self.compute_residual(model, x, t), "residual")
-            )
-            weights = self._training_option("loss_weights") or {}
-            adaptive = self._training_option("adaptive_weights")
-            if adaptive is not None and getattr(adaptive, "enabled", False):
-                physics = (1.0, 1.0, 1.0)
-            else:
-                physics = (
-                    float(weights.get("pde", weights.get("residual", 1.0))),
-                    float(weights.get("boundary", 10.0)),
-                    float(weights.get("initial", 10.0)),
-                )
-            losses["total"] = self.weighted_total(losses, *physics)
-        return losses
+    ) -> torch.Tensor:
+        """The residual term, its columns weighted by ``field_weights``.
+
+        Where it applies, the term and its weight gradient come from one call
+        of a step compiled for these equations
+        (:mod:`pinnrl.native.specialize`); otherwise the residual is computed
+        by :meth:`compute_residual` and reduced here.
+        """
+        compiled = self._compiled_residual_loss(model, x, t)
+        if compiled is not None:
+            return compiled
+        return self._apply_loss_fn(self._weighted(self.compute_residual(model, x, t), "residual"))
+
+    def _step_spec(self):
+        """The specialised step's description for these equations, or ``None`` (cached)."""
+        if "_step_spec_cache" in self.__dict__:
+            return self._step_spec_cache
+        from pinnrl.native import specialize, taylor_streams
+
+        self._step_spec_cache = None
+        request = self._native_request()
+        if request is None or self.inputs or self.config.trainable_parameters:
+            return None
+        spatial = list(self.spatial_coordinates)
+        columns = {c: i for i, c in enumerate(spatial)}
+        columns["t"] = max(len(spatial), 1)  # an ODE keeps a dummy spatial column
+        names = {i: c for c, i in columns.items()}
+        cols, alphas = taylor_streams([tuple(columns[c] for c in d) for d in request])
+        streams: dict[str, tuple[int, int, float]] = {}
+        for j, name in enumerate(self.fields):
+            for s, alpha in enumerate(alphas):
+                coords = tuple(names[c] for c, k in zip(cols, alpha, strict=True) for _ in range(k))
+                symbol = derivative_name(name, coords) if coords else name
+                streams[symbol] = (s, j, float(math.prod(math.factorial(k) for k in alpha)))
+        parameters = tuple(dict.fromkeys(p for e in self._equations for p in e.parameters))
+        if not alphas or any(p not in self.parameters for p in parameters):
+            return None
+        code = specialize.residual_code(
+            [e.expr for e in self._equations],
+            streams,
+            {c: columns[c] for c in self.coordinates},
+            parameters,
+            n_inputs=columns["t"] + 1 if self.time_dependent else len(spatial),
+            n_outputs=len(self.fields),
+        )
+        if code is None:
+            return None
+        spec = specialize.ResidualSpec(
+            equations=tuple(e.text for e in self._equations),
+            alphas=tuple(alphas),
+            n_inputs=columns["t"] + 1 if self.time_dependent else len(spatial),
+            n_outputs=len(self.fields),
+            code=code,
+            parameters=parameters,
+        )
+        self._step_spec_cache = (spec, cols)
+        return self._step_spec_cache
+
+    def _compiled_residual_loss(
+        self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
+    ) -> torch.Tensor | None:
+        """The residual term by the specialised compiled step, or ``None`` where it does not apply.
+
+        It needs what the general kernel needs (a ``tanh`` feed-forward
+        network in float32 on the CPU, equations given as text) and, for now,
+        a network without input or output scaling, fixed parameters and the
+        squared loss. The first calls of a problem are served by the general
+        kernel while the step compiles (:func:`pinnrl.native.specialize.specialize_after`).
+        """
+        from pinnrl import native
+        from pinnrl.native import specialize
+        from pinnrl.neural_networks import FeedForwardNetwork, _inside_function_transform
+
+        if getattr(self, "_step_disabled", False):
+            return None
+        after = specialize.specialize_after()
+        inner = getattr(model, "model", None)
+        if (
+            after is None
+            or getattr(self, "derivatives", "auto") == "autograd"
+            or not isinstance(inner, FeedForwardNetwork)
+            or getattr(model, "scaled", True)
+            or self._training_option("loss_function", "mse") != "mse"
+            or x.device.type != "cpu"
+            or x.dtype != torch.float32
+            or not self.time_dependent
+            or _inside_function_transform()
+            or not native.available()
+        ):
+            return None
+        stack = native.supported_stack(list(inner.layers))
+        if stack is None or stack[0][0].weight.dtype != torch.float32:
+            return None
+        if stack[0][0].weight.device.type != "cpu":
+            return None
+        found = self._step_spec()
+        if found is None:
+            self._step_disabled = True
+            return None
+        spec, cols = found
+        calls = self.__dict__.get("_step_calls", 0) + 1
+        self._step_calls = calls
+        if calls < after:
+            if calls >= max(1, after // 2):
+                specialize.step_library(spec, wait=False)  # compile while the general kernel runs
+            return None
+        lib = self.__dict__.get("_step_lib")
+        if lib is None:
+            lib = specialize.step_library(spec, wait=True)
+            if lib is None:
+                self._step_disabled = True
+                return None
+            self._step_lib = lib
+        values = self._parameter_values()
+        if any(
+            isinstance(values[p], torch.Tensor) and values[p].requires_grad for p in spec.parameters
+        ):
+            return None  # a parameter being differentiated: the loss must carry its graph
+        parameters = [float(values[p]) for p in spec.parameters]
+
+        def by_autograd() -> torch.Tensor:
+            previous, self.derivatives = self.derivatives, "autograd"
+            try:
+                residual = self.compute_residual(model, x, t)
+                return self._apply_loss_fn(self._weighted(residual, "residual"))
+            finally:
+                self.derivatives = previous
+
+        points = torch.cat([x.detach(), t.detach()], dim=1)
+        return specialize.run_step(
+            lib, spec, cols, stack[0], stack[1], points, parameters,
+            self._multipliers("residual"), by_autograd,
+        )  # fmt: skip
 
     def evaluate_expression(
         self,

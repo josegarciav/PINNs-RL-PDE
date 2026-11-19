@@ -243,27 +243,27 @@ See `experiments/I13_native_higher_order/`.
 
 ## The step against the alternatives (experiment I17)
 
-The same training step (a 4 × 64 `tanh` network, 5,120 points, Adam) in `pinnrl`, PyTorch, JAX and DeepXDE, on three equations of rising order, one thread on an Apple M4, milliseconds per step.
+The same training step (a 4 × 64 `tanh` network, 5,120 points, Adam) in `pinnrl`, PyTorch, JAX and DeepXDE, on nine problems from second to fourth order, with a mixed derivative, two fields and two space dimensions; one thread on an Apple M4, milliseconds per step.
 
 ![I17](assets/benchmarks/i17_step_head_to_head.png)
 
-| Implementation | heat, $u_{xx}$ | KdV, $u_{xxx}$ | Cahn–Hilliard, $u_{xxxx}$ |
-|---|---|---|---|
-| JAX, `jit`, forward mode (nested `jvp`) | **4.2** | **6.1** | 10.6 |
-| JAX, `jit`, Taylor mode (`jax.experimental.jet`) | 5.1 | 7.7 | **10.2** |
-| **`pinnrl`, the default (compiled kernel)** | 5.4 | 7.4 | 10.3 |
-| JAX, `jit`, reverse over reverse | 5.8 | 16.0 | 58.9 |
-| PyTorch, nested `autograd.grad` | 8.7 | 17.6 | 43.6 |
-| DeepXDE (PyTorch backend) | 10.2 | 21.9 | 58.3 |
-| `pinnrl`, `derivatives="autograd"` | 10.4 | 19.5 | 45.7 |
-| `torch.func`, nested `jvp` | 16.9 | 35.7 | 92.5 |
-| `torch.compile` | fails | fails | fails |
+| Implementation | heat | Burgers | Allen–Cahn | KdV | BBM | Cahn–Hilliard | K–S | Schrödinger | heat 2-D |
+|---|---|---|---|---|---|---|---|---|---|
+| **`pinnrl`, the default (step compiled per equation)** | **3.5** | **3.6** | **3.5** | **4.3** | **5.5** | **5.6** | **5.6** | **3.6** | **4.9** |
+| JAX, `jit`, forward mode (nested `jvp`) | 4.3 | 4.4 | 4.3 | 6.4 | 6.9 | 10.9 | 11.0 | 4.3 | 6.6 |
+| `pinnrl`, general kernel (`PINNRL_NATIVE_SPECIALIZE=off`) | 4.9 | 5.0 | 5.0 | 7.1 | 9.2 | 10.1 | 10.0 | 5.2 | 7.3 |
+| JAX, `jit`, Taylor mode (`jax.experimental.jet`) | 5.2 | 5.4 | 5.4 | 7.5 | 8.7 | 10.6 | 10.5 | 5.4 | 7.6 |
+| JAX, `jit`, reverse over reverse | 6.1 | 7.9 | 6.7 | 16.1 | 16.1 | 60.7 | 60.5 | 11.7 | 9.5 |
+| PyTorch, nested `autograd.grad` | 8.9 | 9.0 | 9.0 | 18.0 | 18.0 | 44.7 | 44.7 | 17.7 | 12.0 |
+| `pinnrl`, `derivatives="autograd"` | 10.1 | 10.4 | 10.3 | 19.5 | 19.6 | 46.2 | 46.2 | 15.7 | 14.5 |
+| DeepXDE (PyTorch backend) | 10.5 | 10.7 | 10.8 | 23.6 | 23.6 | 61.3 | 59.2 | 19.3 | 15.0 |
+| `torch.func`, nested `jvp` | 17.4 | 17.4 | 17.2 | 36.5 | 31.5 | 94.2 | 93.9 | 17.4 | 27.4 |
+| `torch.compile` | fails | fails | fails | fails | fails | fails | fails | fails | fails |
 
-- **In the PyTorch ecosystem the kernel is the fastest step:** 1.6–4.2× the textbook loop and 1.9–5.6× DeepXDE, more as the order rises. `torch.compile` refuses the step (no double backward in PyTorch 2.10) and `torch.func`'s forward mode is slower than eager reverse mode.
-- **JAX in forward mode is faster still on low orders:** 1.3× on heat, 1.2× on KdV, level on Cahn–Hilliard. XLA compiles the whole step for the equation; the kernel is a general pass called from Python.
-- **The technique decides:** every compiled forward- or Taylor-mode arm is within 30 % of the others, and reverse over reverse is 1.5–6× behind in either framework.
-- **The gap has a known source:** a step specialised by hand for heat runs in 3.6 ms (I11), under JAX's 4.2. Generating the kernel's passes per equation is the next item of the [roadmap](roadmap.md).
-- PhysicsNeMo was not run; it differentiates with PyTorch autograd, so the eager row is its floor by inference.
+- **`pinnrl` is first on every equation:** 1.2× JAX's best mode on second-order problems, 1.25–1.5× at third order and in 2-D, 1.9× at fourth order; 2.5–8× the textbook PyTorch loop and 3–11× DeepXDE.
+- **It was not when the experiment started.** JAX's forward mode led by 1.3× on heat and 1.2× on KdV, for two reasons: XLA fuses each layer's derivative arithmetic into one loop written for the equation, and its `tanh` is a rational approximation three times as fast as a vector library's. Both are now in the package: [a step compiled per equation](custom_equations.md#a-faster-step-the-compiled-kernel) (1.4–1.8× over the general kernel) and the rational `tanh`.
+- **The technique decides before the framework does:** reverse over reverse is 1.4–6× behind forward or Taylor mode inside JAX itself. `torch.compile` cannot run the step and `torch.func`'s forward mode is slower than eager reverse mode.
+- **Limits:** with layer normalization (the packaged default network) the compiled step gains less (9.0 → 7.4 ms on heat's residual pass); scaled networks and the inverse problems still run on the general kernel; PhysicsNeMo and Linux were not measured.
 
 See `experiments/I17_step_head_to_head/`.
 

@@ -34,19 +34,15 @@
 #include <Accelerate/Accelerate.h>
 #else
 #include <cblas.h>  // OpenBLAS (libopenblas-dev); see the build flags in __init__.py
-#include "fast_tanh.h"
 #endif
+#include "fast_tanh.h"
 
 namespace {
 
-// x = tanh(x) over n elements: Apple's vectorised vvtanhf, or a branch-free tanh the compiler
-// vectorises (the C library's tanhf is scalar, and glibc's vector one needs full fast-math).
+// x = tanh(x) over n elements, by a rational approximation the compiler vectorises (three times
+// as fast as Accelerate's vvtanhf at float32 accuracy; see fast_tanh.h).
 inline void tanh_inplace(float* x, int n) {
-#ifdef __APPLE__
-    vvtanhf(x, x, &n);
-#else
-    for (int i = 0; i < n; ++i) x[i] = fast_math::tanhf_approx(x[i]);
-#endif
+    for (int i = 0; i < n; ++i) x[i] = fast_math::tanhf_rational(x[i]);
 }
 
 }  // namespace

@@ -40,7 +40,7 @@ def test_model_maps_inputs_to_the_unit_cube_and_outputs_to_physical_units():
     assert torch.allclose(model(x), 300.0 + 50.0 * inner)
     # without normalize the model is the bare network
     raw = _physical().build_trainer("feedforward", model={"hidden_dims": [8, 8]}).model
-    assert not raw.scaled and torch.allclose(raw(x), raw.model(x))
+    assert not raw.scaled and torch.allclose(raw(x), raw.model(x), atol=1e-6)  # kernel vs torch
     with pytest.raises(ValueError, match="not a field"):
         _physical(scales={"v": 1.0})
     with pytest.raises(ValueError, match="positive"):

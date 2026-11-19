@@ -974,7 +974,7 @@ class PDEBase:
         self._value_stash = self._batched_values(model)
         try:
             losses = {
-                "residual": self._apply_loss_fn(self.compute_residual(model, x, t)),
+                "residual": self._residual_loss(model, x, t),
                 "boundary": self._boundary_loss(model),
                 "initial": self._initial_loss(model),
                 "data": self._compute_data_loss(model),
@@ -994,6 +994,12 @@ class PDEBase:
             )
         losses["total"] = self.weighted_total(losses, *physics_weights)
         return losses
+
+    def _residual_loss(
+        self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
+    ) -> torch.Tensor:
+        """The residual term of the loss at the collocation points ``x, t``."""
+        return self._apply_loss_fn(self.compute_residual(model, x, t))
 
     def _value_points_need_grad(self) -> bool:
         """Whether a boundary or initial term differentiates the network at its points."""
