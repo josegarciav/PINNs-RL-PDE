@@ -44,7 +44,7 @@ def evaporator_solve(
 
     Args:
         nz: Grid points including the inlet.
-        geometry: ``(length, velocity, perimeter, U, latent_heat, T_sat, k_bpe)``.
+        geometry: ``(length, velocity, velocity * perimeter, U, latent_heat, T_sat, k_bpe)``.
         signal_times: ``(n,)`` increasing times of the input tables.
         signal_values: ``(n, 4)`` columns ``W_in``, ``X_in``, ``T_s``, ``R_f`` at those times,
             interpolated linearly in between and held constant outside.

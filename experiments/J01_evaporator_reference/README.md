@@ -6,9 +6,9 @@ J01: a trusted forward model to grade everything else against. J02: can the PINN
 
 ## Setup
 
-**The model** (`pinnrl.process.FallingFilmEvaporator`). A liquid film runs down a heated tube of length $L = 10$ m at $v = 0.5$ m/s (residence time 20 s). Steam at $T_s$ heats it through the wall; the film boils at $T_b(X) = T_{\text{sat}} + k_{\text{bpe}} X$ (boiling-point elevation, $k_{\text{bpe}} = 4$ K), and the heat flux $q = (T_s - T_b(X)) / (1/U + R_f)$ ($U = 2{,}000$ W/m²K clean, $R_f$ the fouling resistance) evaporates water at $P q / \lambda$ per unit length ($P = \pi \cdot 0.05$ m, $\lambda = 2.3$ MJ/kg). The liquid mass flow $W$ and the solids fraction $X$ obey
+**The model** (`pinnrl.process.FallingFilmEvaporator`). A liquid film runs down a heated tube of length $L = 10$ m at $v = 0.5$ m/s (residence time 20 s). Steam at $T_s$ heats it through the wall; the film boils at $T_b(X) = T_{\text{sat}} + k_{\text{bpe}} X$ (boiling-point elevation, $k_{\text{bpe}} = 4$ K), and the heat flux $q = (T_s - T_b(X)) / (1/U + R_f)$ ($U = 2{,}000$ W/m²K clean, $R_f$ the fouling resistance) evaporates water at $P q / \lambda$ per unit length ($P = \pi \cdot 0.1$ m of wetted perimeter, $\lambda = 2.3$ MJ/kg). With the hold-up per unit length $W/v$, the balance $(W/v)_t + W_z = -P q/\lambda$ gives the transport form. The liquid mass flow $W$ and the solids fraction $X$ obey
 
-$$W_t + v W_z = -\frac{P q(X)}{\lambda}, \qquad X_t + v X_z = \frac{X P q(X)}{\lambda W},$$
+$$W_t + v W_z = -\frac{v P q(X)}{\lambda}, \qquad X_t + v X_z = \frac{v X P q(X)}{\lambda W},$$
 
 with the feed $W(0, t) = W_{\text{in}}(t)$, $X(0, t) = X_{\text{in}}(t)$ (0.1 kg/s at 10 % solids), $T_s(t) = 355.15$ K (12 K above $T_{\text{sat}} = 343.15$ K) and $R_f(t)$ as inputs. Solids are conserved along the tube ($WX$ constant in steady state).
 

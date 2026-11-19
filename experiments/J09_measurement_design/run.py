@@ -55,7 +55,7 @@ C_TRUE = np.array([1.0, 1.0, 0.0, 0.0, 0.0, 0.0])  # the ramp 0 -> 2e-4
 Z90 = 1.6448536269514722
 
 # noise of one record
-NOISE = {"X": 0.002, "W": 0.001, "C": 1.2e-4, "lab": 5e-4}
+NOISE = {"X": 0.002, "W": 0.001, "C": 2.4e-4, "lab": 5e-4}  # C: 1 % of the evaporation
 # the nuisances and what each instrument is trusted to (1 sigma)
 NUISANCES = ["b", "xin", "win", "ox", "ow", "gc"]
 PRIOR = {"b": 0.3, "xin": 0.001, "win": 0.005, "ox": 0.002, "ow": 0.005, "gc": 0.02}

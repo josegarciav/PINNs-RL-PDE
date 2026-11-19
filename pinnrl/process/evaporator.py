@@ -6,12 +6,17 @@ temperature is the boiling point ``T_b(X) = T_sat + k_bpe X`` of a solution
 with solids mass fraction ``X`` (the boiling-point elevation), and the heat
 flux goes into evaporation. With a fouling resistance ``R_f`` on the wall the
 flux is ``q = (T_s - T_b(X)) / (1/U + R_f)``. Per unit length the film loses
-water at the rate ``P q / lambda`` (``P`` the wetted perimeter, ``lambda``
-the latent heat) and the solids are conserved, which gives two transport
-equations for the liquid mass flow ``W`` and the mass fraction ``X``::
+water at the rate ``P q / lambda`` in kg/(m s) (``P`` the wetted perimeter,
+``lambda`` the latent heat) and the solids are conserved. With the hold-up
+per unit length ``W / v``, the balances ``(W/v)_t + W_z = -P q / lambda`` and
+its counterpart for the solids give two transport equations for the liquid
+mass flow ``W`` and the mass fraction ``X``::
 
-    W_t + v W_z = -P q(X) / lambda
-    X_t + v X_z =  X P q(X) / (lambda W)
+    W_t + v W_z = -v P q(X) / lambda
+    X_t + v X_z =  v X P q(X) / (lambda W)
+
+so that at steady state ``W_z = -P q / lambda``: the water evaporated along
+the tube is the heat delivered through its wall divided by the latent heat.
 
 with the feed ``W(0, t) = W_in(t)``, ``X(0, t) = X_in(t)`` at the inlet, and
 ``T_s(t)`` and ``R_f(t)`` as inputs. The outlet ``X(L, t)`` and ``W(L, t)``
@@ -76,16 +81,17 @@ class EvaporatorReference:
 class FallingFilmEvaporator:
     """Geometry, physics and operating point of one evaporator tube (SI units).
 
-    Defaults are a dairy-evaporator tube: 10 m long, 50 mm bore, a clean
-    overall coefficient of 2,000 W/m²K, steam 12 K above the solvent's
-    saturation temperature, a feed of 0.1 kg/s at 10 % solids, and a film
-    velocity of 0.5 m/s (20 s residence time); one pass evaporates about 14 %
-    of the feed's water.
+    Defaults are a dairy-evaporator tube: 10 m long, a wetted perimeter of
+    0.314 m (a 100 mm bore, or two 50 mm tubes fed together), a clean overall
+    coefficient of 2,000 W/m²K, steam 12 K above the solvent's saturation
+    temperature, a feed of 0.1 kg/s at 10 % solids, and a film velocity of
+    0.5 m/s (20 s residence time). One pass evaporates 31.5 % of the feed
+    (35 % of its water): 72 kW through 3.1 m² of wall.
     """
 
     length: float = 10.0  # m
     velocity: float = 0.5  # m/s
-    perimeter: float = float(np.pi * 0.05)  # m, wetted perimeter of a 50 mm tube
+    perimeter: float = float(np.pi * 0.1)  # m, wetted perimeter (a 100 mm bore)
     U: float = 2000.0  # W/m²K, clean overall heat-transfer coefficient
     latent_heat: float = 2.3e6  # J/kg
     T_sat: float = 343.15  # K, solvent saturation temperature at the operating pressure
@@ -116,12 +122,12 @@ class FallingFilmEvaporator:
         Returns ``{"z", "W", "X", "q"}``.
         """
         z = np.linspace(0.0, self.length, nz)
-        P, lam, v = self.perimeter, self.latent_heat, self.velocity
+        P, lam = self.perimeter, self.latent_heat
 
         def rhs(_z, s):
             W, X = s
             q = self.heat_flux(X, t)
-            return [-P * q / (lam * v), X * P * q / (lam * W * v)]
+            return [-P * q / lam, X * P * q / (lam * W)]
 
         sol = solve_ivp(
             rhs,
@@ -136,8 +142,13 @@ class FallingFilmEvaporator:
             raise RuntimeError(f"steady-state solve failed: {sol.message}")
         return {"z": z, "W": sol.y[0], "X": sol.y[1], "q": self.heat_flux(sol.y[1], t)}
 
-    def mol_rhs(self, nz: int = 201) -> Callable[[float, np.ndarray], np.ndarray]:
+    def mol_rhs(
+        self, nz: int = 201, transport: bool = True
+    ) -> Callable[[float, np.ndarray], np.ndarray]:
         """The method-of-lines right-hand side ``ds/dt = f(t, s)`` on ``nz`` axial points.
+
+        ``transport=False`` leaves out the advection terms and keeps the
+        evaporation source alone (the local rates of K09).
 
         The state is ``s = [W_0..W_{nz-1}, X_0..X_{nz-1}]``; first-order upwind
         in ``z``; the inlet entries are overwritten by the feed signals. The
@@ -154,8 +165,9 @@ class FallingFilmEvaporator:
             q = self.heat_flux(X, tau)
             dW = np.zeros(nz)
             dX = np.zeros(nz)
-            dW[1:] = -v * (W[1:] - W[:-1]) / dz - P * q[1:] / lam
-            dX[1:] = -v * (X[1:] - X[:-1]) / dz + X[1:] * P * q[1:] / (lam * W[1:])
+            a = v / dz if transport else 0.0
+            dW[1:] = -a * (W[1:] - W[:-1]) - v * P * q[1:] / lam
+            dX[1:] = -a * (X[1:] - X[:-1]) + v * X[1:] * P * q[1:] / (lam * W[1:])
             return np.concatenate([dW, dX])
 
         return rhs
@@ -164,7 +176,7 @@ class FallingFilmEvaporator:
         return (
             float(self.length),
             float(self.velocity),
-            float(self.perimeter),
+            float(self.perimeter * self.velocity),  # the kernel's source coefficient, v P
             float(self.U),
             float(self.latent_heat),
             float(self.T_sat),
@@ -425,8 +437,8 @@ class FallingFilmEvaporator:
         X_scale = float(_as_fn(self.X_in)(0.0))
         return CustomPDE(
             [
-                f"W_t + v*W_z + P*{flux}/lam",
-                f"X_t + v*X_z - X*P*{flux}/(lam*W)",
+                f"W_t + v*W_z + v*P*{flux}/lam",
+                f"X_t + v*X_z - v*X*P*{flux}/(lam*W)",
             ],
             domain={"z": (0.0, self.length), "t": (0.0, t_max)},
             fields=["W", "X"],

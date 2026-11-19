@@ -223,8 +223,7 @@ def evaporator_spectrum(nz, fouling=0.0):
     re = eig.real
     dz = ev.length / (nz - 1)
     # The source terms alone (no transport): a 2 x 2 block per node, the physical rates.
-    still = FallingFilmEvaporator(R_f=fouling, velocity=0.0)
-    rhs_source = still.mol_rhs(nz)
+    rhs_source = FallingFilmEvaporator(R_f=fouling).mol_rhs(nz, transport=False)
     J_s = np.zeros((n, n))
     for j in range(n):
         h = 1e-6 * max(abs(s[j]), 1e-3)
@@ -248,7 +247,8 @@ def evaporator_spectrum(nz, fouling=0.0):
         "source_max_real_part": float(eig_s.real.max()),
         "max_imag": float(np.abs(eig.imag).max()),
         "residence_time_s": ev.residence_time(),
-        "evaporation_time_s": 0.1 / (ev.perimeter * q_in / ev.latent_heat) / ev.velocity,
+        # the time for the inlet's evaporation rate to remove the whole feed
+        "evaporation_time_s": 0.1 / (ev.velocity * ev.perimeter * q_in / ev.latent_heat),
         "jacobian_time_s": time.time() - t0,
         "eigenvalues_real": re.tolist(),
         "eigenvalues_imag": eig.imag.tolist(),

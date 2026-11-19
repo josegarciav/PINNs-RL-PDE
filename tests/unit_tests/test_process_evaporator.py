@@ -53,11 +53,11 @@ def test_custom_pde_form_matches_the_solver_equations():
     W_t, W_z = np.gradient(W, t, axis=1), np.gradient(W, z, axis=0)
     X_t, X_z = np.gradient(X, t, axis=1), np.gradient(X, z, axis=0)
     P, lam, v = ev.perimeter, ev.latent_heat, ev.velocity
-    rW = W_t + v * W_z + P * q / lam
-    rX = X_t + v * X_z - X * P * q / (lam * W)
+    rW = W_t + v * W_z + v * P * q / lam
+    rX = X_t + v * X_z - v * X * P * q / (lam * W)
     inner = (slice(2, -2), slice(2, -2))
-    assert np.abs(rW[inner]).max() / np.abs(P * q / lam).max() < 0.05
-    assert np.abs(rX[inner]).max() / np.abs(X * P * q / (lam * W)).max() < 0.05
+    assert np.abs(rW[inner]).max() / np.abs(v * P * q / lam).max() < 0.05
+    assert np.abs(rX[inner]).max() / np.abs(v * X * P * q / (lam * W)).max() < 0.05
     # the inputs read at the right times and the initial condition is the steady profile
     tt = torch.tensor([[0.0], [47.1]])
     expected = torch.tensor([355.15, 355.15 + 2.0 * np.sin(47.1 / 30.0)], dtype=torch.float32)

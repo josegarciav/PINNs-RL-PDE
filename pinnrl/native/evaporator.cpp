@@ -5,6 +5,9 @@
 //
 //     dW_i/dt = -v (W_i - W_{i-1}) / dz - P q_i / lambda
 //     dX_i/dt = -v (X_i - X_{i-1}) / dz + X_i P q_i / (lambda W_i)
+//
+// Here P is the source coefficient the caller passes, the film velocity times the wetted
+// perimeter (m^2/s): the balance per unit length is (W/v)_t + W_z = -(perimeter) q / lambda.
 //     q_i     = (T_s(t) - T_sat - k_bpe X_i) / (1/U + R_f(t))
 //
 // with the inlet (W_0, X_0) = (W_in(t), X_in(t)) a boundary value. The inputs W_in, X_in, T_s and
