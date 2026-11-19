@@ -126,10 +126,90 @@ def test_a_gradient_of_the_step_can_be_differentiated_again(monkeypatch):
     assert (products[0] - products[1]).norm() < 1e-3 * products[0].norm()
 
 
+INVERSE = {
+    "a scaled network": (
+        lambda: CustomPDE(
+            "u_t - 0.1*u_xx + sin(x)*u",
+            domain={"x": (0.0, 2.0), "t": (0.0, 3.0)},
+            initial_condition="300 + 20*sin(pi*x)",
+            boundary_conditions=ZERO,
+            scales={"u": (300.0, 20.0)},
+        ),
+        dict(normalize=True),
+    ),
+    "trainable parameters": (
+        lambda: CustomPDE(
+            "u_t - alpha*u_xx + beta*u^2",
+            domain=DOMAIN,
+            parameters={"alpha": 0.1, "beta": 0.5},
+            trainable_parameters=["alpha", "beta"],
+            initial_condition="sin(pi*x)",
+            boundary_conditions=ZERO,
+        ),
+        {},
+    ),
+    "an unknown function of time": (
+        lambda: CustomPDE(
+            "u_t - k*u_xx",
+            domain=DOMAIN,
+            unknown_functions={"k": {"inputs": ["t"], "positive": True, "initial": 0.1}},
+            initial_condition="sin(pi*x)",
+            boundary_conditions=ZERO,
+        ),
+        {},
+    ),
+    "an unknown function, a parameter and scaling": (
+        lambda: CustomPDE(
+            "u_t - k*u_xx + a*u",
+            domain=DOMAIN,
+            parameters={"a": 0.3},
+            trainable_parameters=["a"],
+            unknown_functions={"k": {"inputs": ["x", "t"], "positive": True, "initial": 0.1}},
+            initial_condition="sin(pi*x)",
+            boundary_conditions=ZERO,
+        ),
+        dict(normalize=True),
+    ),
+}
+
+
+@pytest.mark.parametrize("layer_norm", [False, True])
+@pytest.mark.parametrize("name", list(INVERSE))
+def test_inverse_problems_agree_with_autograd(name, layer_norm, monkeypatch):
+    """Every unknown gets its gradient from the step: weights, parameters, unknown functions."""
+    monkeypatch.setenv("PINNRL_NATIVE_SPECIALIZE", "1")
+    make, kwargs = INVERSE[name]
+    results = []
+    for mode in ("autograd", "auto"):
+        pde, trainer = _build(make, mode, layer_norm, **kwargs)
+        torch.manual_seed(1)
+        x, t = pde.generate_collocation_points(256)
+        loss = pde.compute_loss(trainer.model, x, t)["residual"]
+        assert _specialised(loss) == (mode == "auto")
+        network = list(trainer.model.parameters())
+        others = [
+            p
+            for group in trainer.optimizer.param_groups
+            for p in group["params"]
+            if all(p is not q for q in network)
+        ]
+        grads = torch.autograd.grad(loss, network + others, allow_unused=True)
+        flat = [
+            (g if g is not None else torch.zeros_like(p)).reshape(-1)
+            for g, p in zip(grads, network + others, strict=True)
+        ]
+        results.append((float(loss), torch.cat(flat[: len(network)]), flat[len(network) :]))
+    (loss_a, net_a, other_a), (loss_s, net_s, other_s) = results
+    assert loss_s == pytest.approx(loss_a, rel=1e-4)
+    assert (net_s - net_a).norm() < 1e-4 * net_a.norm()
+    assert len(other_a) == len(other_s) and (other_a or name == "a scaled network")
+    for a, b in zip(other_a, other_s, strict=True):
+        assert (a - b).norm() <= 1e-3 * a.norm() + 1e-7
+
+
 def test_falls_back_where_the_step_does_not_apply(monkeypatch):
     monkeypatch.setenv("PINNRL_NATIVE_SPECIALIZE", "1")
     cases = {
-        "a scaled network": (PROBLEMS["heat"], dict(normalize=True)),
         "another loss": (PROBLEMS["heat"], dict(loss_function="mae")),
         "a function without a C derivative": (
             lambda: CustomPDE(
@@ -140,23 +220,50 @@ def test_falls_back_where_the_step_does_not_apply(monkeypatch):
             ),
             {},
         ),
-        "a trainable parameter": (
+        "an unknown function of the field": (
             lambda: CustomPDE(
-                "u_t - alpha*u_xx",
+                "u_t - k*u_xx",
                 domain=DOMAIN,
-                parameters={"alpha": 0.1},
-                trainable_parameters=["alpha"],
+                unknown_functions={"k": {"inputs": ["u"], "positive": True, "initial": 0.1}},
                 initial_condition="sin(pi*x)",
                 boundary_conditions=ZERO,
             ),
             {},
         ),
+        "a callable residual": (
+            lambda: CustomPDE(lambda f, p: f.u_t - 0.1 * f.u_xx, domain=DOMAIN),
+            {},
+        ),
     }
     for label, (make, kwargs) in cases.items():
         pde, trainer = _build(make, "auto", **kwargs)
-        loss, grad = _loss_and_gradient(pde, trainer.model)
+        torch.manual_seed(1)
+        x, t = pde.generate_collocation_points(256)
+        loss = pde.compute_loss(trainer.model, x, t)["residual"]
         assert not _specialised(loss), label
-        assert torch.isfinite(grad).all(), label
+        assert torch.isfinite(loss), label
+
+
+def test_a_parameter_made_trainable_later_is_not_served_by_a_stale_step(monkeypatch):
+    monkeypatch.setenv("PINNRL_NATIVE_SPECIALIZE", "1")
+    pde, trainer = _build(
+        lambda: CustomPDE(
+            "u_t - alpha*u_xx",
+            domain=DOMAIN,
+            parameters={"alpha": 0.1},
+            initial_condition="sin(pi*x)",
+            boundary_conditions=ZERO,
+        ),
+        "auto",
+    )
+    torch.manual_seed(1)
+    x, t = pde.generate_collocation_points(256)
+    assert _specialised(pde.compute_loss(trainer.model, x, t)["residual"])
+    theta = torch.nn.Parameter(torch.tensor(0.1))
+    monkeypatch.setattr(pde, "_parameter_values", lambda: {"alpha": theta})
+    loss = pde.compute_loss(trainer.model, x, t)["residual"]
+    assert not _specialised(loss)  # the graph to alpha is kept
+    assert torch.autograd.grad(loss, theta)[0].abs() > 0
 
 
 def test_training_with_the_step_lowers_the_loss(monkeypatch):
@@ -179,3 +286,5 @@ def test_tanh_program_covers_every_stream():
         assert any(line.startswith(f"const float h{s} =") for line in forward)
         assert any(line.startswith(f"const float r{s} =") for line in reverse)
     assert specialize.block_size() >= 1
+    source = specialize.norm_program(alphas)
+    assert "gen_norm_fwd" in source and "gen_norm_bwd" in source

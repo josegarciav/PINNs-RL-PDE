@@ -6,12 +6,13 @@
 // term, over arrays of megabytes, and the forward and reverse passes are separate calls.
 //
 // This header is the other half of a translation unit that pinnrl.native.specialize generates
-// for one equation (it includes jets.cpp first). The generated code supplies three functions
+// for one equation (it includes jets.cpp first). The generated code supplies five functions
 // written out for the equation's own streams,
 //
 //     tanh_fwd(A, Hn, M)      the output streams of tanh from the pre-activation streams,
 //     tanh_bwd(A, H, G, M)    their adjoints, in place in G,
-//     residual(out, G, X, n)  sum of squared residuals of n points and its adjoint streams,
+//     norm_fwd, norm_bwd      the same two through layer normalization, row by row,
+//     residual(out, G, X, n, ...)  sum of squared residuals of n points and its adjoints,
 //
 // each a single loop whose body is straight-line code (what a tracing compiler such as XLA
 // produces for the same step), and the driver below runs the batch in blocks of points small
@@ -20,15 +21,30 @@
 
 #pragma once
 
+// The generated loops read and write disjoint arrays; say so where the compiler cannot prove it.
+#if defined(__clang__)
+#define PINN_SIMD _Pragma("clang loop vectorize(assume_safety)")
+#elif defined(__GNUC__)
+#define PINN_SIMD _Pragma("GCC ivdep")
+#else
+#define PINN_SIMD
+#endif
+
 namespace {
 
-template <class TanhF, class TanhB, class Residual>
-double blocked_residual(const float* X, int N, int L, const int* sizes, const float* const* W,
-                        const float* const* b, int S, int D, const int* cols, const int* alpha,
-                        const float* const* gamma, const float* const* beta, float eps,
-                        const float* params, const float* mult, float scale, float* const* gW,
-                        float* const* gb, float* const* ggamma, float* const* gbeta, int B,
-                        TanhF tanh_fwd, TanhB tanh_bwd, Residual residual) {
+template <class TanhF, class TanhB, class NormF, class NormB, class Residual>
+double blocked_residual(const float* X, const float* XP, int N, int L, const int* sizes,
+                        const float* const* W, const float* const* b, int S, int D, const int* cols,
+                        const int* alpha, const float* const* gamma, const float* const* beta,
+                        float eps, const float* params, const float* mult, const float* fac,
+                        const float* off, const float* E, float* GE, int n_ext, double* gparam,
+                        int n_theta, float scale, float* const* gW, float* const* gb,
+                        float* const* ggamma, float* const* gbeta, int B, TanhF tanh_fwd,
+                        TanhB tanh_bwd, NormF norm_fwd, NormB norm_bwd, Residual residual) {
+    // X: the network's inputs (N x d); XP: the physical coordinates the equations read (the
+    // same array unless the network maps its inputs). fac, off: the scale of every stream and
+    // the offset of every output. E, GE: per-point external values and their adjoints (n_ext
+    // columns). gparam: the gradients of the trainable parameters (n_theta).
     const Tables T(S, D, alpha);
     const bool norm = gamma != nullptr;
     const int d = sizes[0], k = sizes[L];
@@ -36,12 +52,11 @@ double blocked_residual(const float* X, int N, int L, const int* sizes, const fl
     for (int l = 0; l <= L; ++l) widest = sizes[l] > widest ? sizes[l] : widest;
     if (B > N) B = N;
     const long full = (long)S * B;
-    static thread_local std::vector<float> work, scratch, outbuf, tmp;
+    static thread_local std::vector<float> work, scratch, outbuf;
     const size_t need = (size_t)pinn_jets_work_size(B, L, sizes, S, norm ? 1 : 0);
     if (work.size() < need) work.resize(need);
     if (scratch.size() < 2 * (size_t)full * widest) scratch.resize(2 * (size_t)full * widest);
     if (outbuf.size() < (size_t)full * k) outbuf.resize((size_t)full * k);
-    if (tmp.size() < 2 * (size_t)widest) tmp.resize(2 * (size_t)widest);
     for (int l = 0; l < L; ++l) {
         std::memset(gW[l], 0, sizeof(float) * (size_t)sizes[l] * sizes[l + 1]);
         std::memset(gb[l], 0, sizeof(float) * (size_t)sizes[l + 1]);
@@ -50,6 +65,7 @@ double blocked_residual(const float* X, int N, int L, const int* sizes, const fl
             std::memset(gbeta[l], 0, sizeof(float) * (size_t)sizes[l + 1]);
         }
     }
+    for (int i = 0; i < n_theta; ++i) gparam[i] = 0.0;
     double total = 0.0;
     for (int n0 = 0; n0 < N; n0 += B) {
         const int nb = N - n0 < B ? N - n0 : B;
@@ -84,8 +100,8 @@ double blocked_residual(const float* X, int N, int L, const int* sizes, const fl
             const size_t M = (size_t)nb * width;
             if (norm) {
                 float* Y = wk + norm_offset(l, L, rows, sizes);
-                norm_forward(T, A, Y, nb, width, gamma[l], beta[l], eps,
-                             wk + norm_state_offset(l, L, rows, sizes));
+                norm_fwd(A, Y, nb, width, gamma[l], beta[l], eps,
+                         wk + norm_state_offset(l, L, rows, sizes));
                 A = Y;
             }
             tanh_inplace(A, (int)M);
@@ -94,7 +110,9 @@ double blocked_residual(const float* X, int N, int L, const int* sizes, const fl
         // ---- residual: the block's sum of squares and the adjoints of the output streams
         float* Gcur = scratch.data();
         float* Gnext = scratch.data() + (size_t)full * widest;
-        total += residual(out, Gcur, X + (size_t)n0 * d, nb, params, mult);
+        total += residual(out, Gcur, XP + (size_t)n0 * d, nb, params, mult, fac, off,
+                          E ? E + (size_t)n0 * n_ext : nullptr,
+                          GE ? GE + (size_t)n0 * n_ext : nullptr, gparam);
         // ---- reverse
         for (int l = L - 1; l >= 0; --l) {
             const int in = sizes[l], width = sizes[l + 1];
@@ -113,16 +131,9 @@ double blocked_residual(const float* X, int N, int L, const int* sizes, const fl
             const float* A = wk + (norm ? norm_offset(l - 1, L, rows, sizes)
                                         : act_offset(l - 1, L, rows, sizes));
             tanh_bwd(A, H, Gnext, M);
-            if (norm) {
-                float* gg = tmp.data();
-                float* gbt = tmp.data() + widest;
-                norm_backward(T, wk + norm_state_offset(l - 1, L, rows, sizes), Gnext, nb, in,
-                              gamma[l - 1], gg, gbt);
-                for (int j = 0; j < in; ++j) {
-                    ggamma[l - 1][j] += gg[j];
-                    gbeta[l - 1][j] += gbt[j];
-                }
-            }
+            if (norm)
+                norm_bwd(wk + norm_state_offset(l - 1, L, rows, sizes), Gnext, nb, in, gamma[l - 1],
+                         ggamma[l - 1], gbeta[l - 1]);
             float* swap = Gcur;
             Gcur = Gnext;
             Gnext = swap;
@@ -138,6 +149,9 @@ double blocked_residual(const float* X, int N, int L, const int* sizes, const fl
                 gbeta[l][j] *= scale;
             }
     }
+    for (int i = 0; i < n_theta; ++i) gparam[i] *= scale;
+    if (GE != nullptr)
+        for (size_t i = 0; i < (size_t)N * n_ext; ++i) GE[i] *= scale;
     return total * scale;
 }
 

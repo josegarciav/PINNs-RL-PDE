@@ -1,0 +1,57 @@
+name: Benchmark (manual)
+
+# Experiment I17 on a Linux x86 runner: the training step in pinnrl, PyTorch, JAX and DeepXDE.
+# Started by hand (Actions > Benchmark > Run workflow); the results are in the log and in the
+# artifact. A shared runner is noisy: each arm keeps the best of its rounds.
+
+on:
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: Steps per round
+        default: "60"
+
+permissions:
+  contents: read
+
+jobs:
+  i17:
+    name: I17 step head-to-head (Linux x86, OpenBLAS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: OpenBLAS for the native kernel
+        run: sudo apt-get install -y --no-install-recommends libopenblas-dev
+      - name: Install
+        run: uv sync --locked --all-extras --python 3.12
+      - name: Machine
+        run: |
+          lscpu | grep -E "Model name|^CPU\(s\)|Thread|Flags" | cut -c1-400
+          uv run python -c "import torch; from pinnrl import native; print('torch', torch.__version__, '| native:', native.available(), native.unavailable_reason())"
+      - name: PhysicsNeMo-Sym on a CPU runner
+        continue-on-error: true
+        run: |
+          uv venv /tmp/nemo --python 3.12 -q
+          VIRTUAL_ENV=/tmp/nemo uv pip install -q nvidia-physicsnemo-sym > /tmp/nemo.log 2>&1 \
+            && echo "installed" || (echo "does not install:"; grep -m3 -E "RuntimeError|error|No matching" /tmp/nemo.log)
+      - name: I17, plain network
+        run: >
+          uv run --with jax --with deepxde python experiments/I17_step_head_to_head/run.py
+          --steps ${{ inputs.steps }} --rounds 3 --passes 1
+          --arms pinnrl pinnrl-general pinnrl-autograd torch-eager jax-forward jax-jet deepxde
+          --out results-linux
+      - name: I17, layer normalization
+        run: >
+          uv run --with jax --with deepxde python experiments/I17_step_head_to_head/run.py
+          --layer-norm --steps ${{ inputs.steps }} --rounds 3 --passes 1
+          --problems heat kdv cahn_hilliard schrodinger heat_2d
+          --arms pinnrl pinnrl-general torch-eager jax-forward
+          --out results-linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: i17-linux
+          path: results-linux/

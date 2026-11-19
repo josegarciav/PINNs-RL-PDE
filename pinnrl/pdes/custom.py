@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import copy
 import itertools
-import math
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
@@ -825,60 +824,88 @@ class CustomPDE(PDEBase):
         return self._apply_loss_fn(self._weighted(self.compute_residual(model, x, t), "residual"))
 
     def _step_spec(self):
-        """The specialised step's description for these equations, or ``None`` (cached)."""
-        if "_step_spec_cache" in self.__dict__:
-            return self._step_spec_cache
+        """The specialised step's description for these equations, or ``None`` (cached).
+
+        The equations may use trainable parameters (their gradient comes back
+        from the compiled call), measured inputs and unknown functions of the
+        coordinates (evaluated by PyTorch and passed in per point, with their
+        adjoints returned). A callable residual, a derivative of an unknown
+        function, or an unknown function of a field has no compiled step.
+        """
+        trainable_now = tuple(self.config.trainable_parameters or ())
+        cached = self.__dict__.get("_step_spec_cache")
+        if cached is not None and cached[0] == trainable_now:
+            return cached[1]
         from pinnrl.native import specialize, taylor_streams
 
-        self._step_spec_cache = None
-        request = self._native_request()
-        if request is None or self.inputs or self.config.trainable_parameters:
+        self._step_spec_cache = (trainable_now, None)
+        if self._residual_fn is not None or getattr(self, "derivatives", "auto") == "autograd":
+            return None
+        request: list[tuple[str, ...]] = []
+        for expr in self._equations:
+            for name, coords in expr.derivatives:
+                if name not in self.fields:
+                    return None
+                request.append(tuple(sorted(coords)))
+        request = list(dict.fromkeys(request))
+        unknowns = tuple(
+            dict.fromkeys(f for e in self._equations for f in e.fields if f in self._unknown_names)
+        )
+        for name in unknowns:
+            fn = cast(UnknownFunction, self.unknown_functions[name])
+            if any(i not in self.coordinates for i in fn.inputs):
+                return None
+        free = tuple(dict.fromkeys(p for e in self._equations for p in e.parameters))
+        inputs = tuple(p for p in free if p in self.inputs)
+        parameters = tuple(p for p in free if p not in self.inputs)
+        if not request or any(p not in self.parameters for p in parameters):
             return None
         spatial = list(self.spatial_coordinates)
         columns = {c: i for i, c in enumerate(spatial)}
         columns["t"] = max(len(spatial), 1)  # an ODE keeps a dummy spatial column
         names = {i: c for c, i in columns.items()}
         cols, alphas = taylor_streams([tuple(columns[c] for c in d) for d in request])
-        streams: dict[str, tuple[int, int, float]] = {}
+        streams: dict[str, tuple[int, int]] = {}
         for j, name in enumerate(self.fields):
             for s, alpha in enumerate(alphas):
                 coords = tuple(names[c] for c, k in zip(cols, alpha, strict=True) for _ in range(k))
-                symbol = derivative_name(name, coords) if coords else name
-                streams[symbol] = (s, j, float(math.prod(math.factorial(k) for k in alpha)))
-        parameters = tuple(dict.fromkeys(p for e in self._equations for p in e.parameters))
-        if not alphas or any(p not in self.parameters for p in parameters):
-            return None
+                streams[derivative_name(name, coords) if coords else name] = (s, j)
+        trainable = tuple(p for p in parameters if p in trainable_now)
+        externals = unknowns + inputs
+        layout = dict(n_inputs=columns["t"] + 1, n_outputs=len(self.fields))
         code = specialize.residual_code(
             [e.expr for e in self._equations],
             streams,
             {c: columns[c] for c in self.coordinates},
             parameters,
-            n_inputs=columns["t"] + 1 if self.time_dependent else len(spatial),
-            n_outputs=len(self.fields),
+            trainable=trainable,
+            externals=externals,
+            **layout,
         )
         if code is None:
             return None
         spec = specialize.ResidualSpec(
             equations=tuple(e.text for e in self._equations),
             alphas=tuple(alphas),
-            n_inputs=columns["t"] + 1 if self.time_dependent else len(spatial),
-            n_outputs=len(self.fields),
             code=code,
             parameters=parameters,
+            trainable=trainable,
+            externals=externals,
+            **layout,
         )
-        self._step_spec_cache = (spec, cols)
-        return self._step_spec_cache
+        self._step_spec_cache = (trainable_now, (spec, cols))
+        return self._step_spec_cache[1]
 
     def _compiled_residual_loss(
         self, model: torch.nn.Module, x: torch.Tensor, t: torch.Tensor
     ) -> torch.Tensor | None:
         """The residual term by the specialised compiled step, or ``None`` where it does not apply.
 
-        It needs what the general kernel needs (a ``tanh`` feed-forward
-        network in float32 on the CPU, equations given as text) and, for now,
-        a network without input or output scaling, fixed parameters and the
-        squared loss. The first calls of a problem are served by the general
-        kernel while the step compiles (:func:`pinnrl.native.specialize.specialize_after`).
+        It needs a ``tanh`` feed-forward network in float32 on the CPU (with or
+        without layer normalization and input or output scaling), equations
+        given as text, a time-dependent problem and the squared loss. The first
+        calls of a problem are served by the general path while the step
+        compiles (:func:`pinnrl.native.specialize.specialize_after`).
         """
         from pinnrl import native
         from pinnrl.native import specialize
@@ -892,7 +919,7 @@ class CustomPDE(PDEBase):
             after is None
             or getattr(self, "derivatives", "auto") == "autograd"
             or not isinstance(inner, FeedForwardNetwork)
-            or getattr(model, "scaled", True)
+            or not hasattr(model, "scaled")
             or self._training_option("loss_function", "mse") != "mse"
             or x.device.type != "cpu"
             or x.dtype != torch.float32
@@ -908,28 +935,29 @@ class CustomPDE(PDEBase):
             return None
         found = self._step_spec()
         if found is None:
-            self._step_disabled = True
             return None
         spec, cols = found
+        values = self._parameter_values()
+        parameters = [values[p] for p in spec.parameters]
+        for name, value in zip(spec.parameters, parameters, strict=True):
+            differentiated = isinstance(value, torch.Tensor) and value.requires_grad
+            if differentiated != (name in spec.trainable):
+                return None  # a parameter differentiated outside the configured ones
         calls = self.__dict__.get("_step_calls", 0) + 1
         self._step_calls = calls
         if calls < after:
             if calls >= max(1, after // 2):
-                specialize.step_library(spec, wait=False)  # compile while the general kernel runs
+                specialize.step_library(spec, wait=False)  # compile while the general path runs
             return None
-        lib = self.__dict__.get("_step_lib")
-        if lib is None:
+        held = self.__dict__.get("_step_lib")
+        if held is not None and held[0] is spec:
+            lib = held[1]
+        else:
             lib = specialize.step_library(spec, wait=True)
             if lib is None:
                 self._step_disabled = True
                 return None
-            self._step_lib = lib
-        values = self._parameter_values()
-        if any(
-            isinstance(values[p], torch.Tensor) and values[p].requires_grad for p in spec.parameters
-        ):
-            return None  # a parameter being differentiated: the loss must carry its graph
-        parameters = [float(values[p]) for p in spec.parameters]
+            self._step_lib = (spec, lib)
 
         def by_autograd() -> torch.Tensor:
             previous, self.derivatives = self.derivatives, "autograd"
@@ -939,10 +967,32 @@ class CustomPDE(PDEBase):
             finally:
                 self.derivatives = previous
 
-        points = torch.cat([x.detach(), t.detach()], dim=1)
+        x_d, t_d = x.detach(), t.detach()
+        externals = None
+        if spec.externals:
+
+            def externals():
+                coords = {c: x_d[:, i : i + 1] for i, c in enumerate(self.spatial_coordinates)}
+                coords["t"] = t_d
+                columns, leaves = [], []
+                for name in spec.externals:
+                    if name in self.inputs:
+                        columns.append(self.inputs[name](t_d).reshape(-1, 1))
+                        continue
+                    fn = cast(UnknownFunction, self.unknown_functions[name])
+                    columns.append(fn({i: coords[i] for i in fn.inputs}).reshape(-1, 1))
+                    leaves += [p for p in fn.parameters() if p.requires_grad]
+                return torch.cat(columns, dim=1), leaves
+
+        scaling = None
+        if model.scaled:
+            scaling = cast(
+                "tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor, torch.Tensor]",
+                (model._in_lo, model._in_span, model._out_scale, model._out_offset),
+            )
         return specialize.run_step(
-            lib, spec, cols, stack[0], stack[1], points, parameters,
-            self._multipliers("residual"), by_autograd,
+            lib, spec, cols, stack[0], stack[1], torch.cat([x_d, t_d], dim=1), parameters,
+            self._multipliers("residual"), by_autograd, scaling=scaling, externals=externals,
         )  # fmt: skip
 
     def evaluate_expression(

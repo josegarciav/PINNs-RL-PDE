@@ -48,6 +48,8 @@ HERE = Path(__file__).parent
 WIDTH, DEPTH = 64, 4
 N_COL, N_IC, N_BC = 4096, 512, 512
 W_IC, W_BC, LR = 10.0, 10.0, 1e-3
+# ``--layer-norm``: layer normalization before each tanh, as in pinnrl's packaged network
+LAYER_NORM = os.environ.get("I17_LAYER_NORM") == "1"
 
 # Each problem: the equations as pinnrl reads them, the fields, the domain (space, then t), the
 # derivative chains every arm follows (a chain differentiates along its coordinates in turn and
@@ -229,7 +231,7 @@ def arm_pinnrl(problem, mode, steps, rounds):
     )
     trainer = pde.build_trainer(
         "feedforward",
-        model={"hidden_dims": [WIDTH] * DEPTH, "layer_norm": False},
+        model={"hidden_dims": [WIDTH] * DEPTH, "layer_norm": LAYER_NORM},
         derivatives=mode,
         num_collocation_points=N_COL,
         batch_size=N_COL,
@@ -257,11 +259,24 @@ def arm_pinnrl(problem, mode, steps, rounds):
 def _torch_net(problem):
     import torch
 
+    class Norm(torch.nn.Module):  # written out: nn.LayerNorm's third-order derivative is wrong
+        def __init__(self, width):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.ones(width))
+            self.bias = torch.nn.Parameter(torch.zeros(width))
+
+        def forward(self, h):
+            c = h - h.mean(dim=-1, keepdim=True)
+            return self.bias + self.weight * c * torch.rsqrt(
+                c.square().mean(-1, keepdim=True) + 1e-5
+            )
+
     fields, names, _ = layout(problem)
     torch.manual_seed(0)
     layers, n_in = [], len(names)
     for _ in range(DEPTH):
-        layers += [torch.nn.Linear(n_in, WIDTH), torch.nn.Tanh()]
+        layers += [torch.nn.Linear(n_in, WIDTH)] + ([Norm(WIDTH)] if LAYER_NORM else [])
+        layers += [torch.nn.Tanh()]
         n_in = WIDTH
     layers.append(torch.nn.Linear(n_in, len(fields)))
     return torch.nn.Sequential(*layers)
@@ -381,13 +396,18 @@ def arm_jax(problem, kind, steps, rounds):
     for a, b in zip(sizes[:-1], sizes[1:], strict=True):
         key, sub = jax.random.split(key)
         limit = (6.0 / (a + b)) ** 0.5
-        params.append((jax.random.uniform(sub, (b, a), minval=-limit, maxval=limit), jnp.zeros(b)))
+        weight = jax.random.uniform(sub, (b, a), minval=-limit, maxval=limit)
+        params.append((weight, jnp.zeros(b), jnp.ones(b), jnp.zeros(b)))
 
     def net(params, z):  # z (N, d) -> (N, k)
         h = z
-        for w, b in params[:-1]:
-            h = jnp.tanh(h @ w.T + b)
-        w, b = params[-1]
+        for w, b, gain, shift in params[:-1]:
+            h = h @ w.T + b
+            if LAYER_NORM:
+                c = h - h.mean(axis=-1, keepdims=True)
+                h = shift + gain * c * jax.lax.rsqrt((c * c).mean(axis=-1, keepdims=True) + 1e-5)
+            h = jnp.tanh(h)
+        w, b = params[-1][:2]
         return h @ w.T + b
 
     def direction(c):
@@ -545,6 +565,8 @@ def arm_deepxde(problem, steps, rounds):
     data = dde.data.TimePDE(
         geometry, pde, conditions, num_domain=N_COL, num_boundary=N_BC, num_initial=N_IC
     )
+    if LAYER_NORM:
+        raise RuntimeError("DeepXDE's FNN has no layer normalization")
     net = dde.nn.FNN([len(names)] + [WIDTH] * DEPTH + [len(fields)], "tanh", "Glorot uniform")
     model = dde.Model(data, net)
     weights = [1.0] * len(spec["equations"]) + [W_BC] * len(fields) + [W_IC] * len(fields)
@@ -581,6 +603,7 @@ def run_arm(arm, problem, threads, steps, rounds):
 def child_env(arm, threads):
     env = dict(os.environ, TQDM_DISABLE="1", DDE_BACKEND="pytorch", JAX_PLATFORMS="cpu")
     env.pop("PINNRL_NATIVE_SPECIALIZE", None)
+    env["I17_LAYER_NORM"] = "1" if LAYER_NORM else "0"
     if arm == "pinnrl-general":
         env["PINNRL_NATIVE_SPECIALIZE"] = "off"
     if threads:
@@ -600,8 +623,13 @@ def main():
     parser.add_argument("--threads", nargs="+", type=int, default=[1], help="0: the default")
     parser.add_argument("--arms", nargs="+", default=ARMS)
     parser.add_argument("--out", type=Path, default=HERE / "results")
+    parser.add_argument(
+        "--layer-norm", action="store_true", help="layer normalization in every arm"
+    )
     parser.add_argument("--child", nargs=3, metavar=("ARM", "PROBLEM", "THREADS"))
     args = parser.parse_args()
+    if args.layer_norm and not args.child:
+        globals()["LAYER_NORM"] = True
     if args.child:
         arm, problem, threads = args.child
         try:
@@ -656,6 +684,7 @@ def main():
         "steps": args.steps,
         "rounds": args.rounds,
         "passes": args.passes,
+        "layer_norm": LAYER_NORM,
     }
     if sys.platform == "darwin":  # low power mode halves every timing
         power = subprocess.run(["pmset", "-g"], capture_output=True, text=True).stdout
@@ -666,8 +695,9 @@ def main():
         meta["torch"] = torch.__version__
     except ImportError:
         pass
-    (args.out / "steps.json").write_text(json.dumps({"meta": meta, "rows": out}, indent=1))
-    print("saved", args.out / "steps.json")
+    target = args.out / ("steps_layer_norm.json" if LAYER_NORM else "steps.json")
+    target.write_text(json.dumps({"meta": meta, "rows": out}, indent=1))
+    print("saved", target)
 
 
 if __name__ == "__main__":
