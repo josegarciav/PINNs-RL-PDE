@@ -105,7 +105,7 @@ The shortest path to results you can trust and publish:
 | D07 | P2 | Gradient clipping | Does clipping help or hurt? | clip ∈ {0, 1, 10} on Burgers and KdV. | todo |
 | D08 | P2 | Mini-batch vs full batch | Is stochasticity a useful regulariser for Adam? | batch_size ∈ {256, 1024, full}. | todo |
 | D09 | P2 | Hard vs soft constraints | Exact IC/BC by output transform, `u = g + d(x,t)·N`, vs penalty terms. | Heat, wave, Burgers. Error, and the convergence speed of residual loss. | todo |
-| D10 | P3 | Second-order optimisers | Do newer methods beat L-BFGS (e.g. SOAP, NysNewton-CG)? | Best D01 configs, with time to reach the target error. | todo |
+| D10 | P0 | A least-squares optimizer | How far below Adam and L-BFGS does an optimizer that uses the sum of squares get per second on one core, and which further ideas add to it? | Levenberg–Marquardt and three variants (damping as an ODE step, block Kaczmarz, last layer solved) vs Adam, L-BFGS and their sequence on heat, Burgers, KdV; 60 s, 3 seeds, one core: LM 6e-7 on heat and 6e-6 on KdV (120× and 220× below Adam→L-BFGS), 3× on Burgers; **the last layer solved reaches 5e-9 on heat**; the other two variants dropped. See `D10_least_squares_optimizer/` (`PLAN.md` for the stages). SOAP and SSBroyden are still to add as baselines. | stage 1 done |
 
 ## E. Architectures
 
