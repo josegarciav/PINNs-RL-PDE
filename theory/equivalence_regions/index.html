@@ -1,0 +1,2810 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Physics-informed neural networks for forward and inverse PDE problems, evaluated against numerical references">
+      
+      
+      
+        <link rel="canonical" href="https://josegarciav.github.io/PINNs-RL-PDE/theory/equivalence_regions/">
+      
+      
+        <link rel="prev" href="../numerical_analysis/">
+      
+      
+        <link rel="next" href="../../engine/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Equivalence regions and swarm sampling - pinnrl</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#nonlinear-uncertainty-equivalence-regions-and-swarm-sampling" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="pinnrl" class="md-header__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            pinnrl
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Equivalence regions and swarm sampling
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting_started/" class="md-tabs__link">
+          
+  
+  
+  Start
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../custom_equations/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Theory
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../engine/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Engine
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/cli/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../roadmap/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="pinnrl" class="md-nav__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    pinnrl
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../when_to_use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When to use a PINN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../custom_equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Custom equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../inverse_problems/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverse problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../process_twins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process twins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets (The Well)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../applications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Applications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Theory
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../well_posedness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Well-posedness and stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../identifiability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identifiability and conditioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bayesian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Bayesian view and uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../numerical_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The numerical-analysis bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equivalence regions and swarm sampling
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equivalence regions and swarm sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-region-of-equivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The region of equivalence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The region of equivalence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-the-best-fit-point-is-not-the-truth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The best-fit point is not the truth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-the-linearized-region-is-only-local" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The linearized region is only local
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-noise-and-regularization-deform-the-region" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Noise and regularization deform the region
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-while-optimizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling while optimizing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sampling while optimizing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pso-is-a-damped-massspring-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PSO is a damped mass–spring system
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-family-from-the-discretization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A family from the discretization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stability-regions-replace-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stability regions replace tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collapse-is-the-failure-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collapse is the failure mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#posterior-statistics-by-counting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posterior statistics by counting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-reduction-before-sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model reduction before sampling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-changes-in-pinnrluq" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this changes in pinnrl.uq
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What this changes in pinnrl.uq">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-report-regions-not-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Report regions, not points
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-a-swarm-sampler-over-the-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. A swarm sampler over the parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-a-tolerance-from-the-noise-model-and-the-physics-weight-as-regularization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. A tolerance from the noise model, and the physics weight as regularization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-reduced-bases-for-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Reduced bases for fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-ensembles-are-a-swarm-without-dynamics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Ensembles are a swarm without dynamics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-optimizer-stability-from-the-same-mathematics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Optimizer stability from the same mathematics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration file
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_4" id="__nav_7_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/neural_networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neural networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/pdes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDEs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/native/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/rl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL sampler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/plots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/uq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command-line entry points
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What has been built
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research program
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../paper/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Software paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-region-of-equivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The region of equivalence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The region of equivalence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-the-best-fit-point-is-not-the-truth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The best-fit point is not the truth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-the-linearized-region-is-only-local" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The linearized region is only local
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-noise-and-regularization-deform-the-region" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Noise and regularization deform the region
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-while-optimizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling while optimizing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sampling while optimizing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pso-is-a-damped-massspring-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PSO is a damped mass–spring system
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-family-from-the-discretization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A family from the discretization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stability-regions-replace-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stability regions replace tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collapse-is-the-failure-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collapse is the failure mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#posterior-statistics-by-counting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posterior statistics by counting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-reduction-before-sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model reduction before sampling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-changes-in-pinnrluq" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this changes in pinnrl.uq
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What this changes in pinnrl.uq">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-report-regions-not-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Report regions, not points
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-a-swarm-sampler-over-the-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. A swarm sampler over the parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-a-tolerance-from-the-noise-model-and-the-physics-weight-as-regularization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. A tolerance from the noise model, and the physics weight as regularization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-reduced-bases-for-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Reduced bases for fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-ensembles-are-a-swarm-without-dynamics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Ensembles are a swarm without dynamics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-optimizer-stability-from-the-same-mathematics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Optimizer stability from the same mathematics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="nonlinear-uncertainty-equivalence-regions-and-swarm-sampling">Nonlinear uncertainty: equivalence regions and swarm sampling<a class="headerlink" href="#nonlinear-uncertainty-equivalence-regions-and-swarm-sampling" title="Permanent link">&para;</a></h1>
+<p>This page defines the set of all parameters that fit the data within the noise, and the particle-swarm method that samples it. Read it when a Gaussian error bar is not enough: several parameters, a nonlinear model, or a best fit that may not be the truth.</p>
+<ul>
+<li>The Fisher bound and the Laplace approximation of the <a href="../bayesian/">Bayesian view</a> are <em>linear</em> statements: an ellipse around one estimate.</li>
+<li>Fernández-Martínez, García-Gonzalo and co-workers (University of Oviedo), working on geophysical inverse problems, argue that the object to report is the <strong>region of equivalence</strong>, and that it is sampled rather than linearized. Their nine papers shape the design of <a href="../../api/uq/"><code>pinnrl.uq</code></a>.</li>
+</ul>
+<h2 id="the-region-of-equivalence">The region of equivalence<a class="headerlink" href="#the-region-of-equivalence" title="Permanent link">&para;</a></h2>
+<div class="arithmatex">\[
+d_{\text{obs}} = F(m_{\text{true}}) + \delta d, \qquad
+M_{\mathrm{tol}} = \{\, m : \|F(m) - d_{\text{obs}}\| \le \mathrm{tol} \,\}
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(m\)</span></strong>: the model, that is the vector of unknown parameters (<span class="arithmatex">\(\theta\)</span> on the other pages).</li>
+<li><strong><span class="arithmatex">\(F\)</span></strong> (forward map): takes parameters to predicted observations. On this page <span class="arithmatex">\(F\)</span> is not the Fisher matrix.</li>
+<li><strong><span class="arithmatex">\(d_{\text{obs}}\)</span></strong>, <strong><span class="arithmatex">\(\delta d\)</span></strong>: the observations and their noise.</li>
+<li><strong>Misfit</strong>: the distance <span class="arithmatex">\(\|F(m) - d_{\text{obs}}\|\)</span> between prediction and data.</li>
+<li><strong><span class="arithmatex">\(M_{\mathrm{tol}}\)</span></strong> (region of equivalence): every model whose misfit is within a tolerance <span class="arithmatex">\(\mathrm{tol}\)</span> set by the noise.</li>
+</ul>
+<p>The solution of an inverse problem is this set, not its minimum-misfit member (Pallero et al., 2018, after Tarantola). Three facts carry over to PINN identification unchanged.</p>
+<h3 id="1-the-best-fit-point-is-not-the-truth">1. The best-fit point is not the truth<a class="headerlink" href="#1-the-best-fit-point-is-not-the-truth" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[
+\nabla c(m_0) = 2 J^\top \delta d \ne 0
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(m_0\)</span></strong>: the minimizer of the noisy misfit.</li>
+<li><strong><span class="arithmatex">\(c\)</span></strong>: the noise-free misfit.</li>
+<li><strong><span class="arithmatex">\(J\)</span></strong>: the Jacobian of <span class="arithmatex">\(F\)</span> (the sensitivity matrix of <a href="../identifiability/">identifiability</a>).</li>
+</ul>
+<p>The true model lies inside <span class="arithmatex">\(M_{\mathrm{tol}}\)</span> with a <em>higher</em> misfit than the best fit. Reporting the minimizer alone reports the noise.</p>
+<h3 id="2-the-linearized-region-is-only-local">2. The linearized region is only local<a class="headerlink" href="#2-the-linearized-region-is-only-local" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Linearized region</strong>: the ellipse from <span class="arithmatex">\(J\)</span> at <span class="arithmatex">\(m_0\)</span>, the Fisher ellipse of <a href="../identifiability/">identifiability</a>. It matches <span class="arithmatex">\(M_{\mathrm{tol}}\)</span> near <span class="arithmatex">\(m_0\)</span> and nowhere else.</li>
+<li>For a nonlinear forward map the true region is a curved valley (the "banana"), elongated along the small singular values of <span class="arithmatex">\(J\)</span>, possibly disconnected.</li>
+<li>The ellipse both includes models outside the region and misses models inside it.</li>
+<li>F02 is such a case in <code>pinnrl</code>: the PINN's optimum for the two KdV coefficients sits 20 % from the truth with a tight Fisher ellipse around it.</li>
+</ul>
+<h3 id="3-noise-and-regularization-deform-the-region">3. Noise and regularization deform the region<a class="headerlink" href="#3-noise-and-regularization-deform-the-region" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Noise</strong> shrinks the low-misfit part of the valley and may move the best fit into a different basin (Fernández-Martínez et al., 2014a, b).</li>
+<li><strong>Tikhonov term</strong>: a penalty on the distance to a reference model. It bounds the region anisotropically, most along the directions of highest uncertainty, and can create local minima.</li>
+<li><strong>For a PINN the physics weights play the role of the regularization.</strong> F07 found that the soft physics term flattens the data-misfit profile 2.5–12×, which is the same deformation seen from inside the loss.</li>
+</ul>
+<p><strong>For a PINN:</strong> report the set of parameters that fit, with the trained estimate as one member; the estimate alone carries the noise and the physics weight.</p>
+<h2 id="sampling-while-optimizing">Sampling while optimizing<a class="headerlink" href="#sampling-while-optimizing" title="Permanent link">&para;</a></h2>
+<p>Particle swarms in their <em>exploratory</em> form sample <span class="arithmatex">\(M_{\mathrm{tol}}\)</span>. Each particle moves under</p>
+<div class="arithmatex">\[
+v_i^{k+1} = \omega\, v_i^k + \phi_1 (g^k - x_i^k) + \phi_2 (l_i^k - x_i^k), \qquad x_i^{k+1} = x_i^k + v_i^{k+1}
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(x_i^k\)</span></strong>, <strong><span class="arithmatex">\(v_i^k\)</span></strong>: position (a parameter vector) and velocity of particle <span class="arithmatex">\(i\)</span> at iteration <span class="arithmatex">\(k\)</span>.</li>
+<li><strong><span class="arithmatex">\(g^k\)</span></strong>, <strong><span class="arithmatex">\(l_i^k\)</span></strong>: the best position found by the swarm and by particle <span class="arithmatex">\(i\)</span>.</li>
+<li><strong><span class="arithmatex">\(\phi_1, \phi_2\)</span></strong>: random accelerations; <span class="arithmatex">\(\phi = \phi_1 + \phi_2\)</span> and <span class="arithmatex">\(\bar\phi\)</span> is its mean.</li>
+<li><strong><span class="arithmatex">\(\omega\)</span></strong>: the inertia.</li>
+<li><strong>Sample</strong>: every evaluated position with misfit below the tolerance is kept.</li>
+</ul>
+<p>The method needs only forward solves: no gradient, no inverse operator, no regularization and no reference model.</p>
+<h3 id="pso-is-a-damped-massspring-system">PSO is a damped mass–spring system<a class="headerlink" href="#pso-is-a-damped-massspring-system" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[
+x^{k+1} + (\phi - \omega - 1)\, x^k + \omega\, x^{k-1} = \phi_1 g^k + \phi_2 l^k
+\quad\longleftrightarrow\quad
+x'' + (1 - \omega)\, x' + \phi\, (x - o) = 0
+\]</div>
+<ul>
+<li><strong>Left</strong>: the stochastic second-order difference equation each particle obeys.</li>
+<li><strong>Right</strong>: the continuous system it discretizes, with damping <span class="arithmatex">\(1 - \omega\)</span> and stiffness <span class="arithmatex">\(\phi\)</span> (Fernández-Martínez &amp; García-Gonzalo, 2008, 2011).</li>
+<li><strong><span class="arithmatex">\(o\)</span></strong>: the stochastic centre of attraction, between <span class="arithmatex">\(g\)</span> and <span class="arithmatex">\(l\)</span>.</li>
+<li><strong>Generalized PSO</strong>: the same discretization with a time step <span class="arithmatex">\(\Delta t \ne 1\)</span>. Larger steps explore, smaller steps freeze the swarm.</li>
+</ul>
+<p>The step <code>pinnrl.uq</code> takes (<a href="../../api/uq/"><code>sample_equivalence_region</code></a>), with an inertia <span class="arithmatex">\(\omega_i\)</span> and a time step <span class="arithmatex">\(\Delta t_i\)</span> per particle (the "cloud", below):</p>
+<div class="arithmatex">\[
+v_i^{k+1} = \big(1 - (1 - \omega_i)\Delta t_i\big)\, v_i^k + \Delta t_i \big[\phi_1 (g^k - x_i^k) + \phi_2 (l_i^k - x_i^k)\big], \qquad x_i^{k+1} = x_i^k + \Delta t_i\, v_i^{k+1}
+\]</div>
+<h3 id="a-family-from-the-discretization">A family from the discretization<a class="headerlink" href="#a-family-from-the-discretization" title="Permanent link">&para;</a></h3>
+<p>Centering or delaying the velocity and acceleration differences gives CC-PSO, CP-PSO, PP-PSO and RR-PSO (Fernández-Martínez &amp; García-Gonzalo, 2009, 2012; García-Gonzalo et al., 2014). All are linearly isomorphic for the same delay. They differ in convergence rate and exploration.</p>
+<table>
+<thead>
+<tr>
+<th>Variant</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PSO, CC-PSO</td>
+<td>converge fastest</td>
+</tr>
+<tr>
+<td>CP-PSO, PP-PSO</td>
+<td>the most exploratory; the recommended samplers</td>
+</tr>
+<tr>
+<td>RR-PSO</td>
+<td>best on benchmarks, with its good parameters on the line <span class="arithmatex">\(\phi = 3(\omega - 3/2)\)</span></td>
+</tr>
+</tbody>
+</table>
+<h3 id="stability-regions-replace-tuning">Stability regions replace tuning<a class="headerlink" href="#stability-regions-replace-tuning" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[
+|\omega| &lt; 1, \qquad 0 &lt; \bar\phi &lt; 2(\omega + 1)
+\]</div>
+<ul>
+<li><strong>First-order stability</strong>: the mean trajectory of a particle stays bounded inside this region.</li>
+<li><strong>Second-order stability</strong>: the variance stays bounded. Its region is smaller.</li>
+<li><strong>USL curve</strong>: the upper border of the second-order region. It is given analytically for any distribution of <span class="arithmatex">\((\omega, \phi_1, \phi_2)\)</span> with finite first moments (García-Gonzalo &amp; Fernández-Martínez, 2014).</li>
+</ul>
+<p>For the classical PSO with uniformly distributed accelerations, the border that <a href="../../api/uq/"><code>second_order_stable</code></a> checks is</p>
+<div class="arithmatex">\[
+\bar\phi &lt; \frac{12\,(1 - \omega^2)}{7 - 5\,\omega}
+\]</div>
+<ul>
+<li>Good parameters lie just inside that border, where the variance is large and successive positions are uncorrelated: <em>high variance and temporal uncorrelation improve exploration of ill-posed problems</em> (2008).</li>
+<li><strong>Cloud versions</strong>: every particle gets its own parameters drawn near the border, and its own time step. Nothing is tuned by hand.</li>
+<li>Most published PSO variants are unnecessary once the stability analysis is understood (García-Gonzalo &amp; Fernández-Martínez, 2012; Fernández-Martínez &amp; García-Gonzalo, 2013).</li>
+</ul>
+<h3 id="collapse-is-the-failure-mode">Collapse is the failure mode<a class="headerlink" href="#collapse-is-the-failure-mode" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[
+D^k = \frac{\operatorname{median}_i \|x_i^k - \bar{x}^k\|}{\operatorname{median}_i \|x_i^0 - \bar{x}^0\|}
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(D^k\)</span></strong> (dispersion): the median distance of the particles to their centre <span class="arithmatex">\(\bar{x}^k\)</span>, relative to its initial value. It is monitored every iteration.</li>
+<li><strong>Collapse</strong>: <span class="arithmatex">\(D^k\)</span> falls toward zero and the swarm stops exploring.</li>
+</ul>
+<p>When it collapses, one of three things is done:</p>
+<ol>
+<li>The sampling stops.</li>
+<li>Exploration is raised (larger <span class="arithmatex">\(\Delta t\)</span>, repulsive forces).</li>
+<li>The collapsed particles are counted as one sample.</li>
+</ol>
+<p>The sampled set is an <em>approximation</em> of the posterior, not a posterior sample. Whether and when PSO performs importance sampling is stated as the open question (2013).</p>
+<h3 id="posterior-statistics-by-counting">Posterior statistics by counting<a class="headerlink" href="#posterior-statistics-by-counting" title="Permanent link">&para;</a></h3>
+<p>From the retained samples (Pallero et al., 2018):</p>
+<ul>
+<li>min–max ranges per parameter;</li>
+<li>a mean or median model with its interquartile range;</li>
+<li>percentiles and empirical CDFs of any derived quantity;</li>
+<li>histograms that reveal multimodality.</li>
+</ul>
+<p>Their example is a 300-parameter gravity inversion with 40,000 forward solves and 25,429 retained models.</p>
+<h3 id="model-reduction-before-sampling">Model reduction before sampling<a class="headerlink" href="#model-reduction-before-sampling" title="Permanent link">&para;</a></h3>
+<ul>
+<li>An isotropic search space cannot be sampled efficiently beyond about ten dimensions.</li>
+<li><strong>Reduced basis</strong>: a small set of modes in which a field-valued unknown is expanded. The modes are principal components of prior scenarios, or the singular vectors of a model already in the low-misfit region, plus one high-frequency term.</li>
+<li>The swarm moves in the coefficients (Pallero et al., 2018; Fernández-Martínez, 2015).</li>
+</ul>
+<p><strong>For a PINN:</strong> the swarm needs thousands of forward solves, so it needs a forward map far cheaper than a training run.</p>
+<h2 id="what-this-changes-in-pinnrluq">What this changes in <code>pinnrl.uq</code><a class="headerlink" href="#what-this-changes-in-pinnrluq" title="Permanent link">&para;</a></h2>
+<p>The UQ module was planned as a likelihood-based data term, deep ensembles, a Laplace approximation and calibration metrics. The module is released (item 5 in <a href="../../history/">History</a>), with the swarm sampler and the parametric surrogate next to the Laplace approximation.</p>
+<h3 id="1-report-regions-not-points">1. Report regions, not points<a class="headerlink" href="#1-report-regions-not-points" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[
+\mathrm{tol}^2 = (1 + \varepsilon)\, N \sigma^2
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(N\)</span></strong>: the number of observations; <strong><span class="arithmatex">\(\sigma\)</span></strong>: the noise standard deviation (Gaussian noise).</li>
+<li><strong><span class="arithmatex">\(\varepsilon\)</span></strong>: the margin above the expected misfit of the truth, <span class="arithmatex">\(N\sigma^2\)</span> (<a href="../../api/uq/"><code>misfit_tolerance</code></a>, default 0.1).</li>
+</ul>
+<p><code>sample_equivalence_region</code> uses the likelihood-ratio region when no tolerance is given:</p>
+<div class="arithmatex">\[
+\{\, \theta : c(\theta) \le c_{\min} + \sigma^2\, \chi^2_p(\text{level}) \,\}
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(c(\theta)\)</span></strong>: the sum of squared residuals; <strong><span class="arithmatex">\(c_{\min}\)</span></strong>: the best misfit found.</li>
+<li><strong><span class="arithmatex">\(\chi^2_p(\text{level})\)</span></strong>: the chi-square quantile with <span class="arithmatex">\(p\)</span> degrees of freedom, <span class="arithmatex">\(p\)</span> the number of parameters (tabulated for <span class="arithmatex">\(p \le 5\)</span>).</li>
+<li>For Gaussian noise this is the asymptotic confidence region at that level, directly comparable with the Fisher ellipse.</li>
+</ul>
+<p>The Fisher ellipse and the Laplace Gaussian are reported next to the set as the linear approximation, so the two can disagree visibly (the F02 case).</p>
+<h3 id="2-a-swarm-sampler-over-the-parameters">2. A swarm sampler over the parameters<a class="headerlink" href="#2-a-swarm-sampler-over-the-parameters" title="Permanent link">&para;</a></h3>
+<p>For <span class="arithmatex">\(p \lesssim 10\)</span> parameters a cloud CP-PSO over <span class="arithmatex">\(\theta\)</span> is the sampler. It needs a cheap forward map for each <span class="arithmatex">\(\theta\)</span>, and for a PINN a forward solve is a training run. Two routes:</p>
+<table>
+<thead>
+<tr>
+<th>Route</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Parametric surrogate</strong> <span class="arithmatex">\(u_w(x, t;\, \theta)\)</span></td>
+<td><span class="arithmatex">\(\theta\)</span> is a network input; trained once over the prior range and evaluated in microseconds. Built first.</td>
+</tr>
+<tr>
+<td><strong>Warm-started retraining</strong></td>
+<td>a few hundred steps from the nearest particle's weights (the F07 profile, generalized to <span class="arithmatex">\(p\)</span> dimensions and to a moving swarm)</td>
+</tr>
+</tbody>
+</table>
+<p>The test cases are the KdV pair and the Burgers viscosity, since their regions are known to be displaced from the truth.</p>
+<ul>
+<li><strong>K45</strong>: one parametric surrogate is accurate to 0.2–0.3 % over the range on heat and Burgers and 0.2–2 % on KdV, at a quarter to a half of the cost of five dedicated networks, and the swarm on its misfit reproduces the closed-form region (<a href="../../benchmarks/#parametric-surrogate-as-the-forward-emulator-experiment-k45">benchmarks</a>).</li>
+<li><strong>K46</strong>: on closed-form misfits (heat, KdV, saturation) the regions are ellipses at these noise levels, and the swarm under-samples their edges (width 0.6–0.8 of the ellipse). On the PINN's own misfit the region is the same as on the closed form (<a href="../../benchmarks/#calibrated-uncertainty-experiments-f06-k10-k39-k46">benchmarks</a>).</li>
+</ul>
+<h3 id="3-a-tolerance-from-the-noise-model-and-the-physics-weight-as-regularization">3. A tolerance from the noise model, and the physics weight as regularization<a class="headerlink" href="#3-a-tolerance-from-the-noise-model-and-the-physics-weight-as-regularization" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The tolerance is set by <span class="arithmatex">\(\sigma\)</span> (K39).</li>
+<li>The dependence of the region on the physics weight is measured and documented, since it plays the role of the Tikhonov term.</li>
+<li><strong>Too strong</strong>: the region shrinks anisotropically toward what the surrogate can represent.</li>
+<li><strong>Too weak</strong>: the data are fitted by a field that violates the equation.</li>
+</ul>
+<h3 id="4-reduced-bases-for-fields">4. Reduced bases for fields<a class="headerlink" href="#4-reduced-bases-for-fields" title="Permanent link">&para;</a></h3>
+<ul>
+<li>When the unknown is a coefficient field or a closure (roadmap v0.6, released), it is parametrized by fewer than ten modes and the swarm samples the coefficients.</li>
+<li><strong>Karhunen–Loève modes</strong>: the principal directions of a random field's covariance; an alternative to principal components of prior scenarios.</li>
+<li>This is also the bridge to the measurement-design work: the modes the data do not constrain are the ones a new sensor should.</li>
+<li><strong>K48</strong> (the F09 fields in a cosine basis of 8 modes): the Fisher spectrum from the reference solver says 200 observations at noise 0.01 determine every mode to &lt; 0.006, so the bump's collapse in F09 is the surrogate's limit, not the data's. A 4-mode swarm under-samples the likelihood region (0.2–0.7 of the Fisher half-widths), and the truncated basis's best fit sits 10 Fisher half-widths from the truth's projection (<a href="../../benchmarks/#reduced-bases-for-field-unknowns-experiment-k48">benchmarks</a>).</li>
+</ul>
+<h3 id="5-ensembles-are-a-swarm-without-dynamics">5. Ensembles are a swarm without dynamics<a class="headerlink" href="#5-ensembles-are-a-swarm-without-dynamics" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Deep ensembles over seeds are a crude sample of <span class="arithmatex">\(M_{\mathrm{tol}}\)</span>. The papers' dispersion diagnostic and the "collapsed particles count once" rule apply to them (<a href="../../api/uq/"><code>ensemble_summary</code></a>).</li>
+<li>K10 (with F06): ensembles over seeds cover 13 %, Laplace 77 %, the physics region 90 %. The reference posterior by HMC (K42) is not run yet.</li>
+<li>The open question of when a swarm sample is a posterior sample is answered empirically in K47, by weighting retained samples:</li>
+</ul>
+<div class="arithmatex">\[
+w_s \propto \exp\!\left(-\frac{\text{misfit}_s}{2\sigma^2}\right)
+\]</div>
+<ul>
+<li><strong>K47</strong> (heat <span class="arithmatex">\(\alpha\)</span>, 30 data sets; pendulum <span class="arithmatex">\((k, b)\)</span>, 10), against the exact posterior on a grid: the weighted set is centred right but 0.5–0.7 as wide, with coverage 80–87 %; the accepted set covers 90–100 % (<a href="../../benchmarks/#the-swarm-as-a-posterior-sample-experiment-k47">benchmarks</a>). This holds only where the cloud covers the support.</li>
+</ul>
+<h3 id="6-optimizer-stability-from-the-same-mathematics">6. Optimizer stability from the same mathematics<a class="headerlink" href="#6-optimizer-stability-from-the-same-mathematics" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The second-order (variance) stability regions of a stochastically forced damped oscillator are the same analysis that sets a safe step for a momentum optimizer under gradient noise.</li>
+<li>D01/D02 can use it to choose the learning rate and momentum from the Hessian spectrum of K03 rather than by trial.</li>
+</ul>
+<p><strong>For a PINN:</strong> at the noise levels tested the region is the Fisher ellipse; the swarm confirms it but under-samples its edges, and the weighted set is too narrow to serve as a posterior.</p>
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Pallero, J. L. G., Fernández-Muñiz, M. Z., Cernea, A., Álvarez-Machancoses, Ó., Pedruelo-González, L. M., Bonvalot, S. &amp; Fernández-Martínez, J. L. (2018). Particle swarm optimization and uncertainty assessment in inverse problems. <em>Entropy</em> 20, 96. <a href="https://doi.org/10.3390/e20020096">doi:10.3390/e20020096</a></li>
+<li>Fernández-Martínez, J. L. &amp; García-Gonzalo, E. (2008). The generalized PSO: a new door to PSO evolution. <em>Journal of Artificial Evolution and Applications</em> 2008, 861275. <a href="https://doi.org/10.1155/2008/861275">doi:10.1155/2008/861275</a></li>
+<li>Fernández-Martínez, J. L. &amp; García-Gonzalo, E. (2009). The PSO family: deduction, stochastic analysis and comparison. <em>Swarm Intelligence</em> 3, 245–273. <a href="https://doi.org/10.1007/s11721-009-0034-8">doi:10.1007/s11721-009-0034-8</a></li>
+<li>Fernández-Martínez, J. L. &amp; García-Gonzalo, E. (2011). Stochastic stability analysis of the linear continuous and discrete PSO models. <em>IEEE Transactions on Evolutionary Computation</em> 15, 405–423. <a href="https://doi.org/10.1109/TEVC.2010.2053935">doi:10.1109/TEVC.2010.2053935</a></li>
+<li>Fernández-Martínez, J. L. &amp; García-Gonzalo, E. (2012). Stochastic stability and numerical analysis of two novel algorithms of the PSO family: PP-GPSO and RR-GPSO. <em>International Journal on Artificial Intelligence Tools</em> 21, 1240011. <a href="https://doi.org/10.1142/S0218213012400118">doi:10.1142/S0218213012400118</a></li>
+<li>García-Gonzalo, E. &amp; Fernández-Martínez, J. L. (2012). A brief historical review of particle swarm optimization (PSO). <em>Journal of Bioinformatics and Intelligent Control</em> 1, 3–16. <a href="https://doi.org/10.1166/jbic.2012.1002">doi:10.1166/jbic.2012.1002</a></li>
+<li>Fernández-Martínez, J. L. &amp; García-Gonzalo, E. (2013). Particle swarm optimisation: time for uniformisation. <em>International Journal of Computing Science and Mathematics</em> 4, 16–33. <a href="https://doi.org/10.1504/IJCSM.2013.054671">doi:10.1504/IJCSM.2013.054671</a></li>
+<li>García-Gonzalo, E., Fernández-Martínez, J. L. &amp; Cernea, A. (2014). Four-points particle swarm optimization algorithms. <em>Journal of Multiple-Valued Logic and Soft Computing</em> 22, 239–266.</li>
+<li>García-Gonzalo, E. &amp; Fernández-Martínez, J. L. (2014). Convergence and stochastic stability analysis of particle swarm optimization variants with generic parameter distributions. <em>Applied Mathematics and Computation</em> 249, 286–302. <a href="https://doi.org/10.1016/j.amc.2014.10.066">doi:10.1016/j.amc.2014.10.066</a></li>
+<li>Fernández-Martínez, J. L., Pallero, J. L. G., Fernández-Muñiz, Z. &amp; Pedruelo-González, L. M. (2014a, b). The effect of noise and Tikhonov's regularization in inverse problems. Parts I and II. <em>Journal of Applied Geophysics</em> 108, 176–185 and 186–193. (Cited through Pallero et al., 2018.)</li>
+<li>Fernández-Martínez, J. L. (2015). Model reduction and uncertainty analysis in inverse problems. <em>The Leading Edge</em> 34, 1006–1016. (Cited through Pallero et al., 2018.)</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2759 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Physics-informed neural networks for forward and inverse PDE problems, evaluated against numerical references">
+      
+      
+      
+        <link rel="canonical" href="https://josegarciav.github.io/PINNs-RL-PDE/concepts/">
+      
+      
+        <link rel="prev" href="../when_to_use/">
+      
+      
+        <link rel="next" href="../equations/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Concepts - pinnrl</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#concepts" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="pinnrl" class="md-header__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            pinnrl
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Concepts
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../getting_started/" class="md-tabs__link">
+          
+  
+  
+  Start
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../custom_equations/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../theory/" class="md-tabs__link">
+          
+  
+  
+  Theory
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../engine/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Engine
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/cli/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../roadmap/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="pinnrl" class="md-nav__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    pinnrl
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../when_to_use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When to use a PINN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-pinn-loss" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The PINN loss
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The PINN loss">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#automatic-differentiation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automatic differentiation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forward-and-inverse-problems" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forward and inverse problems
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boundary-and-initial-conditions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boundary and initial conditions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#collocation-sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collocation sampling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architectures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architectures
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimizers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimizers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#loss-weighting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loss weighting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inverse-problems" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inverse problems
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#training-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../custom_equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Custom equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inverse_problems/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverse problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../process_twins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process twins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets (The Well)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../applications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Applications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Theory
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/well_posedness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Well-posedness and stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/identifiability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identifiability and conditioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/bayesian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Bayesian view and uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/numerical_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The numerical-analysis bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/equivalence_regions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equivalence regions and swarm sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration file
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_4" id="__nav_7_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/neural_networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neural networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/pdes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDEs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/native/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/rl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL sampler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/plots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/uq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command-line entry points
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What has been built
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research program
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../paper/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Software paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-pinn-loss" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The PINN loss
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The PINN loss">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#automatic-differentiation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automatic differentiation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forward-and-inverse-problems" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forward and inverse problems
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boundary-and-initial-conditions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boundary and initial conditions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#collocation-sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collocation sampling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architectures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architectures
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimizers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimizers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#loss-weighting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loss weighting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inverse-problems" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inverse problems
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#training-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="concepts">Concepts<a class="headerlink" href="#concepts" title="Permanent link">&para;</a></h1>
+<p>This page defines the ideas behind each component of <code>pinnrl</code>. Read it if you are new to physics-informed neural networks (PINNs); derivations are in the <a href="#references">cited papers</a>.</p>
+<h2 id="the-pinn-loss">The PINN loss<a class="headerlink" href="#the-pinn-loss" title="Permanent link">&para;</a></h2>
+<p>A PINN is a network <span class="arithmatex">\(u_\theta(x, t)\)</span> trained to satisfy a differential equation and its conditions (Raissi, Perdikaris &amp; Karniadakis, 2019):</p>
+<div class="arithmatex">\[
+\mathcal{N}[u] = 0, \qquad r_\theta(x, t) = \mathcal{N}[u_\theta](x, t)
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(\mathcal{N}\)</span></strong>: the differential operator of the equation, for example <span class="arithmatex">\(\mathcal{N}[u] = u_t - \alpha u_{xx}\)</span>.</li>
+<li><strong>Residual <span class="arithmatex">\(r_\theta\)</span></strong>: what is left when the network is put into the equation. It is zero for an exact solution.</li>
+<li><strong>Collocation point</strong>: a point <span class="arithmatex">\((x_j, t_j)\)</span> inside the domain where the residual is evaluated.</li>
+</ul>
+<p>Training minimizes a weighted sum of four terms over the weights <span class="arithmatex">\(\theta\)</span>:</p>
+<div class="arithmatex">\[
+\mathcal{L}(\theta) = w_r\,\mathcal{L}_r + w_b\,\mathcal{L}_b + w_i\,\mathcal{L}_i + w_d\,\mathcal{L}_d
+\]</div>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Definition</th>
+<th>Evaluated at</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Residual</td>
+<td><span class="arithmatex">\(\mathcal{L}_r = \operatorname{mean}_j \lvert r_\theta(x_j, t_j) \rvert^2\)</span></td>
+<td>collocation points</td>
+</tr>
+<tr>
+<td>Boundary</td>
+<td><span class="arithmatex">\(\mathcal{L}_b = \operatorname{mean} \lvert \mathcal{B}[u_\theta] - g \rvert^2\)</span></td>
+<td>every condition <span class="arithmatex">\(\mathcal{B}[u] = g\)</span> on every boundary face</td>
+</tr>
+<tr>
+<td>Initial</td>
+<td><span class="arithmatex">\(\mathcal{L}_i = \operatorname{mean} \lvert u_\theta(x, t_0) - u_0(x) \rvert^2\)</span></td>
+<td><span class="arithmatex">\(t = t_0\)</span></td>
+</tr>
+<tr>
+<td>Data</td>
+<td><span class="arithmatex">\(\mathcal{L}_d = \operatorname{mean} \lvert u_\theta(x_\text{obs}, t_\text{obs}) - u_\text{obs} \rvert^2\)</span></td>
+<td>observations; zero unless data is attached (inverse and data modes)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Loss weights <span class="arithmatex">\(w_r, w_b, w_i, w_d\)</span></strong>: fixed numbers under <code>loss_weights</code> (15, 20, 10, 10 in <code>config.yaml</code>), or <a href="#loss-weighting">adapted during training</a>.</li>
+<li><strong>Mesh-free</strong>: nothing ties the network to a grid, so the same code handles irregular domains and higher dimensions.</li>
+</ul>
+<p>Accuracy depends on where the residual is evaluated (sampling), how the terms are balanced (weighting) and what the network can represent (architecture).</p>
+<h3 id="automatic-differentiation">Automatic differentiation<a class="headerlink" href="#automatic-differentiation" title="Permanent link">&para;</a></h3>
+<p>The derivatives in <span class="arithmatex">\(\mathcal{N}[u_\theta]\)</span> are exact: the chain rule applied to the network, with no finite-difference step.</p>
+<ul>
+<li><strong>Engine</strong>: the code that computes them. The default, <code>derivatives="auto"</code> in <code>build_trainer</code> and <code>pinnrl-train</code>, is a compiled kernel wherever it applies; <code>"autograd"</code> switches it off. See <a href="../engine/">The native engine</a>.</li>
+</ul>
+<h3 id="forward-and-inverse-problems">Forward and inverse problems<a class="headerlink" href="#forward-and-inverse-problems" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[
+\text{forward: } \min_\theta \mathcal{L}(\theta; \lambda) \qquad\qquad \text{inverse: } \min_{\theta,\,\lambda} \mathcal{L}(\theta, \lambda)
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(\lambda\)</span></strong>: the physical parameters of the equation, such as a diffusivity.</li>
+<li><strong>Forward problem</strong>: <span class="arithmatex">\(\lambda\)</span> is known; find <span class="arithmatex">\(u\)</span>.</li>
+<li><strong>Inverse problem</strong>: <span class="arithmatex">\(\lambda\)</span> is unknown; find it and <span class="arithmatex">\(u\)</span> from measurements (<a href="#inverse-problems">below</a>).</li>
+</ul>
+<h2 id="boundary-and-initial-conditions">Boundary and initial conditions<a class="headerlink" href="#boundary-and-initial-conditions" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Enforces</th>
+<th>Config</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dirichlet</td>
+<td><span class="arithmatex">\(u = g\)</span> on each face</td>
+<td><code>dirichlet: {value: 0}</code>, <code>{left: a, right: b}</code>, or <code>{type: exact}</code> (uses the exact solution)</td>
+</tr>
+<tr>
+<td>Neumann</td>
+<td><span class="arithmatex">\(\partial u/\partial x_i = g\)</span> on both faces of axis <span class="arithmatex">\(i\)</span> (the axis derivative, not the outward normal, so a nonzero <span class="arithmatex">\(g\)</span> has the same sign on both faces)</td>
+<td><code>neumann: {value: 0}</code> or <code>{type: zero}</code></td>
+</tr>
+<tr>
+<td>Periodic</td>
+<td><span class="arithmatex">\(u\)</span> and <span class="arithmatex">\(\partial u/\partial x_i\)</span> match across opposite faces</td>
+<td><code>periodic: {}</code></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Every spatial axis gets the condition on both faces.</li>
+<li>An unknown condition type raises an error; it is not silently ignored.</li>
+<li><strong>Second order in time</strong> (wave, pendulum): the initial loss adds the initial velocity <span class="arithmatex">\(v_0\)</span> (<code>initial_condition.velocity</code>, default 0). Without it the problem is not well posed.</li>
+</ul>
+<div class="arithmatex">\[
+\mathcal{L}_i = \operatorname{mean}\lvert u_\theta(x, t_0) - u_0 \rvert^2 + \operatorname{mean}\lvert \partial_t u_\theta(x, t_0) - v_0 \rvert^2
+\]</div>
+<h2 id="collocation-sampling">Collocation sampling<a class="headerlink" href="#collocation-sampling" title="Permanent link">&para;</a></h2>
+<p>The residual is only enforced where it is evaluated. The sampler is the rule <span class="arithmatex">\(p\)</span> that draws the <span class="arithmatex">\(N\)</span> collocation points of a batch.</p>
+<ul>
+<li><strong>Sharp feature</strong>: a shock, interface or boundary layer. It fills a small part of the domain, so uniform points can under-resolve the place where the error is.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Strategy</th>
+<th>Rule</th>
+<th>Idea</th>
+<th>Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>uniform</code></td>
+<td><span class="arithmatex">\(z_j = z_j^\text{grid} + 0.01\,L\,\xi_j\)</span></td>
+<td>A jittered space-time grid, redrawn every batch. Unbiased, and implicitly regularizing.</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>stratified</code></td>
+<td><span class="arithmatex">\(z_j = a + (\pi(j) + U_j)\,\dfrac{b - a}{N}\)</span></td>
+<td>Latin-hypercube points: one per stratum, so coverage is even.</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>residual_based</code> (<strong>RAD</strong>)</td>
+<td><span class="arithmatex">\(p(x) \propto \dfrac{\lvert r(x)\rvert^k}{\operatorname{mean}\lvert r\rvert^k} + c\)</span></td>
+<td>Draw from a uniform candidate pool with probability <span class="arithmatex">\(p\)</span> (Wu et al., 2023).</td>
+<td>one residual evaluation per pool point</td>
+</tr>
+<tr>
+<td><code>adaptive</code> (<strong>RL bandit</strong>, experimental)</td>
+<td><span class="arithmatex">\(\pi = (1 - \epsilon)\operatorname{softmax}(Q / T) + \dfrac{\epsilon}{N_\text{cells}}\)</span></td>
+<td>A bandit learns which cells have high residual, and mixes its picks 50/50 with uniform points. 1-D only.</td>
+<td>256 residual evaluations (32 cells × 8 points) per update, every <code>probe_every</code> batches (10 in <code>config.yaml</code>)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Jitter</strong>: Gaussian noise <span class="arithmatex">\(\xi_j \sim \mathcal{N}(0, 1)\)</span> scaled to 1 % of the axis length <span class="arithmatex">\(L\)</span>, added to a grid node.</li>
+<li><strong>Stratum</strong>: one of <span class="arithmatex">\(N\)</span> equal slices of an axis <span class="arithmatex">\([a, b]\)</span>; <span class="arithmatex">\(\pi\)</span> is a random permutation and <span class="arithmatex">\(U_j\)</span> a uniform draw in <span class="arithmatex">\([0, 1)\)</span>.</li>
+<li><strong>Pool</strong>: the RAD candidates, <code>pool_factor</code> = 4 times the batch.</li>
+<li><strong><span class="arithmatex">\(k\)</span>, <span class="arithmatex">\(c\)</span></strong>: <span class="arithmatex">\(k\)</span> sharpens the focus on high residuals; <span class="arithmatex">\(c\)</span> keeps a uniform floor. The trainer uses <span class="arithmatex">\(k = 1\)</span>, <span class="arithmatex">\(c = 0\)</span>; other values are arguments of <code>generate_collocation_points</code> and of the sampling study.</li>
+<li><strong>Cell</strong>: one of 16 × 8 space-time boxes; each is one action of the bandit.</li>
+<li><strong>Contextual bandit</strong>: a DQN with discount 0. Its value <span class="arithmatex">\(Q\)</span> regresses onto the reward, a cell's mean <span class="arithmatex">\(\lvert r \rvert\)</span> from probes relative to the other probed cells.</li>
+</ul>
+<p>Adaptive sampling has to pay for its overhead and beat a strong uniform baseline at equal budget. <a href="../benchmarks/">Benchmarks</a> reports how the strategies compare.</p>
+<h2 id="architectures">Architectures<a class="headerlink" href="#architectures" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Spectral bias</strong>: MLPs learn low-frequency components first and struggle with high-frequency or multiscale solutions (Rahaman et al., 2019). Most of the alternatives exist to counter it.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Layer</th>
+<th>Idea</th>
+<th>Use it for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>feedforward</code></td>
+<td><span class="arithmatex">\(\tanh(W h + b)\)</span></td>
+<td>Tanh MLP, the standard PINN baseline</td>
+<td>smooth solutions; the first thing to try</td>
+</tr>
+<tr>
+<td><code>resnet</code></td>
+<td><span class="arithmatex">\(\sigma\big(h + F(h)\big)\)</span></td>
+<td>MLP blocks <span class="arithmatex">\(F\)</span> with skip connections</td>
+<td>deeper networks that still train stably</td>
+</tr>
+<tr>
+<td><code>fourier</code></td>
+<td><span class="arithmatex">\([\sin(zB), \cos(zB)]\)</span></td>
+<td>Random Fourier features of the input <span class="arithmatex">\(z = (x, t)\)</span> before the MLP (Tancik et al., 2020); one hidden layer per <code>hidden_dims</code> entry</td>
+<td>oscillatory or high-frequency solutions</td>
+</tr>
+<tr>
+<td><code>siren</code></td>
+<td><span class="arithmatex">\(\sin\big(\omega_0 (W h + b)\big)\)</span></td>
+<td>Sine activations with frequency <code>omega_0</code> (Sitzmann et al., 2020)</td>
+<td>wave-like solutions; sensitive to <code>omega_0</code></td>
+</tr>
+<tr>
+<td><code>fno</code></td>
+<td>spectral layer with a skip connection and layer normalization</td>
+<td>Fourier-neural-operator-style spectral layers on point-wise inputs (Li et al., 2021)</td>
+<td>experimentation</td>
+</tr>
+<tr>
+<td><code>attention</code></td>
+<td>self-attention block with a skip connection and layer normalization</td>
+<td>Self-attention blocks over a learned embedding</td>
+<td>experimentation</td>
+</tr>
+<tr>
+<td><code>autoencoder</code></td>
+<td>encoder, latent, decoder</td>
+<td>An encoder–latent–decoder MLP</td>
+<td>experimentation</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong><span class="arithmatex">\(B\)</span></strong>: a fixed random matrix, <span class="arithmatex">\(B_{ij} \sim \mathcal{N}(0, \sigma^2)\)</span>; <span class="arithmatex">\(\sigma\)</span> = <code>scale</code> sets the frequency band.</li>
+<li><strong><code>fno</code> is not operator learning</strong>: the FFT runs over each point's hidden features, and the network maps <span class="arithmatex">\((x, t)\)</span> to <span class="arithmatex">\(u\)</span>, not functions to functions.</li>
+</ul>
+<h2 id="optimizers">Optimizers<a class="headerlink" href="#optimizers" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Adam</strong>: the robust default.</li>
+<li><strong>L-BFGS</strong>: quasi-Newton with a strong-Wolfe line search. It often sharpens the final convergence of smooth problems but can stall early. Each step works on one sampled batch, so it behaves best with a single batch per epoch (<code>batch_size</code> = <code>num_collocation_points</code>).</li>
+<li><strong><code>adam_lbfgs</code></strong>: Adam for a fraction of the epochs (<code>adam_lbfgs_switch_ratio</code>), then L-BFGS. A common recipe in the PINN literature.</li>
+<li><strong>Schedules</strong>: <code>cosine</code>, <code>reduce_lr</code> (on plateau) or <code>constant</code>, with optional linear warmup.</li>
+</ul>
+<h2 id="loss-weighting">Loss weighting<a class="headerlink" href="#loss-weighting" title="Permanent link">&para;</a></h2>
+<p>The residual, boundary and initial terms can differ by orders of magnitude in value and in gradient size, and gradient descent then ignores the small ones. Fixed weights (<code>loss_weights</code>) are the simplest fix. Two strategies rebalance during training.</p>
+<p><strong><code>lrw</code>: gradient-norm balancing</strong></p>
+<div class="arithmatex">\[
+\bar g_i \leftarrow \alpha\, \bar g_i + (1 - \alpha)\, \lVert \nabla_\theta \mathcal{L}_i \rVert, \qquad w_i = \frac{1/(\bar g_i + \epsilon)}{\sum_j 1/(\bar g_j + \epsilon)}
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(\bar g_i\)</span></strong>: a running average of the gradient norm of term <span class="arithmatex">\(i\)</span>, with retention factor <span class="arithmatex">\(\alpha\)</span> = <code>alpha</code>.</li>
+<li>This is a simplified form of the learning-rate annealing of Wang, Teng &amp; Perdikaris (2021), which scales each term by the ratio of the residual's maximum gradient to that term's mean gradient.</li>
+</ul>
+<p><strong><code>rbw</code>: relative loss balancing</strong></p>
+<div class="arithmatex">\[
+\bar L_i \leftarrow \alpha\, \bar L_i + (1 - \alpha)\, \mathcal{L}_i, \qquad w_i \leftarrow \alpha\, w_i + (1 - \alpha)\, \frac{\bar L_i}{\sum_j \bar L_j + \epsilon}
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(\bar L_i\)</span></strong>: a running average of the loss of term <span class="arithmatex">\(i\)</span>. The terms with the largest loss get the most weight.</li>
+</ul>
+<p>Both strategies:</p>
+<ul>
+<li>give weights that sum to 1;</li>
+<li>replace the <code>loss_weights</code> of the residual, boundary and initial terms; the data weight stays fixed;</li>
+<li>are switched off during L-BFGS, where the three terms then have weight 1.</li>
+</ul>
+<p><strong>Loss function</strong> (<code>loss_function</code>), for an error <span class="arithmatex">\(e\)</span>:</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Term</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mse</code> (default)</td>
+<td><span class="arithmatex">\(\operatorname{mean}\, e^2\)</span></td>
+</tr>
+<tr>
+<td><code>mae</code></td>
+<td><span class="arithmatex">\(\operatorname{mean}\, \lvert e \rvert\)</span></td>
+</tr>
+<tr>
+<td><code>huber</code></td>
+<td><span class="arithmatex">\(e^2/2\)</span> for <span class="arithmatex">\(\lvert e \rvert \le \delta\)</span>, else <span class="arithmatex">\(\delta\,(\lvert e \rvert - \delta/2)\)</span>, with <span class="arithmatex">\(\delta\)</span> = <code>huber_delta</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>mae</code> and <code>huber</code> reduce the influence of outliers, for example noisy observations.</p>
+<h2 id="inverse-problems">Inverse problems<a class="headerlink" href="#inverse-problems" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Mark the PDE parameters <span class="arithmatex">\(\lambda\)</span> as trainable. They become <code>torch.nn.Parameter</code>s.</li>
+<li>Supply observations. They add the data term.</li>
+<li>
+<p>Train. The network and the parameters are optimized together.</p>
+</li>
+<li>
+<p><strong>Physics terms</strong>: pin <span class="arithmatex">\(\lambda\)</span> to values under which the network solves the PDE. <span class="arithmatex">\(\lambda\)</span> enters through the residual and, for some initial conditions such as the Allen–Cahn and KdV profiles, through the initial loss.</p>
+</li>
+<li><strong>Data term</strong>: pulls the solution toward the measurements.</li>
+</ol>
+<p>See <a href="../inverse_problems/">Inverse problems</a>.</p>
+<h2 id="training-modes">Training modes<a class="headerlink" href="#training-modes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th><code>mode</code></th>
+<th>Loss terms</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>forward</code></td>
+<td>residual + BC + IC</td>
+<td>Solve a known PDE</td>
+</tr>
+<tr>
+<td><code>inverse</code></td>
+<td>residual + BC + IC + data, with trainable parameters</td>
+<td>Identify parameters from data</td>
+</tr>
+<tr>
+<td><code>data_augmented</code></td>
+<td>residual + BC + IC + data</td>
+<td>Fit reference data while respecting the physics</td>
+</tr>
+<tr>
+<td><code>data_only</code></td>
+<td>data</td>
+<td>A neural surrogate of a dataset (e.g. The Well)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="code-map">Code map<a class="headerlink" href="#code-map" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pinnrl.pdes</code></td>
+<td><code>PDEBase</code> (derivatives, BC/IC, sampling, loss, validation), the ten PDE configurations, and the registry (<code>create_pde</code>, <code>get_pde_spec</code>)</td>
+</tr>
+<tr>
+<td><code>pinnrl.neural_networks</code></td>
+<td><code>PINNModel</code> and the seven architectures</td>
+</tr>
+<tr>
+<td><code>pinnrl.training</code></td>
+<td><code>PDETrainer</code> (<code>train</code>, <code>train_steps</code>), adaptive weights, and the <code>pinnrl-train</code> CLI (<code>build_model</code>, <code>load_run</code>)</td>
+</tr>
+<tr>
+<td><code>pinnrl.rl</code></td>
+<td>The experimental residual-bandit sampler</td>
+</tr>
+<tr>
+<td><code>pinnrl.benchmarks</code></td>
+<td>Finite-difference baselines, numerical reference solutions, the sampling study, and the <code>pinnrl-benchmark</code> CLI</td>
+</tr>
+<tr>
+<td><code>pinnrl.datasets</code></td>
+<td>The Well registry and loader</td>
+</tr>
+<tr>
+<td><code>pinnrl.plots</code>, <code>pinnrl.dashboard</code></td>
+<td>Plotting and the Dash app</td>
+</tr>
+</tbody>
+</table>
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Raissi, Perdikaris &amp; Karniadakis (2019). Physics-informed neural networks: a deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. <em>J. Comput. Phys.</em> 378, 686–707.</li>
+<li>Wu, Zhu, Tan, Kartha &amp; Lu (2023). A comprehensive study of non-adaptive and residual-based adaptive sampling for physics-informed neural networks. <em>Comput. Methods Appl. Mech. Eng.</em> 403, 115671.</li>
+<li>Wang, Teng &amp; Perdikaris (2021). Understanding and mitigating gradient flow pathologies in physics-informed neural networks. <em>SIAM J. Sci. Comput.</em> 43(5), A3055–A3081.</li>
+<li>Rahaman et al. (2019). On the spectral bias of neural networks. <em>ICML</em>.</li>
+<li>Tancik et al. (2020). Fourier features let networks learn high frequency functions in low dimensional domains. <em>NeurIPS</em>.</li>
+<li>Sitzmann et al. (2020). Implicit neural representations with periodic activation functions. <em>NeurIPS</em>.</li>
+<li>Li et al. (2021). Fourier neural operator for parametric partial differential equations. <em>ICLR</em>.</li>
+<li>Krishnapriyan, Gholami, Zhe, Kirby &amp; Mahoney (2021). Characterizing possible failure modes in physics-informed neural networks. <em>NeurIPS</em>.</li>
+<li>Basdevant et al. (1986). Spectral and finite difference solutions of the Burgers equation. <em>Comput. Fluids</em> 14(1), 23–41. (Source of the Burgers reference value used in <code>pinnrl.benchmarks.reference</code>.)</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
