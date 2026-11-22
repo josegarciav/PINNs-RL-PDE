@@ -26,6 +26,16 @@ and, as variants on the same linear algebra (the first moves of PLAN.md):
     varpro      M5: the last layer solved by linear least squares at every step, the hidden
                 weights stepped on the Jacobian projected off the last layer's (Kaufman)
 
+and the second group of moves:
+
+    continueK   M6: Levenberg-Marquardt while the viscosity moves from an easy value to the
+                target in K geometric stages (Burgers only)
+    filterB     M3: an extended Kalman filter over a stream of fresh batches of B rows, never
+                revisited, carrying the weights' covariance
+    al          M8: initial and boundary rows as constraints with multipliers (augmented
+                Lagrangian, penalty 1) inside Levenberg-Marquardt; lm_w1 is its control, the
+                same penalty without multipliers
+
 on heat, Burgers (nu = 0.01/pi) and the KdV soliton, each for a fixed wall-clock budget, with
 the relative L2 error against the exact or reference solution recorded along the way.
 
@@ -50,7 +60,8 @@ HERE = Path(__file__).parent
 W_IC, W_BC = 10.0, 10.0
 N_COL, N_IC, N_BC = 2000, 256, 256
 METHODS = ("lm", "adam", "lbfgs", "adam_lbfgs")
-VARIANTS = ("flow", "block32", "block128", "varpro")
+VARIANTS = ("flow", "block32", "block128", "varpro", "varpro60")
+STAGE2 = ("continue8", "filter64", "al", "lm_w1")
 
 
 # ------------------------------------------------------------------------------ problems
@@ -74,6 +85,10 @@ PROBLEMS = {
         t=(0.0, 1.0),
         order=2,
         residual=lambda u, ux, uxx, uxxx, ut: ut + u * ux - (0.01 / math.pi) * uxx,
+        # the same equation at another viscosity, for continuation
+        family=lambda nu: lambda u, ux, uxx, uxxx, ut: ut + u * ux - nu * uxx,
+        easy=0.1,
+        target=0.01 / math.pi,
         initial=lambda x: -torch.sin(math.pi * x),
         boundary=lambda x, t: torch.zeros_like(x),
         exact=None,  # the Cole-Hopf reference of pinnrl.benchmarks
@@ -115,14 +130,15 @@ def make_net(width, depth, seed):
     return torch.nn.Sequential(*layers).double()
 
 
-def sample(problem, generator):
+def sample(problem, generator, sizes=None):
+    n_col, n_ic, n_bc = sizes or (N_COL, N_IC, N_BC)
     spec = PROBLEMS[problem]
     (x0, x1), (t0, t1) = spec["x"], spec["t"]
     rand = lambda n: torch.rand(n, dtype=torch.float64, generator=generator)  # noqa: E731
-    col = torch.stack([x0 + (x1 - x0) * rand(N_COL), t0 + (t1 - t0) * rand(N_COL)], 1)
-    ic = torch.stack([x0 + (x1 - x0) * rand(N_IC), torch.full((N_IC,), t0, dtype=torch.float64)], 1)
-    side = torch.where(torch.arange(N_BC) % 2 == 0, x0, x1).double()
-    bc = torch.stack([side, t0 + (t1 - t0) * rand(N_BC)], 1)
+    col = torch.stack([x0 + (x1 - x0) * rand(n_col), t0 + (t1 - t0) * rand(n_col)], 1)
+    ic = torch.stack([x0 + (x1 - x0) * rand(n_ic), torch.full((n_ic,), t0, dtype=torch.float64)], 1)
+    side = torch.where(torch.arange(n_bc) % 2 == 0, x0, x1).double()
+    bc = torch.stack([side, t0 + (t1 - t0) * rand(n_bc)], 1)
     return col, ic, bc
 
 
@@ -143,9 +159,12 @@ class Scaler(torch.nn.Module):
 
 
 # ------------------------------------------------------- residual vector, two formulations
-def residual_rows(problem, model):
-    """``r(params, points) -> (N,)`` by torch.func, differentiable row by row."""
+def residual_rows(problem, model, weights=(W_IC, W_BC)):
+    """``r(params, points) -> (N,)`` by torch.func, differentiable row by row.
+
+    ``rows.physics["residual"]`` can be replaced to change the equation (continuation)."""
     spec = PROBLEMS[problem]
+    physics = {"residual": spec["residual"]}
     buffers = dict(model.named_buffers())
 
     def u(params, z):
@@ -166,13 +185,17 @@ def residual_rows(problem, model):
     def pde_row(params, z):
         g = du(params, z)
         third = duxx(params, z)[0] if spec["order"] >= 3 else 0.0
-        return spec["residual"](u(params, z), g[0], uxx(params, z), third, g[1])
+        return physics["residual"](u(params, z), g[0], uxx(params, z), third, g[1])
 
     def scales(counts):
         n_col, n_ic, n_bc = counts
-        return 1.0 / math.sqrt(n_col), math.sqrt(W_IC / n_ic), math.sqrt(W_BC / n_bc)
+        return (
+            1.0 / math.sqrt(n_col),
+            math.sqrt(weights[0] / n_ic),
+            math.sqrt(weights[1] / n_bc),
+        )
 
-    def rows(params, col, ic, bc, counts=None):
+    def rows(params, col, ic, bc, counts=None, shift=None):
         """The scaled residual vector. ``counts`` fixes the scaling when the points given are
         a subset of a larger set, so a row has the same value alone as within the set."""
         s_r, s_ic, s_bc = scales(counts or (col.shape[0], ic.shape[0], bc.shape[0]))
@@ -183,6 +206,8 @@ def residual_rows(problem, model):
             v_ic = vmap(u, in_dims=(None, 0))(params, ic) - spec["initial"](ic[:, 0])
         if len(bc):
             v_bc = vmap(u, in_dims=(None, 0))(params, bc) - spec["boundary"](bc[:, 0], bc[:, 1])
+        if shift is not None:  # multipliers over the penalty, added to the constraint rows
+            v_ic, v_bc = v_ic + shift[0], v_bc + shift[1]
         return torch.cat([s_r * r, s_ic * v_ic, s_bc * v_bc])
 
     def jacobian(params, col, ic, bc, counts=None, only=None):
@@ -204,6 +229,7 @@ def residual_rows(problem, model):
             blocks.append(scale * flat)
         return torch.cat(blocks)
 
+    rows.physics = physics
     return rows, jacobian
 
 
@@ -524,6 +550,165 @@ def run_varpro(problem, model, clock, budget, generator, resample_every=5, proje
     return stats
 
 
+def run_continue(problem, model, clock, budget, generator, stages=8, resample_every=5):
+    """M6. Levenberg-Marquardt on a moving equation: the viscosity starts at an easy value and
+    reaches the target in ``stages`` geometric steps. A stage ends when the cost falls under
+    1e-5 or after 15 steps, and the target is forced at half the budget. (The tangent
+    predictor of the plan is the first Gauss-Newton step at the new viscosity, so it needs no
+    code of its own.)"""
+    spec = PROBLEMS[problem]
+    weights = Weights(model)
+    theta = weights.read()
+    rows, jacobian = residual_rows(problem, model)
+    ratio = (spec["target"] / spec["easy"]) ** (1.0 / stages)
+    mu, at_stage = spec["easy"], 0
+    rows.physics["residual"] = spec["family"](mu)
+
+    def residual(vec, pts):
+        return rows(weights.tree(vec), *pts)
+
+    lam, nu, it = 1e-3, 2.0, 0
+    stats = {"iterations": 0, "rejected": 0, "reached_target_s": None}
+    pts = sample(problem, generator)
+    while (spent := clock.tick()) < budget:
+        if it % resample_every == 0:
+            pts = sample(problem, generator)
+        r = residual(theta, pts)
+        cost = 0.5 * float(r @ r)
+        if mu > spec["target"] and (cost < 1e-5 or at_stage >= 15 or spent > 0.5 * budget):
+            mu = spec["target"] if spent > 0.5 * budget else max(mu * ratio, spec["target"])
+            if mu <= spec["target"] * (1 + 1e-12):
+                mu, stats["reached_target_s"] = spec["target"], spent
+                rows.physics["residual"] = spec["residual"]
+            else:
+                rows.physics["residual"] = spec["family"](mu)
+            at_stage = 0
+            r = residual(theta, pts)
+            cost = 0.5 * float(r @ r)
+        J = jacobian(weights.tree(theta), *pts)
+        g = J.T @ r
+        lin = Linearization(J)
+        for _ in range(8):
+            delta = lin.step(r, lam)
+            r_new = residual(theta + delta, pts)
+            new_cost = 0.5 * float(r_new @ r_new)
+            predicted = 0.5 * float(delta @ (lam * delta - g))
+            rho = (cost - new_cost) / max(predicted, 1e-300)
+            if rho > 0 and math.isfinite(new_cost):
+                theta = theta + delta
+                lam, nu = nielsen(lam, rho), 2.0
+                break
+            lam, nu = lam * nu, 2.0 * nu
+            stats["rejected"] += 1
+        weights.write(theta)
+        it, at_stage = it + 1, at_stage + 1
+    stats["iterations"] = it
+    return stats
+
+
+def run_filter(
+    problem, model, clock, budget, generator, batch=64, prior=1.0, forget=0.995, cap=1e12
+):
+    """M3. Training as filtering. Each step draws ``batch`` fresh rows (three quarters in the
+    domain, the rest on the initial line and the boundary), never seen again, and applies an
+    extended Kalman update with unit row noise:
+
+        K = P J^T (J P J^T + I)^{-1},   theta -= K r,   P = (P - K J P) / forget
+
+    P is the full covariance of the weights (the plan's low-rank form is the next step if
+    this one works), with every variance capped at ``cap`` times the prior."""
+    weights = Weights(model)
+    theta = weights.read()
+    rows, jacobian = residual_rows(problem, model)
+    sizes = (batch - 2 * (batch // 8), batch // 8, batch // 8)
+    unit = (1, 1, 1)  # rows unscaled: a stream has no total count
+    P = prior * torch.eye(theta.numel(), dtype=theta.dtype)
+    eye = torch.eye(batch, dtype=theta.dtype)
+    it, stats = 0, {"iterations": 0, "rejected": 0, "batch": batch, "capped": 0}
+    while clock.tick() < budget:
+        pts = sample(problem, generator, sizes)
+        tree = weights.tree(theta)
+        r = rows(tree, *pts, counts=unit)
+        J = jacobian(tree, *pts, counts=unit)
+        PJt = P @ J.T
+        gain = torch.linalg.solve(J @ PJt + eye, PJt.T).T
+        cand = theta - gain @ r
+        # The update should lower the residual of its own batch. One that more than doubles
+        # it is the sign of a covariance gone bad: the step is refused and P starts again.
+        after = float(rows(weights.tree(cand), *pts, counts=unit).norm())
+        if math.isfinite(after) and after <= 2.0 * float(r.norm()):
+            theta = cand
+            P = (P - gain @ PJt.T) / forget
+            P = 0.5 * (P + P.T)
+            # Forgetting inflates directions the stream does not excite without bound, and
+            # the filter then diverges (seen after 100 to 150 s, when P's range passes what
+            # double precision holds). Rows and columns are scaled so no variance exceeds
+            # ``cap`` times the prior. The growth itself is needed: a cap of 1 stalls it.
+            shrink = torch.clamp(cap * prior / P.diagonal().clamp_min(1e-300), max=1.0).sqrt()
+            if bool((shrink < 1.0).any()):
+                P = shrink[:, None] * P * shrink[None, :]
+                stats["capped"] += 1
+        else:
+            P = prior * torch.eye(theta.numel(), dtype=theta.dtype)
+            stats["rejected"] += 1
+        weights.write(theta)
+        it += 1
+    stats["iterations"] = it
+    return stats
+
+
+def run_al(problem, model, clock, budget, generator, penalty=1.0, multipliers=True, every=5):
+    """M8. The initial and boundary conditions as constraints c(theta) = 0 on fixed points:
+
+        1/2 |r_pde|^2 + lambda . c + penalty/2 |c|^2  =  1/2 |r_pde|^2 + penalty/2 |c + lambda/penalty|^2 + const
+
+    so each inner problem is least squares with shifted constraint rows, solved by the same
+    Levenberg-Marquardt steps, and ``lambda += penalty * c`` every ``every`` steps. Without
+    ``multipliers`` it is Levenberg-Marquardt at loss weights equal to ``penalty``."""
+    weights = Weights(model)
+    theta = weights.read()
+    rows, jacobian = residual_rows(problem, model, weights=(penalty, penalty))
+    col, ic, bc = sample(problem, generator)  # the constraint points stay; col is redrawn
+    shift = (torch.zeros(len(ic), dtype=theta.dtype), torch.zeros(len(bc), dtype=theta.dtype))
+
+    def residual(vec, pts):
+        return rows(weights.tree(vec), *pts, shift=shift)
+
+    lam, nu, it, stats = 1e-3, 2.0, 0, {"iterations": 0, "rejected": 0}
+    while clock.tick() < budget:
+        if it % every == 0 and it:
+            col = sample(problem, generator)[0]
+            if multipliers:  # lambda/penalty += c, with c the unshifted constraint values
+                empty = col[:0]
+                c_ic = rows(weights.tree(theta), empty, ic, bc[:0], counts=(1, 1, 1))
+                c_bc = rows(weights.tree(theta), empty, ic[:0], bc, counts=(1, 1, 1))
+                root = math.sqrt(penalty)
+                shift = (shift[0] + c_ic / root, shift[1] + c_bc / root)
+        pts = (col, ic, bc)
+        r = residual(theta, pts)
+        J = jacobian(weights.tree(theta), *pts)
+        g = J.T @ r
+        cost = 0.5 * float(r @ r)
+        lin = Linearization(J)
+        for _ in range(8):
+            delta = lin.step(r, lam)
+            r_new = residual(theta + delta, pts)
+            new_cost = 0.5 * float(r_new @ r_new)
+            predicted = 0.5 * float(delta @ (lam * delta - g))
+            rho = (cost - new_cost) / max(predicted, 1e-300)
+            if rho > 0 and math.isfinite(new_cost):
+                theta = theta + delta
+                lam, nu = nielsen(lam, rho), 2.0
+                break
+            lam, nu = lam * nu, 2.0 * nu
+            stats["rejected"] += 1
+        weights.write(theta)
+        it += 1
+    stats["iterations"] = it
+    stats["multiplier_rms"] = float(torch.cat(shift).pow(2).mean().sqrt()) * penalty
+    return stats
+
+
 def run_adam(problem, model, clock, budget, generator, resample_every=50):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     it, pts = 0, sample(problem, generator)
@@ -584,6 +769,21 @@ def run_one(problem, method, seed, budget, width, depth, every):
             project=method != "alternate",
             warm=int(method[6:] or 0) if method.startswith("varpro") else 0,
         )
+    elif method.startswith("continue"):
+        stats = run_continue(problem, model, clock, budget, generator, stages=int(method[8:]))
+    elif method.startswith("filter"):
+        size, _, exponent = method[6:].partition("c")  # filter64c4: variances capped at 1e4
+        stats = run_filter(
+            problem,
+            model,
+            clock,
+            budget,
+            generator,
+            batch=int(size),
+            cap=10.0 ** int(exponent or 12),
+        )
+    elif method in ("al", "lm_w1"):
+        stats = run_al(problem, model, clock, budget, generator, multipliers=method == "al")
     else:
         assert method == "adam_lbfgs", method
         stats = run_adam(problem, model, clock, 0.3 * budget, generator)
@@ -636,6 +836,8 @@ def main():
         for method in args.methods:
             for seed in range(args.seeds):
                 if (problem, method, seed) in done:
+                    continue
+                if method.startswith("continue") and "family" not in PROBLEMS[problem]:
                     continue
                 run = run_one(
                     problem, method, seed, args.budget, args.width, args.depth, args.every

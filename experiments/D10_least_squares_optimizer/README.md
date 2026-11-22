@@ -24,49 +24,85 @@ Methods:
 2. **M1**: the same step with $\lambda$ set from the linearization error, plus one correction that reuses the factorization.
 3. **M4**: block Kaczmarz. Blocks of 32 or 128 rows drawn in proportion to their squared residual, each solved exactly.
 4. **M5**: variable projection. The last layer is solved by linear least squares at every step; the hidden weights step on the projected Jacobian. Two starts: from the first step, and after 60 plain steps.
-5. **Baselines**: Adam at $10^{-3}$, L-BFGS (strong Wolfe), Adam for 30 % of the budget then L-BFGS.
+5. **M6**: continuation. Levenberg–Marquardt while the viscosity moves from 0.1 to the target in 4, 8 or 16 geometric stages. Burgers only.
+6. **M3**: training as filtering. An extended Kalman filter over a stream of fresh batches of 64 or 256 rows, never revisited, carrying the full covariance $P$ of the weights:
+   $K = P J^\top (J P J^\top + I)^{-1}$, $\theta \leftarrow \theta - K r$, $P \leftarrow (P - K J P)/0.995$.
+7. **M8**: multipliers. Initial and boundary rows as constraints with an augmented Lagrangian at penalty 1, inside Levenberg–Marquardt. Its control is Levenberg–Marquardt at loss weights 1.
+8. **Baselines**: Adam at $10^{-3}$, L-BFGS (strong Wolfe), Adam for 30 % of the budget then L-BFGS.
 
 ```bash
-python experiments/D10_least_squares_optimizer/run.py --budget 60 --seeds 3 \
-    --methods lm flow block32 block128 varpro varpro60 adam lbfgs adam_lbfgs
-python experiments/D10_least_squares_optimizer/plot.py
+D=experiments/D10_least_squares_optimizer
+python $D/run.py --budget 60 --seeds 3 --methods lm flow block32 block128 varpro varpro60 \
+    continue4 continue8 continue16 filter64 filter256 al lm_w1 adam lbfgs adam_lbfgs
+python $D/run.py --budget 180 --seeds 3 --methods lm filter64 --out $D/results/long
+python $D/plot.py && python $D/plot.py $D/results/long/runs_3x32.json
 ```
 
 ## Results
 
 Median $\varepsilon(T)$ over 3 seeds, with the range.
 
-| Equation | Method | 10 s | 30 s | 60 s | Steps |
-|---|---|---|---|---|---|
-| heat | Levenberg–Marquardt | 2.7e-05 (2e-05–4e-05) | 2.8e-06 (1e-06–5e-06) | 6.2e-07 (5e-07–2e-06) | 421 |
-| heat | M1 damping from the linearization error | 4.5e-05 (4e-05–8e-05) | 3.5e-06 (3e-06–4e-06) | 1.6e-06 (7e-07–2e-06) | 358 |
-| heat | M5 last layer solved, after 60 plain steps | 7.6e-05 (7e-05–2e-04) | 2.9e-08 (2e-08–3e-08) | **4.9e-09** (3e-09–6e-09) | 249 |
-| heat | M5 last layer solved, from the start | 3.8e-07 (1e-07–5e-07) | 3.2e-08 (2e-08–5e-08) | 1.1e-08 (9e-09–1e-08) | 346 |
-| heat | M4 blocks of 128 rows | 3.2e-04 (2e-04–5e-04) | 3.1e-04 (2e-04–5e-04) | 2.3e-04 (9e-05–3e-04) | 7491 |
-| heat | M4 blocks of 32 rows | 1.5e-03 (1e-03–2e-03) | 1.7e-03 (1e-03–3e-03) | 1.5e-03 (1e-03–2e-03) | 14189 |
-| heat | Adam, then L-BFGS | 2.5e-03 (2e-03–3e-03) | 1.0e-04 (1e-04–1e-04) | 7.6e-05 (6e-05–9e-05) | 4283 |
-| heat | L-BFGS | 1.4e-04 (1e-04–2e-04) | 8.6e-05 (8e-05–1e-04) | 7.8e-05 (7e-05–1e-04) | 7517 |
-| heat | Adam | 2.5e-03 (2e-03–3e-03) | 6.8e-04 (5e-04–2e-03) | 5.7e-04 (4e-04–6e-03) | 14418 |
-| burgers | Levenberg–Marquardt | 9.2e-02 (4e-02–2e-01) | 3.0e-03 (3e-03–4e-03) | 4.5e-03 (3e-03–8e-03) | 403 |
-| burgers | M1 damping from the linearization error | 9.8e-02 (4e-02–1e-01) | 1.0e-02 (6e-03–2e-02) | 3.3e-03 (3e-03–7e-03) | 399 |
-| burgers | M5 last layer solved, after 60 plain steps | 1.3e-01 (1e-01–2e-01) | 1.9e-02 (1e-02–2e-02) | 5.3e-03 (1e-03–7e-03) | 194 |
-| burgers | M5 last layer solved, from the start | 4.9e-01 (5e-01–5e-01) | 4.8e-01 (5e-01–5e-01) | 4.7e-01 (4e-01–5e-01) | 137 |
-| burgers | M4 blocks of 128 rows | 1.9e-01 (2e-01–4e-01) | 1.7e-01 (1e-01–3e-01) | 1.4e-01 (1e-01–2e-01) | 7124 |
-| burgers | M4 blocks of 32 rows | 4.0e-01 (4e-01–4e-01) | 3.5e-01 (3e-01–4e-01) | 3.6e-01 (3e-01–4e-01) | 13916 |
-| burgers | Adam, then L-BFGS | 3.3e-01 (3e-01–4e-01) | 2.7e-02 (2e-02–9e-02) | 1.4e-02 (8e-03–2e-02) | 4108 |
-| burgers | L-BFGS | 2.7e-01 (8e-02–4e-01) | 1.4e-01 (6e-02–5e-01) | 2.2e-02 (5e-03–4e-01) | 564 |
-| burgers | Adam | 3.3e-01 (3e-01–4e-01) | 1.3e-01 (5e-02–2e-01) | 4.5e-02 (3e-02–1e-01) | 13937 |
-| kdv | Levenberg–Marquardt | 2.0e-04 (1e-04–5e-04) | 9.9e-06 (6e-06–1e-05) | **6.0e-06** (3e-06–6e-06) | 365 |
-| kdv | M1 damping from the linearization error | 7.5e-04 (2e-04–2e-03) | 2.9e-05 (3e-05–6e-05) | 1.1e-05 (7e-06–1e-05) | 325 |
-| kdv | M5 last layer solved, after 60 plain steps | 4.5e-04 (3e-04–2e-03) | 7.4e-05 (1e-05–9e-05) | 6.6e-06 (4e-06–1e-05) | 140 |
-| kdv | M5 last layer solved, from the start | 5.1e-01 (4e-01–6e-01) | 5.0e-01 (4e-01–6e-01) | 4.8e-01 (4e-01–6e-01) | 184 |
-| kdv | M4 blocks of 128 rows | 2.7e-03 (2e-03–4e-03) | 2.4e-03 (2e-03–4e-03) | 2.3e-03 (2e-03–4e-03) | 5163 |
-| kdv | M4 blocks of 32 rows | 7.9e-03 (5e-03–1e-02) | 5.0e-03 (4e-03–8e-03) | 4.7e-03 (4e-03–6e-03) | 9549 |
-| kdv | Adam, then L-BFGS | 1.2e-01 (1e-01–3e-01) | 2.7e-03 (3e-03–3e-03) | 1.3e-03 (1e-03–1e-03) | 1155 |
-| kdv | L-BFGS | 4.2e-03 (4e-03–5e-03) | 2.1e-03 (2e-03–3e-03) | 2.0e-03 (2e-03–2e-03) | 1961 |
-| kdv | Adam | 7.3e-02 (3e-02–8e-02) | 1.7e-02 (2e-02–2e-02) | 3.8e-03 (3e-03–5e-03) | 8925 |
+- **Last 10 s, mean**: the geometric mean of the readings in the last sixth of the run. On Burgers one reading can differ from the next by a factor of 5 as the points are redrawn, so this column is the steadier summary.
 
-The figure is `results/runs_3x32.png` after `plot.py`.
+### 60 seconds
+
+| Equation | Method | 10 s | 30 s | 60 s | Last 10 s, mean | Steps |
+|---|---|---|---|---|---|---|
+| heat | Levenberg–Marquardt | 2.7e-05 (2e-05–4e-05) | 2.8e-06 (1e-06–5e-06) | 6.2e-07 (5e-07–2e-06) | 8.6e-07 | 421 |
+| heat | M1 damping set by the linearization error | 4.5e-05 (4e-05–8e-05) | 3.5e-06 (3e-06–4e-06) | 1.6e-06 (7e-07–2e-06) | 1.8e-06 | 358 |
+| heat | M5 last layer solved, after 60 plain steps | 7.6e-05 (7e-05–2e-04) | 2.9e-08 (2e-08–3e-08) | 4.9e-09 (3e-09–6e-09) | 5.4e-09 | 249 |
+| heat | M5 last layer solved, from the start | 3.8e-07 (1e-07–5e-07) | 3.2e-08 (2e-08–5e-08) | 1.1e-08 (9e-09–1e-08) | 1.2e-08 | 346 |
+| heat | M4 blocks of 128 rows | 3.2e-04 (2e-04–5e-04) | 3.1e-04 (2e-04–5e-04) | 2.3e-04 (9e-05–3e-04) | 3.0e-04 | 7491 |
+| heat | M4 blocks of 32 rows | 1.5e-03 (1e-03–2e-03) | 1.7e-03 (1e-03–3e-03) | 1.5e-03 (1e-03–2e-03) | 1.4e-03 | 14189 |
+| heat | M3 Kalman filter, batches of 64 | 2.3e-04 (2e-04–3e-04) | 1.5e-05 (1e-05–2e-05) | 4.4e-07 (4e-07–5e-07) | 5.8e-07 | 3713 |
+| heat | M3 Kalman filter, batches of 256 | 2.3e-04 (2e-04–3e-04) | 3.7e-05 (4e-05–4e-05) | 4.1e-06 (3e-06–4e-06) | 4.8e-06 | 2032 |
+| heat | M8 multipliers, penalty 1 | 4.3e-05 (4e-05–1e-04) | 9.9e-06 (8e-06–1e-05) | 1.7e-06 (2e-06–4e-06) | 2.3e-06 | 508 |
+| heat | Levenberg–Marquardt, loss weights 1 | 1.8e-05 (1e-05–3e-05) | 1.8e-06 (1e-06–2e-06) | 4.3e-07 (4e-07–6e-07) | 4.7e-07 | 518 |
+| heat | Adam, then L-BFGS | 2.5e-03 (2e-03–3e-03) | 1.0e-04 (1e-04–1e-04) | 7.6e-05 (6e-05–9e-05) | 7.5e-05 | 4283 |
+| heat | L-BFGS | 1.4e-04 (1e-04–2e-04) | 8.6e-05 (8e-05–1e-04) | 7.8e-05 (7e-05–1e-04) | 7.8e-05 | 7517 |
+| heat | Adam | 2.5e-03 (2e-03–3e-03) | 6.8e-04 (5e-04–2e-03) | 5.7e-04 (4e-04–6e-03) | 8.9e-04 | 14418 |
+| burgers | Levenberg–Marquardt | 9.2e-02 (4e-02–2e-01) | 3.0e-03 (3e-03–4e-03) | 4.5e-03 (3e-03–8e-03) | 3.6e-03 | 403 |
+| burgers | M1 damping set by the linearization error | 9.8e-02 (4e-02–1e-01) | 1.0e-02 (6e-03–2e-02) | 3.3e-03 (3e-03–7e-03) | 2.7e-03 | 399 |
+| burgers | M5 last layer solved, after 60 plain steps | 1.3e-01 (1e-01–2e-01) | 1.9e-02 (1e-02–2e-02) | 5.3e-03 (1e-03–7e-03) | 4.1e-03 | 194 |
+| burgers | M5 last layer solved, from the start | 4.9e-01 (5e-01–5e-01) | 4.8e-01 (5e-01–5e-01) | 4.7e-01 (4e-01–5e-01) | 4.7e-01 | 137 |
+| burgers | M4 blocks of 128 rows | 1.9e-01 (2e-01–4e-01) | 1.7e-01 (1e-01–3e-01) | 1.4e-01 (1e-01–2e-01) | 1.4e-01 | 7124 |
+| burgers | M4 blocks of 32 rows | 4.0e-01 (4e-01–4e-01) | 3.5e-01 (3e-01–4e-01) | 3.6e-01 (3e-01–4e-01) | 3.5e-01 | 13916 |
+| burgers | M6 viscosity in 4 stages | 2.2e-01 (2e-01–2e-01) | 1.7e-03 (1e-03–4e-03) | 3.2e-03 (2e-04–7e-03) | 1.2e-03 | 453 |
+| burgers | M6 viscosity in 8 stages | 1.4e-01 (1e-01–1e-01) | 2.4e-03 (1e-03–4e-03) | 2.7e-03 (1e-03–3e-03) | 1.7e-03 | 456 |
+| burgers | M6 viscosity in 16 stages | 1.8e-01 (2e-01–2e-01) | 2.5e-03 (1e-03–5e-03) | 1.1e-03 (1e-03–3e-03) | 1.3e-03 | 460 |
+| burgers | M3 Kalman filter, batches of 64 | 2.3e-01 (2e-01–3e-01) | 4.0e-02 (6e-03–1e-01) | 4.2e-04 (3e-04–1e-03) | 1.7e-03 | 3663 |
+| burgers | M3 Kalman filter, batches of 256 | 1.2e-01 (8e-02–2e-01) | 2.5e-02 (1e-02–1e-01) | 1.7e-03 (1e-03–4e-03) | 1.9e-03 | 1976 |
+| burgers | M8 multipliers, penalty 1 | 1.5e-01 (1e-01–2e-01) | 1.4e-02 (1e-02–1e-02) | 1.6e-03 (1e-03–2e-03) | 1.9e-03 | 452 |
+| burgers | Levenberg–Marquardt, loss weights 1 | 9.8e-02 (5e-02–2e-01) | 9.1e-03 (5e-03–1e-02) | 1.9e-03 (1e-03–2e-03) | 2.0e-03 | 453 |
+| burgers | Adam, then L-BFGS | 3.3e-01 (3e-01–4e-01) | 2.7e-02 (2e-02–9e-02) | 1.4e-02 (8e-03–2e-02) | 1.3e-02 | 4108 |
+| burgers | L-BFGS | 2.7e-01 (8e-02–4e-01) | 1.4e-01 (6e-02–5e-01) | 2.2e-02 (5e-03–4e-01) | 3.9e-02 | 564 |
+| burgers | Adam | 3.3e-01 (3e-01–4e-01) | 1.3e-01 (5e-02–2e-01) | 4.5e-02 (3e-02–1e-01) | 4.2e-02 | 13937 |
+| kdv | Levenberg–Marquardt | 2.0e-04 (1e-04–5e-04) | 9.9e-06 (6e-06–1e-05) | 6.0e-06 (3e-06–6e-06) | 6.4e-06 | 365 |
+| kdv | M1 damping set by the linearization error | 7.5e-04 (2e-04–2e-03) | 2.9e-05 (3e-05–6e-05) | 1.1e-05 (7e-06–1e-05) | 1.2e-05 | 325 |
+| kdv | M5 last layer solved, after 60 plain steps | 4.5e-04 (3e-04–2e-03) | 7.4e-05 (1e-05–9e-05) | 6.6e-06 (4e-06–1e-05) | 7.3e-06 | 140 |
+| kdv | M5 last layer solved, from the start | 5.1e-01 (4e-01–6e-01) | 5.0e-01 (4e-01–6e-01) | 4.8e-01 (4e-01–6e-01) | 4.8e-01 | 184 |
+| kdv | M4 blocks of 128 rows | 2.7e-03 (2e-03–4e-03) | 2.4e-03 (2e-03–4e-03) | 2.3e-03 (2e-03–4e-03) | 2.3e-03 | 5163 |
+| kdv | M4 blocks of 32 rows | 7.9e-03 (5e-03–1e-02) | 5.0e-03 (4e-03–8e-03) | 4.7e-03 (4e-03–6e-03) | 4.8e-03 | 9549 |
+| kdv | M3 Kalman filter, batches of 64 | 9.8e-03 (7e-03–1e-02) | 5.0e-04 (3e-04–6e-04) | 1.3e-05 (1e-05–2e-05) | 1.8e-05 | 3047 |
+| kdv | M3 Kalman filter, batches of 256 | 7.7e-03 (6e-03–1e-02) | 1.0e-03 (1e-03–1e-03) | 1.1e-04 (8e-05–1e-04) | 1.4e-04 | 1619 |
+| kdv | M8 multipliers, penalty 1 | 1.8e-03 (2e-03–4e-03) | 3.9e-04 (2e-04–4e-04) | 9.7e-05 (7e-05–2e-04) | 1.2e-04 | 367 |
+| kdv | Levenberg–Marquardt, loss weights 1 | 4.7e-05 (3e-05–1e-04) | 7.1e-06 (3e-06–1e-05) | 2.4e-06 (6e-07–3e-06) | 2.6e-06 | 369 |
+| kdv | Adam, then L-BFGS | 1.2e-01 (1e-01–3e-01) | 2.7e-03 (3e-03–3e-03) | 1.3e-03 (1e-03–1e-03) | 1.3e-03 | 1155 |
+| kdv | L-BFGS | 4.2e-03 (4e-03–5e-03) | 2.1e-03 (2e-03–3e-03) | 2.0e-03 (2e-03–2e-03) | 2.0e-03 | 1961 |
+| kdv | Adam | 7.3e-02 (3e-02–8e-02) | 1.7e-02 (2e-02–2e-02) | 3.8e-03 (3e-03–5e-03) | 4.2e-03 | 8925 |
+
+### 180 seconds
+
+| Equation | Method | 10 s | 30 s | 60 s | 120 s | Last 30 s, mean | Steps |
+|---|---|---|---|---|---|---|---|
+| heat | Levenberg–Marquardt | 2.2e-05 (1e-05–3e-05) | 2.2e-06 (2e-06–4e-06) | 5.7e-07 (5e-07–1e-06) | 1.6e-07 (1e-07–4e-07) | 1.1e-07 | 1428 |
+| heat | M3 Kalman filter, batches of 64 | 2.5e-04 (2e-04–3e-04) | 1.4e-05 (1e-05–2e-05) | 4.4e-07 (4e-07–5e-07) | 1.4e-09 (1e-09–5e-09) | 1.5e-09 | 11071 |
+| burgers | Levenberg–Marquardt | 4.3e-02 (3e-02–1e-01) | 4.8e-03 (3e-03–8e-03) | 2.8e-03 (3e-03–5e-03) | 1.3e-03 (9e-04–3e-03) | 1.3e-03 | 1333 |
+| burgers | M3 Kalman filter, batches of 64 | 2.3e-01 (2e-01–3e-01) | 3.8e-02 (6e-03–1e-01) | 4.8e-04 (3e-04–1e-03) | 3.8e-05 (3e-05–2e-04) | 2.0e-05 | 11020 |
+| kdv | Levenberg–Marquardt | 1.5e-04 (1e-04–5e-04) | 9.9e-06 (6e-06–1e-05) | 4.8e-06 (2e-06–6e-06) | 1.5e-06 (6e-07–2e-06) | 9.6e-07 | 1071 |
+| kdv | M3 Kalman filter, batches of 64 | 9.8e-03 (7e-03–1e-02) | 5.0e-04 (3e-04–6e-04) | 1.3e-05 (1e-05–2e-05) | 2.3e-07 (9e-08–2e-07) | 1.0e-07 | 9029 |
+
+The figures are `results/runs_3x32.png` and `results/long/runs_3x32.png` after `plot.py`.
 
 ## What it shows
 
@@ -78,6 +114,19 @@ The figure is `results/runs_3x32.png` after `plot.py`.
 6. **Setting the damping like an ODE step size changes nothing.** M1 follows Levenberg–Marquardt on all three equations and ends level or slightly behind.
 7. **The undamped flow does not move at all.** At the start $J$ has numerical rank 93 of 2,241 (singular values from 7.8 down to 6e-20). With a fixed cut-off of the pseudo-inverse, the step has length 20 to 100 and raises the residual at every step length above 0.01. The damping is the method, not a detail.
 
+### The second group of moves
+
+8. **The filter is the first method to clear the bar on Burgers.** At 180 s it holds 2.0e-05 against 1.3e-03 for Levenberg–Marquardt, 65 times lower, on all three seeds. It is 73 times lower on heat (1.5e-09) and 10 times lower on KdV (1.0e-07).
+9. **Its lead comes late.** In the first 30 s Levenberg–Marquardt is 10 to 50 times ahead. The two cross near 60 s; after that Levenberg–Marquardt flattens and the filter keeps falling.
+10. **Small batches win.** Batches of 64 beat batches of 256 on every equation: the memory in $P$ does the work a large batch would.
+11. **The plain filter diverges, and the fix has two parts.** With forgetting alone, 5 of 6 runs on heat and KdV blew up between 110 and 150 s: $P$ grows without bound in directions the stream does not excite, until its range exceeds double precision.
+    - **A cap on the variances** at $10^{12}$ times the prior removed 8 of 9 failures. A cap at the prior itself stalls the method at 1e-04: the growth of $P$ is needed.
+    - **A check on each update** removed the last: an update that more than doubles the residual of its own batch is refused and $P$ starts again. It fired at most once per run.
+12. **Continuation does not pay at this viscosity.** With 4, 8 or 16 stages it ends within the spread of a cold start.
+13. **Multipliers are worse than their own control** on all three equations.
+14. **Loss weights of 10 were not a good default.** Weights of 1 are level or better everywhere, and 2 times better on Burgers.
+15. **M5b needs no arm.** The last-layer solve on the equation linearized about the current solution is the Gauss–Newton sweep on the last layer that M5 already runs on nonlinear equations.
+
 ## Verdict against the plan
 
 | Move | Gate | Result |
@@ -86,8 +135,11 @@ The figure is `results/runs_3x32.png` after `plot.py`.
 | M1, residual flow | Beats stage 0 on two of three | Dropped: no gain on any |
 | M4, block Kaczmarz | Beats stage 0 on two of three | Dropped as the main optimizer. Kept as a candidate opening move for the agent (M9) |
 | M5, variable projection | Beats stage 0 on two of three; a gain on the linear problem | Kept, with a warm start: a large gain on heat, level on the other two |
+| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. The full-rank question is open: only the full $P$ was run |
+| M6, continuation | A cold run is not as good | Dropped at this viscosity |
+| M8, multipliers | Beats stage 0 on two of three | Dropped |
 
-Roadmap bet R1 asks for 100 times below Adam then L-BFGS. It holds on two of these three equations, not on Burgers.
+Roadmap bet R1 asks for 100 times below Adam then L-BFGS. At 60 s Levenberg–Marquardt meets it on heat and KdV and not on Burgers. The baselines were not run to 180 s, so the filter's margin over them at that time is not measured.
 
 ## What it does not show
 
@@ -96,4 +148,7 @@ Roadmap bet R1 asks for 100 times below Adam then L-BFGS. It holds on two of the
 - **Double precision in PyTorch.** The engine runs in single precision; errors near $10^{-8}$ will not survive it unchanged.
 - **Baselines at their defaults.** Adam's rate and the L-BFGS history were not tuned per equation, and neither was anything in the new methods.
 - **The warm-up length of 60** was chosen once, on a 30 s test, and not scanned.
+- **The filter's constants** (forgetting 0.995, prior 1, cap $10^{12}$, the factor 2 in the check) were set once. The cap was chosen from one seed at three values.
+- **The filter's cost grows with the square of the number of weights** per step and its memory likewise (40 MB here). A low-rank or factored covariance is needed beyond a few thousand weights.
+- **No baseline at 180 s** other than Levenberg–Marquardt.
 - **The Burgers reference** is the package's Cole–Hopf solution on a 256 by 101 grid; its own accuracy bounds what can be read below about 1e-4.

@@ -36,6 +36,13 @@ SERIES = {  # method: (label, color, line style)
     "varpro": ("M5 last layer solved, from the start", "#7a3fb5", ":"),
     "block128": ("M4 blocks of 128 rows", "#1f9d6b", "-"),
     "block32": ("M4 blocks of 32 rows", "#1f9d6b", ":"),
+    "continue4": ("M6 viscosity in 4 stages", "#c2255c", ":"),
+    "continue8": ("M6 viscosity in 8 stages", "#c2255c", "-"),
+    "continue16": ("M6 viscosity in 16 stages", "#c2255c", "--"),
+    "filter64": ("M3 Kalman filter, batches of 64", "#0b7285", "-"),
+    "filter256": ("M3 Kalman filter, batches of 256", "#0b7285", "--"),
+    "al": ("M8 multipliers, penalty 1", "#946200", "-"),
+    "lm_w1": ("Levenberg–Marquardt, loss weights 1", "#946200", ":"),
     "adam_lbfgs": ("Adam, then L-BFGS", "#2a78d6", "-"),
     "lbfgs": ("L-BFGS", "#2a78d6", "--"),
     "adam": ("Adam", "#8a8985", "-"),
@@ -59,8 +66,18 @@ def band(problem, method):
 
 
 marks = [t for t in (10.0, 30.0, 60.0, 120.0) if t <= budget]
-print("| Equation | Method | " + " | ".join(f"{t:.0f} s" for t in marks) + " | Steps |")
-print("|---|---|" + "---|" * (len(marks) + 1))
+
+
+def settled(curve):
+    """Geometric mean of the readings in the last sixth of the budget: the error wanders as
+    the points are redrawn, so one reading is a noisy summary."""
+    late = [e for t, e in curve if t >= budget * 5.0 / 6.0]
+    return float(np.exp(np.mean(np.log(late))))
+
+
+head = " | ".join(f"{t:.0f} s" for t in marks)
+print(f"| Equation | Method | {head} | Last {budget / 6:.0f} s, mean | Steps |")
+print("|---|---|" + "---|" * (len(marks) + 2))
 for problem in problems:
     for method in methods:
         mine = [r for r in runs if (r["problem"], r["method"]) == (problem, method)]
@@ -70,6 +87,7 @@ for problem in problems:
         for t in marks:
             values = [float(at(r["curve"], t)) for r in mine]
             cells.append(f"{np.median(values):.1e} ({min(values):.0e}–{max(values):.0e})")
+        cells.append(f"{np.median([settled(r['curve']) for r in mine]):.1e}")
         steps = int(np.median([r["iterations"] for r in mine]))
         print(f"| {problem} | {SERIES[method][0]} | " + " | ".join(cells) + f" | {steps} |")
 

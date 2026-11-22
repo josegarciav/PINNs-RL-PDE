@@ -145,7 +145,7 @@ Rules: every arm is charged its full wall-clock time; nothing is tuned per probl
 
 ## Results
 
-Stages 0 and 1 are measured in [README.md](README.md) (heat, Burgers, KdV; 60 s; 3 seeds).
+Stages 0 to 2 are measured in [README.md](README.md) (heat, Burgers, KdV; 60 s and 180 s; 3 seeds).
 
 | Move | Outcome |
 |---|---|
@@ -153,9 +153,21 @@ Stages 0 and 1 are measured in [README.md](README.md) (heat, Burgers, KdV; 60 s;
 | M1 | Dropped. The flow with a fixed cut-off does not move ($J$ has numerical rank 93 of 2,241); with the damping set from the linearization error it equals Levenberg–Marquardt |
 | M4 | Dropped as the main optimizer: the fastest method in the first seconds on KdV, then it stalls. Kept as an opening move for M9 |
 | M5 | Kept: $5 \times 10^{-9}$ on heat, 127 times below stage 0. Level with it on Burgers and KdV, and only after a warm start |
+| M5b | No arm needed: it is the Gauss–Newton sweep on the last layer that M5 already runs |
+| M3 | **Kept, the lead candidate.** At 180 s: $2 \times 10^{-5}$ on Burgers (65 times below stage 0), $1.5 \times 10^{-9}$ on heat (73 times), $10^{-7}$ on KdV (10 times). Slower than stage 0 for the first minute. Needs a cap on the covariance and a check on each update, or it diverges |
+| M6 | Dropped at this viscosity: no better than a cold start with 4, 8 or 16 stages |
+| M8 | Dropped: worse than the same penalty without multipliers. Loss weights of 1 beat the weights of 10 used so far |
 
 What the results change:
 
-1. **Burgers is now the test that matters.** No method here is 100 times below the baselines on it. M6 (continuation in the viscosity) moves to the front of stage 2.
-2. **M5 needs a linear problem to shine.** Linearize the equation about the current solution at every step (Newton on the operator), so the last-layer solve is exact on nonlinear equations too. This is added to stage 2 as M5b.
-3. **Basis growth** (the second half of M5) is still untested.
+1. **The filter is the method to build on.** It is the only move ahead of Levenberg–Marquardt on all three equations, and the only one that moves Burgers.
+2. **Its two weaknesses set the next work.**
+   - **The slow first minute.** Open with Levenberg–Marquardt or blocks (M4), then hand the weights to the filter. The switch is a decision for M9.
+   - **The full covariance.** $P$ costs the square of the number of weights. Test a low-rank plus diagonal form, a Kronecker-factored form per layer, and a square-root update, at 2,241 weights first and then at the 12,000 of I17's network.
+3. **Combine the two survivors.** M5 solves the last layer exactly; M3 filters the rest. On heat they reach the same error by different routes.
+4. **Order the stream in time** (fact 5). The filter here draws points uniformly; the plan's causal ordering is untested.
+5. **A harder equation.** Continuation was not needed at $\nu = 0.01/\pi$. Allen–Cahn and Burgers at a smaller viscosity are where it, and the filter, should be tried next.
+6. **Baselines to add**: SOAP and self-scaled Broyden, and every baseline at 180 s.
+7. **Basis growth** (the second half of M5) is still untested.
+
+Stage 2b (next): items 2 and 3, then 4 and 5. Stage 3 (M2, M7) and the engine work of stage 4 follow as planned.
