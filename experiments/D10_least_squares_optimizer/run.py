@@ -36,6 +36,14 @@ and the second group of moves:
                 Lagrangian, penalty 1) inside Levenberg-Marquardt; lm_w1 is its control, the
                 same penalty without multipliers
 
+and what the filter's results asked for:
+
+    lmfilterT   Levenberg-Marquardt for T seconds, then the filter from those weights
+    dfilterBlayer, dfilterBnode
+                the filter with a covariance kept only within a layer, or within the weights
+                entering one neuron (the decoupled filter of Puskorius and Feldkamp), so its
+                cost no longer grows with the square of the number of weights
+
 on heat, Burgers (nu = 0.01/pi) and the KdV soliton, each for a fixed wall-clock budget, with
 the relative L2 error against the exact or reference solution recorded along the way.
 
@@ -62,6 +70,7 @@ N_COL, N_IC, N_BC = 2000, 256, 256
 METHODS = ("lm", "adam", "lbfgs", "adam_lbfgs")
 VARIANTS = ("flow", "block32", "block128", "varpro", "varpro60")
 STAGE2 = ("continue8", "filter64", "al", "lm_w1")
+STAGE2B = ("lmfilter20", "dfilter64layer", "dfilter64node")
 
 
 # ------------------------------------------------------------------------------ problems
@@ -657,6 +666,93 @@ def run_filter(
     return stats
 
 
+def weight_groups(weights, kind):
+    """Index sets that share a covariance block: every weight (``full``), one set per layer
+    (``layer``), or one per neuron, its incoming weights and bias (``node``)."""
+    offsets = np.concatenate([[0], np.cumsum(weights.sizes)])
+    if kind == "full":
+        return [torch.arange(int(offsets[-1]))]
+    groups = []
+    for k in range(0, len(weights.names), 2):  # weight (out, in) then bias (out)
+        out, fan_in = weights.shapes[k]
+        w0, b0 = int(offsets[k]), int(offsets[k + 1])
+        if kind == "layer":
+            groups.append(torch.arange(w0, b0 + out))
+        else:
+            for j in range(out):
+                row = torch.arange(w0 + j * fan_in, w0 + (j + 1) * fan_in)
+                groups.append(torch.cat([row, torch.tensor([b0 + j])]))
+    return groups
+
+
+def run_filter_blocks(
+    problem,
+    model,
+    clock,
+    budget,
+    generator,
+    batch=64,
+    kind="layer",
+    prior=1.0,
+    forget=0.995,
+    cap=1e12,
+):
+    """M3 with a block-diagonal covariance. The innovation matrix sums over the blocks,
+
+        S = I + sum_g J_g P_g J_g^T,   theta_g -= P_g J_g^T S^{-1} r,   P_g -= P_g J_g^T S^{-1} J_g P_g
+
+    so the weights still move together through S, and only their cross-covariances between
+    blocks are dropped. Same cap and same check as ``run_filter``."""
+    weights = Weights(model)
+    theta = weights.read()
+    rows, jacobian = residual_rows(problem, model)
+    sizes = (batch - 2 * (batch // 8), batch // 8, batch // 8)
+    unit = (1, 1, 1)
+    groups = weight_groups(weights, kind)
+
+    def fresh():
+        return [prior * torch.eye(len(g), dtype=theta.dtype) for g in groups]
+
+    Ps = fresh()
+    eye = torch.eye(batch, dtype=theta.dtype)
+    it = 0
+    stats = {"iterations": 0, "rejected": 0, "batch": batch, "capped": 0, "blocks": len(groups)}
+    while clock.tick() < budget:
+        pts = sample(problem, generator, sizes)
+        tree = weights.tree(theta)
+        r = rows(tree, *pts, counts=unit)
+        J = jacobian(tree, *pts, counts=unit)
+        Js = [J[:, g] for g in groups]
+        PJts = [P @ Jg.T for P, Jg in zip(Ps, Js, strict=True)]
+        S = eye.clone()
+        for Jg, PJt in zip(Js, PJts, strict=True):
+            S += Jg @ PJt
+        factor = torch.linalg.cholesky_ex(0.5 * (S + S.T))[0]
+        weighted = torch.cholesky_solve(r[:, None], factor)[:, 0]
+        cand = theta.clone()
+        for g, PJt in zip(groups, PJts, strict=True):
+            cand[g] -= PJt @ weighted
+        after = float(rows(weights.tree(cand), *pts, counts=unit).norm())
+        if math.isfinite(after) and after <= 2.0 * float(r.norm()):
+            theta = cand
+            capped = False
+            for i, PJt in enumerate(PJts):
+                P = (Ps[i] - PJt @ torch.cholesky_solve(PJt.T, factor)) / forget
+                P = 0.5 * (P + P.T)
+                shrink = torch.clamp(cap * prior / P.diagonal().clamp_min(1e-300), max=1.0).sqrt()
+                if bool((shrink < 1.0).any()):
+                    P, capped = shrink[:, None] * P * shrink[None, :], True
+                Ps[i] = P
+            stats["capped"] += capped
+        else:
+            Ps = fresh()
+            stats["rejected"] += 1
+        weights.write(theta)
+        it += 1
+    stats["iterations"] = it
+    return stats
+
+
 def run_al(problem, model, clock, budget, generator, penalty=1.0, multipliers=True, every=5):
     """M8. The initial and boundary conditions as constraints c(theta) = 0 on fixed points:
 
@@ -771,6 +867,15 @@ def run_one(problem, method, seed, budget, width, depth, every):
         )
     elif method.startswith("continue"):
         stats = run_continue(problem, model, clock, budget, generator, stages=int(method[8:]))
+    elif method.startswith("lmfilter"):
+        first = run_lm(problem, model, clock, float(method[8:]), generator)
+        stats = run_filter(problem, model, clock, budget, generator)
+        stats["lm_iterations"] = first["iterations"]
+    elif method.startswith("dfilter"):
+        kind = "layer" if method.endswith("layer") else "node"
+        stats = run_filter_blocks(
+            problem, model, clock, budget, generator, batch=int(method[7 : -len(kind)]), kind=kind
+        )
     elif method.startswith("filter"):
         size, _, exponent = method[6:].partition("c")  # filter64c4: variances capped at 1e4
         stats = run_filter(

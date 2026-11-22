@@ -155,6 +155,9 @@ Stages 0 to 2 are measured in [README.md](README.md) (heat, Burgers, KdV; 60 s a
 | M5 | Kept: $5 \times 10^{-9}$ on heat, 127 times below stage 0. Level with it on Burgers and KdV, and only after a warm start |
 | M5b | No arm needed: it is the Gauss–Newton sweep on the last layer that M5 already runs |
 | M3 | **Kept, the lead candidate.** At 180 s: $2 \times 10^{-5}$ on Burgers (65 times below stage 0), $1.5 \times 10^{-9}$ on heat (73 times), $10^{-7}$ on KdV (10 times). Slower than stage 0 for the first minute. Needs a cap on the covariance and a check on each update, or it diverges |
+| M3, hybrid | Kept: 20 s of stage 0 first gives stage 0's error at 30 s and the filter's at 180 s. The restart of $P$ costs about 40 s of flat error |
+| M3, covariance per layer | Kept with a caveat: level on heat, 24 times better on KdV, 20 times worse on Burgers than the full covariance |
+| M3, covariance per neuron | Dropped: behind stage 0 on heat and KdV, diverges on Burgers |
 | M6 | Dropped at this viscosity: no better than a cold start with 4, 8 or 16 stages |
 | M8 | Dropped: worse than the same penalty without multipliers. Loss weights of 1 beat the weights of 10 used so far |
 
@@ -170,4 +173,9 @@ What the results change:
 6. **Baselines to add**: SOAP and self-scaled Broyden, and every baseline at 180 s.
 7. **Basis growth** (the second half of M5) is still untested.
 
-Stage 2b (next): items 2 and 3, then 4 and 5. Stage 3 (M2, M7) and the engine work of stage 4 follow as planned.
+Stage 2b, measured so far (item 2):
+
+- **The slow first minute is solved by a hybrid**, at the price of a flat stretch after the switch. Next: start $P$ from the last $(J^\top J + \lambda I)^{-1}$ of the opening phase so nothing is relearned.
+- **The covariance can lose the coupling between layers on smooth solutions, not on a front.** Coupling within a neuron alone is not enough. Next: the per-layer form at I17's 4×64 network (12,700 weights), and a Kronecker-factored block so the cost stops growing with the square of a layer.
+
+Still open in stage 2b: items 3, 4, 5 and 6. Stage 3 (M2, M7) and the engine work of stage 4 follow as planned.
