@@ -70,7 +70,7 @@ N_COL, N_IC, N_BC = 2000, 256, 256
 METHODS = ("lm", "adam", "lbfgs", "adam_lbfgs")
 VARIANTS = ("flow", "block32", "block128", "varpro", "varpro60")
 STAGE2 = ("continue8", "filter64", "al", "lm_w1")
-STAGE2B = ("lmfilter20", "dfilter64layer", "dfilter64node")
+STAGE2B = ("lmfilter20", "lmfilter20w", "dfilter64layer", "dfilter64node")
 
 
 # ------------------------------------------------------------------------------ problems
@@ -616,7 +616,16 @@ def run_continue(problem, model, clock, budget, generator, stages=8, resample_ev
 
 
 def run_filter(
-    problem, model, clock, budget, generator, batch=64, prior=1.0, forget=0.995, cap=1e12
+    problem,
+    model,
+    clock,
+    budget,
+    generator,
+    batch=64,
+    prior=1.0,
+    forget=0.995,
+    cap=1e12,
+    warm=False,
 ):
     """M3. Training as filtering. Each step draws ``batch`` fresh rows (three quarters in the
     domain, the rest on the initial line and the boundary), never seen again, and applies an
@@ -625,13 +634,20 @@ def run_filter(
         K = P J^T (J P J^T + I)^{-1},   theta -= K r,   P = (P - K J P) / forget
 
     P is the full covariance of the weights (the plan's low-rank form is the next step if
-    this one works), with every variance capped at ``cap`` times the prior."""
+    this one works), with every variance capped at ``cap`` times the prior.
+
+    ``warm`` starts P as the posterior of one full sample at the incoming weights,
+    (J^T J + I / prior)^{-1}, for weights that another optimizer has already moved."""
     weights = Weights(model)
     theta = weights.read()
     rows, jacobian = residual_rows(problem, model)
     sizes = (batch - 2 * (batch // 8), batch // 8, batch // 8)
     unit = (1, 1, 1)  # rows unscaled: a stream has no total count
     P = prior * torch.eye(theta.numel(), dtype=theta.dtype)
+    if warm:
+        J = jacobian(weights.tree(theta), *sample(problem, generator), counts=unit)
+        information = J.T @ J + torch.eye(theta.numel(), dtype=theta.dtype) / prior
+        P = torch.cholesky_inverse(torch.linalg.cholesky(information))
     eye = torch.eye(batch, dtype=theta.dtype)
     it, stats = 0, {"iterations": 0, "rejected": 0, "batch": batch, "capped": 0}
     while clock.tick() < budget:
@@ -868,8 +884,9 @@ def run_one(problem, method, seed, budget, width, depth, every):
     elif method.startswith("continue"):
         stats = run_continue(problem, model, clock, budget, generator, stages=int(method[8:]))
     elif method.startswith("lmfilter"):
-        first = run_lm(problem, model, clock, float(method[8:]), generator)
-        stats = run_filter(problem, model, clock, budget, generator)
+        warm = method.endswith("w")  # lmfilter20w: P starts from the last linearization
+        first = run_lm(problem, model, clock, float(method[8:].rstrip("w")), generator)
+        stats = run_filter(problem, model, clock, budget, generator, warm=warm)
         stats["lm_iterations"] = first["iterations"]
     elif method.startswith("dfilter"):
         kind = "layer" if method.endswith("layer") else "node"

@@ -175,7 +175,9 @@ What the results change:
 
 Stage 2b, measured so far (item 2):
 
-- **The slow first minute is solved by a hybrid**, at the price of a flat stretch after the switch. Next: start $P$ from the last $(J^\top J + \lambda I)^{-1}$ of the opening phase so nothing is relearned.
+- **The slow first minute is solved by a hybrid**, at the price of a flat stretch after the switch. Starting $P$ at $(J^\top J + I)^{-1}$ on a full sample at the switch was tried and is no better, slightly worse: dropped.
 - **The covariance can lose the coupling between layers on smooth solutions, not on a front.** Coupling within a neuron alone is not enough. Next: the per-layer form at I17's 4×64 network (12,700 weights), and a Kronecker-factored block so the cost stops growing with the square of a layer.
 
-Still open in stage 2b: items 3, 4, 5 and 6. Stage 3 (M2, M7) and the engine work of stage 4 follow as planned.
+- **Against Adam then L-BFGS at 180 s** the filter is 35,000 (heat), 350 (Burgers) and 9,800 (KdV) times lower: the 100 times of bet R1 on all three, at this size.
+
+Still open in stage 2b: items 3, 4, 5 and the rest of 6 (SOAP, self-scaled Broyden). Stage 3 (M2, M7) and the engine work of stage 4 follow as planned.

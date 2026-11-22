@@ -42,6 +42,7 @@ SERIES = {  # method: (label, color, line style)
     "filter64": ("M3 Kalman filter, batches of 64", "#0b7285", "-"),
     "filter256": ("M3 Kalman filter, batches of 256", "#0b7285", "--"),
     "lmfilter20": ("Levenberg–Marquardt for 20 s, then the filter", "#0b7285", "-."),
+    "lmfilter20w": ("The same, covariance started from the last linearization", "#0b7285", ":"),
     "dfilter64layer": ("M3 filter, covariance per layer", "#5f3dc4", "-"),
     "dfilter64node": ("M3 filter, covariance per neuron", "#5f3dc4", ":"),
     "al": ("M8 multipliers, penalty 1", "#946200", "-"),
