@@ -31,6 +31,7 @@ Methods:
    - **Hybrid, warm**: the same with $P$ started at $(J^\top J + I)^{-1}$ on one full sample at the switch.
    - **Covariance per layer**: $P$ kept only within each layer (4 blocks, the largest 1,056 weights), one shared $J P J^\top + I$.
    - **Covariance per neuron**: $P$ kept only among the weights that enter one neuron (97 blocks of at most 33).
+   - **Forgetting**: $f = 0.95$, $0.98$, $0.9$, $0.999$ in place of $0.995$; and a **growing memory**, $f_k = 1 - 1/\max(20,\, k/25)$ at step $k$: the filter remembers 1 batch in 25 of those it has seen, and never fewer than 20.
    - **Low rank**: no $n \times n$ matrix. The information is kept as $P^{-1} = c\,I + V \operatorname{diag}(s^2) V^\top$ with $V$ orthonormal, $n \times k$. Each batch adds $J^\top J$ through one SVD of a $(k + 64)$-square matrix and keeps the $k$ strongest directions. Cost per step $n k (k + 64)$ against $n^2 \cdot 64$.
 7. **M8**: multipliers. Initial and boundary rows as constraints with an augmented Lagrangian at penalty 1, inside Levenberg–Marquardt. Its control is Levenberg–Marquardt at loss weights 1.
 8. **Baselines**: Adam at $10^{-3}$, L-BFGS (strong Wolfe), Adam for 30 % of the budget then L-BFGS.
@@ -45,7 +46,7 @@ python $D/run.py --budget 600 --seeds 2 --width 64 --depth 4 --every 10 --out $D
     --methods lm dfilter64layer sfilter64r64 adam_lbfgs
 python $D/plot.py && python $D/plot.py $D/results/long/runs_3x32.json
 python $D/plot.py $D/results/wide/runs_4x64.json
-python $D/run.py --budget 180 --seeds 3 --methods lm filter64 filter64f95 --out $D/results/forget
+python $D/run.py --budget 180 --seeds 3 --methods lm filter64 filter64f95 filter64g25 --out $D/results/forget
 ```
 
 ## Results
@@ -158,12 +159,15 @@ Run later, on battery in Low Power Mode: every method takes about half the steps
 | heat | Levenberg–Marquardt | 7.6e-05 (7e-05–1e-04) | 4.5e-06 (4e-06–5e-06) | 1.6e-06 (8e-07–2e-06) | 4.6e-07 (3e-07–5e-07) | 2.2e-07 | 877 |
 | heat | M3 Kalman filter, batches of 64 | 6.1e-04 (5e-04–6e-04) | 8.2e-05 (7e-05–1e-04) | 1.1e-05 (1e-05–1e-05) | 2.8e-07 (2e-07–3e-07) | 2.1e-08 | 5837 |
 | heat | M3 filter, forgetting 0.95 | 1.2e-05 (1e-05–1e-05) | 1.6e-08 (8e-09–3e-08) | 8.1e-09 (5e-09–1e-08) | 8.6e-09 (2e-09–1e-08) | 2.9e-09 | 5745 |
+| heat | M3 filter, memory of 1 batch in 25 seen, at least 20 | 1.4e-05 (1e-05–2e-05) | 1.5e-08 (6e-09–2e-08) | 5.7e-09 (5e-09–1e-08) | 1.7e-09 (1e-09–5e-09) | 1.5e-09 | 5895 |
 | burgers | Levenberg–Marquardt | 1.3e-01 (1e-01–3e-01) | 1.5e-02 (1e-02–3e-02) | 2.6e-03 (1e-03–5e-03) | 1.2e-03 (1e-03–2e-03) | 1.9e-03 | 778 |
 | burgers | M3 Kalman filter, batches of 64 | 3.2e-01 (3e-01–3e-01) | 1.3e-01 (5e-02–2e-01) | 3.9e-02 (5e-03–1e-01) | 4.5e-04 (4e-04–5e-04) | 1.7e-04 | 5608 |
 | burgers | M3 filter, forgetting 0.95 | 1.4e-01 (7e-02–2e-01) | 1.3e-02 (4e-03–2e-01) | 2.3e-03 (1e-03–3e-03) | 2.4e-04 (2e-04–2e-03) | 5.2e-04 | 5570 |
+| burgers | M3 filter, memory of 1 batch in 25 seen, at least 20 | 1.3e-01 (9e-02–2e-01) | 1.9e-02 (4e-03–1e-01) | 1.5e-03 (1e-03–4e-03) | 3.3e-04 (6e-05–5e-04) | 1.1e-04 | 5704 |
 | kdv | Levenberg–Marquardt | 4.5e-04 (3e-04–2e-03) | 2.5e-05 (2e-05–3e-05) | 9.1e-06 (4e-06–1e-05) | 2.8e-06 (2e-06–4e-06) | 1.5e-06 | 663 |
 | kdv | M3 Kalman filter, batches of 64 | 2.9e-02 (1e-02–3e-02) | 2.9e-03 (2e-03–4e-03) | 3.6e-04 (3e-04–4e-04) | 6.7e-06 (7e-06–9e-06) | 4.8e-07 | 4957 |
 | kdv | M3 filter, forgetting 0.95 | 1.8e-04 (2e-04–2e-04) | 4.5e-07 (2e-07–6e-07) | 1.4e-07 (9e-08–3e-07) | 1.4e-07 (1e-07–2e-07) | 1.0e-07 | 4727 |
+| kdv | M3 filter, memory of 1 batch in 25 seen, at least 20 | 2.2e-04 (2e-04–4e-04) | 6.5e-07 (4e-07–8e-07) | 9.2e-08 (4e-08–2e-07) | 8.3e-08 (4e-08–2e-07) | 1.3e-07 | 4489 |
 
 A first scan at 60 s, one seed, same session:
 
@@ -230,7 +234,13 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png` and `resul
     - **A shorter memory is faster** and ends level: at $f = 0.98$, 2.8e-09 on heat and 1.8e-07 on KdV after 180 s (one seed).
 26. **At $f = 0.95$ the slow first minute is gone on heat and KdV.** The filter is ahead of Levenberg–Marquardt from the first reading: at 30 s, 1.6e-08 against 4.5e-06 on heat (280 times) and 4.5e-07 against 2.5e-05 on KdV (55 times). Over the last 30 s it is 76 and 15 times below, and 7 and 5 times below the filter at 0.995.
 27. **Burgers wants the long memory late.** At $f = 0.95$ it is level with Levenberg–Marquardt to 60 s and ends 3.7 times below it (5.2e-04), but 3 times above the filter at 0.995 (1.7e-04), with one seed at 1.8e-03. At 0.9 it degrades, with 22 refused updates.
-28. **So the factor should change along the run**: short memory while the model is far off, long memory near the end. That is the role a learning-rate schedule plays for Adam, and it is the next test.
+28. **So the factor should change along the run**: short memory while the model is far off, long memory near the end.
+29. **A memory that grows with the stream gets both.** Remembering 1 batch in 25 of those seen, at least 20, it is as fast as $f = 0.95$ for the first 30 s on all three equations, and over the last 30 s it is the best or level with the best:
+    - **Heat**: 1.5e-09, 150 times below Levenberg–Marquardt.
+    - **Burgers**: 1.1e-04, 17 times below Levenberg–Marquardt, 1.5 times below $f = 0.995$ and 5 times below $f = 0.95$.
+    - **KdV**: 1.3e-07, 12 times below Levenberg–Marquardt, level with $f = 0.95$ and 4 times below $f = 0.995$.
+
+    It has no constant tied to the budget. The 20 and the 25 were set once, from the two fixed factors, and not scanned.
 
 ## Verdict against the plan
 
@@ -240,7 +250,7 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png` and `resul
 | M1, residual flow | Beats stage 0 on two of three | Dropped: no gain on any |
 | M4, block Kaczmarz | Beats stage 0 on two of three | Dropped as the main optimizer. Kept as a candidate opening move for the agent (M9) |
 | M5, variable projection | Beats stage 0 on two of three; a gain on the linear problem | Kept, with a warm start: a large gain on heat, level on the other two |
-| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. Without the full $P$: a block per layer holds on heat and KdV and loses a factor of 20 on Burgers, and is too slow at 12,737 weights; a block per neuron fails; 64 directions keep up with Levenberg–Marquardt at 12,737 weights but lose the full filter's late lead. Forgetting 0.95 removes the slow start on heat and KdV |
+| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. Without the full $P$: a block per layer holds on heat and KdV and loses a factor of 20 on Burgers, and is too slow at 12,737 weights; a block per neuron fails; 64 directions keep up with Levenberg–Marquardt at 12,737 weights but lose the full filter's late lead. A memory that grows with the stream (1 batch in 25, at least 20) removes the slow start and is best or level at the end on all three |
 | M6, continuation | A cold run is not as good | Dropped at this viscosity |
 | M8, multipliers | Beats stage 0 on two of three | Dropped |
 
@@ -256,7 +266,7 @@ Roadmap bet R1 asks for 100 times below Adam then L-BFGS. At 60 s Levenberg–Ma
 - **The warm-up length of 60** was chosen once, on a 30 s test, and not scanned.
 - **The filter's constants** (forgetting 0.995, prior 1, cap $10^{12}$, the factor 2 in the check) were set once. The cap was chosen from one seed at three values.
 - **The full filter's cost grows with the square of the number of weights** per step and its memory likewise (40 MB here). The low-rank form scales and loses accuracy late; a Kronecker-factored form is untested.
-- **The rank of 64** comes from one 30 s scan on one seed. **The forgetting of 0.95** comes from one 60 s scan on one seed.
+- **The rank of 64** comes from one 30 s scan on one seed. **The forgetting of 0.95** comes from one 60 s scan on one seed; the growing memory's 20 and 25 were not scanned.
 - **Low Power Mode**: the forgetting runs were made on battery at about half speed. They are compared only with controls from the same session.
 - **Two runs were slowed by other load** (Burgers, per-layer filter, seed 1 at 4×64: 2,413 steps against 3,286; heat, low-rank filter, seed 1 at 4×64: 20,291 against 32,455). Both are kept.
 - **Baselines at 180 s**: Levenberg–Marquardt and Adam then L-BFGS only. SOAP and self-scaled Broyden are not run.

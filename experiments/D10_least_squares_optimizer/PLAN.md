@@ -159,6 +159,7 @@ Stages 0 to 2 are measured in [README.md](README.md) (heat, Burgers, KdV; 60 s a
 | M3, covariance per layer | Kept with a caveat: level on heat, 24 times better on KdV, 20 times worse on Burgers than the full covariance |
 | M3, covariance per neuron | Dropped: behind stage 0 on heat and KdV, diverges on Burgers |
 | M3, forgetting 0.95 | Kept: ahead of stage 0 from the first reading on heat and KdV (280 and 55 times at 30 s), and 7 and 5 times below forgetting 0.995 at the end. On Burgers the long memory ends 3 times lower |
+| M3, growing memory | **Kept, the new default for M3**: forget $1 - 1/\max(20, k/25)$. As fast as 0.95 early; at 180 s 150, 17 and 12 times below stage 0 on heat, Burgers, KdV |
 | M3, low rank (64 directions) | Kept for size: level with stage 0 at 12,737 weights and 600 s, 17 times ahead on heat at 60 s; stops at stage 0's level where the full filter goes 10 to 70 times lower |
 | M6 | Dropped at this viscosity: no better than a cold start with 4, 8 or 16 stages |
 | M8 | Dropped: worse than the same penalty without multipliers. Loss weights of 1 beat the weights of 10 used so far |
@@ -179,7 +180,7 @@ Stage 2b, measured so far (item 2):
 
 - **The slow first minute is solved by a hybrid**, at the price of a flat stretch after the switch. Starting $P$ at $(J^\top J + I)^{-1}$ on a full sample at the switch was tried and is no better, slightly worse: dropped.
 - **The covariance can lose the coupling between layers on smooth solutions, not on a front.** Coupling within a neuron alone is not enough. At I17's 4×64 network (12,737 weights) the per-layer form is too slow (40 to 50 times behind stage 0). A low-rank information form with 64 directions keeps up with stage 0 but loses the full filter's late gains: the long memory lives in the weak directions it drops. Keeping the dropped information on a diagonal and 256 directions in place of 64 were tried (one seed) and do not bring it back.
-- **The forgetting factor is the filter's pace.** 0.95 in place of 0.995 removes the slow first minute on heat and KdV; 0.999 is 10,000 times worse on heat. Burgers prefers 0.995 late. Next: a forgetting that rises along the run, or is set from the innovation $r^\top (J P J^\top + I)^{-1} r$ (adaptive forgetting, as in recursive least squares), and forgetting 0.95 at 12,737 weights.
+- **The forgetting factor is the filter's pace.** 0.95 in place of 0.995 removes the slow first minute on heat and KdV; 0.999 is 10,000 times worse on heat. Burgers prefers 0.995 late. A memory that grows with the stream, 1 batch in 25 of those seen and at least 20, gets the fast start and the long-memory end on all three. Next: the same at 12,737 weights, and a forgetting set from the innovation $r^\top (J P J^\top + I)^{-1} r$ (adaptive forgetting, as in recursive least squares) in place of the fixed 25.
 
 - **Against Adam then L-BFGS at 180 s** the filter is 35,000 (heat), 350 (Burgers) and 9,800 (KdV) times lower: the 100 times of bet R1 on all three, at this size.
 

@@ -627,6 +627,7 @@ def run_filter(
     forget=0.995,
     cap=1e12,
     warm=False,
+    grow=None,
 ):
     """M3. Training as filtering. Each step draws ``batch`` fresh rows (three quarters in the
     domain, the rest on the initial line and the boundary), never seen again, and applies an
@@ -636,6 +637,9 @@ def run_filter(
 
     P is the full covariance of the weights (the plan's low-rank form is the next step if
     this one works), with every variance capped at ``cap`` times the prior.
+
+    ``grow`` = (m0, q) replaces the fixed factor by a memory that grows with the stream: at
+    step k the filter remembers max(m0, q k) batches, forget = 1 - 1 / max(m0, q k).
 
     ``warm`` starts P as the posterior of one full sample at the incoming weights,
     (J^T J + I / prior)^{-1}, for weights that another optimizer has already moved."""
@@ -664,7 +668,8 @@ def run_filter(
         after = float(rows(weights.tree(cand), *pts, counts=unit).norm())
         if math.isfinite(after) and after <= 2.0 * float(r.norm()):
             theta = cand
-            P = (P - gain @ PJt.T) / forget
+            f = 1.0 - 1.0 / max(grow[0], grow[1] * it) if grow else forget
+            P = (P - gain @ PJt.T) / f
             P = 0.5 * (P + P.T)
             # Forgetting inflates directions the stream does not excite without bound, and
             # the filter then diverges (seen after 100 to 150 s, when P's range passes what
@@ -694,6 +699,7 @@ def run_filter_sketch(
     prior=1.0,
     forget=0.995,
     cap=1e12,
+    grow=None,
 ):
     """M3 without the n-by-n matrix. The filter is carried in information form, and the
     information is a multiple of the identity plus ``rank`` directions:
@@ -742,8 +748,9 @@ def run_filter_sketch(
             U, sing, _ = torch.linalg.svd(core, full_matrices=False)
             keep = min(rank, k + batch)
             V = torch.cat([V, Q], dim=1) @ U[:, :keep]
-            s2 = forget * sing[:keep] ** 2
-            c = max(forget * c, floor)
+            f = 1.0 - 1.0 / max(grow[0], grow[1] * it) if grow else forget
+            s2 = f * sing[:keep] ** 2
+            c = max(f * c, floor)
             if it % 200 == 199:  # the products drift from orthonormal
                 V, _ = torch.linalg.qr(V)
         else:
@@ -1031,9 +1038,19 @@ def run_one(problem, method, seed, budget, width, depth, every):
             problem, model, clock, budget, generator, batch=int(size), rank=int(rank)
         )
     elif method.startswith("sfilter"):
-        size, _, rank = method[7:].partition("r")  # sfilter64r256: 256 directions kept
+        # sfilter64r256: 256 directions kept; sfilter64r64g25: with the growing memory
+        found = re.fullmatch(r"sfilter(\d+)r(\d+)(?:g(\d+))?", method)
+        assert found, method
+        size, rank, every = found.groups()
         stats = run_filter_sketch(
-            problem, model, clock, budget, generator, batch=int(size), rank=int(rank)
+            problem,
+            model,
+            clock,
+            budget,
+            generator,
+            batch=int(size),
+            rank=int(rank),
+            grow=(20.0, 1.0 / int(every)) if every else None,
         )
     elif method.startswith("dfilter"):
         kind = "layer" if method.endswith("layer") else "node"
@@ -1041,10 +1058,11 @@ def run_one(problem, method, seed, budget, width, depth, every):
             problem, model, clock, budget, generator, batch=int(method[7 : -len(kind)]), kind=kind
         )
     elif method.startswith("filter"):
-        # filter64, filter64c4 (variances capped at 1e4), filter64f98 (forgetting 0.98)
-        found = re.fullmatch(r"filter(\d+)(?:c(\d+))?(?:f(\d+))?", method)
+        # filter64, filter64c4 (variances capped at 1e4), filter64f98 (forgetting 0.98),
+        # filter64g25 (memory of max(20, k / 25) batches at step k)
+        found = re.fullmatch(r"filter(\d+)(?:c(\d+))?(?:f(\d+))?(?:g(\d+))?", method)
         assert found, method
-        size, exponent, keep = found.groups()
+        size, exponent, keep, every = found.groups()
         stats = run_filter(
             problem,
             model,
@@ -1054,6 +1072,7 @@ def run_one(problem, method, seed, budget, width, depth, every):
             batch=int(size),
             cap=10.0 ** int(exponent or 12),
             forget=float("0." + keep) if keep else 0.995,
+            grow=(20.0, 1.0 / int(every)) if every else None,
         )
     elif method in ("al", "lm_w1"):
         stats = run_al(problem, model, clock, budget, generator, multipliers=method == "al")
