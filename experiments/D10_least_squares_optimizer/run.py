@@ -57,6 +57,7 @@ import json
 import math
 import os
 import platform
+import re
 import time
 from pathlib import Path
 
@@ -754,6 +755,70 @@ def run_filter_sketch(
     return stats
 
 
+def run_filter_lowrank_diag(
+    problem,
+    model,
+    clock,
+    budget,
+    generator,
+    batch=64,
+    rank=64,
+    prior=1.0,
+    forget=0.995,
+    cap=1e12,
+):
+    """M3, low rank plus diagonal. As ``run_filter_sketch``, but what the truncation drops is
+    kept on a diagonal instead of discarded:
+
+        S = P^{-1} = diag(d) + W W^T,     W = V diag(s), n by rank
+
+    A batch forms [W, J^T], keeps its ``rank`` strongest directions in W, and adds the squared
+    entries of the rest to d (the exact diagonal of the dropped part). The gain uses
+    Woodbury: P = D^-1 - D^-1 W (I + W^T D^-1 W)^-1 W^T D^-1. Cost per step n (rank+batch)^2."""
+    weights = Weights(model)
+    theta = weights.read()
+    n = theta.numel()
+    rows, jacobian = residual_rows(problem, model)
+    sizes = (batch - 2 * (batch // 8), batch // 8, batch // 8)
+    unit = (1, 1, 1)
+    floor = 1.0 / (cap * prior)
+    eye = torch.eye(batch, dtype=theta.dtype)
+
+    def empty():
+        return torch.full((n,), 1.0 / prior, dtype=theta.dtype), torch.zeros(
+            n, 0, dtype=theta.dtype
+        )
+
+    d, W = empty()
+    it, stats = 0, {"iterations": 0, "rejected": 0, "batch": batch, "rank": rank}
+    while clock.tick() < budget:
+        pts = sample(problem, generator, sizes)
+        tree = weights.tree(theta)
+        r = rows(tree, *pts, counts=unit)
+        Jt = jacobian(tree, *pts, counts=unit).T
+        A, B = Jt / d[:, None], W / d[:, None]
+        small = torch.eye(W.shape[1], dtype=theta.dtype) + W.T @ B
+        PJt = A - B @ torch.linalg.solve(small, W.T @ A)
+        gain = torch.linalg.solve(Jt.T @ PJt + eye, PJt.T).T
+        cand = theta - gain @ r
+        after = float(rows(weights.tree(cand), *pts, counts=unit).norm())
+        if math.isfinite(after) and after <= 2.0 * float(r.norm()):
+            theta = cand
+            Q, R = torch.linalg.qr(torch.cat([W, Jt], dim=1))
+            U, sing, _ = torch.linalg.svd(R, full_matrices=False)
+            M = Q @ (U * sing)  # columns: the directions of W W^T + J^T J, scaled
+            W, rest = M[:, :rank], M[:, rank:]
+            d = torch.clamp(forget * (d + (rest * rest).sum(1)), min=floor)
+            W = W * forget**0.5
+        else:
+            d, W = empty()
+            stats["rejected"] += 1
+        weights.write(theta)
+        it += 1
+    stats["iterations"] = it
+    return stats
+
+
 def weight_groups(weights, kind):
     """Index sets that share a covariance block: every weight (``full``), one set per layer
     (``layer``), or one per neuron, its incoming weights and bias (``node``)."""
@@ -960,6 +1025,11 @@ def run_one(problem, method, seed, budget, width, depth, every):
         first = run_lm(problem, model, clock, float(method[8:].rstrip("w")), generator)
         stats = run_filter(problem, model, clock, budget, generator, warm=warm)
         stats["lm_iterations"] = first["iterations"]
+    elif method.startswith("ldfilter"):
+        size, _, rank = method[8:].partition("r")  # ldfilter64r64: low rank plus diagonal
+        stats = run_filter_lowrank_diag(
+            problem, model, clock, budget, generator, batch=int(size), rank=int(rank)
+        )
     elif method.startswith("sfilter"):
         size, _, rank = method[7:].partition("r")  # sfilter64r256: 256 directions kept
         stats = run_filter_sketch(
@@ -971,7 +1041,10 @@ def run_one(problem, method, seed, budget, width, depth, every):
             problem, model, clock, budget, generator, batch=int(method[7 : -len(kind)]), kind=kind
         )
     elif method.startswith("filter"):
-        size, _, exponent = method[6:].partition("c")  # filter64c4: variances capped at 1e4
+        # filter64, filter64c4 (variances capped at 1e4), filter64f98 (forgetting 0.98)
+        found = re.fullmatch(r"filter(\d+)(?:c(\d+))?(?:f(\d+))?", method)
+        assert found, method
+        size, exponent, keep = found.groups()
         stats = run_filter(
             problem,
             model,
@@ -980,6 +1053,7 @@ def run_one(problem, method, seed, budget, width, depth, every):
             generator,
             batch=int(size),
             cap=10.0 ** int(exponent or 12),
+            forget=float("0." + keep) if keep else 0.995,
         )
     elif method in ("al", "lm_w1"):
         stats = run_al(problem, model, clock, budget, generator, multipliers=method == "al")
