@@ -44,6 +44,8 @@ SERIES = {  # method: (label, color, line style)
     "lmfilter20": ("Levenberg–Marquardt for 20 s, then the filter", "#0b7285", "-."),
     "lmfilter20w": ("The same, covariance started from the last linearization", "#0b7285", ":"),
     "dfilter64layer": ("M3 filter, covariance per layer", "#5f3dc4", "-"),
+    "sfilter64r256": ("M3 filter, 256 directions of information kept", "#c2255c", "-"),
+    "sfilter64r64": ("M3 filter, 64 directions kept", "#c2255c", ":"),
     "dfilter64node": ("M3 filter, covariance per neuron", "#5f3dc4", ":"),
     "al": ("M8 multipliers, penalty 1", "#946200", "-"),
     "lm_w1": ("Levenberg–Marquardt, loss weights 1", "#946200", ":"),
@@ -69,7 +71,8 @@ def band(problem, method):
     return np.median(held, 0), held.min(0), held.max(0)
 
 
-marks = [t for t in (10.0, 30.0, 60.0, 120.0) if t <= budget]
+steps = (10.0, 30.0, 60.0, 120.0) if budget <= 180 else (30.0, 60.0, 180.0, 300.0)
+marks = [t for t in steps if t <= budget]
 
 
 def settled(curve):

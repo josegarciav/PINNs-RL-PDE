@@ -682,6 +682,78 @@ def run_filter(
     return stats
 
 
+def run_filter_sketch(
+    problem,
+    model,
+    clock,
+    budget,
+    generator,
+    batch=64,
+    rank=256,
+    prior=1.0,
+    forget=0.995,
+    cap=1e12,
+):
+    """M3 without the n-by-n matrix. The filter is carried in information form, and the
+    information is a multiple of the identity plus ``rank`` directions:
+
+        S = P^{-1} = c I + V diag(s^2) V^T,        V orthonormal, n by rank
+
+    Forgetting multiplies c and s^2 by ``forget``; c stops at 1 / (cap * prior), which is the
+    variance cap of the dense filter. A batch adds J^T J: the new rows are split into their
+    part inside V and a remainder, a small (rank + batch) square matrix is decomposed, and
+    the ``rank`` strongest directions are kept (an incremental SVD; what is cut is dropped).
+    The gain uses P before the update, as in the dense filter. Cost per step: n * rank *
+    (rank + batch), against n^2 * batch."""
+    weights = Weights(model)
+    theta = weights.read()
+    n = theta.numel()
+    rows, jacobian = residual_rows(problem, model)
+    sizes = (batch - 2 * (batch // 8), batch // 8, batch // 8)
+    unit = (1, 1, 1)
+    floor = 1.0 / (cap * prior)
+    eye = torch.eye(batch, dtype=theta.dtype)
+
+    def empty():
+        return 1.0 / prior, torch.zeros(n, 0, dtype=theta.dtype), torch.zeros(0, dtype=theta.dtype)
+
+    c, V, s2 = empty()
+    it, stats = 0, {"iterations": 0, "rejected": 0, "batch": batch, "rank": rank}
+    while clock.tick() < budget:
+        pts = sample(problem, generator, sizes)
+        tree = weights.tree(theta)
+        r = rows(tree, *pts, counts=unit)
+        Jt = jacobian(tree, *pts, counts=unit).T
+        inside = V.T @ Jt  # rank by batch
+        outside = Jt - V @ inside
+        PJt = outside / c + V @ (inside / (c + s2)[:, None])
+        gain = torch.linalg.solve(Jt.T @ PJt + eye, PJt.T).T
+        cand = theta - gain @ r
+        after = float(rows(weights.tree(cand), *pts, counts=unit).norm())
+        if math.isfinite(after) and after <= 2.0 * float(r.norm()):
+            theta = cand
+            Q, R = torch.linalg.qr(outside)
+            k = s2.numel()
+            core = torch.zeros(k + batch, k + batch, dtype=theta.dtype)
+            core[:k, :k] = torch.diag(s2.sqrt())
+            core[:k, k:] = inside
+            core[k:, k:] = R
+            U, sing, _ = torch.linalg.svd(core, full_matrices=False)
+            keep = min(rank, k + batch)
+            V = torch.cat([V, Q], dim=1) @ U[:, :keep]
+            s2 = forget * sing[:keep] ** 2
+            c = max(forget * c, floor)
+            if it % 200 == 199:  # the products drift from orthonormal
+                V, _ = torch.linalg.qr(V)
+        else:
+            c, V, s2 = empty()
+            stats["rejected"] += 1
+        weights.write(theta)
+        it += 1
+    stats["iterations"] = it
+    return stats
+
+
 def weight_groups(weights, kind):
     """Index sets that share a covariance block: every weight (``full``), one set per layer
     (``layer``), or one per neuron, its incoming weights and bias (``node``)."""
@@ -888,6 +960,11 @@ def run_one(problem, method, seed, budget, width, depth, every):
         first = run_lm(problem, model, clock, float(method[8:].rstrip("w")), generator)
         stats = run_filter(problem, model, clock, budget, generator, warm=warm)
         stats["lm_iterations"] = first["iterations"]
+    elif method.startswith("sfilter"):
+        size, _, rank = method[7:].partition("r")  # sfilter64r256: 256 directions kept
+        stats = run_filter_sketch(
+            problem, model, clock, budget, generator, batch=int(size), rank=int(rank)
+        )
     elif method.startswith("dfilter"):
         kind = "layer" if method.endswith("layer") else "node"
         stats = run_filter_blocks(

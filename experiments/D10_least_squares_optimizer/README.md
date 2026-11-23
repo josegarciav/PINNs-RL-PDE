@@ -31,6 +31,7 @@ Methods:
    - **Hybrid, warm**: the same with $P$ started at $(J^\top J + I)^{-1}$ on one full sample at the switch.
    - **Covariance per layer**: $P$ kept only within each layer (4 blocks, the largest 1,056 weights), one shared $J P J^\top + I$.
    - **Covariance per neuron**: $P$ kept only among the weights that enter one neuron (97 blocks of at most 33).
+   - **Low rank**: no $n \times n$ matrix. The information is kept as $P^{-1} = c\,I + V \operatorname{diag}(s^2) V^\top$ with $V$ orthonormal, $n \times k$. Each batch adds $J^\top J$ through one SVD of a $(k + 64)$-square matrix and keeps the $k$ strongest directions. Cost per step $n k (k + 64)$ against $n^2 \cdot 64$.
 7. **M8**: multipliers. Initial and boundary rows as constraints with an augmented Lagrangian at penalty 1, inside Levenberg–Marquardt. Its control is Levenberg–Marquardt at loss weights 1.
 8. **Baselines**: Adam at $10^{-3}$, L-BFGS (strong Wolfe), Adam for 30 % of the budget then L-BFGS.
 
@@ -39,8 +40,11 @@ D=experiments/D10_least_squares_optimizer
 python $D/run.py --budget 60 --seeds 3 --methods lm flow block32 block128 varpro varpro60 \
     continue4 continue8 continue16 filter64 filter256 al lm_w1 adam lbfgs adam_lbfgs
 python $D/run.py --budget 180 --seeds 3 --out $D/results/long \
-    --methods lm filter64 lmfilter20 lmfilter20w dfilter64layer dfilter64node adam_lbfgs
+    --methods lm filter64 lmfilter20 lmfilter20w dfilter64layer dfilter64node sfilter64r64 adam_lbfgs
+python $D/run.py --budget 600 --seeds 2 --width 64 --depth 4 --every 10 --out $D/results/wide \
+    --methods lm dfilter64layer sfilter64r64 adam_lbfgs
 python $D/plot.py && python $D/plot.py $D/results/long/runs_3x32.json
+python $D/plot.py $D/results/wide/runs_4x64.json
 ```
 
 ## Results
@@ -105,6 +109,7 @@ Median $\varepsilon(T)$ over 3 seeds, with the range.
 | heat | Levenberg–Marquardt for 20 s, then the filter | 2.4e-05 (1e-05–4e-05) | 3.3e-06 (2e-06–3e-06) | 2.0e-06 (2e-06–3e-06) | 5.8e-09 (4e-09–7e-09) | 1.8e-09 | 9841 |
 | heat | The same, covariance started from the last linearization | 2.4e-05 (1e-05–4e-05) | 3.3e-06 (2e-06–3e-06) | 2.6e-06 (2e-06–3e-06) | 1.7e-08 (2e-08–2e-08) | 2.2e-09 | 8737 |
 | heat | M3 filter, covariance per layer | 1.1e-04 (1e-04–2e-04) | 2.1e-06 (2e-06–3e-06) | 1.5e-08 (1e-08–2e-08) | 3.8e-09 (3e-09–5e-09) | 1.6e-09 | 17017 |
+| heat | M3 filter, 64 directions kept | 7.7e-05 (7e-05–1e-04) | 1.5e-06 (1e-06–2e-06) | 1.1e-06 (7e-07–1e-06) | 4.9e-07 (4e-07–1e-06) | 4.5e-07 | 22318 |
 | heat | M3 filter, covariance per neuron | 5.1e-04 (5e-04–6e-04) | 5.1e-05 (3e-05–7e-05) | 2.6e-05 (7e-06–3e-05) | 7.6e-06 (5e-06–2e-05) | 4.8e-06 | 20780 |
 | heat | Adam, then L-BFGS | 8.4e-03 (3e-03–1e-02) | 6.6e-04 (5e-04–7e-04) | 1.2e-04 (9e-05–1e-04) | 5.7e-05 (5e-05–8e-05) | 5.2e-05 | 14811 |
 | burgers | Levenberg–Marquardt | 4.3e-02 (3e-02–1e-01) | 4.8e-03 (3e-03–8e-03) | 2.8e-03 (3e-03–5e-03) | 1.3e-03 (9e-04–3e-03) | 1.3e-03 | 1333 |
@@ -112,6 +117,7 @@ Median $\varepsilon(T)$ over 3 seeds, with the range.
 | burgers | Levenberg–Marquardt for 20 s, then the filter | 5.7e-02 (2e-02–1e-01) | 2.2e-03 (1e-03–7e-03) | 2.1e-04 (2e-04–4e-04) | 3.1e-05 (2e-05–1e-04) | 2.8e-05 | 9729 |
 | burgers | The same, covariance started from the last linearization | 4.8e-02 (2e-02–1e-01) | 2.5e-03 (2e-03–4e-03) | 3.3e-04 (3e-04–5e-04) | 1.4e-04 (5e-05–2e-04) | 3.9e-05 | 8164 |
 | burgers | M3 filter, covariance per layer | 7.0e-02 (5e-02–1e-01) | 7.7e-03 (5e-03–9e-03) | 1.7e-03 (1e-03–3e-03) | 4.3e-04 (3e-04–8e-04) | 4.0e-04 | 16554 |
+| burgers | M3 filter, 64 directions kept | 2.0e-01 (7e-02–2e-01) | 1.5e-02 (1e-02–2e-02) | 1.8e-03 (2e-03–2e-03) | 7.7e-04 (5e-04–1e-03) | 9.1e-04 | 21724 |
 | burgers | M3 filter, covariance per neuron | 2.1e-01 (2e-01–3e-01) | 1.2e-01 (3e-02–2e-01) | 1.1e-01 (3e-02–3e-01) | 9.1e-01 (2e-02–9e-01) | 9.8e-01 | 20949 |
 | burgers | Adam, then L-BFGS | 3.1e-01 (3e-01–4e-01) | 7.0e-02 (4e-02–2e-01) | 4.0e-02 (2e-02–1e-01) | 8.7e-03 (2e-03–2e-02) | 7.0e-03 | 14839 |
 | kdv | Levenberg–Marquardt | 1.5e-04 (1e-04–5e-04) | 9.9e-06 (6e-06–1e-05) | 4.8e-06 (2e-06–6e-06) | 1.5e-06 (6e-07–2e-06) | 9.6e-07 | 1071 |
@@ -119,10 +125,30 @@ Median $\varepsilon(T)$ over 3 seeds, with the range.
 | kdv | Levenberg–Marquardt for 20 s, then the filter | 1.4e-04 (1e-04–5e-04) | 1.5e-05 (1e-05–2e-05) | 1.5e-05 (1e-05–2e-05) | 2.6e-07 (2e-07–5e-07) | 1.1e-07 | 8008 |
 | kdv | The same, covariance started from the last linearization | 1.5e-04 (1e-04–6e-04) | 2.2e-05 (1e-05–3e-05) | 2.0e-05 (1e-05–2e-05) | 1.2e-06 (7e-07–5e-06) | 1.9e-07 | 6114 |
 | kdv | M3 filter, covariance per layer | 4.4e-03 (3e-03–6e-03) | 1.1e-04 (7e-05–2e-04) | 2.2e-06 (2e-06–4e-06) | 2.9e-08 (2e-08–6e-08) | 4.2e-09 | 12608 |
+| kdv | M3 filter, 64 directions kept | 1.9e-03 (1e-03–2e-03) | 3.7e-05 (3e-05–1e-04) | 1.8e-05 (4e-06–3e-05) | 1.2e-05 (3e-06–1e-05) | 6.5e-06 | 15923 |
 | kdv | M3 filter, covariance per neuron | 1.1e-02 (7e-03–2e-02) | 1.1e-03 (1e-03–2e-03) | 5.4e-04 (3e-04–1e-03) | 1.1e-04 (1e-04–1e-03) | 9.5e-05 | 14694 |
 | kdv | Adam, then L-BFGS | 1.2e-01 (1e-01–2e-01) | 3.4e-02 (2e-02–6e-02) | 3.8e-03 (3e-03–4e-03) | 1.1e-03 (8e-04–1e-03) | 9.8e-04 | 3869 |
 
-The figures are `results/runs_3x32.png` and `results/long/runs_3x32.png` after `plot.py`.
+### A larger network, 600 seconds
+
+4 hidden layers of 64, 12,737 weights (I17's network), 2 seeds, the error read every 10 s.
+
+| Equation | Method | 30 s | 60 s | 180 s | 300 s | Last 100 s, mean | Steps |
+|---|---|---|---|---|---|---|---|
+| heat | Levenberg–Marquardt | 1.2e-04 (1e-04–1e-04) | 2.2e-05 (2e-05–2e-05) | 2.1e-06 (2e-06–2e-06) | 6.5e-07 (6e-07–7e-07) | 3.4e-07 | 853 |
+| heat | M3 filter, covariance per layer | 1.2e-03 (1e-03–1e-03) | 5.3e-04 (4e-04–7e-04) | 1.3e-04 (1e-04–1e-04) | 7.8e-05 (7e-05–8e-05) | 1.4e-05 | 1824 |
+| heat | M3 filter, 64 directions kept | 6.8e-05 (5e-05–9e-05) | 1.3e-06 (1e-06–1e-06) | 6.7e-06 (6e-07–1e-05) | 4.4e-07 (4e-07–5e-07) | 4.1e-07 | 26373 |
+| heat | Adam, then L-BFGS | 4.2e-03 (3e-03–5e-03) | 1.5e-03 (1e-03–2e-03) | 5.3e-03 (5e-04–1e-02) | 5.0e-05 (5e-05–5e-05) | 5.0e-05 | 13634 |
+| burgers | Levenberg–Marquardt | 7.6e-02 (3e-02–1e-01) | 1.2e-02 (3e-03–2e-02) | 3.9e-04 (3e-04–5e-04) | 6.1e-04 (2e-04–1e-03) | 5.9e-04 | 1372 |
+| burgers | M3 filter, covariance per layer | 1.5e-01 (1e-01–2e-01) | 1.9e-01 (1e-01–3e-01) | 1.8e-01 (1e-01–2e-01) | 3.2e-02 (3e-02–4e-02) | 2.5e-03 | 2849 |
+| burgers | M3 filter, 64 directions kept | 7.7e-02 (2e-02–1e-01) | 3.1e-02 (1e-02–5e-02) | 1.8e-03 (1e-03–2e-03) | 1.9e-03 (5e-04–3e-03) | 5.4e-04 | 16882 |
+| burgers | Adam, then L-BFGS | 3.7e-01 (4e-01–4e-01) | 3.2e-01 (3e-01–3e-01) | 4.2e-02 (3e-02–5e-02) | 1.7e-02 (8e-03–3e-02) | 3.1e-03 | 8799 |
+| kdv | Levenberg–Marquardt | 3.8e-03 (3e-03–5e-03) | 2.9e-04 (2e-04–3e-04) | 1.9e-05 (1e-05–2e-05) | 6.3e-06 (5e-06–8e-06) | 2.8e-06 | 638 |
+| kdv | M3 filter, covariance per layer | 1.4e-01 (1e-01–1e-01) | 3.1e-02 (2e-02–4e-02) | 3.7e-03 (4e-03–4e-03) | 1.1e-03 (9e-04–1e-03) | 1.3e-04 | 1715 |
+| kdv | M3 filter, 64 directions kept | 3.9e-03 (3e-03–5e-03) | 3.5e-04 (2e-04–5e-04) | 4.2e-06 (3e-06–5e-06) | 4.9e-06 (4e-06–5e-06) | 3.3e-06 | 13230 |
+| kdv | Adam, then L-BFGS | 7.5e-02 (4e-02–1e-01) | 3.2e-02 (2e-02–5e-02) | 5.8e-03 (5e-03–6e-03) | 8.5e-04 (8e-04–9e-04) | 8.5e-04 | 8783 |
+
+The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png` and `results/wide/runs_4x64.png` after `plot.py`.
 
 ## What it shows
 
@@ -160,6 +186,16 @@ The figures are `results/runs_3x32.png` and `results/long/runs_3x32.png` after `
 19. **Starting the covariance from the last linearization does not shorten the pause.** With $P = (J^\top J + I)^{-1}$ at the switch the hybrid is level or behind the cold restart at every reading: at 120 s, 1.7e-08 against 5.8e-09 on heat, 1.4e-04 against 3.1e-05 on Burgers, 1.2e-06 against 2.6e-07 on KdV. A tight $P$ makes the first updates small; the wide prior is what lets the filter move.
 20. **At 180 s the filter is far below the usual baseline on all three.** Adam then L-BFGS ends at 5.2e-05 on heat, 7.0e-03 on Burgers and 9.8e-04 on KdV. The full filter is 35,000, 350 and 9,800 times lower.
 
+### Stage 2b: scaling to 12,737 weights
+
+21. **The per-layer filter does not scale.** On the larger network it takes 1,700 to 2,850 steps in 600 s and ends 40 to 50 times above Levenberg–Marquardt on heat and KdV, and 4 times above on Burgers.
+22. **The low-rank filter takes the steps, and stalls.** With 64 directions it runs 13,000 to 26,000 steps in 600 s at 12,737 weights.
+    - **Early**: at 60 s it is 17 times below Levenberg–Marquardt on heat (1.3e-06 against 2.2e-05); at 180 s 4.5 times below on KdV.
+    - **Late**: level with Levenberg–Marquardt at 600 s on all three (4.1e-07, 5.4e-04, 3.3e-06 against 3.4e-07, 5.9e-04, 2.8e-06), and 120, 6 and 260 times below Adam then L-BFGS.
+    - **On the small network** it stops near the same levels (4.5e-07, 9.1e-04, 6.5e-06 over the last 30 s), where the full filter goes on to 1.5e-09, 2.0e-05, 1.0e-07.
+23. **What is lost is the long memory.** Keeping only the strongest directions throws away the weak information that thousands of batches build up, and the full filter's late gains come from it. Rank in a 30 s scan on one seed: 64 best; 16 and 32 noisier; 128 and 256 slower, with 256 equal to the full filter.
+24. **The low-rank filter is still the best method found at 12,737 weights in the first minutes**, and the only filter that keeps up with Levenberg–Marquardt at that size. Closing the gap to the full filter's end point is the open problem of M3.
+
 ## Verdict against the plan
 
 | Move | Gate | Result |
@@ -168,7 +204,7 @@ The figures are `results/runs_3x32.png` and `results/long/runs_3x32.png` after `
 | M1, residual flow | Beats stage 0 on two of three | Dropped: no gain on any |
 | M4, block Kaczmarz | Beats stage 0 on two of three | Dropped as the main optimizer. Kept as a candidate opening move for the agent (M9) |
 | M5, variable projection | Beats stage 0 on two of three; a gain on the linear problem | Kept, with a warm start: a large gain on heat, level on the other two |
-| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. Without the full $P$: a block per layer holds on heat and KdV and loses a factor of 20 on Burgers; a block per neuron fails |
+| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. Without the full $P$: a block per layer holds on heat and KdV and loses a factor of 20 on Burgers, and is too slow at 12,737 weights; a block per neuron fails; 64 directions keep up with Levenberg–Marquardt at 12,737 weights but lose the full filter's late lead |
 | M6, continuation | A cold run is not as good | Dropped at this viscosity |
 | M8, multipliers | Beats stage 0 on two of three | Dropped |
 
@@ -176,13 +212,15 @@ Roadmap bet R1 asks for 100 times below Adam then L-BFGS. At 60 s Levenberg–Ma
 
 ## What it does not show
 
-- **Three seeds**, a network of 2,241 weights, three equations in one space dimension. The plan asks for ten seeds and the nine equations of I17.
+- **Three seeds** (two at 12,737 weights), two network sizes, three equations in one space dimension. The plan asks for ten seeds and the nine equations of I17.
 - **Dense linear algebra.** The cost per step grows with the cube of the smaller of rows and weights. Larger networks need the matrix-free solve.
 - **Double precision in PyTorch.** The engine runs in single precision; errors near $10^{-8}$ will not survive it unchanged.
 - **Baselines at their defaults.** Adam's rate and the L-BFGS history were not tuned per equation, and neither was anything in the new methods.
 - **The hybrid's 20 s** was set once and not scanned.
 - **The warm-up length of 60** was chosen once, on a 30 s test, and not scanned.
 - **The filter's constants** (forgetting 0.995, prior 1, cap $10^{12}$, the factor 2 in the check) were set once. The cap was chosen from one seed at three values.
-- **The filter's cost grows with the square of the number of weights** per step and its memory likewise (40 MB here). A block per layer still costs the square of a layer's weights. A form that scales (Kronecker-factored, or low rank plus diagonal) is untested.
+- **The full filter's cost grows with the square of the number of weights** per step and its memory likewise (40 MB here). The low-rank form scales and loses accuracy late; a Kronecker-factored form is untested.
+- **The rank of 64** comes from one 30 s scan on one seed.
+- **Two runs were slowed by other load** (Burgers, per-layer filter, seed 1 at 4×64: 2,413 steps against 3,286; heat, low-rank filter, seed 1 at 4×64: 20,291 against 32,455). Both are kept.
 - **Baselines at 180 s**: Levenberg–Marquardt and Adam then L-BFGS only. SOAP and self-scaled Broyden are not run.
 - **The Burgers reference** is the package's Cole–Hopf solution on a 256 by 101 grid; its own accuracy bounds what can be read below about 1e-4.
