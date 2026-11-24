@@ -43,6 +43,8 @@ Methods:
    - **Self-scaled BFGS**: $\phi = 1$ and $\tau = \min(1, y^\top s / s^\top H^{-1} s)$ (the paper's eq. 11).
    - **Self-scaled Broyden**: $\tau$ and $\phi$ both from the step (eqs. 13–23).
    - **Our additions**: $H = (s^\top y / y^\top y)\, I$ at the first update; $H = I$ again after a failed line search.
+   - **Adam first**: for 30 % of the budget as in the paper, for 10 s, or not at all.
+   - **After the filter**: the growing-memory filter for 30 s, then self-scaled Broyden from its weights. $H$ starts from the scaled identity, or from the filter's $P$ scaled by $s^\top y / y^\top P y$.
 
 ```bash
 D=experiments/D10_least_squares_optimizer
@@ -58,7 +60,10 @@ python $D/run.py --budget 180 --seeds 3 --methods lm filter64 filter64f95 filter
 python $D/run.py --budget 300 --seeds 1 --width 64 --depth 4 --every 10 --out $D/results/wide_grow \
     --methods lm filter64g25 sfilter64r64g25
 python $D/run.py --budget 180 --seeds 3 --out $D/results/baselines \
-    --methods lm filter64g25 adam_ssbroyden adam_ssbfgs adam_lbfgs
+    --methods lm filter64g25 adam_ssbroyden adam_ssbfgs adam_lbfgs \
+    adam10_ssbroyden adam0_ssbroyden filter_ss30 filter_ss30p filter64g25m adam0_ssbroydenf
+python $D/plot.py $D/results/baselines/runs_3x32.json $D/results/baselines/runs_3x32.png \
+    lm,filter64g25,filter_ss30,adam0_ssbroyden,adam10_ssbroyden,adam_ssbroyden,adam_lbfgs
 ```
 
 ## Results
@@ -208,27 +213,45 @@ One seed. The machine went from battery in Low Power Mode to mains power during 
 
 ### The strongest published baseline, 180 seconds
 
-All five methods run fresh in one session, on mains power with Low Power Mode off and nothing else running. This is the cleanest table of the study.
+Every method run fresh, in three sessions on the same day, all on mains power with Low Power Mode off and nothing else running. This is the cleanest table of the study. The figure shows seven of the rows.
 
 | Equation | Method | 10 s | 30 s | 60 s | 120 s | Last 30 s, mean | Steps |
 |---|---|---|---|---|---|---|---|
 | heat | Levenberg–Marquardt | 2.4e-05 (1e-05–4e-05) | 2.3e-06 (1e-06–2e-06) | 5.5e-07 (4e-07–8e-07) | 1.9e-07 (1e-07–2e-07) | 1.1e-07 | 1520 |
 | heat | M3 filter, memory of 1 batch in 25 seen, at least 20 | 3.0e-07 (2e-07–4e-07) | 8.0e-09 (5e-09–2e-08) | 1.7e-09 (2e-09–6e-09) | 8.3e-10 (6e-10–2e-09) | 9.6e-10 | 10892 |
+| heat | The filter for 30 s, then self-scaled Broyden | 3.2e-07 (3e-07–4e-07) | 8.3e-09 (6e-09–2e-08) | 3.2e-09 (2e-09–4e-09) | 2.5e-10 (2e-10–4e-10) | 8.6e-11 | 12521 |
+| heat | The same, Broyden's first H from the filter's P | 3.3e-07 (2e-07–4e-07) | 6.1e-09 (5e-09–2e-08) | 9.8e-10 (7e-10–4e-09) | 2.8e-10 (2e-10–3e-10) | 1.8e-10 | 18348 |
+| heat | Adam for 10 s, then self-scaled Broyden | 2.1e-03 (1e-03–3e-03) | 2.9e-07 (1e-07–3e-07) | 6.0e-09 (3e-09–6e-09) | 2.4e-10 (2e-10–4e-10) | 2.4e-10 | 18547 |
+| heat | Self-scaled Broyden from the start | 5.0e-06 (4e-06–5e-06) | 6.9e-08 (6e-08–8e-08) | 2.7e-09 (2e-09–5e-09) | 3.5e-10 (3e-10–4e-10) | 3.4e-10 | 20707 |
+| heat | The same, the filter's weighting (5/3) | 3.7e-06 (4e-06–5e-06) | 7.8e-08 (5e-08–1e-07) | 4.7e-09 (2e-09–9e-09) | 3.5e-10 (3e-10–5e-10) | 3.5e-10 | 19390 |
+| heat | M3 filter, growing memory, the full loss's weighting (10) | 2.7e-07 (2e-07–3e-07) | 1.9e-08 (1e-08–2e-08) | 2.3e-09 (2e-09–3e-09) | 1.2e-09 (1e-09–2e-09) | 8.8e-10 | 11111 |
 | heat | Adam, then self-scaled Broyden | 2.4e-03 (1e-03–8e-03) | 1.2e-02 (6e-04–1e-02) | 1.3e-05 (9e-06–2e-05) | 2.0e-09 (1e-09–2e-09) | 2.0e-10 | 8866 |
 | heat | Adam, then self-scaled BFGS | 2.2e-03 (1e-03–8e-03) | 3.0e-03 (1e-03–5e-03) | 3.0e-05 (2e-05–3e-05) | 1.1e-08 (7e-09–1e-08) | 1.8e-09 | 5977 |
 | heat | Adam, then L-BFGS | 2.2e-03 (1e-03–4e-03) | 1.8e-03 (7e-04–2e-02) | 1.3e-04 (9e-05–1e-04) | 6.4e-05 (4e-05–7e-05) | 6.4e-05 | 15826 |
 | burgers | Levenberg–Marquardt | 6.1e-02 (2e-02–1e-01) | 2.3e-03 (8e-04–4e-03) | 1.1e-03 (7e-04–6e-03) | 1.0e-03 (4e-04–2e-03) | 1.1e-03 | 1417 |
 | burgers | M3 filter, memory of 1 batch in 25 seen, at least 20 | 5.4e-02 (2e-02–2e-01) | 1.5e-03 (6e-04–6e-03) | 2.5e-04 (2e-04–3e-04) | 9.6e-05 (5e-05–2e-04) | 5.6e-05 | 11018 |
+| burgers | The filter for 30 s, then self-scaled Broyden | 5.4e-02 (2e-02–2e-01) | 1.8e-03 (2e-04–6e-03) | 4.0e-03 (3e-03–1e-02) | 5.4e-03 (3e-03–6e-03) | 1.6e-03 | 7340 |
+| burgers | The same, Broyden's first H from the filter's P | 5.3e-02 (2e-02–2e-01) | 1.4e-03 (2e-04–6e-03) | 1.1e-03 (5e-04–5e-03) | 9.6e-03 (3e-03–1e-02) | 2.1e-03 | 7349 |
+| burgers | Adam for 10 s, then self-scaled Broyden | 3.2e-01 (3e-01–4e-01) | 2.7e-02 (6e-03–1e-01) | 4.5e-03 (2e-03–5e-02) | 1.0e-03 (7e-04–7e-03) | 6.7e-04 | 8123 |
+| burgers | Self-scaled Broyden from the start | 9.7e-02 (8e-02–2e-01) | 5.2e-02 (3e-03–1e-01) | 4.0e-03 (8e-04–4e-03) | 3.6e-03 (4e-03–4e-03) | 7.0e-04 | 8559 |
+| burgers | The same, the filter's weighting (5/3) | 3.2e-01 (2e-01–4e-01) | 2.9e-01 (2e-01–3e-01) | 2.3e-01 (6e-03–3e-01) | 1.8e-01 (7e-04–2e-01) | 1.4e-01 | 8314 |
+| burgers | M3 filter, growing memory, the full loss's weighting (10) | 1.8e-02 (2e-02–5e-02) | 1.8e-03 (3e-04–4e-03) | 3.5e-04 (2e-04–4e-04) | 9.3e-05 (3e-05–2e-04) | 5.1e-05 | 10961 |
 | burgers | Adam, then self-scaled Broyden | 3.2e-01 (3e-01–4e-01) | 9.5e-02 (6e-02–2e-01) | 4.1e-02 (2e-02–1e-01) | 2.2e-03 (1e-03–4e-03) | 8.2e-04 | 6005 |
 | burgers | Adam, then self-scaled BFGS | 3.2e-01 (3e-01–4e-01) | 1.0e-01 (7e-02–2e-01) | 2.2e-02 (2e-02–1e-01) | 1.0e-03 (1e-03–2e-02) | 9.1e-04 | 6232 |
 | burgers | Adam, then L-BFGS | 3.2e-01 (3e-01–4e-01) | 1.0e-01 (6e-02–2e-01) | 3.5e-02 (3e-02–4e-02) | 1.0e-02 (8e-03–3e-02) | 5.5e-03 | 15603 |
 | kdv | Levenberg–Marquardt | 1.4e-04 (1e-04–5e-04) | 9.7e-06 (5e-06–1e-05) | 4.8e-06 (2e-06–6e-06) | 1.3e-06 (5e-07–2e-06) | 8.9e-07 | 1111 |
 | kdv | M3 filter, memory of 1 batch in 25 seen, at least 20 | 6.8e-06 (6e-06–1e-05) | 8.6e-08 (6e-08–2e-07) | 8.3e-08 (3e-08–2e-07) | 1.1e-07 (8e-08–1e-07) | 2.8e-08 | 8932 |
+| kdv | The filter for 30 s, then self-scaled Broyden | 8.6e-06 (7e-06–1e-05) | 9.0e-08 (5e-08–1e-07) | 2.0e-07 (5e-08–2e-07) | 3.8e-08 (3e-08–1e-07) | 1.5e-08 | 6664 |
+| kdv | The same, Broyden's first H from the filter's P | 1.2e-05 (5e-06–1e-05) | 8.6e-08 (5e-08–2e-07) | 1.9e-07 (3e-08–2e-07) | 4.9e-08 (6e-09–2e-07) | 4.1e-08 | 8031 |
+| kdv | Adam for 10 s, then self-scaled Broyden | 7.1e-02 (3e-02–8e-02) | 1.5e-06 (1e-06–2e-06) | 2.3e-08 (1e-08–4e-08) | 5.1e-10 (3e-10–8e-10) | 3.5e-10 | 11482 |
+| kdv | Self-scaled Broyden from the start | 3.9e-05 (3e-05–8e-05) | 2.7e-07 (2e-07–1e-06) | 8.0e-09 (2e-09–2e-08) | 1.1e-09 (7e-10–2e-09) | 1.1e-09 | 12545 |
+| kdv | The same, the filter's weighting (5/3) | 2.0e-05 (2e-05–6e-05) | 1.9e-07 (1e-07–8e-07) | 5.1e-09 (3e-09–2e-08) | 3.6e-10 (3e-10–4e-10) | 3.6e-10 | 12779 |
+| kdv | M3 filter, growing memory, the full loss's weighting (10) | 8.1e-06 (4e-06–9e-06) | 5.0e-07 (4e-07–8e-07) | 4.9e-07 (4e-07–8e-07) | 5.8e-08 (5e-08–9e-08) | 8.6e-08 | 8948 |
 | kdv | Adam, then self-scaled Broyden | 6.7e-02 (5e-02–8e-02) | 1.5e-02 (1e-02–2e-02) | 1.5e-04 (1e-04–2e-04) | 8.4e-09 (4e-09–1e-08) | 3.4e-10 | 6277 |
 | kdv | Adam, then self-scaled BFGS | 6.9e-02 (4e-02–8e-02) | 2.1e-02 (1e-02–3e-02) | 2.6e-04 (2e-04–4e-04) | 4.3e-08 (4e-08–8e-08) | 8.7e-09 | 4744 |
 | kdv | Adam, then L-BFGS | 6.9e-02 (3e-02–8e-02) | 2.0e-02 (1e-02–3e-02) | 2.6e-03 (2e-03–3e-03) | 8.0e-04 (8e-04–9e-04) | 7.7e-04 | 8183 |
 
-The Adam phase lasts 54 s, so the self-scaled rows at 10 s and 30 s are Adam's.
+With Adam for 30 % of the budget the Adam phase lasts 54 s, so those self-scaled rows at 10 s and 30 s are Adam's. Steps count the second method only, for the methods made of two.
 
 The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png` and `results/wide/runs_4x64.png` `results/forget/runs_3x32.png`, `results/wide_grow/runs_4x64.png` and `results/baselines/runs_3x32.png` after `plot.py`.
 
@@ -310,7 +333,25 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png` and `resul
     - **Early**: at 30 s the filter is at 8.0e-09 on heat and 8.6e-08 on KdV, while self-scaled Broyden is still in Adam at 1e-02. At 60 s, 6 s after the switch, it is 1.3e-05 and 1.5e-04 against the filter's 1.7e-09 and 8.3e-08.
     - **Burgers**: the filter ends at 5.6e-05, below what the reference can resolve and at least 8 times below self-scaled Broyden (8.2e-04). Self-scaled Broyden ends level with Levenberg–Marquardt (1.1e-03).
 36. **The filter flattens where self-scaled Broyden does not.** On KdV the filter holds near 1e-07 from 30 s to 120 s and only then falls to 2.8e-08. Self-scaled Broyden goes through that level without slowing. One explanation, not yet tested: each filter step sees 64 fresh rows, so its steps carry the sampling noise of the batch, while self-scaled Broyden steps on one fixed set of 2,512 rows for 500 steps.
-37. **The two strengths fit together.** The filter reaches in 20 to 30 s the level that self-scaled Broyden reaches 30 to 70 s after its start. Self-scaled Broyden is what goes on falling from there. The next move is the filter first and self-scaled Broyden from the filter's weights, possibly with $H$ started from the filter's $P$, an inverse Gauss–Newton matrix.
+37. **The two strengths look as if they fit together.** The filter reaches in 20 to 30 s the level that self-scaled Broyden reaches 30 to 70 s after its start, and self-scaled Broyden is what goes on falling from there. Findings 39–41 test the filter first, then self-scaled Broyden from its weights.
+38. **Self-scaled Broyden needs no Adam phase here.** From the first step it is at 6.9e-08 on heat and 2.7e-07 on KdV after 30 s, and ends at 3.4e-10 and 1.1e-09. After 10 s of Adam it ends at 2.4e-10 and 3.5e-10. On Burgers all three versions end between 6.7e-04 and 8.2e-04. The paper's Adam phase of 30 % only delays it. Against the best of the three at each moment:
+    - **Heat**: the filter is ahead until 68 s, 30 times at 20 s and 7 times at 30 s.
+    - **KdV**: the filter is ahead until 37 s, 4 times at 20 s. After that self-scaled Broyden leads, by up to 200 times.
+    - **Burgers**: the filter is ahead at every reading, by 7 to 60 times.
+39. **The filter for 30 s, then self-scaled Broyden, is the best method on heat.** It holds the filter's lead early, stays within 2 times of the best self-scaled Broyden from 60 to 120 s, and ends at 8.6e-11, 2 to 4 times below every version of it. With the filter's $P$ as the first $H$ it ends at 1.8e-10: no gain.
+40. **On KdV and Burgers the hybrid fails.**
+    - **KdV**: it ends at 1.5e-08 (seeds 1.0e-09 to 4.8e-08), against 3.5e-10 for self-scaled Broyden after 10 s of Adam.
+    - **Burgers**: the error rises after the switch, from 1.8e-03 at 30 s to 5.4e-03 at 120 s. It ends 30 times above the filter alone.
+41. **Why the handoff fails** (diagnostics on one seed; not a timed run):
+    - **Not the loss weights**: self-scaled Broyden given the filter's own weighting stalls the same way on KdV (1.7e-07 to 2.3e-07 in 2,400 steps).
+    - **Not a fresh $H$**: on its own path, self-scaled Broyden restarted from the scaled identity at 2.8e-07 converges as fast as without the restart (2.8e-09 against 2.4e-09 after 2,400 steps).
+    - **Not the size of the weights on KdV**: after 5 s of the filter the weight norm is Adam's (7.4), and self-scaled Broyden is slow from there too (3.9e-08 after 2,400 steps).
+    - **The filter trains a network of higher rank.** At the same error on KdV (about 2e-07) the Jacobian on 2,512 rows has 213 singular values above $10^{-8}$ after the filter, against 109 after Adam then self-scaled Broyden. The residual left sits a decade lower in the spectrum: 73 % of it in $\sigma \in (10^{-8}, 10^{-6}]$, against 92 % in $(10^{-7}, 10^{-5}]$.
+    - **From there no second method moves the error.** Damped Gauss–Newton steps by SVD on fresh samples of 5,024 rows, the damping chosen on a second sample, lower the loss by a fifth in 6 steps and leave the error at 1.6e-07. Undamped steps raise the loss on the second sample.
+    - **On Burgers the filter's weights reach a norm of 2,359**, against 7 to 19 elsewhere: saturated units that draw the front. Self-scaled Broyden on its fixed 2,512 points then raises the loss on fresh points 8 times. It fits the points and not the equation between them.
+42. **So the filter is fast because it uses more of the network, and that is also why it is hard to finish.** It reaches low errors early by moving weakly determined weights, and leaves the last error in directions that are weak for every method tried here.
+43. **The filter's lead on Burgers is the optimizer's, not its weighting's.** With its rows weighted 60 so that it minimizes the same loss as every other method, the filter ends at 5.1e-05 on Burgers. That is level with its own weighting (5.6e-05) and 14 times below self-scaled Broyden from the start (7.0e-04), and it is ahead at every reading. On heat the weighting changes nothing (8.8e-10). On KdV the full loss's weighting makes the filter slower and 3 times worse at the end (8.6e-08 against 2.8e-08): there the light weighting helped.
+44. **Self-scaled Broyden with the filter's light weighting** fails on Burgers on two seeds of three (1.4e-01 and 1.7e-01; the third 1.5e-03), is level on heat (3.5e-10), and is its best on KdV (3.6e-10, against 1.1e-09 with the weights of 10).
 
 ## Verdict against the plan
 
@@ -320,7 +361,7 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png` and `resul
 | M1, residual flow | Beats stage 0 on two of three | Dropped: no gain on any |
 | M4, block Kaczmarz | Beats stage 0 on two of three | Dropped as the main optimizer. Kept as a candidate opening move for the agent (M9) |
 | M5, variable projection | Beats stage 0 on two of three; a gain on the linear problem | Kept, with a warm start: a large gain on heat, level on the other two |
-| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. Without the full $P$: a block per layer holds on heat and KdV and loses a factor of 20 on Burgers, and is too slow at 12,737 weights; a block per neuron fails; 64 directions keep up with Levenberg–Marquardt at 12,737 weights but lose the full filter's late lead. A memory that grows with the stream (1 batch in 25, at least 20) removes the slow start and is best or level at the end on all three. Against self-scaled Broyden: ahead for the first minute and on Burgers, 5 and 80 times behind at the end on heat and KdV |
+| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. Without the full $P$: a block per layer holds on heat and KdV and loses a factor of 20 on Burgers, and is too slow at 12,737 weights; a block per neuron fails; 64 directions keep up with Levenberg–Marquardt at 12,737 weights but lose the full filter's late lead. A memory that grows with the stream (1 batch in 25, at least 20) removes the slow start and is best or level at the end on all three. Against self-scaled Broyden with little or no Adam: ahead until 68 s on heat and 37 s on KdV, and over the whole run on Burgers on the same loss (14 times at the end). Followed by self-scaled Broyden it is the best method on heat; that handoff fails on KdV and Burgers |
 | M6, continuation | A cold run is not as good | Dropped at this viscosity |
 | M8, multipliers | Beats stage 0 on two of three | Dropped |
 
@@ -332,7 +373,15 @@ $$
 \varepsilon_{\text{new}}(T) \le \min_{b \in \text{baselines}} \varepsilon_b(T) \quad \text{for every } T
 $$
 
-The filter meets this to about 85 s on KdV, to about 129 s on heat, and over the whole run on Burgers. No method found here meets it everywhere yet.
+The strongest baseline is self-scaled Broyden with little or no Adam first (finding 38), not the paper's 30 % of Adam. Against it, on the same loss:
+
+| Equation | Best method here | Meets the bar |
+|---|---|---|
+| Heat | The filter for 30 s, then self-scaled Broyden | Yes: within 2 times of the best at every reading, 2 to 4 times below it at the end |
+| Burgers | The filter alone | Yes: 7 to 60 times below at every reading, 14 times at the end |
+| KdV | The filter until 37 s | No: after 37 s self-scaled Broyden leads, by up to 200 times |
+
+No single method meets it on all three. The filter's lead is real on the equation with a front and in the first half-minute; on KdV it is not yet an optimizer that finishes.
 
 ## What it does not show
 
@@ -349,4 +398,11 @@ The filter meets this to about 85 s on KdV, to about 129 s on heat, and over the
 - **Two runs were slowed by other load** (Burgers, per-layer filter, seed 1 at 4×64: 2,413 steps against 3,286; heat, low-rank filter, seed 1 at 4×64: 20,291 against 32,455). Both are kept.
 - **SOAP is not run.** Self-scaled Broyden and BFGS follow the paper's protocol except the line search's constants, which the paper does not give (PyTorch's strong Wolfe search is used), and the two additions in the setup. The restart after a failed line search fired 800 to 5,200 times per run for self-scaled Broyden on heat and KdV, at most once on Burgers, never for self-scaled BFGS. Whether the method does better or worse without it is not tested.
 - **The Adam phase of 30 %** is the length used for every hybrid here, not a tuned one. A shorter phase would start the self-scaled methods sooner.
+- **The filter does not minimize the same loss as the others.** Its batch is 48 equation rows and 8 initial and 8 boundary rows, unscaled, with weight 10 on the last two. Per point, that is a weight of $80/48 \approx 1.7$ on the initial and boundary terms, against 10 in the loss of every other method:
+
+  $$
+  \mathbb{E}\big[\lVert r_{\text{batch}} \rVert^2\big] = 48\,\big(\mathbb{E}\, r_{\text{pde}}^2 + 1.7\, \mathbb{E}\, r_{\text{ic}}^2 + 1.7\, \mathbb{E}\, r_{\text{bc}}^2\big), \qquad L = \mathbb{E}\, r_{\text{pde}}^2 + 10\, \mathbb{E}\, r_{\text{ic}}^2 + 10\, \mathbb{E}\, r_{\text{bc}}^2
+  $$
+
+  Tested in finding 43: with rows weighted to match the full loss, the filter's Burgers and heat results hold; on KdV it is 3 times worse. The tables before the self-scaled baselines use the light weighting.
 - **The Burgers reference** is the package's Cole–Hopf solution on a 256 by 101 grid; its own accuracy bounds what can be read below about 1e-4.

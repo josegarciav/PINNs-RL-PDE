@@ -1,8 +1,9 @@
 """D10 figure and table: the error each optimizer has reached after T seconds on one core.
 
-Usage: python experiments/D10_least_squares_optimizer/plot.py [runs.json] [out.png]
+Usage: python experiments/D10_least_squares_optimizer/plot.py [runs.json] [out.png] [m1,m2,...]
 
 Prints the table of the README (median over seeds, with the range) and saves the figure.
+The optional list of methods limits the figure, not the table.
 """
 
 import json
@@ -15,6 +16,7 @@ import numpy as np
 HERE = Path(__file__).parent
 path = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / "results" / "runs_3x32.json"
 out_png = Path(sys.argv[2]) if len(sys.argv) > 2 else path.with_suffix(".png")
+only = sys.argv[3].split(",") if len(sys.argv) > 3 else None
 data = json.loads(path.read_text())
 runs, budget = data["runs"], data["meta"]["budget_s"]
 
@@ -43,7 +45,7 @@ SERIES = {  # method: (label, color, line style)
     "filter64f98": ("M3 filter, forgetting 0.98", "#0b7285", (0, (1, 1))),
     "filter64f95": ("M3 filter, forgetting 0.95", "#1864ab", "-"),
     "filter64f9": ("M3 filter, forgetting 0.9", "#1864ab", ":"),
-    "filter64g25": ("M3 filter, memory of 1 batch in 25 seen, at least 20", "#e8590c", "-"),
+    "filter64g25": ("M3 filter, memory of 1 batch in 25 seen, at least 20", "#c92a2a", "-"),
     "filter256": ("M3 Kalman filter, batches of 256", "#0b7285", "--"),
     "lmfilter20": ("Levenberg–Marquardt for 20 s, then the filter", "#0b7285", "-."),
     "lmfilter20w": ("The same, covariance started from the last linearization", "#0b7285", ":"),
@@ -55,6 +57,13 @@ SERIES = {  # method: (label, color, line style)
     "dfilter64node": ("M3 filter, covariance per neuron", "#5f3dc4", ":"),
     "al": ("M8 multipliers, penalty 1", "#946200", "-"),
     "lm_w1": ("Levenberg–Marquardt, loss weights 1", "#946200", ":"),
+    "filter_ss30": ("The filter for 30 s, then self-scaled Broyden", "#2b8a3e", "-"),
+    "filter_ss30p": ("The same, Broyden's first H from the filter's P", "#2b8a3e", "--"),
+    "filter_ss60": ("The filter for 60 s, then self-scaled Broyden", "#2b8a3e", ":"),
+    "adam10_ssbroyden": ("Adam for 10 s, then self-scaled Broyden", "#2a78d6", "--"),
+    "adam0_ssbroyden": ("Self-scaled Broyden from the start", "#173f7a", "-"),
+    "adam0_ssbroydenf": ("The same, the filter's weighting (5/3)", "#173f7a", ":"),
+    "filter64g25m": ("M3 filter, growing memory, the full loss's weighting (10)", "#c92a2a", ":"),
     "adam_ssbroyden": ("Adam, then self-scaled Broyden", "#2a78d6", "-."),
     "adam_ssbfgs": ("Adam, then self-scaled BFGS", "#2a78d6", ":"),
     "adam_lbfgs": ("Adam, then L-BFGS", "#2a78d6", "-"),
@@ -111,6 +120,8 @@ for ax, problem in zip(np.atleast_1d(axes), problems, strict=True):
     ax.set_facecolor(SURFACE)
     for method in methods:
         if not any((r["problem"], r["method"]) == (problem, method) for r in runs):
+            continue
+        if only is not None and method not in only:
             continue
         label, color, style = SERIES[method]
         median, low, high = band(problem, method)

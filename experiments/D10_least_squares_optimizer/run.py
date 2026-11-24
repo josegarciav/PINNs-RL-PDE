@@ -244,7 +244,7 @@ def residual_rows(problem, model, weights=(W_IC, W_BC)):
     return rows, jacobian
 
 
-def loss_autograd(problem, model, col, ic, bc):
+def loss_autograd(problem, model, col, ic, bc, weights=(W_IC, W_BC)):
     """The same sum of squares by batched reverse mode, the textbook way (for the baselines)."""
     spec = PROBLEMS[problem]
     z = col.clone().requires_grad_(True)
@@ -257,7 +257,7 @@ def loss_autograd(problem, model, col, ic, bc):
     r = spec["residual"](u, g[:, 0], uxx, third, g[:, 1])
     v_ic = model(ic)[:, 0] - spec["initial"](ic[:, 0])
     v_bc = model(bc)[:, 0] - spec["boundary"](bc[:, 0], bc[:, 1])
-    return (r**2).mean() + W_IC * (v_ic**2).mean() + W_BC * (v_bc**2).mean()
+    return (r**2).mean() + weights[0] * (v_ic**2).mean() + weights[1] * (v_bc**2).mean()
 
 
 # ------------------------------------------------------------------------------ optimizers
@@ -629,6 +629,8 @@ def run_filter(
     cap=1e12,
     warm=False,
     grow=None,
+    keep=None,
+    loss_weights=(W_IC, W_BC),
 ):
     """M3. Training as filtering. Each step draws ``batch`` fresh rows (three quarters in the
     domain, the rest on the initial line and the boundary), never seen again, and applies an
@@ -643,10 +645,17 @@ def run_filter(
     step k the filter remembers max(m0, q k) batches, forget = 1 - 1 / max(m0, q k).
 
     ``warm`` starts P as the posterior of one full sample at the incoming weights,
-    (J^T J + I / prior)^{-1}, for weights that another optimizer has already moved."""
+    (J^T J + I / prior)^{-1}, for weights that another optimizer has already moved.
+
+    ``keep``, a dict, receives the final P under "P" for an optimizer that follows.
+
+    ``loss_weights`` multiply the squares of the initial and boundary rows. The rows are
+    unscaled and the batch is 3/4 equation rows, so per point the batch weighs those terms
+    w / 6 against the equation: the default 10 gives 5/3, where every full-batch method uses
+    10; 60 matches them."""
     weights = Weights(model)
     theta = weights.read()
-    rows, jacobian = residual_rows(problem, model)
+    rows, jacobian = residual_rows(problem, model, loss_weights)
     sizes = (batch - 2 * (batch // 8), batch // 8, batch // 8)
     unit = (1, 1, 1)  # rows unscaled: a stream has no total count
     P = prior * torch.eye(theta.numel(), dtype=theta.dtype)
@@ -686,6 +695,8 @@ def run_filter(
         weights.write(theta)
         it += 1
     stats["iterations"] = it
+    if keep is not None:
+        keep["P"] = P
     return stats
 
 
@@ -999,7 +1010,17 @@ def run_lbfgs(problem, model, clock, budget, generator, resample_every=10):
     return {"iterations": it}
 
 
-def run_selfscaled(problem, model, clock, budget, generator, variant="broyden", resample_every=500):
+def run_selfscaled(
+    problem,
+    model,
+    clock,
+    budget,
+    generator,
+    variant="broyden",
+    resample_every=500,
+    base=None,
+    loss_weights=(W_IC, W_BC),
+):
     """Self-scaled quasi-Newton (Urban, Stefanou and Pons, arXiv 2405.04230, eqs. 5-23): a
     dense inverse Hessian H, strong Wolfe line search, and the update
 
@@ -1009,7 +1030,14 @@ def run_selfscaled(problem, model, clock, budget, generator, variant="broyden", 
     with tau and phi from eq. 11-12 (SSBFGS) or eq. 13-23 (SSBroyden). Points are redrawn
     every ``resample_every`` iterations as in the paper; H is kept. Not in the paper, and
     ours: H starts at (s^T y / y^T y) I at the first update (Nocedal and Wright, eq. 6.20),
-    and H is reset to I when the line search fails."""
+    and H is reset to I when the line search fails.
+
+    ``base``, a matrix, replaces I as the first H: the first direction is -base g, and the
+    first update scales it to (s^T y / y^T base y) base. For the filter's P, whose size is
+    in the filter's row units and not the loss's. A reset after a failed search still goes
+    to I: by then ``base`` belongs to other weights.
+
+    ``loss_weights``: the weights of the initial and boundary terms in the loss."""
     weights = Weights(model)
     theta = weights.read()
     n = theta.numel()
@@ -1017,12 +1045,12 @@ def run_selfscaled(problem, model, clock, budget, generator, variant="broyden", 
 
     def evaluate(vec, pts):
         weights.write(vec)
-        loss = loss_autograd(problem, model, *pts)
+        loss = loss_autograd(problem, model, *pts, weights=loss_weights)
         grads = torch.autograd.grad(loss, params)
-        return float(loss), torch.cat([g.reshape(-1) for g in grads])
+        return float(loss.detach()), torch.cat([g.reshape(-1) for g in grads])
 
     eye = torch.eye(n, dtype=theta.dtype)
-    H, fresh = eye.clone(), True
+    H, fresh = (eye.clone() if base is None else base.clone()), True
     it, stats = 0, {"iterations": 0, "restarts": 0, "evaluations": 0}
     pts = sample(problem, generator)
     loss, g = evaluate(theta, pts)
@@ -1036,7 +1064,8 @@ def run_selfscaled(problem, model, clock, budget, generator, variant="broyden", 
             H, fresh, p = eye.clone(), True, -g
             gtd = float(g @ p)
             stats["restarts"] += 1
-        step = min(1.0, 1.0 / float(g.abs().sum())) if fresh else 1.0
+        identity = base is None or stats["restarts"] > 0
+        step = min(1.0, 1.0 / float(g.abs().sum())) if fresh and identity else 1.0
         new_loss, new_g, alpha, calls = _strong_wolfe(
             lambda x, a, d, pts=pts: evaluate(x + a * d, pts), theta, step, p, loss, g, gtd
         )
@@ -1054,7 +1083,7 @@ def run_selfscaled(problem, model, clock, budget, generator, variant="broyden", 
         theta, loss, g = theta + s, new_loss, new_g
         if ys > 1e-300 and b > 0:
             if fresh:
-                H = (ys / float(y @ y)) * eye
+                H = (ys / float(y @ H @ y)) * H  # H is I or the base here
                 fresh = False
             Hy = H @ y
             yHy = float(y @ Hy)
@@ -1142,12 +1171,27 @@ def run_one(problem, method, seed, budget, width, depth, every):
         stats = run_filter_blocks(
             problem, model, clock, budget, generator, batch=int(method[7 : -len(kind)]), kind=kind
         )
+    elif method.startswith("filter_ss"):
+        # filter_ss30: the growing-memory filter for 30 s, then self-scaled Broyden from its
+        # weights; filter_ss30p: with the filter's P as Broyden's first H
+        found = re.fullmatch(r"filter_ss(\d+)(p?)", method)
+        assert found, method
+        switch, with_p = found.groups()
+        kept: dict = {}
+        first = run_filter(
+            problem, model, clock, float(switch), generator, grow=(20.0, 1.0 / 25), keep=kept
+        )
+        stats = run_selfscaled(
+            problem, model, clock, budget, generator, base=kept["P"] if with_p else None
+        )
+        stats["filter_iterations"] = first["iterations"]
     elif method.startswith("filter"):
         # filter64, filter64c4 (variances capped at 1e4), filter64f98 (forgetting 0.98),
-        # filter64g25 (memory of max(20, k / 25) batches at step k)
-        found = re.fullmatch(r"filter(\d+)(?:c(\d+))?(?:f(\d+))?(?:g(\d+))?", method)
+        # filter64g25 (memory of max(20, k / 25) batches at step k), filter64g25m (initial and
+        # boundary rows weighted to match the full-batch loss)
+        found = re.fullmatch(r"filter(\d+)(?:c(\d+))?(?:f(\d+))?(?:g(\d+))?(m?)", method)
         assert found, method
-        size, exponent, keep, every = found.groups()
+        size, exponent, keep, every, matched = found.groups()
         stats = run_filter(
             problem,
             model,
@@ -1158,13 +1202,26 @@ def run_one(problem, method, seed, budget, width, depth, every):
             cap=10.0 ** int(exponent or 12),
             forget=float("0." + keep) if keep else 0.995,
             grow=(20.0, 1.0 / int(every)) if every else None,
+            loss_weights=(60.0, 60.0) if matched else (W_IC, W_BC),
         )
     elif method in ("al", "lm_w1"):
         stats = run_al(problem, model, clock, budget, generator, multipliers=method == "al")
-    elif method in ("adam_ssbroyden", "adam_ssbfgs"):
-        first = run_adam(problem, model, clock, 0.3 * budget, generator)
+    elif re.fullmatch(r"adam(\d*)_ss(broyden|bfgs)(f?)", method):
+        # adam_ssbroyden: Adam for 30 % of the budget; adam10_ssbroyden: for 10 s;
+        # adam0_ssbroydenf: the initial and boundary terms weighted 5/3, as the filter does
+        found = re.fullmatch(r"adam(\d*)_ss(broyden|bfgs)(f?)", method)
+        seconds, variant, light = found.groups()
+        first = run_adam(
+            problem, model, clock, float(seconds) if seconds else 0.3 * budget, generator
+        )
         stats = run_selfscaled(
-            problem, model, clock, budget, generator, variant=method.removeprefix("adam_ss")
+            problem,
+            model,
+            clock,
+            budget,
+            generator,
+            variant=variant,
+            loss_weights=(5.0 / 3.0, 5.0 / 3.0) if light else (W_IC, W_BC),
         )
         stats["adam_iterations"] = first["iterations"]
     else:
