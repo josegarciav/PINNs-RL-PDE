@@ -160,6 +160,7 @@ Stages 0 to 2 are measured in [README.md](README.md) (heat, Burgers, KdV; 60 s a
 | M3, covariance per neuron | Dropped: behind stage 0 on heat and KdV, diverges on Burgers |
 | M3, forgetting 0.95 | Kept: ahead of stage 0 from the first reading on heat and KdV (280 and 55 times at 30 s), and 7 and 5 times below forgetting 0.995 at the end. On Burgers the long memory ends 3 times lower |
 | M3, growing memory | **Kept, the new default for M3**: forget $1 - 1/\max(20, k/25)$. As fast as 0.95 early; at 180 s 150, 17 and 12 times below stage 0 on heat, Burgers, KdV |
+| M3 against self-scaled Broyden | Mixed: ahead in the first minute and over the whole run on Burgers; 5 and 80 times behind at 180 s on heat and KdV |
 | M3, low rank (64 directions) | Kept for size: level with stage 0 at 12,737 weights and 600 s, 17 times ahead on heat at 60 s; stops at stage 0's level where the full filter goes 10 to 70 times lower |
 | M6 | Dropped at this viscosity: no better than a cold start with 4, 8 or 16 stages |
 | M8 | Dropped: worse than the same penalty without multipliers. Loss weights of 1 beat the weights of 10 used so far |
@@ -173,7 +174,7 @@ What the results change:
 3. **Combine the two survivors.** M5 solves the last layer exactly; M3 filters the rest. On heat they reach the same error by different routes.
 4. **Order the stream in time** (fact 5). The filter here draws points uniformly; the plan's causal ordering is untested.
 5. **A harder equation.** Continuation was not needed at $\nu = 0.01/\pi$. Allen–Cahn and Burgers at a smaller viscosity are where it, and the filter, should be tried next.
-6. **Baselines to add**: SOAP and self-scaled Broyden, and every baseline at 180 s.
+6. **Baselines to add**: SOAP. Self-scaled Broyden and BFGS are run (below).
 7. **Basis growth** (the second half of M5) is still untested.
 
 Stage 2b, measured so far (item 2):
@@ -183,5 +184,10 @@ Stage 2b, measured so far (item 2):
 - **The forgetting factor is the filter's pace.** 0.95 in place of 0.995 removes the slow first minute on heat and KdV; 0.999 is 10,000 times worse on heat. Burgers prefers 0.995 late. A memory that grows with the stream, 1 batch in 25 of those seen and at least 20, gets the fast start and the long-memory end on all three. At 12,737 weights (one seed) the full filter is too slow even so, and the low-rank filter with the growing memory wins the first minute and ends level with stage 0. The 2,241-weight network with the full filter is 5 to 230 times below the 12,737-weight network with stage 0. Next: a forgetting set from the innovation $r^\top (J P J^\top + I)^{-1} r$ (adaptive forgetting, as in recursive least squares) in place of the fixed 25; a form of $P$ that keeps the full filter's correlations at 10,000 weights is the open problem.
 
 - **Against Adam then L-BFGS at 180 s** the filter is 35,000 (heat), 350 (Burgers) and 9,800 (KdV) times lower: the 100 times of bet R1 on all three, at this size.
+- **Against self-scaled Broyden** (Urbán, Stefanou and Pons, 2024) after the same Adam phase, the result is mixed. The filter is ahead for the first 85 s on KdV and 129 s on heat, and over the whole run on Burgers (5.6e-05 against 8.2e-04). Over the last 30 s self-scaled Broyden is 5 times below it on heat (2.0e-10) and 80 times below on KdV (3.4e-10). Self-scaled BFGS is between the two. The bar for R1 is now the best published method at every moment of the run, and nothing here meets it everywhere.
+- **Next**:
+  1. The filter first, then self-scaled Broyden from its weights. Two starts for $H$: the scaled identity, and the filter's own $P$ (an inverse Gauss–Newton matrix, built for free).
+  2. A shorter Adam phase for self-scaled Broyden, so that the baseline is not held back by the 30 % rule.
+  3. Whether the filter's flat stretch on KdV (near 1e-07 from 30 s to 120 s) is the batch noise: a batch that grows late, or a fixed set held for a while, as self-scaled Broyden does.
 
-Still open in stage 2b: items 3, 4, 5 and the rest of 6 (SOAP, self-scaled Broyden). Stage 3 (M2, M7) and the engine work of stage 4 follow as planned.
+Still open in stage 2b: items 3, 4, 5 and SOAP. Stage 3 (M2, M7) and the engine work of stage 4 follow as planned.

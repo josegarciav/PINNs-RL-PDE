@@ -64,6 +64,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from torch.func import functional_call, grad, vmap
+from torch.optim.lbfgs import _strong_wolfe
 
 HERE = Path(__file__).parent
 W_IC, W_BC = 10.0, 10.0
@@ -998,6 +999,90 @@ def run_lbfgs(problem, model, clock, budget, generator, resample_every=10):
     return {"iterations": it}
 
 
+def run_selfscaled(problem, model, clock, budget, generator, variant="broyden", resample_every=500):
+    """Self-scaled quasi-Newton (Urban, Stefanou and Pons, arXiv 2405.04230, eqs. 5-23): a
+    dense inverse Hessian H, strong Wolfe line search, and the update
+
+        H+ = (H - Hy (Hy)^T / y^T H y + phi v v^T) / tau + s s^T / y^T s
+        v  = sqrt(y^T H y) (s / y^T s - H y / y^T H y)
+
+    with tau and phi from eq. 11-12 (SSBFGS) or eq. 13-23 (SSBroyden). Points are redrawn
+    every ``resample_every`` iterations as in the paper; H is kept. Not in the paper, and
+    ours: H starts at (s^T y / y^T y) I at the first update (Nocedal and Wright, eq. 6.20),
+    and H is reset to I when the line search fails."""
+    weights = Weights(model)
+    theta = weights.read()
+    n = theta.numel()
+    params = list(model.parameters())
+
+    def evaluate(vec, pts):
+        weights.write(vec)
+        loss = loss_autograd(problem, model, *pts)
+        grads = torch.autograd.grad(loss, params)
+        return float(loss), torch.cat([g.reshape(-1) for g in grads])
+
+    eye = torch.eye(n, dtype=theta.dtype)
+    H, fresh = eye.clone(), True
+    it, stats = 0, {"iterations": 0, "restarts": 0, "evaluations": 0}
+    pts = sample(problem, generator)
+    loss, g = evaluate(theta, pts)
+    while clock.tick() < budget:
+        if it > 0 and it % resample_every == 0:
+            pts = sample(problem, generator)
+            loss, g = evaluate(theta, pts)
+        p = -(H @ g)
+        gtd = float(g @ p)
+        if not gtd < 0:  # not a descent direction: start again from the gradient
+            H, fresh, p = eye.clone(), True, -g
+            gtd = float(g @ p)
+            stats["restarts"] += 1
+        step = min(1.0, 1.0 / float(g.abs().sum())) if fresh else 1.0
+        new_loss, new_g, alpha, calls = _strong_wolfe(
+            lambda x, a, d, pts=pts: evaluate(x + a * d, pts), theta, step, p, loss, g, gtd
+        )
+        stats["evaluations"] += calls
+        s = alpha * p
+        y = new_g - g
+        ys = float(y @ s)
+        if not (math.isfinite(new_loss) and new_loss <= loss) or alpha == 0:
+            H, fresh = eye.clone(), True
+            stats["restarts"] += 1
+            weights.write(theta)
+            it += 1
+            continue
+        b = -alpha * float(s @ g) / ys if ys > 0 else 0.0
+        theta, loss, g = theta + s, new_loss, new_g
+        if ys > 1e-300 and b > 0:
+            if fresh:
+                H = (ys / float(y @ y)) * eye
+                fresh = False
+            Hy = H @ y
+            yHy = float(y @ Hy)
+            h = yHy / ys
+            a = max(h * b - 1.0, 0.0)
+            tau1 = min(1.0, 1.0 / b)  # eq. 11: (y.s) / (s.H^-1 s) = 1 / b
+            tau, phi = tau1, 1.0
+            if variant == "broyden" and a > 1e-12:
+                c = math.sqrt(a / (a + 1.0))  # eq. 18
+                rho = min(1.0, h * (1.0 - c))  # eq. 19
+                theta_k = max((rho - 1.0) / a, min(1.0 / rho, (1.0 - b) / b))  # eq. 20-22
+                sigma = max(1.0 + a * theta_k, 1e-300)  # eq. 23
+                shrink = sigma ** (-1.0 / (n - 1))
+                tau = (
+                    tau1 * min(shrink, 1.0 / theta_k) if theta_k > 0 else min(tau1 * shrink, sigma)
+                )
+                phi = (1.0 - theta_k) / (1.0 + a * theta_k)  # eq. 14
+            v = math.sqrt(yHy) * (s / ys - Hy / yHy)
+            H = (H - torch.outer(Hy, Hy) / yHy + phi * torch.outer(v, v)) / tau
+            H = H + torch.outer(s, s) / ys
+            H = 0.5 * (H + H.T)
+        weights.write(theta)
+        it += 1
+    weights.write(theta)
+    stats["iterations"] = it
+    return stats
+
+
 def run_one(problem, method, seed, budget, width, depth, every):
     torch.set_num_threads(1)
     generator = torch.Generator().manual_seed(1000 + seed)
@@ -1076,6 +1161,12 @@ def run_one(problem, method, seed, budget, width, depth, every):
         )
     elif method in ("al", "lm_w1"):
         stats = run_al(problem, model, clock, budget, generator, multipliers=method == "al")
+    elif method in ("adam_ssbroyden", "adam_ssbfgs"):
+        first = run_adam(problem, model, clock, 0.3 * budget, generator)
+        stats = run_selfscaled(
+            problem, model, clock, budget, generator, variant=method.removeprefix("adam_ss")
+        )
+        stats["adam_iterations"] = first["iterations"]
     else:
         assert method == "adam_lbfgs", method
         stats = run_adam(problem, model, clock, 0.3 * budget, generator)

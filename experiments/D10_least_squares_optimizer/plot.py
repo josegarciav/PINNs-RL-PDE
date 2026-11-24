@@ -55,6 +55,8 @@ SERIES = {  # method: (label, color, line style)
     "dfilter64node": ("M3 filter, covariance per neuron", "#5f3dc4", ":"),
     "al": ("M8 multipliers, penalty 1", "#946200", "-"),
     "lm_w1": ("Levenberg–Marquardt, loss weights 1", "#946200", ":"),
+    "adam_ssbroyden": ("Adam, then self-scaled Broyden", "#2a78d6", "-."),
+    "adam_ssbfgs": ("Adam, then self-scaled BFGS", "#2a78d6", ":"),
     "adam_lbfgs": ("Adam, then L-BFGS", "#2a78d6", "-"),
     "lbfgs": ("L-BFGS", "#2a78d6", "--"),
     "adam": ("Adam", "#8a8985", "-"),
