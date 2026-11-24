@@ -47,6 +47,8 @@ python $D/run.py --budget 600 --seeds 2 --width 64 --depth 4 --every 10 --out $D
 python $D/plot.py && python $D/plot.py $D/results/long/runs_3x32.json
 python $D/plot.py $D/results/wide/runs_4x64.json
 python $D/run.py --budget 180 --seeds 3 --methods lm filter64 filter64f95 filter64g25 --out $D/results/forget
+python $D/run.py --budget 300 --seeds 1 --width 64 --depth 4 --every 10 --out $D/results/wide_grow \
+    --methods lm filter64g25 sfilter64r64g25
 ```
 
 ## Results
@@ -178,7 +180,23 @@ A first scan at 60 s, one seed, same session:
 | 0.95 | 7.5e-09 | 3.8e-07 | 5.1e-04 | 1–3 |
 | 0.9 | 6.3e-09 | 1.1e-07 | 9.5e-03 | 6–22 |
 
-The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png` and `results/wide/runs_4x64.png` and `results/forget/runs_3x32.png` after `plot.py`.
+### The growing memory on the larger network, 300 seconds
+
+One seed. The machine went from battery in Low Power Mode to mains power during this run, so only the three methods of one equation, run one after another, compare with each other.
+
+| Equation | Method | 30 s | 60 s | 180 s | 300 s | Last 50 s, mean | Steps |
+|---|---|---|---|---|---|---|---|
+| heat | Levenberg–Marquardt | 1.1e-04 (1e-04–1e-04) | 1.9e-05 (2e-05–2e-05) | 2.1e-06 (2e-06–2e-06) | 7.5e-07 (7e-07–7e-07) | 9.1e-07 | 404 |
+| heat | M3 filter, memory of 1 batch in 25 seen, at least 20 | 3.1e-03 (3e-03–3e-03) | 6.6e-04 (7e-04–7e-04) | 5.5e-05 (6e-05–6e-05) | 1.7e-05 (2e-05–2e-05) | 1.8e-05 | 304 |
+| heat | M3 filter, 64 directions, growing memory | 1.6e-05 (2e-05–2e-05) | 8.1e-06 (8e-06–8e-06) | 2.0e-06 (2e-06–2e-06) | 1.3e-06 (1e-06–1e-06) | 1.5e-06 | 8009 |
+| burgers | Levenberg–Marquardt | 2.3e-01 (2e-01–2e-01) | 1.1e-02 (1e-02–1e-02) | 3.8e-04 (4e-04–4e-04) | 3.8e-03 (4e-03–4e-03) | 1.4e-03 | 376 |
+| burgers | M3 filter, memory of 1 batch in 25 seen, at least 20 | 4.7e-01 (5e-01–5e-01) | 3.7e-01 (4e-01–4e-01) | 2.9e-01 (3e-01–3e-01) | 8.9e-02 (9e-02–9e-02) | 1.0e-01 | 303 |
+| burgers | M3 filter, 64 directions, growing memory | 3.4e-01 (3e-01–3e-01) | 4.8e-02 (5e-02–5e-02) | 1.7e-03 (2e-03–2e-03) | 5.3e-04 (5e-04–5e-04) | 5.8e-04 | 8737 |
+| kdv | Levenberg–Marquardt | 1.5e-03 (2e-03–2e-03) | 1.0e-04 (1e-04–1e-04) | 4.9e-06 (5e-06–5e-06) | 1.7e-06 (2e-06–2e-06) | 1.9e-06 | 572 |
+| kdv | M3 filter, memory of 1 batch in 25 seen, at least 20 | 1.6e-01 (2e-01–2e-01) | 6.0e-03 (6e-03–6e-03) | 2.6e-05 (3e-05–3e-05) | 1.6e-06 (2e-06–2e-06) | 3.2e-06 | 573 |
+| kdv | M3 filter, 64 directions, growing memory | 4.9e-05 (5e-05–5e-05) | 9.7e-06 (1e-05–1e-05) | 4.9e-06 (5e-06–5e-06) | 2.9e-06 (3e-06–3e-06) | 3.1e-06 | 12003 |
+
+The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png` and `results/wide/runs_4x64.png` `results/forget/runs_3x32.png` and `results/wide_grow/runs_4x64.png` after `plot.py`.
 
 ## What it shows
 
@@ -241,6 +259,9 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png` and `resul
     - **KdV**: 1.3e-07, 12 times below Levenberg–Marquardt, level with $f = 0.95$ and 4 times below $f = 0.995$.
 
     It has no constant tied to the budget. The 20 and the 25 were set once, from the two fixed factors, and not scanned.
+30. **At 12,737 weights the growing memory does not rescue the full filter.** It takes 300 to 570 steps in 300 s and ends 20 times behind Levenberg–Marquardt on heat, 70 times on Burgers, level on KdV.
+31. **The low-rank filter with the growing memory wins the first minute and ends level.** At 30 s it is 7 times ahead of Levenberg–Marquardt on heat and 30 times on KdV; over the last 50 s it is within a factor of 2.5 of it, either way, on all three.
+32. **With this optimizer the small network is the better model.** The 2,241-weight network trained by the filter for 180 s (on battery) is 230 times (heat), 5 times (Burgers) and 20 times (KdV) below the 12,737-weight network trained by Levenberg–Marquardt for 600 s on mains power. The filter's accuracy needs many cheap steps, and a small network gives them.
 
 ## Verdict against the plan
 
