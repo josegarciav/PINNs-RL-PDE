@@ -406,19 +406,28 @@ def nielsen(lam, rho):
     return max(lam * max(1.0 / 3.0, 1.0 - (2.0 * rho - 1.0) ** 3), 1e-12)
 
 
-def run_lm(problem, model, clock, budget, generator, resample_every=5):
+def run_lm(problem, model, clock, budget, generator, resample_every=5, rad=False):
+    """Stage 0. ``rad``: the equation points of each redraw from a :class:`ResidualPool` of 8
+    times as many, without replacement and without weights, as RAD is used."""
     weights = Weights(model)
     theta = weights.read()
     rows, jacobian = residual_rows(problem, model)
+    pool = ResidualPool(problem, model, generator, size=8 * N_COL, refresh=1) if rad else None
 
     def residual(vec, pts):
         return rows(weights.tree(vec), *pts)
 
+    def draw():
+        pts = sample(problem, generator)
+        if pool is None:
+            return pts
+        return (pool.draw(N_COL, replacement=False)[0], *pts[1:])
+
     lam, nu, it, stats = 1e-3, 2.0, 0, {"iterations": 0, "rejected": 0}
-    pts = sample(problem, generator)
+    pts = draw()
     while clock.tick() < budget:
         if it % resample_every == 0:
-            pts = sample(problem, generator)
+            pts = draw()
         r = residual(theta, pts)
         J = jacobian(weights.tree(theta), *pts)
         g = J.T @ r
@@ -700,6 +709,8 @@ def run_filter(
     keep=None,
     loss_weights=(W_IC, W_BC),
     stream=None,
+    huber=None,
+    damped=False,
 ):
     """M3. Training as filtering. Each step draws ``batch`` fresh rows (three quarters in the
     domain, the rest on the initial line and the boundary), never seen again, and applies an
@@ -725,7 +736,13 @@ def run_filter(
 
     ``stream``: None draws the equation rows uniformly; "rad" draws them from a
     :class:`ResidualPool`; "radw" also scales each by the root of its importance weight, so
-    the expected batch loss is the uniform one."""
+    the expected batch loss is the uniform one.
+
+    ``huber``: a robust update (Huber's weights on the innovation, as in robust Kalman
+    filters). With the predicted spread of each row, S = J P J^T + I, a row whose normalized
+    innovation e_i = r_i / sqrt(S_ii) exceeds ``huber`` is scaled by sqrt(huber / |e_i|):
+    its noise is taken as larger, and its pull on the weights grows like sqrt|r_i|, not
+    like r_i."""
     weights = Weights(model)
     theta = weights.read()
     rows, jacobian = residual_rows(problem, model, loss_weights)
@@ -752,14 +769,32 @@ def run_filter(
         r = scale * rows(tree, *pts, counts=unit)
         J = scale[:, None] * jacobian(tree, *pts, counts=unit)
         PJt = P @ J.T
-        gain, info = torch.linalg.solve_ex(J @ PJt + eye, PJt.T)
-        gain = gain.T
-        cand = theta - gain @ r
+        robust = None
+        if huber is not None:
+            spread = ((J * PJt.T).sum(1) + 1.0).sqrt()
+            robust = torch.clamp(huber * spread / r.abs().clamp_min(1e-300), max=1.0).sqrt()
+            r, J, PJt = robust * r, robust[:, None] * J, PJt * robust[None, :]
+            stats["downweighted"] = stats.get("downweighted", 0) + int((robust < 1.0).sum())
         # The update should lower the residual of its own batch. One that more than doubles
         # it is the sign of a covariance gone bad: the step is refused and P starts again.
         # So is a system too ill-conditioned to solve (J P J^T so large that + I is lost).
-        after = float((scale * rows(weights.tree(cand), *pts, counts=unit)).norm())
-        if int(info) == 0 and math.isfinite(after) and after <= 2.0 * float(r.norm()):
+        # With ``damped``, a refused step is first tried again with the rows' noise taken
+        # as 4, 16, 64 times larger (R = lambda I: the linearization was wrong for them),
+        # and if all fail the batch is skipped and P kept.
+        for noise in (1.0, 4.0, 16.0, 64.0) if damped else (1.0,):
+            gain, info = torch.linalg.solve_ex(J @ PJt + noise * eye, PJt.T)
+            gain = gain.T
+            cand = theta - gain @ r
+            after_rows = scale * rows(weights.tree(cand), *pts, counts=unit)
+            if robust is not None:
+                after_rows = robust * after_rows
+            after = float(after_rows.norm())
+            accepted = int(info) == 0 and math.isfinite(after) and after <= 2.0 * float(r.norm())
+            if accepted:
+                break
+            if damped:
+                stats["retried"] = stats.get("retried", 0) + 1
+        if accepted:
             theta = cand
             f = 1.0 - 1.0 / max(grow[0], grow[1] * it) if grow else forget
             P = (P - gain @ PJt.T) / f
@@ -773,7 +808,8 @@ def run_filter(
                 P = shrink[:, None] * P * shrink[None, :]
                 stats["capped"] += 1
         else:
-            P = prior * torch.eye(theta.numel(), dtype=theta.dtype)
+            if not damped:
+                P = prior * torch.eye(theta.numel(), dtype=theta.dtype)
             stats["rejected"] += 1
         weights.write(theta)
         it += 1
@@ -1215,8 +1251,8 @@ def run_one(problem, method, seed, budget, width, depth, every):
     points, values = reference(problem)
     clock = Clock(model, points, values, every)
     clock.tick(force=True)
-    if method == "lm":
-        stats = run_lm(problem, model, clock, budget, generator)
+    if method in ("lm", "lmrad"):
+        stats = run_lm(problem, model, clock, budget, generator, rad=method == "lmrad")
     elif method == "adam":
         stats = run_adam(problem, model, clock, budget, generator)
     elif method == "lbfgs":
@@ -1287,9 +1323,14 @@ def run_one(problem, method, seed, budget, width, depth, every):
         # boundary rows weighted to match the full-batch loss)
         # filter64g25rad / filter64g25radw: equation rows drawn from the residual, without or
         # with importance weights
-        found = re.fullmatch(r"filter(\d+)(?:c(\d+))?(?:f(\d+))?(?:g(\d+))?(m?)(rad|radw)?", method)
+        # filter64g25h3: Huber's weights on innovations beyond 3 predicted spreads;
+        # filter64g25d: a refused step retried with the noise 4, 16, 64 times larger
+        found = re.fullmatch(
+            r"filter(\d+)(?:c(\d+))?(?:f(\d+))?(?:g(\d+))?(m?)(rad|radw)?(?:h(\d+))?(d?)",
+            method,
+        )
         assert found, method
-        size, exponent, keep, every, matched, stream = found.groups()
+        size, exponent, keep, every, matched, stream, huber, damped = found.groups()
         stats = run_filter(
             problem,
             model,
@@ -1302,6 +1343,8 @@ def run_one(problem, method, seed, budget, width, depth, every):
             grow=(20.0, 1.0 / int(every)) if every else None,
             loss_weights=(60.0, 60.0) if matched else (W_IC, W_BC),
             stream=stream,
+            huber=float(huber) if huber else None,
+            damped=bool(damped),
         )
     elif method in ("al", "lm_w1"):
         stats = run_al(problem, model, clock, budget, generator, multipliers=method == "al")

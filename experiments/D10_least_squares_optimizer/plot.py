@@ -67,6 +67,13 @@ SERIES = {  # method: (label, color, line style)
     "filter64g25rad": ("M3 filter, growing memory, rows drawn from the residual", "#e8590c", "-"),
     "filter64g25radw": ("The same, with importance weights", "#e8590c", "--"),
     "adam0_ssbroydenrad": ("Self-scaled Broyden, points drawn from the residual", "#1864ab", "-."),
+    "lmrad": ("Levenberg–Marquardt, points drawn from the residual", "#f08c00", "--"),
+    "filter64g25d": ("M3 filter, growing memory, a refused step damped", "#a61e4d", "-"),
+    "filter64g25radwd": (
+        "The same, rows drawn from the residual with importance weights",
+        "#a61e4d",
+        "--",
+    ),
     "adam_ssbroyden": ("Adam, then self-scaled Broyden", "#2a78d6", "-."),
     "adam_ssbfgs": ("Adam, then self-scaled BFGS", "#2a78d6", ":"),
     "adam_lbfgs": ("Adam, then L-BFGS", "#2a78d6", "-"),
