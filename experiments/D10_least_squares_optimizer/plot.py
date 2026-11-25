@@ -74,6 +74,18 @@ SERIES = {  # method: (label, color, line style)
         "#a61e4d",
         "--",
     ),
+    "filter64g25dir": ("M3 filter, growing memory, directional forgetting", "#5f3dc4", "-"),
+    "filter64g25dirradw": (
+        "The same, rows drawn from the residual with importance weights",
+        "#5f3dc4",
+        "--",
+    ),
+    "filter64g25t": ("M3 filter, growing memory, a step limit on the change in u", "#c92a2a", "-."),
+    "filter64g25tradw": (
+        "The same, rows drawn from the residual with importance weights",
+        "#e8590c",
+        "-.",
+    ),
     "adam_ssbroyden": ("Adam, then self-scaled Broyden", "#2a78d6", "-."),
     "adam_ssbfgs": ("Adam, then self-scaled BFGS", "#2a78d6", ":"),
     "adam_lbfgs": ("Adam, then L-BFGS", "#2a78d6", "-"),

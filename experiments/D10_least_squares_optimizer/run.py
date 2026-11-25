@@ -711,6 +711,8 @@ def run_filter(
     stream=None,
     huber=None,
     damped=False,
+    directional=False,
+    trust=None,
 ):
     """M3. Training as filtering. Each step draws ``batch`` fresh rows (three quarters in the
     domain, the rest on the initial line and the boundary), never seen again, and applies an
@@ -742,10 +744,38 @@ def run_filter(
     filters). With the predicted spread of each row, S = J P J^T + I, a row whose normalized
     innovation e_i = r_i / sqrt(S_ii) exceeds ``huber`` is scaled by sqrt(huber / |e_i|):
     its noise is taken as larger, and its pull on the weights grows like sqrt|r_i|, not
-    like r_i."""
+    like r_i.
+
+    ``directional``: directional forgetting (Hagglund 1983; Kulhavy 1987). Dividing P by
+    ``forget`` inflates every direction by 1/forget a step, also those no batch measures:
+    covariance windup. On a front (Burgers at nu = 0.003/pi) the trace of P reaches 2e9 in
+    1000 steps and the filter takes steps of norm 1e4 that each lower their own batch's
+    residual, so the step check passes them, until the weights are too large to recover.
+    Here only the measured subspace is forgotten, and the rest of P is kept.
+
+    It ends the windup (no step refused in 7000 on the front) but not the plateau, 0.28, and
+    on the smooth equations it is 100 to 10^4 times worse at 6000 steps: the growth of P
+    where batches measure little is what lets the filter take Newton-sized steps there.
+
+    ``trust``: a step limit in function space. A step may change u on a fixed probe of 1024
+    points by at most ``trust`` times the larger of max |u| there and max |u0|, the initial
+    line's (the network's own output is near 0 at first). A step over it is tried again
+    with the rows' noise 4, 16, ..., 1024 times larger, and if all fail the batch is skipped;
+    P is never reset. On the front the breakdown came after a reset: with the weights grown
+    large, P = prior lets each step fit its 64 rows exactly, and the median accepted step
+    changed u by 2. Steps that long in weights but short in u are allowed."""
     weights = Weights(model)
     theta = weights.read()
     rows, jacobian = residual_rows(problem, model, loss_weights)
+    if trust is not None:
+        # Its own generator: the stream of batches is the same with or without the limit.
+        probe = sample(problem, torch.Generator().manual_seed(7), (1024, 0, 0))[0]
+        scale0 = float(PROBLEMS[problem]["initial"](probe[:, 0]).abs().max())
+
+        def predict(vec):
+            with torch.no_grad():
+                return torch.func.functional_call(model, weights.tree(vec), (probe,))[:, 0]
+
     sizes = (batch - 2 * (batch // 8), batch // 8, batch // 8)
     pool = ResidualPool(problem, model, generator) if stream else None
     unit = (1, 1, 1)  # rows unscaled: a stream has no total count
@@ -781,7 +811,13 @@ def run_filter(
         # With ``damped``, a refused step is first tried again with the rows' noise taken
         # as 4, 16, 64 times larger (R = lambda I: the linearization was wrong for them),
         # and if all fail the batch is skipped and P kept.
-        for noise in (1.0, 4.0, 16.0, 64.0) if damped else (1.0,):
+        if trust is not None:
+            noises = (1.0, 4.0, 16.0, 64.0, 256.0, 1024.0)
+            u_now = predict(theta)
+            bound = trust * max(float(u_now.abs().max()), scale0)
+        else:
+            noises = (1.0, 4.0, 16.0, 64.0) if damped else (1.0,)
+        for noise in noises:
             gain, info = torch.linalg.solve_ex(J @ PJt + noise * eye, PJt.T)
             gain = gain.T
             cand = theta - gain @ r
@@ -790,14 +826,27 @@ def run_filter(
                 after_rows = robust * after_rows
             after = float(after_rows.norm())
             accepted = int(info) == 0 and math.isfinite(after) and after <= 2.0 * float(r.norm())
+            if accepted and trust is not None:
+                accepted = float((predict(cand) - u_now).abs().max()) <= bound
             if accepted:
                 break
-            if damped:
+            if len(noises) > 1:
                 stats["retried"] = stats.get("retried", 0) + 1
         if accepted:
             theta = cand
             f = 1.0 - 1.0 / max(grow[0], grow[1] * it) if grow else forget
-            P = (P - gain @ PJt.T) / f
+            P = P - gain @ PJt.T
+            if directional:
+                # Only the information this batch measured is discounted. With S = J P J^T
+                # after the update, in information form
+                #     P^-1  <-  P^-1 - (1 - f) J^T S^-1 J
+                # and by Woodbury  P <- P + (1/f - 1) P J^T S^+ J P.
+                PJt = P @ J.T
+                S = J @ PJt
+                lift = torch.linalg.pinv(S, hermitian=True, rtol=1e-10)
+                P = P + (1.0 / f - 1.0) * (PJt @ lift @ PJt.T)
+            else:
+                P = P / f
             P = 0.5 * (P + P.T)
             # Forgetting inflates directions the stream does not excite without bound, and
             # the filter then diverges (seen after 100 to 150 s, when P's range passes what
@@ -808,7 +857,7 @@ def run_filter(
                 P = shrink[:, None] * P * shrink[None, :]
                 stats["capped"] += 1
         else:
-            if not damped:
+            if not damped and trust is None:
                 P = prior * torch.eye(theta.numel(), dtype=theta.dtype)
             stats["rejected"] += 1
         weights.write(theta)
@@ -1324,13 +1373,15 @@ def run_one(problem, method, seed, budget, width, depth, every):
         # filter64g25rad / filter64g25radw: equation rows drawn from the residual, without or
         # with importance weights
         # filter64g25h3: Huber's weights on innovations beyond 3 predicted spreads;
-        # filter64g25d: a refused step retried with the noise 4, 16, 64 times larger
+        # filter64g25d: a refused step retried with the noise 4, 16, 64 times larger;
+        # filter64g25dir: directional forgetting; filter64g25t: a step may change u by at
+        # most a quarter of its scale
         found = re.fullmatch(
-            r"filter(\d+)(?:c(\d+))?(?:f(\d+))?(?:g(\d+))?(m?)(rad|radw)?(?:h(\d+))?(d?)",
+            r"filter(\d+)(?:c(\d+))?(?:f(\d+))?(?:g(\d+))?(m?)(dir)?(t?)(rad|radw)?(?:h(\d+))?(d?)",
             method,
         )
         assert found, method
-        size, exponent, keep, every, matched, stream, huber, damped = found.groups()
+        size, exponent, keep, every, matched, direct, limit, stream, huber, damped = found.groups()
         stats = run_filter(
             problem,
             model,
@@ -1345,6 +1396,8 @@ def run_one(problem, method, seed, budget, width, depth, every):
             stream=stream,
             huber=float(huber) if huber else None,
             damped=bool(damped),
+            directional=bool(direct),
+            trust=0.25 if limit else None,
         )
     elif method in ("al", "lm_w1"):
         stats = run_al(problem, model, clock, budget, generator, multipliers=method == "al")
