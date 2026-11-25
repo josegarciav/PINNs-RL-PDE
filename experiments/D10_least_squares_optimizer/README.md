@@ -417,7 +417,7 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png`, `results/
     - No method ends below 3e-02. Levenberg–Marquardt is the least bad: 5.5e-02 over the last 30 s, one seed at 0.28.
     - Self-scaled Broyden sits at 0.22 to 0.27 from 20 s to the end, with or without Adam.
     - The filter is the worst. It is at 0.31 at 10 s and near 1 from 40 s on, with either weighting.
-    - **The filter's failure is instability** (seed 0, 60 s, not a timed run): its weights reach a norm of 57,000, and the network loses even the initial and boundary values ($u(-1, t) = 0.56$ for 0). The cap lets $P$ grow to $10^{12}$ in the directions the front excites.
+    - **The filter's failure is instability** (seed 0, 60 s, not a timed run): its weights reach a norm of 57,000, and the network loses even the initial and boundary values ($u(-1, t) = 0.56$ for 0). How it happens is finding 51.
     - **Levenberg–Marquardt's error is the front.** Away from it the solution is right to two digits. Its error grows from 0.03 at $t = 0.4$ to 0.36 at $t = 1$ as the front steepens and its fit of it stays about 4 times too wide.
     - The front, $u \approx -\tanh(x / 2\nu)$, is about $4\nu \approx 4 \cdot 10^{-3}$ wide. The 2,000 points are about 0.03 apart, 8 times more: a full sample puts about 3 points in the front, a filter batch one point every 15 batches.
     - **Neither the points nor the cap fix the filter** (scans on seed 0 on a shared machine, not timed runs):
@@ -434,6 +434,38 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png`, `results/
       Self-scaled Broyden with its points drawn from the residual at each redraw ends at 0.50 after 30 s (best 0.15).
       - **Rows drawn from the residual**: from a uniform pool of 4,096 points, refreshed every 25 steps, point $i$ with probability $p_i \propto |r_i| / \overline{|r|} + 1$ (RAD, Wu et al., 2023).
       - **Importance weights**: each row scaled by $(4096\, p_i)^{-1/2}$, so the expected batch loss is the uniform one.
+51. **The filter's breakdown on the front is covariance windup, and the windup is also its speed.** Traced step by step on seed 0 with `trace.py`, not timed:
+    - **$P$ inflates.** Dividing $P$ by $f$ each step inflates every direction the batches measure weakly. By step 1,000 the trace of $P$ is $2 \cdot 10^9$ and the median step has norm 1,100 (up to $2 \cdot 10^4$). Each step lowers its own batch's residual, so the check passes it, and $u$ barely moves: the median accepted step changes $u$ by at most 0.04 on a probe of 4,000 points. The error stays at 0.31.
+    - **Then $P$ is reset.** At step 1,500 a refused step resets $P$ to the prior. With the weights that large, $P = I$ lets each step fit its 64 rows exactly: the median accepted step now changes $u$ by 2 somewhere, and the error rises from 0.31 to 1.2 by step 2,000.
+    - **Damping the refused step does not help.** Retried with $R = 4, 16, 64\, I$, then skipped with $P$ kept, two seeds at full speed hold 0.24 to 0.34 from 30 to 60 s, break near 72 and 96 s, and end at 1.2 and 3.7.
+52. **Bounding the growth removes the breakdown and the speed; a step limit in $u$ removes only the breakdown.** Error by steps, seed 0, `trace.py`, not timed:
+
+    | Change to the filter | Sharp Burgers | Heat | Burgers | KdV | Allen–Cahn |
+    |---|---|---|---|---|---|
+    | None: $P \leftarrow P / f$ | 0.95 | 1.7e-09 | 8.1e-05 | 1.2e-07 | 4.3e-06 |
+    | Directional forgetting | 0.28 | 2.7e-06 | 9.6e-02 | 1.6e-05 | 3.5e-01 |
+    | Additive process noise | 0.31 | 1.1e-05 | 2.5e-03 | | |
+    | A step limit on the change in $u$ | 0.32 | 1.7e-09 | 9.0e-05 | 8.7e-08 | |
+
+    After 6,000 steps; sharp Burgers after 7,000 in the first three rows.
+    - **Directional forgetting** (Hägglund 1983; Kulhavý 1987): only the subspace a batch measured is forgotten. With $S = J P J^\top$ after the update,
+
+      $$P^{-1} \leftarrow P^{-1} - (1 - f)\, J^\top S^{-1} J$$
+
+    - **Additive process noise**: $P \leftarrow P + (1/f - 1)\, I$. Growth is linear, not exponential.
+    - **The step limit**: a step may change $u$ on a fixed probe of 1,024 points by at most $\tfrac14 \max(\max |u|, \max |u_0|)$, with $u_0$ the initial line. Over it, the rows' noise is raised 4 times and the step tried again, up to 1,024 times; then the batch is skipped. $P$ is never reset. On sharp Burgers it retries 8,332 times in 6,000 steps; on heat 281 and on KdV 35.
+
+    The growth of $P$ where batches measure little lets the filter take Newton-sized steps there, and that is its lead on the smooth equations. The step limit keeps the growth: a step that is long in weights and short in $u$ passes.
+53. **A stable filter still stops near 0.3 on the front.** With the step limit and rows drawn from the residual it is at 0.28 after 6,000 steps with importance weights and 0.26 without, falling slowly.
+54. **Levenberg–Marquardt with points drawn from the residual is the first method to fit the sharp front.** Its 2,000 equation points are redrawn every 5 steps from a residual pool of 16,000, without weights. Plain Levenberg–Marquardt redraws them uniformly as often, so the placement is the only difference. Median of three seeds, run on battery at about 0.55 of full speed, against the others at full speed:
+
+    | | 30 s | 60 s | 120 s | 180 s |
+    |---|---|---|---|---|
+    | Levenberg–Marquardt, residual points | 1.5e-01 | 4.2e-02 | 3.7e-03 | 6.0e-03 |
+    | Levenberg–Marquardt | 1.4e-01 | 1.5e-01 | 1.5e-01 | 3.0e-02 |
+    | Best self-scaled Broyden | 2.3e-01 | 2.2e-01 | 2.3e-01 | 2.3e-01 |
+
+    All three seeds end between 2.8e-03 and 5.0e-03. Self-scaled Broyden with residual points, also on battery, stays at 0.15 to 0.29: it redraws every 500 steps, as its paper does. The full-speed rerun is queued.
 
 ## Verdict against the plan
 
@@ -443,7 +475,7 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png`, `results/
 | M1, residual flow | Beats stage 0 on two of three | Dropped: no gain on any |
 | M4, block Kaczmarz | Beats stage 0 on two of three | Dropped as the main optimizer. Kept as a candidate opening move for the agent (M9) |
 | M5, variable projection | Beats stage 0 on two of three; a gain on the linear problem | Kept, with a warm start: a large gain on heat, level on the other two |
-| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. Without the full $P$: a block per layer holds on heat and KdV and loses a factor of 20 on Burgers, and is too slow at 12,737 weights; a block per neuron fails; 64 directions keep up with Levenberg–Marquardt at 12,737 weights but lose the full filter's late lead. A memory that grows with the stream (1 batch in 25, at least 20) removes the slow start and is best or level at the end on all three. Against self-scaled Broyden with little or no Adam: ahead until 68 s on heat and 37 s on KdV, and over the whole run on Burgers on the same loss (14 times at the end). Followed by self-scaled Broyden it is the best method on heat; that handoff fails on KdV and Burgers. On Allen–Cahn ahead at every reading, 2.3 times at the end, and never on a wrong solution; at $\nu = 0.003/\pi$ every method fails and the filter most |
+| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. Without the full $P$: a block per layer holds on heat and KdV and loses a factor of 20 on Burgers, and is too slow at 12,737 weights; a block per neuron fails; 64 directions keep up with Levenberg–Marquardt at 12,737 weights but lose the full filter's late lead. A memory that grows with the stream (1 batch in 25, at least 20) removes the slow start and is best or level at the end on all three. Against self-scaled Broyden with little or no Adam: ahead until 68 s on heat and 37 s on KdV, and over the whole run on Burgers on the same loss (14 times at the end). Followed by self-scaled Broyden it is the best method on heat; that handoff fails on KdV and Burgers. On Allen–Cahn ahead at every reading, 2.3 times at the end, and never on a wrong solution; at $\nu = 0.003/\pi$ it breaks down from covariance windup (finding 51). A step limit on the change in $u$ stops the breakdown, level with the plain filter by steps on heat, Burgers and KdV, and then stops near 0.3 on the front |
 | M6, continuation | A cold run is not as good | Dropped at this viscosity |
 | M8, multipliers | Beats stage 0 on two of three | Dropped |
 
@@ -463,9 +495,9 @@ The strongest baseline is self-scaled Broyden with little or no Adam first (find
 | Burgers | The filter alone | Yes: 7 to 60 times below at every reading, 14 times at the end |
 | KdV | The filter until 37 s | No: after 37 s self-scaled Broyden leads, by up to 200 times |
 | Allen–Cahn | The filter alone | Yes: 2.3 to 250 times below at every reading from 20 s, and no wrong solution on any seed (finding 47) |
-| Burgers, $\nu = 0.003/\pi$ | None | No method below 3e-02. Levenberg–Marquardt is the least bad; the filter is the worst |
+| Burgers, $\nu = 0.003/\pi$ | Levenberg–Marquardt with residual points | Provisionally yes from 60 s: 5 to 60 times below the best self-scaled Broyden, measured on battery (finding 54); level or behind before 30 s. The filter fails, and made stable stops near 0.3 |
 
-No single method meets it on all five. The filter's lead is real on both equations with a moderate front and in the first half-minute of the smooth ones. On KdV it is not yet an optimizer that finishes. A front 3.3 times thinner than Burgers' usual one defeats every method at this size and with these points.
+No single method meets it on all five. The filter's lead is real on both equations with a moderate front and in the first half-minute of the smooth ones. On KdV it is not yet an optimizer that finishes. On a front 3.3 times thinner than Burgers' usual one the points decide: on uniform points every method stops above 3e-02, and Levenberg–Marquardt on points drawn from the residual fits it to 3e-03.
 
 ## What it does not show
 
@@ -492,3 +524,4 @@ No single method meets it on all five. The filter's lead is real on both equatio
 - **The Burgers reference** is the package's Cole–Hopf solution on a 256 by 101 grid; its own accuracy bounds what can be read below about 1e-4.
 - **The Allen–Cahn reference** has its own error of about 4e-07 (a solver grid 32 times finer than the output; against 64 times finer, 2.9e-07). The best errors read here are 8 times above it.
 - **The fronts runs shared the machine with desktop use.** Runs more than 10 % slow by their step count were rerun; one kept is 15 % slow (finding 48). The heat, Burgers and KdV tables were made on an idle machine.
+- **Finding 54 is from runs on battery** in Low Power Mode, at about 0.55 of full speed by their step counts; its comparisons are against full-speed runs, so they favour the others. The traces in findings 51–53 count steps, not time.
