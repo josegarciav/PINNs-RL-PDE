@@ -13,6 +13,9 @@ $$
 ## Setup
 
 - **Equations**: heat ($u_t = 0.1\,u_{xx}$), Burgers ($\nu = 0.01/\pi$), the KdV soliton.
+- **Fronts** (the last table only):
+  - **Allen–Cahn**: $u_t = 2 \cdot 10^{-4}\, u_{xx} + u - u^3$ on $[-1, 1] \times [0, 5]$, $u_0 = x^2 \cos \pi x$, $u(\pm 1, t) = -1$. Reference: method of lines on a grid 32 times finer than the 257 by 101 output grid, RK45 at a relative tolerance of $10^{-9}$.
+  - **Sharp Burgers**: $\nu = 0.003/\pi$: the usual front 3.3 times thinner. Reference: Cole–Hopf on a 513 by 101 grid.
 - **Network**: 3 hidden layers of 32, tanh, 2,241 weights, inputs scaled to $[-1, 1]$.
 - **Rows**: 2,000 collocation points, 256 initial, 256 boundary, redrawn every few steps. Weights 10 on the initial and boundary terms.
 - **Machine**: Apple M4, one thread, double precision, plain PyTorch. 60 s per run, 3 seeds, nothing else running.
@@ -64,6 +67,12 @@ python $D/run.py --budget 180 --seeds 3 --out $D/results/baselines \
     adam10_ssbroyden adam0_ssbroyden filter_ss30 filter_ss30p filter64g25m adam0_ssbroydenf
 python $D/plot.py $D/results/baselines/runs_3x32.json $D/results/baselines/runs_3x32.png \
     lm,filter64g25,filter_ss30,adam0_ssbroyden,adam10_ssbroyden,adam_ssbroyden,adam_lbfgs
+python $D/run.py --budget 180 --seeds 3 --problems allen_cahn --out $D/results/fronts \
+    --methods lm filter64g25 filter64g25m adam0_ssbroyden adam0_ssbroydenf adam10_ssbroyden \
+    adam_ssbroyden adam_lbfgs
+python $D/run.py --budget 180 --seeds 3 --problems burgers_sharp --out $D/results/fronts \
+    --methods lm filter64g25 filter64g25m adam0_ssbroyden adam10_ssbroyden
+python $D/plot.py $D/results/fronts/runs_3x32.json
 ```
 
 ## Results
@@ -253,7 +262,27 @@ Every method run fresh, in three sessions on the same day, all on mains power wi
 
 With Adam for 30 % of the budget the Adam phase lasts 54 s, so those self-scaled rows at 10 s and 30 s are Adam's. Steps count the second method only, for the methods made of two.
 
-The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png` and `results/wide/runs_4x64.png` `results/forget/runs_3x32.png`, `results/wide_grow/runs_4x64.png` and `results/baselines/runs_3x32.png` after `plot.py`.
+### Fronts, 180 seconds
+
+| Equation | Method | 10 s | 30 s | 60 s | 120 s | Last 30 s, mean | Steps |
+|---|---|---|---|---|---|---|---|
+| allen_cahn | Levenberg–Marquardt | 5.8e-01 (5e-01–6e-01) | 7.7e-02 (7e-02–2e-01) | 1.7e-02 (2e-03–2e-02) | 4.3e-04 (1e-04–8e-04) | 2.0e-04 | 1412 |
+| allen_cahn | M3 filter, memory of 1 batch in 25 seen, at least 20 | 6.4e-02 (3e-02–1e-01) | 2.5e-05 (1e-05–3e-05) | 5.3e-06 (4e-06–8e-06) | 3.8e-06 (3e-06–4e-06) | 3.3e-06 | 10792 |
+| allen_cahn | M3 filter, growing memory, the full loss's weighting (10) | 1.1e-02 (3e-03–5e-02) | 2.3e-05 (2e-05–7e-05) | 1.5e-05 (1e-05–4e-05) | 1.2e-05 (5e-06–1e-05) | 6.9e-06 | 10777 |
+| allen_cahn | Self-scaled Broyden from the start | 5.1e-01 (5e-01–5e-01) | 1.8e-02 (8e-03–3e-01) | 2.2e-04 (7e-05–3e-01) | 2.9e-05 (1e-05–3e-01) | 1.1e-05 | 7992 |
+| allen_cahn | The same, the filter's weighting (5/3) | 5.1e-01 (3e-01–5e-01) | 4.7e-03 (5e-03–6e-03) | 9.0e-05 (7e-05–1e-04) | 1.6e-05 (1e-05–3e-05) | 9.1e-06 | 8470 |
+| allen_cahn | Adam for 10 s, then self-scaled Broyden | 1.0e+00 (9e-01–1e+00) | 1.5e-01 (4e-02–4e-01) | 1.2e-03 (2e-04–4e-01) | 1.1e-04 (3e-05–4e-01) | 1.9e-05 | 7789 |
+| allen_cahn | Adam, then self-scaled Broyden | 1.0e+00 (9e-01–1e+00) | 9.3e-01 (9e-01–1e+00) | 5.6e-01 (5e-01–6e-01) | 2.7e-01 (1e-04–4e-01) | 3.2e-01 | 5661 |
+| allen_cahn | Adam, then L-BFGS | 1.0e+00 (9e-01–1e+00) | 9.3e-01 (9e-01–1e+00) | 5.6e-01 (6e-01–6e-01) | 5.2e-01 (4e-01–5e-01) | 5.2e-01 | 15532 |
+| burgers_sharp | Levenberg–Marquardt | 2.4e-01 (1e-01–3e-01) | 1.4e-01 (9e-02–2e-01) | 1.5e-01 (7e-02–2e-01) | 1.5e-01 (7e-02–2e-01) | 5.5e-02 | 1410 |
+| burgers_sharp | M3 filter, memory of 1 batch in 25 seen, at least 20 | 3.1e-01 (3e-01–5e-01) | 7.9e-01 (5e-01–1e+00) | 9.4e-01 (8e-01–2e+00) | 9.5e-01 (9e-01–1e+00) | 1.1e+00 | 11513 |
+| burgers_sharp | M3 filter, growing memory, the full loss's weighting (10) | 1.7e-01 (2e-01–3e-01) | 2.1e-01 (2e-01–1e+00) | 1.7e-01 (2e-01–1e+00) | 1.4e-01 (9e-02–1e+00) | 1.0e+00 | 11270 |
+| burgers_sharp | Self-scaled Broyden from the start | 2.4e-01 (2e-01–2e-01) | 2.7e-01 (2e-01–3e-01) | 2.5e-01 (2e-01–3e-01) | 2.4e-01 (2e-01–3e-01) | 2.4e-01 | 8016 |
+| burgers_sharp | Adam for 10 s, then self-scaled Broyden | 3.7e-01 (3e-01–4e-01) | 2.3e-01 (2e-01–3e-01) | 2.2e-01 (2e-01–3e-01) | 2.3e-01 (2e-01–3e-01) | 2.5e-01 | 7560 |
+
+All on mains power with Low Power Mode off, but not on an idle machine: ordinary desktop use ran alongside. Because the training path does not depend on the clock except through the length of a timed Adam phase, the step count of a rerun measures its speed; runs found more than 10 % slow were rerun. One was slow twice and is kept: Adam then self-scaled Broyden on Allen–Cahn, seed 2, at 0.85 of full speed (5,104 steps against 5,975).
+
+The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png`, `results/wide/runs_4x64.png`, `results/forget/runs_3x32.png`, `results/wide_grow/runs_4x64.png`, `results/baselines/runs_3x32.png` and `results/fronts/runs_3x32.png` after `plot.py`.
 
 ## What it shows
 
@@ -353,6 +382,44 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png` and `resul
 43. **The filter's lead on Burgers is the optimizer's, not its weighting's.** With its rows weighted 60 so that it minimizes the same loss as every other method, the filter ends at 5.1e-05 on Burgers. That is level with its own weighting (5.6e-05) and 14 times below self-scaled Broyden from the start (7.0e-04), and it is ahead at every reading. On heat the weighting changes nothing (8.8e-10). On KdV the full loss's weighting makes the filter slower and 3 times worse at the end (8.6e-08 against 2.8e-08): there the light weighting helped.
 44. **Self-scaled Broyden with the filter's light weighting** fails on Burgers on two seeds of three (1.4e-01 and 1.7e-01; the third 1.5e-03), is level on heat (3.5e-10), and is its best on KdV (3.6e-10, against 1.1e-09 with the weights of 10).
 
+### Fronts
+
+45. **On Allen–Cahn the filter is the best method at every reading.** The strongest baseline at every moment is self-scaled Broyden from the start with the filter's light weighting, so the two minimize the same loss:
+
+    | | 20 s | 30 s | 60 s | 120 s | 180 s |
+    |---|---|---|---|---|---|
+    | Filter | 1.2e-04 | 2.5e-05 | 5.3e-06 | 3.8e-06 | 3.0e-06 |
+    | Best self-scaled Broyden | 3.1e-02 | 4.7e-03 | 9.0e-05 | 1.6e-05 | 7.0e-06 |
+    | Ratio | 250 | 190 | 17 | 4 | 2.3 |
+
+    Over the last 30 s: 3.3e-06 against 9.1e-06, and 2.0e-04 for Levenberg–Marquardt, 60 times above. All three filter seeds end between 2.7e-06 and 3.5e-06.
+46. **On the full loss's weighting the order holds.** The filter weighted 10 is ahead of self-scaled Broyden weighted 10 at every reading and ends 2 times below it (6.9e-06 against 1.1e-05). Both do better with the light weighting late, the filter by 2 times.
+47. **Self-scaled Broyden sometimes lands on a wrong solution; the filter never does.** Runs that end above 0.09, out of three seeds:
+
+    | Method | Wrong solution |
+    |---|---|
+    | Filter, either weighting | 0 of 6 |
+    | Levenberg–Marquardt | 0 (but at 1e-04 to 2e-04) |
+    | Self-scaled Broyden from the start | 1 |
+    | The same, the filter's weighting | 0 |
+    | Adam for 10 s, then self-scaled Broyden | 1 |
+    | Adam for 54 s, then self-scaled Broyden | 2 |
+    | Adam, then L-BFGS | 3 |
+
+    The wrong solution is the unstable equilibrium $u = 0$ (diagnosed on seed 2 of self-scaled Broyden from the start, not a timed run):
+    - It fits the initial line to 5e-05. Then the middle decays to 0 by $t \approx 1$, where the true solution grows from 0.04 to 1 near $x = \pm 0.25$.
+    - $u = 0$ solves the equation exactly, so the loss pays only in thin layers: near $t = 0$, and where the middle meets the $-1$ outside. The error grows with time: 8e-02 at $t = 0.2$, 0.5 at $t = 3$, 0.8 at $t = 5$.
+    - This is the causality failure of PINNs (Wang, Sankaran and Perdikaris, 2022, arXiv 2203.07404).
+    - The filter on the same seed is within 2e-06 to 5e-06 at every time. Why it avoids the equilibrium is not tested.
+48. **Whether Broyden fails depends on where it starts.** A timed Adam phase gives fewer Adam steps on a slower machine, and so a different start. Seed 2 after 10 s of Adam ended at 0.57 in a run 25 % slow and at 1.5e-05 at full speed. Seed 2 after 54 s of Adam reached 2.1e-05 at full speed in the first sweep and failed in both slowed reruns.
+49. **The first reference hid the gap.** Graded on a solver grid 8 times finer than the output grid, whose own error is about 6e-06, the filter and self-scaled Broyden both ended near 7e-06 and looked level. On a grid 32 times finer (error about 4e-07) the filter ends at 3.3e-06 and Broyden at 9.1e-06. A tie near a reference's own error is not a tie.
+50. **Burgers at $\nu = 0.003/\pi$ defeats every method at this size.**
+    - No method ends below 3e-02. Levenberg–Marquardt is the least bad: 5.5e-02 over the last 30 s, one seed at 0.28.
+    - Self-scaled Broyden sits at 0.22 to 0.27 from 20 s to the end, with or without Adam.
+    - The filter is the worst. It is at 0.31 at 10 s and near 1 from 40 s on, with either weighting. Why its error rises is not diagnosed.
+    - The front, $u \approx -\tanh(x / 2\nu)$, is about $4\nu \approx 4 \cdot 10^{-3}$ wide. The 2,000 points are about 0.03 apart, 8 times more: a full sample puts about 3 points in the front, a filter batch one point every 15 batches.
+    - So at this viscosity the question is where the points go before how the optimizer steps. A stream drawn from the residual is the next test.
+
 ## Verdict against the plan
 
 | Move | Gate | Result |
@@ -361,7 +428,7 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png` and `resul
 | M1, residual flow | Beats stage 0 on two of three | Dropped: no gain on any |
 | M4, block Kaczmarz | Beats stage 0 on two of three | Dropped as the main optimizer. Kept as a candidate opening move for the agent (M9) |
 | M5, variable projection | Beats stage 0 on two of three; a gain on the linear problem | Kept, with a warm start: a large gain on heat, level on the other two |
-| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. Without the full $P$: a block per layer holds on heat and KdV and loses a factor of 20 on Burgers, and is too slow at 12,737 weights; a block per neuron fails; 64 directions keep up with Levenberg–Marquardt at 12,737 weights but lose the full filter's late lead. A memory that grows with the stream (1 batch in 25, at least 20) removes the slow start and is best or level at the end on all three. Against self-scaled Broyden with little or no Adam: ahead until 68 s on heat and 37 s on KdV, and over the whole run on Burgers on the same loss (14 times at the end). Followed by self-scaled Broyden it is the best method on heat; that handoff fails on KdV and Burgers |
+| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. Without the full $P$: a block per layer holds on heat and KdV and loses a factor of 20 on Burgers, and is too slow at 12,737 weights; a block per neuron fails; 64 directions keep up with Levenberg–Marquardt at 12,737 weights but lose the full filter's late lead. A memory that grows with the stream (1 batch in 25, at least 20) removes the slow start and is best or level at the end on all three. Against self-scaled Broyden with little or no Adam: ahead until 68 s on heat and 37 s on KdV, and over the whole run on Burgers on the same loss (14 times at the end). Followed by self-scaled Broyden it is the best method on heat; that handoff fails on KdV and Burgers. On Allen–Cahn ahead at every reading, 2.3 times at the end, and never on a wrong solution; at $\nu = 0.003/\pi$ every method fails and the filter most |
 | M6, continuation | A cold run is not as good | Dropped at this viscosity |
 | M8, multipliers | Beats stage 0 on two of three | Dropped |
 
@@ -380,8 +447,10 @@ The strongest baseline is self-scaled Broyden with little or no Adam first (find
 | Heat | The filter for 30 s, then self-scaled Broyden | Yes: within 2 times of the best at every reading, 2 to 4 times below it at the end |
 | Burgers | The filter alone | Yes: 7 to 60 times below at every reading, 14 times at the end |
 | KdV | The filter until 37 s | No: after 37 s self-scaled Broyden leads, by up to 200 times |
+| Allen–Cahn | The filter alone | Yes: 2.3 to 250 times below at every reading from 20 s, and no wrong solution on any seed (finding 47) |
+| Burgers, $\nu = 0.003/\pi$ | None | No method below 3e-02. Levenberg–Marquardt is the least bad; the filter is the worst |
 
-No single method meets it on all three. The filter's lead is real on the equation with a front and in the first half-minute; on KdV it is not yet an optimizer that finishes.
+No single method meets it on all five. The filter's lead is real on both equations with a moderate front and in the first half-minute of the smooth ones. On KdV it is not yet an optimizer that finishes. A front 3.3 times thinner than Burgers' usual one defeats every method at this size and with these points.
 
 ## What it does not show
 
@@ -406,3 +475,5 @@ No single method meets it on all three. The filter's lead is real on the equatio
 
   Tested in finding 43: with rows weighted to match the full loss, the filter's Burgers and heat results hold; on KdV it is 3 times worse. The tables before the self-scaled baselines use the light weighting.
 - **The Burgers reference** is the package's Cole–Hopf solution on a 256 by 101 grid; its own accuracy bounds what can be read below about 1e-4.
+- **The Allen–Cahn reference** has its own error of about 4e-07 (a solver grid 32 times finer than the output; against 64 times finer, 2.9e-07). The best errors read here are 8 times above it.
+- **The fronts runs shared the machine with desktop use.** Runs more than 10 % slow by their step count were rerun; one kept is 15 % slow (finding 48). The heat, Burgers and KdV tables were made on an idle machine.

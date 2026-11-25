@@ -53,6 +53,7 @@ Usage: python experiments/D10_least_squares_optimizer/run.py [--budget 60] [--se
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import math
 import os
@@ -113,16 +114,44 @@ PROBLEMS = {
         boundary=lambda x, t: 0.5 / torch.cosh(0.5 * (x - t)) ** 2,
         exact=_kdv_exact,
     ),
+    # Fronts: where the filter's lead over self-scaled Broyden is (README finding 43).
+    "burgers_sharp": dict(  # a viscosity 3.3 times smaller: the front 3.3 times thinner
+        x=(-1.0, 1.0),
+        t=(0.0, 1.0),
+        order=2,
+        nu=0.003 / math.pi,
+        residual=lambda u, ux, uxx, uxxx, ut: ut + u * ux - (0.003 / math.pi) * uxx,
+        initial=lambda x: -torch.sin(math.pi * x),
+        boundary=lambda x, t: torch.zeros_like(x),
+        exact=None,
+    ),
+    "allen_cahn": dict(  # u_t = 0.0002 u_xx + u - u^3, interfaces about 0.014 wide
+        x=(-1.0, 1.0),
+        t=(0.0, 5.0),
+        order=2,
+        residual=lambda u, ux, uxx, uxxx, ut: ut - 0.0002 * uxx - u + u**3,
+        initial=lambda x: x**2 * torch.cos(math.pi * x),
+        boundary=lambda x, t: -torch.ones_like(x),
+        exact=None,
+    ),
 }
 
 
+@functools.cache
 def reference(problem):
     """``(points (M, 2), values (M,))`` to grade a network against."""
     spec = PROBLEMS[problem]
     if spec["exact"] is None:
-        from pinnrl.benchmarks.reference import burgers_reference
+        from pinnrl.benchmarks import reference as refs
 
-        ref = burgers_reference(nx=256, nt=101)
+        if problem == "allen_cahn":  # method of lines, RK45 at rtol 1e-9
+            # Solver grid 32x the output grid: its own error is ~4e-7 (8x was
+            # ~6e-6, the level both optimizers reached, so it hid the gap).
+            ref = refs.allen_cahn_reference(t_max=spec["t"][1], refine=32)
+        elif problem == "burgers":
+            ref = refs.burgers_reference(nx=256, nt=101)
+        else:  # Cole-Hopf; a finer grid so the thinner front is sampled
+            ref = refs.burgers_reference(nu=spec["nu"], nx=513, nt=101)
         xx, tt = ref.flat_points()
         return np.hstack([xx, tt]), ref.u.reshape(-1)
     x = np.linspace(*spec["x"], 201)
@@ -1252,7 +1281,9 @@ def main():
     parser.add_argument("--width", type=int, default=32)
     parser.add_argument("--depth", type=int, default=3)
     parser.add_argument("--every", type=float, default=2.0, help="seconds between error readings")
-    parser.add_argument("--problems", nargs="+", default=list(PROBLEMS))
+    parser.add_argument(
+        "--problems", nargs="+", default=["heat", "burgers", "kdv"], choices=list(PROBLEMS)
+    )
     parser.add_argument("--methods", nargs="+", default=list(METHODS))
     parser.add_argument("--out", type=Path, default=HERE / "results")
     parser.add_argument("--fresh", action="store_true", help="discard saved runs")

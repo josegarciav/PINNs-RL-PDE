@@ -134,8 +134,16 @@ for ax, problem in zip(np.atleast_1d(axes), problems, strict=True):
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
 np.atleast_1d(axes)[0].set_ylabel("relative $L_2$ error")
-handles, labels = np.atleast_1d(axes)[0].get_legend_handles_labels()
-fig.legend(handles, labels, frameon=False, fontsize=9, ncol=3, loc="lower center")
-fig.tight_layout(rect=(0, 0.14, 1, 1))
+# Every method on any panel, once: the panels need not share their methods.
+legend: dict = {}
+for ax in np.atleast_1d(axes):
+    for handle, label in zip(*ax.get_legend_handles_labels(), strict=True):
+        legend.setdefault(label, handle)
+columns = 3 if len(problems) >= 3 else 2
+rows = -(-len(legend) // columns)
+fig.legend(
+    legend.values(), legend.keys(), frameon=False, fontsize=9, ncol=columns, loc="lower center"
+)
+fig.tight_layout(rect=(0, 0.04 + 0.045 * rows, 1, 1))
 fig.savefig(out_png, dpi=160, facecolor=SURFACE)
 print("saved", out_png)

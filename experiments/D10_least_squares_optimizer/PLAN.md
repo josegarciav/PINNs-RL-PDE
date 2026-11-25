@@ -161,6 +161,7 @@ Stages 0 to 2 are measured in [README.md](README.md) (heat, Burgers, KdV; 60 s a
 | M3, forgetting 0.95 | Kept: ahead of stage 0 from the first reading on heat and KdV (280 and 55 times at 30 s), and 7 and 5 times below forgetting 0.995 at the end. On Burgers the long memory ends 3 times lower |
 | M3, growing memory | **Kept, the new default for M3**: forget $1 - 1/\max(20, k/25)$. As fast as 0.95 early; at 180 s 150, 17 and 12 times below stage 0 on heat, Burgers, KdV |
 | M3 against self-scaled Broyden | Mixed. Against its best form (little or no Adam first): ahead until 68 s on heat and 37 s on KdV; on Burgers ahead at every reading, 14 times at the end, on the same loss |
+| M3 on fronts | Allen–Cahn: ahead of every baseline at every reading (250 times at 20 s, 2.3 times at 180 s), never on a wrong solution. Burgers at $\nu = 0.003/\pi$: every method fails, the filter most |
 | M3, then self-scaled Broyden | Kept for heat: best at every reading, 2 to 4 times below self-scaled Broyden at the end. Fails on KdV (slow) and Burgers (the error rises) |
 | M3, low rank (64 directions) | Kept for size: level with stage 0 at 12,737 weights and 600 s, 17 times ahead on heat at 60 s; stops at stage 0's level where the full filter goes 10 to 70 times lower |
 | M6 | Dropped at this viscosity: no better than a cold start with 4, 8 or 16 stages |
@@ -174,7 +175,7 @@ What the results change:
    - **The full covariance.** $P$ costs the square of the number of weights. Test a low-rank plus diagonal form, a Kronecker-factored form per layer, and a square-root update, at 2,241 weights first and then at the 12,000 of I17's network.
 3. **Combine the two survivors.** M5 solves the last layer exactly; M3 filters the rest. On heat they reach the same error by different routes.
 4. **Order the stream in time** (fact 5). The filter here draws points uniformly; the plan's causal ordering is untested.
-5. **A harder equation.** Continuation was not needed at $\nu = 0.01/\pi$. Allen–Cahn and Burgers at a smaller viscosity are where it, and the filter, should be tried next.
+5. **A harder equation.** Continuation was not needed at $\nu = 0.01/\pi$. Allen–Cahn and Burgers at a smaller viscosity are where it, and the filter, should be tried next. (Done for the filter: README findings 45–50.)
 6. **Baselines to add**: SOAP. Self-scaled Broyden and BFGS are run (below).
 7. **Basis growth** (the second half of M5) is still untested.
 
@@ -186,13 +187,15 @@ Stage 2b, measured so far (item 2):
 
 - **Against Adam then L-BFGS at 180 s** the filter is 35,000 (heat), 350 (Burgers) and 9,800 (KdV) times lower: the 100 times of bet R1 on all three, at this size.
 - **Against self-scaled Broyden** (Urbán, Stefanou and Pons, 2024) after the same Adam phase, the result is mixed. The filter is ahead for the first 85 s on KdV and 129 s on heat, and over the whole run on Burgers (5.6e-05 against 8.2e-04). Over the last 30 s self-scaled Broyden is 5 times below it on heat (2.0e-10) and 80 times below on KdV (3.4e-10). Self-scaled BFGS is between the two. The bar for R1 is now the best published method at every moment of the run.
-- **Measured since** (README findings 38–44):
+- **Measured since** (README findings 38–50):
   1. Self-scaled Broyden needs no Adam. From the first step, or after 10 s of Adam, it is the strongest baseline. Against it the filter leads until 68 s on heat and 37 s on KdV, and at every reading on Burgers.
   2. The filter for 30 s, then self-scaled Broyden, is the best method on heat. It fails on KdV and Burgers. Starting $H$ from the filter's $P$ does not help.
   3. The handoff fails because the filter trains a network of about twice the Jacobian rank, and leaves its last error a decade lower in the spectrum, where neither Broyden nor damped Gauss–Newton moves it. On Burgers the filter's weights reach a norm of 2,359, and Broyden then overfits its fixed points.
   4. The filter's light weighting of the initial and boundary terms (5/3 per point, against 10) is not the source of its Burgers lead: with the weighting matched it ends at 5.1e-05, 14 times below self-scaled Broyden.
+  5. Allen–Cahn (README findings 45–49): the filter is the best method at every reading, 250 times below the best self-scaled Broyden at 20 s and 2.3 times at 180 s (3.3e-06 against 9.1e-06, the same loss), and the only one that never lands on a wrong solution. Broyden does on 0 to 2 seeds of 3, depending on its weighting and its Adam phase. The first reference (error 6e-06) had made the two look level.
+  6. Burgers at $\nu = 0.003/\pi$ (finding 50): every method fails (above 3e-02); the filter is the worst, near 1 from 40 s on. The front is 8 times narrower than the spacing of the points.
 - **Next**:
-  1. Fronts: Burgers at a smaller viscosity and Allen–Cahn, against self-scaled Broyden from the start. The filter's lasting lead is on the front, and this is where to test whether it grows.
+  1. A stream drawn from the residual: the filter's batch sampled in proportion to $r^2$ on a large candidate set, with or without the weights $1/(N p)$ that keep the batch loss unbiased, against self-scaled Broyden with the same sampler at each redraw. First on sharp Burgers, where the points, not the steps, are the problem.
   2. KdV after 37 s: whether the filter's flat stretch (near 1e-07 from 30 s to 120 s) is the batch noise, by a batch that grows late or a fixed set held for a while, as self-scaled Broyden does.
   3. Whether limiting how far $P$ may grow (the cap, now $10^{12}$ times the prior) keeps the Jacobian's rank lower and makes the filter's weights a good start for Broyden.
 
