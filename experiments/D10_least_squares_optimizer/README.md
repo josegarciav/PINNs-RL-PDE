@@ -222,7 +222,7 @@ One seed. The machine went from battery in Low Power Mode to mains power during 
 
 ### The strongest published baseline, 180 seconds
 
-Every method run fresh, in three sessions on the same day, all on mains power with Low Power Mode off and nothing else running. This is the cleanest table of the study. The figure shows seven of the rows.
+Every method run fresh, in three sessions on the same day, all on mains power with Low Power Mode off and nothing else running. This is the cleanest table of the study. The figure shows seven of the rows. The rows with points drawn from the residual or with the step limit were run later, also on mains power; the last of them shared the machine with screens held to the efficiency cores, at normal step counts.
 
 | Equation | Method | 10 s | 30 s | 60 s | 120 s | Last 30 s, mean | Steps |
 |---|---|---|---|---|---|---|---|
@@ -237,6 +237,10 @@ Every method run fresh, in three sessions on the same day, all on mains power wi
 | heat | Adam, then self-scaled Broyden | 2.4e-03 (1e-03–8e-03) | 1.2e-02 (6e-04–1e-02) | 1.3e-05 (9e-06–2e-05) | 2.0e-09 (1e-09–2e-09) | 2.0e-10 | 8866 |
 | heat | Adam, then self-scaled BFGS | 2.2e-03 (1e-03–8e-03) | 3.0e-03 (1e-03–5e-03) | 3.0e-05 (2e-05–3e-05) | 1.1e-08 (7e-09–1e-08) | 1.8e-09 | 5977 |
 | heat | Adam, then L-BFGS | 2.2e-03 (1e-03–4e-03) | 1.8e-03 (7e-04–2e-02) | 1.3e-04 (9e-05–1e-04) | 6.4e-05 (4e-05–7e-05) | 6.4e-05 | 15826 |
+| heat | Self-scaled Broyden, points drawn from the residual | 6.6e-06 (4e-06–9e-06) | 1.0e-07 (6e-08–2e-07) | 7.0e-09 (5e-09–1e-08) | 5.3e-10 (4e-10–6e-10) | 5.4e-10 | 19440 |
+| heat | Levenberg–Marquardt, points drawn from the residual | 2.8e-05 (1e-05–5e-05) | 4.0e-06 (2e-06–5e-06) | 4.5e-07 (4e-07–7e-07) | 1.6e-07 (2e-07–2e-07) | 1.2e-07 | 1451 |
+| heat | M3 filter, growing memory, a step limit on the change in u | 2.0e-06 (1e-06–2e-06) | 5.1e-09 (4e-09–2e-08) | 2.6e-09 (2e-09–3e-09) | 1.3e-09 (1e-09–2e-09) | 1.4e-09 | 9617 |
+| heat | The same, rows drawn from the residual with importance weights | 1.6e-06 (1e-06–2e-06) | 9.3e-09 (2e-09–2e-08) | 2.3e-09 (2e-09–2e-09) | 1.5e-09 (8e-10–2e-09) | 1.1e-09 | 9333 |
 | burgers | Levenberg–Marquardt | 6.1e-02 (2e-02–1e-01) | 2.3e-03 (8e-04–4e-03) | 1.1e-03 (7e-04–6e-03) | 1.0e-03 (4e-04–2e-03) | 1.1e-03 | 1417 |
 | burgers | M3 filter, memory of 1 batch in 25 seen, at least 20 | 5.4e-02 (2e-02–2e-01) | 1.5e-03 (6e-04–6e-03) | 2.5e-04 (2e-04–3e-04) | 9.6e-05 (5e-05–2e-04) | 5.6e-05 | 11018 |
 | burgers | The filter for 30 s, then self-scaled Broyden | 5.4e-02 (2e-02–2e-01) | 1.8e-03 (2e-04–6e-03) | 4.0e-03 (3e-03–1e-02) | 5.4e-03 (3e-03–6e-03) | 1.6e-03 | 7340 |
@@ -248,6 +252,10 @@ Every method run fresh, in three sessions on the same day, all on mains power wi
 | burgers | Adam, then self-scaled Broyden | 3.2e-01 (3e-01–4e-01) | 9.5e-02 (6e-02–2e-01) | 4.1e-02 (2e-02–1e-01) | 2.2e-03 (1e-03–4e-03) | 8.2e-04 | 6005 |
 | burgers | Adam, then self-scaled BFGS | 3.2e-01 (3e-01–4e-01) | 1.0e-01 (7e-02–2e-01) | 2.2e-02 (2e-02–1e-01) | 1.0e-03 (1e-03–2e-02) | 9.1e-04 | 6232 |
 | burgers | Adam, then L-BFGS | 3.2e-01 (3e-01–4e-01) | 1.0e-01 (6e-02–2e-01) | 3.5e-02 (3e-02–4e-02) | 1.0e-02 (8e-03–3e-02) | 5.5e-03 | 15603 |
+| burgers | Self-scaled Broyden, points drawn from the residual | 8.2e-02 (4e-02–1e-01) | 1.1e-03 (6e-04–3e-03) | 1.1e-04 (4e-05–2e-04) | 1.4e-05 (1e-05–7e-05) | 2.3e-05 | 8580 |
+| burgers | Levenberg–Marquardt, points drawn from the residual | 3.1e-02 (1e-02–1e-01) | 8.4e-04 (7e-04–1e-03) | 2.0e-04 (1e-04–2e-04) | 5.2e-05 (3e-05–6e-05) | 4.2e-05 | 1375 |
+| burgers | M3 filter, growing memory, a step limit on the change in u | 5.6e-02 (5e-02–1e-01) | 1.7e-03 (1e-03–4e-03) | 3.6e-04 (2e-04–7e-04) | 9.2e-05 (3e-05–6e-04) | 4.4e-05 | 9701 |
+| burgers | The same, rows drawn from the residual with importance weights | 1.8e-01 (2e-01–2e-01) | 2.8e-04 (1e-04–4e-04) | 5.5e-05 (3e-05–8e-05) | 1.5e-05 (1e-05–5e-05) | 1.3e-05 | 9282 |
 | kdv | Levenberg–Marquardt | 1.4e-04 (1e-04–5e-04) | 9.7e-06 (5e-06–1e-05) | 4.8e-06 (2e-06–6e-06) | 1.3e-06 (5e-07–2e-06) | 8.9e-07 | 1111 |
 | kdv | M3 filter, memory of 1 batch in 25 seen, at least 20 | 6.8e-06 (6e-06–1e-05) | 8.6e-08 (6e-08–2e-07) | 8.3e-08 (3e-08–2e-07) | 1.1e-07 (8e-08–1e-07) | 2.8e-08 | 8932 |
 | kdv | The filter for 30 s, then self-scaled Broyden | 8.6e-06 (7e-06–1e-05) | 9.0e-08 (5e-08–1e-07) | 2.0e-07 (5e-08–2e-07) | 3.8e-08 (3e-08–1e-07) | 1.5e-08 | 6664 |
@@ -259,6 +267,10 @@ Every method run fresh, in three sessions on the same day, all on mains power wi
 | kdv | Adam, then self-scaled Broyden | 6.7e-02 (5e-02–8e-02) | 1.5e-02 (1e-02–2e-02) | 1.5e-04 (1e-04–2e-04) | 8.4e-09 (4e-09–1e-08) | 3.4e-10 | 6277 |
 | kdv | Adam, then self-scaled BFGS | 6.9e-02 (4e-02–8e-02) | 2.1e-02 (1e-02–3e-02) | 2.6e-04 (2e-04–4e-04) | 4.3e-08 (4e-08–8e-08) | 8.7e-09 | 4744 |
 | kdv | Adam, then L-BFGS | 6.9e-02 (3e-02–8e-02) | 2.0e-02 (1e-02–3e-02) | 2.6e-03 (2e-03–3e-03) | 8.0e-04 (8e-04–9e-04) | 7.7e-04 | 8183 |
+| kdv | Self-scaled Broyden, points drawn from the residual | 4.1e-05 (3e-05–9e-05) | 3.2e-07 (1e-07–5e-07) | 7.9e-09 (5e-09–1e-07) | 4.5e-10 (9e-11–3e-09) | 4.5e-10 | 12500 |
+| kdv | Levenberg–Marquardt, points drawn from the residual | 1.4e-04 (9e-05–6e-04) | 5.2e-06 (5e-06–1e-05) | 2.3e-06 (2e-06–6e-06) | 1.2e-06 (1e-06–1e-06) | 8.1e-07 | 1075 |
+| kdv | M3 filter, growing memory, a step limit on the change in u | 1.8e-05 (2e-05–1e-04) | 1.5e-07 (6e-08–2e-07) | 5.7e-08 (5e-08–2e-07) | 1.6e-08 (4e-09–1e-07) | 9.2e-09 | 7962 |
+| kdv | The same, rows drawn from the residual with importance weights | 1.8e-05 (2e-05–5e-05) | 2.1e-07 (1e-07–4e-07) | 7.9e-08 (3e-08–1e-07) | 2.2e-08 (2e-08–5e-08) | 2.6e-08 | 7657 |
 
 With Adam for 30 % of the budget the Adam phase lasts 54 s, so those self-scaled rows at 10 s and 30 s are Adam's. Steps count the second method only, for the methods made of two.
 
@@ -274,11 +286,19 @@ With Adam for 30 % of the budget the Adam phase lasts 54 s, so those self-scaled
 | allen_cahn | Adam for 10 s, then self-scaled Broyden | 1.0e+00 (9e-01–1e+00) | 1.5e-01 (4e-02–4e-01) | 1.2e-03 (2e-04–4e-01) | 1.1e-04 (3e-05–4e-01) | 1.9e-05 | 7789 |
 | allen_cahn | Adam, then self-scaled Broyden | 1.0e+00 (9e-01–1e+00) | 9.3e-01 (9e-01–1e+00) | 5.6e-01 (5e-01–6e-01) | 2.7e-01 (1e-04–4e-01) | 3.2e-01 | 5661 |
 | allen_cahn | Adam, then L-BFGS | 1.0e+00 (9e-01–1e+00) | 9.3e-01 (9e-01–1e+00) | 5.6e-01 (6e-01–6e-01) | 5.2e-01 (4e-01–5e-01) | 5.2e-01 | 15532 |
+| allen_cahn | Self-scaled Broyden, points drawn from the residual | 5.3e-01 (5e-01–5e-01) | 1.5e-02 (7e-03–2e-02) | 2.3e-04 (2e-04–4e-04) | 2.5e-05 (2e-05–6e-05) | 1.6e-05 | 8503 |
+| allen_cahn | Levenberg–Marquardt, points drawn from the residual | 5.4e-01 (5e-01–5e-01) | 4.0e-02 (3e-02–7e-02) | 2.2e-03 (2e-03–3e-03) | 1.4e-04 (1e-04–1e-04) | 1.0e-04 | 1375 |
+| allen_cahn | M3 filter, growing memory, a step limit on the change in u | 4.1e-02 (3e-02–6e-02) | 3.4e-05 (2e-05–5e-05) | 1.7e-05 (1e-05–2e-05) | 1.6e-05 (1e-05–2e-05) | 1.4e-05 | 10071 |
+| allen_cahn | The same, rows drawn from the residual with importance weights | 4.2e-02 (3e-02–6e-02) | 1.8e-05 (2e-05–3e-05) | 9.0e-06 (7e-06–1e-05) | 4.6e-06 (3e-06–7e-06) | 4.2e-06 | 9135 |
 | burgers_sharp | Levenberg–Marquardt | 2.4e-01 (1e-01–3e-01) | 1.4e-01 (9e-02–2e-01) | 1.5e-01 (7e-02–2e-01) | 1.5e-01 (7e-02–2e-01) | 5.5e-02 | 1410 |
 | burgers_sharp | M3 filter, memory of 1 batch in 25 seen, at least 20 | 3.1e-01 (3e-01–5e-01) | 7.9e-01 (5e-01–1e+00) | 9.4e-01 (8e-01–2e+00) | 9.5e-01 (9e-01–1e+00) | 1.1e+00 | 11513 |
 | burgers_sharp | M3 filter, growing memory, the full loss's weighting (10) | 1.7e-01 (2e-01–3e-01) | 2.1e-01 (2e-01–1e+00) | 1.7e-01 (2e-01–1e+00) | 1.4e-01 (9e-02–1e+00) | 1.0e+00 | 11270 |
 | burgers_sharp | Self-scaled Broyden from the start | 2.4e-01 (2e-01–2e-01) | 2.7e-01 (2e-01–3e-01) | 2.5e-01 (2e-01–3e-01) | 2.4e-01 (2e-01–3e-01) | 2.4e-01 | 8016 |
 | burgers_sharp | Adam for 10 s, then self-scaled Broyden | 3.7e-01 (3e-01–4e-01) | 2.3e-01 (2e-01–3e-01) | 2.2e-01 (2e-01–3e-01) | 2.3e-01 (2e-01–3e-01) | 2.5e-01 | 7560 |
+| burgers_sharp | Self-scaled Broyden, points drawn from the residual | 1.6e-01 (1e-01–3e-01) | 2.5e-01 (1e-01–5e-01) | 2.0e-01 (1e-01–5e-01) | 2.1e-01 (2e-01–5e-01) | 2.0e-01 | 8074 |
+| burgers_sharp | Levenberg–Marquardt, points drawn from the residual | 3.3e-01 (3e-01–4e-01) | 7.5e-02 (7e-02–2e-01) | 8.5e-03 (6e-03–1e-02) | 1.5e-03 (6e-04–2e-03) | 1.1e-03 | 1319 |
+| burgers_sharp | M3 filter, growing memory, a step limit on the change in u | 2.6e-01 (2e-01–3e-01) | 2.5e-01 (2e-01–3e-01) | 2.6e-01 (2e-01–3e-01) | 2.8e-01 (2e-01–5e-01) | 2.5e-01 | 9901 |
+| burgers_sharp | The same, rows drawn from the residual with importance weights | 3.2e-01 (3e-01–3e-01) | 3.1e-01 (2e-01–4e-01) | 3.0e-01 (1e-01–4e-01) | 3.3e-01 (3e-01–1e+00) | 1.2e+00 | 9132 |
 
 All on mains power with Low Power Mode off, but not on an idle machine: ordinary desktop use ran alongside. Because the training path does not depend on the clock except through the length of a timed Adam phase, the step count of a rerun measures its speed; runs found more than 10 % slow were rerun. One was slow twice and is kept: Adam then self-scaled Broyden on Allen–Cahn, seed 2, at 0.85 of full speed (5,104 steps against 5,975).
 
@@ -379,7 +399,7 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png`, `results/
     - **From there no second method moves the error.** Damped Gauss–Newton steps by SVD on fresh samples of 5,024 rows, the damping chosen on a second sample, lower the loss by a fifth in 6 steps and leave the error at 1.6e-07. Undamped steps raise the loss on the second sample.
     - **On Burgers the filter's weights reach a norm of 2,359**, against 7 to 19 elsewhere: saturated units that draw the front. Self-scaled Broyden on its fixed 2,512 points then raises the loss on fresh points 8 times. It fits the points and not the equation between them.
 42. **So the filter is fast because it uses more of the network, and that is also why it is hard to finish.** It reaches low errors early by moving weakly determined weights, and leaves the last error in directions that are weak for every method tried here.
-43. **The filter's lead on Burgers is the optimizer's, not its weighting's.** With its rows weighted 60 so that it minimizes the same loss as every other method, the filter ends at 5.1e-05 on Burgers. That is level with its own weighting (5.6e-05) and 14 times below self-scaled Broyden from the start (7.0e-04), and it is ahead at every reading. On heat the weighting changes nothing (8.8e-10). On KdV the full loss's weighting makes the filter slower and 3 times worse at the end (8.6e-08 against 2.8e-08): there the light weighting helped.
+43. **The filter's lead on Burgers is the optimizer's, not its weighting's.** With its rows weighted 60 so that it minimizes the same loss as every other method, the filter ends at 5.1e-05 on Burgers. That is level with its own weighting (5.6e-05) and 14 times below self-scaled Broyden from the start (7.0e-04), and it is ahead at every reading. That Broyden draws its points uniformly; with points drawn from the residual it is ahead of the plain filter (finding 57). On heat the weighting changes nothing (8.8e-10). On KdV the full loss's weighting makes the filter slower and 3 times worse at the end (8.6e-08 against 2.8e-08): there the light weighting helped.
 44. **Self-scaled Broyden with the filter's light weighting** fails on Burgers on two seeds of three (1.4e-01 and 1.7e-01; the third 1.5e-03), is level on heat (3.5e-10), and is its best on KdV (3.6e-10, against 1.1e-09 with the weights of 10).
 
 ### Fronts
@@ -455,17 +475,76 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png`, `results/
     - **Additive process noise**: $P \leftarrow P + (1/f - 1)\, I$. Growth is linear, not exponential.
     - **The step limit**: a step may change $u$ on a fixed probe of 1,024 points by at most $\tfrac14 \max(\max |u|, \max |u_0|)$, with $u_0$ the initial line. Over it, the rows' noise is raised 4 times and the step tried again, up to 1,024 times; then the batch is skipped. $P$ is never reset. On sharp Burgers it retries 8,332 times in 6,000 steps; on heat 281 and on KdV 35.
 
-    The growth of $P$ where batches measure little lets the filter take Newton-sized steps there, and that is its lead on the smooth equations. The step limit keeps the growth: a step that is long in weights and short in $u$ passes.
-53. **A stable filter still stops near 0.3 on the front.** With the step limit and rows drawn from the residual it is at 0.28 after 6,000 steps with importance weights and 0.26 without, falling slowly.
-54. **Levenberg–Marquardt with points drawn from the residual is the first method to fit the sharp front.** Its 2,000 equation points are redrawn every 5 steps from a residual pool of 16,000, without weights. Plain Levenberg–Marquardt redraws them uniformly as often, so the placement is the only difference. Median of three seeds, run on battery at about 0.55 of full speed, against the others at full speed:
+    The growth of $P$ where batches measure little lets the filter take Newton-sized steps there, and that is its lead on the smooth equations. The step limit keeps the growth: a step that is long in weights and short in $u$ passes. Timed, it costs 8 to 14 % of the steps (finding 56).
+53. **The step limit stops the sudden breakdown, not a slow drift, and the filter still stops near 0.2 on the front.** Timed at full speed, three seeds, mean over the last 30 s:
+    - Seeds 0 and 2 hold 0.25 and 0.20 to the end.
+    - Seed 1 reaches 0.17 at 32 s, then drifts to 1.1 by 137 s. No step is over the limit; the error builds over about 2,000 steps.
+    - By steps (`trace.py`), with rows drawn from the residual as well, it is at 0.28 after 6,000 steps with importance weights and 0.26 without, falling slowly.
+54. **Levenberg–Marquardt with points drawn from the residual fits the sharp front.** Its 2,000 equation points are redrawn every 5 steps from a residual pool of 16,000 (RAD as in finding 50, refreshed at each redraw), without weights. Plain Levenberg–Marquardt redraws them uniformly as often, so the placement is the only difference. Median of three seeds:
 
-    | | 30 s | 60 s | 120 s | 180 s |
+    | | 10 s | 30 s | 60 s | 120 s | Last 30 s, mean |
+    |---|---|---|---|---|---|
+    | Levenberg–Marquardt, residual points | 3.3e-01 | 7.5e-02 | 8.5e-03 | 1.5e-03 | 1.1e-03 |
+    | Levenberg–Marquardt | 2.4e-01 | 1.4e-01 | 1.5e-01 | 1.5e-01 | 5.5e-02 |
+    | Self-scaled Broyden from the start | 2.4e-01 | 2.7e-01 | 2.5e-01 | 2.4e-01 | 2.4e-01 |
+
+    - Over the last 30 s it is 50 times below plain Levenberg–Marquardt and 200 times below self-scaled Broyden. The seeds: 1.4e-03, 9.8e-04, 1.1e-03.
+    - Before 25 s it is behind plain Levenberg–Marquardt (1.4 times at 10 s, level at 20 s).
+    - Single readings move by up to 10 times as the points are redrawn: seed 1 reads 2.5e-04 and 2.5e-03 four seconds apart.
+    - The pool costs 3 to 8 % of the steps (1,319 against 1,410).
+    - The first runs, on battery at 0.55 of full speed, ended at 3e-03 to 5e-03: the error is still falling at the end.
+55. **Residual points help Levenberg–Marquardt where the solution has a layer, and only there.** Mean over the last 30 s, median of three seeds:
+
+    | Equation | Levenberg–Marquardt | The same, residual points | Gain |
+    |---|---|---|---|
+    | Heat | 1.1e-07 | 1.2e-07 | none |
+    | KdV | 8.9e-07 | 8.1e-07 | none |
+    | Allen–Cahn | 2.0e-04 | 1.0e-04 | 2 |
+    | Burgers | 1.1e-03 | 4.2e-05 | 26 |
+    | Burgers, $\nu = 0.003/\pi$ | 5.5e-02 | 1.1e-03 | 50 |
+
+    On Burgers it is the best of all methods to 30 s (3.1e-02 at 10 s) and level with the plain filter after (4.2e-05 against 5.6e-05 over the last 30 s). Self-scaled Broyden gains more from the same points and leads it after 30 s (finding 57). On Allen–Cahn the filter is still 30 times below it.
+56. **At full speed the step limit is level with the plain filter on three equations and costs 4 times on Allen–Cahn.** Mean over the last 30 s, median of three seeds:
+
+    | Equation | Filter | With the step limit | Best baseline | Steps, with the limit |
     |---|---|---|---|---|
-    | Levenberg–Marquardt, residual points | 1.5e-01 | 4.2e-02 | 3.7e-03 | 6.0e-03 |
-    | Levenberg–Marquardt | 1.4e-01 | 1.5e-01 | 1.5e-01 | 3.0e-02 |
-    | Best self-scaled Broyden | 2.3e-01 | 2.2e-01 | 2.3e-01 | 2.3e-01 |
+    | Heat | 9.6e-10 | 1.4e-09 | 2.0e-10 | 9,617 against 10,892 |
+    | Burgers | 5.6e-05 | 4.4e-05 | 2.3e-05 | 9,701 against 11,018 |
+    | KdV | 2.8e-08 | 9.2e-09 | 3.4e-10 | 7,962 against 8,932 |
+    | Allen–Cahn | 3.3e-06 | 1.4e-05 | 9.1e-06 | 10,071 against 10,792 |
+    | Burgers, $\nu = 0.003/\pi$ | 1.1 | 0.25 | 1.1e-03 | 9,901 against 11,513 |
 
-    All three seeds end between 2.8e-03 and 5.0e-03. Self-scaled Broyden with residual points, also on battery, stays at 0.15 to 0.29: it redraws every 500 steps, as its paper does. The full-speed rerun is queued.
+    The best baseline includes the published methods with points drawn from the residual (finding 57).
+
+    - On KdV it helps two seeds of three, by 5 and 2 times (5.2e-09 against 2.8e-08, 9.2e-09 against 2.2e-08). The third is 1.5 times worse (4.8e-08 against 3.1e-08).
+    - On Allen–Cahn it is level to 30 s (3.4e-05 against 2.5e-05), then stays near 1.6e-05 from 60 to 120 s while the plain filter falls to 3.8e-06. All three seeds are 3 to 6 times worse. It retries 344 to 521 times per run. Why the limit stalls it late is not tested.
+    - So the limit stops the sudden breakdown on the sharp front, and on Allen–Cahn it costs the lead over self-scaled Broyden late (1.4e-05 against 9.1e-06 on the same loss over the last 30 s).
+57. **Points drawn from the residual belong to the baseline, and on Burgers they take the filter's lead.** Self-scaled Broyden's paper redraws uniform points every 500 iterations (Urbán, Stefanou and Pons, 2024). Drawing them from the residual at each redraw, from a pool of 16,000, combines it with a second published method (RAD, Wu et al., 2023). So the bar includes that combination, and Levenberg–Marquardt with residual points. Mean over the last 30 s, median of three seeds:
+
+    | Equation | Self-scaled Broyden | The same, residual points |
+    |---|---|---|
+    | Heat | 3.4e-10 | 5.4e-10 |
+    | KdV | 1.1e-09 | 4.5e-10 |
+    | Allen–Cahn | 1.1e-05 | 1.6e-05 |
+    | Burgers | 7.0e-04 | 2.3e-05 |
+    | Burgers, $\nu = 0.003/\pi$ | 0.24 | 0.20 |
+
+    - **On Burgers it is 30 times better.** Against it the plain filter is 1.5 to 7 times behind the best baseline at every reading. The 14 times of finding 43 were against Broyden on uniform points.
+    - Elsewhere the residual points change Broyden by less than 3 times.
+    - On the sharp front it stays near 0.2, where Levenberg–Marquardt with the same points reaches 1.1e-03. Broyden redraws every 500 steps and keeps its $H$ across redraws; Levenberg–Marquardt redraws every 5 steps and keeps nothing. Which of the two matters is not tested.
+58. **The filter needs the residual points too, and then it leads Burgers from 30 s.** With the step limit, and rows drawn from the residual with importance weights (a pool of 4,096 refreshed every 25 batches). Error divided by the best baseline's at each reading, median of three seeds; below 1 is ahead:
+
+    | Equation | 10 s | 30 s | 60 s | 90 s | 120 s | 180 s | Last 30 s, mean |
+    |---|---|---|---|---|---|---|---|
+    | Heat | 0.42 | 0.14 | 0.84 | 3.7 | 6.2 | 5.2 | 5.7 |
+    | Burgers | 5.6 | 0.34 | 0.52 | 0.68 | 1.0 | 0.95 | 0.57 |
+    | KdV | 0.89 | 1.1 | 16 | 35 | 60 | 83 | 78 |
+    | Allen–Cahn | 0.08 | 0.004 | 0.10 | 0.19 | 0.30 | 0.49 | 0.46 |
+    | Burgers, $\nu = 0.003/\pi$ | 2.0 | 4.2 | 35 | 180 | 220 | 4,000 | 1,100 |
+
+    - **Burgers**: 1.3e-05 over the last 30 s, against 2.3e-05 for Broyden with residual points and 5.6e-05 for the plain filter. It is slow at first: 0.18 at 10 s, where the plain filter is at 0.054.
+    - **Allen–Cahn**: it wins back most of what the step limit cost (4.2e-06 against 1.4e-05; the plain filter 3.3e-06) and leads every baseline at every reading.
+    - **Sharp Burgers**: two seeds of three break down after 120 s and end at 1.0 and 1.3, so the step limit does not hold there with these rows. Why is not tested.
 
 ## Verdict against the plan
 
@@ -475,7 +554,7 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png`, `results/
 | M1, residual flow | Beats stage 0 on two of three | Dropped: no gain on any |
 | M4, block Kaczmarz | Beats stage 0 on two of three | Dropped as the main optimizer. Kept as a candidate opening move for the agent (M9) |
 | M5, variable projection | Beats stage 0 on two of three; a gain on the linear problem | Kept, with a warm start: a large gain on heat, level on the other two |
-| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. Without the full $P$: a block per layer holds on heat and KdV and loses a factor of 20 on Burgers, and is too slow at 12,737 weights; a block per neuron fails; 64 directions keep up with Levenberg–Marquardt at 12,737 weights but lose the full filter's late lead. A memory that grows with the stream (1 batch in 25, at least 20) removes the slow start and is best or level at the end on all three. Against self-scaled Broyden with little or no Adam: ahead until 68 s on heat and 37 s on KdV, and over the whole run on Burgers on the same loss (14 times at the end). Followed by self-scaled Broyden it is the best method on heat; that handoff fails on KdV and Burgers. On Allen–Cahn ahead at every reading, 2.3 times at the end, and never on a wrong solution; at $\nu = 0.003/\pi$ it breaks down from covariance windup (finding 51). A step limit on the change in $u$ stops the breakdown, level with the plain filter by steps on heat, Burgers and KdV, and then stops near 0.3 on the front |
+| M3, filtering | Beats stage 0 on two of three; works without a full-rank covariance | **Kept, and the lead candidate**: ahead on all three at 180 s. Without the full $P$: a block per layer holds on heat and KdV and loses a factor of 20 on Burgers, and is too slow at 12,737 weights; a block per neuron fails; 64 directions keep up with Levenberg–Marquardt at 12,737 weights but lose the full filter's late lead. A memory that grows with the stream (1 batch in 25, at least 20) removes the slow start and is best or level at the end on all three. Against self-scaled Broyden with little or no Adam: ahead until 68 s on heat and 37 s on KdV, and over the whole run on Burgers on the same loss (14 times at the end). Followed by self-scaled Broyden it is the best method on heat; that handoff fails on KdV and Burgers. On Allen–Cahn ahead at every reading, 2.3 times at the end, and never on a wrong solution; at $\nu = 0.003/\pi$ it breaks down from covariance windup (finding 51). A step limit on the change in $u$ stops the sudden breakdown but not a slow drift on one seed of three; at full speed it is level with the plain filter on heat, Burgers and KdV, costs 4 times on Allen–Cahn, and stops near 0.2 on the front (findings 53, 56). Against baselines that draw their points from the residual it loses the Burgers lead, and wins it back from 30 s only by drawing its rows from the residual too (findings 57, 58) |
 | M6, continuation | A cold run is not as good | Dropped at this viscosity |
 | M8, multipliers | Beats stage 0 on two of three | Dropped |
 
@@ -487,17 +566,17 @@ $$
 \varepsilon_{\text{new}}(T) \le \min_{b \in \text{baselines}} \varepsilon_b(T) \quad \text{for every } T
 $$
 
-The strongest baseline is self-scaled Broyden with little or no Adam first (finding 38), not the paper's 30 % of Adam. Against it, on the same loss:
+The strongest baseline is self-scaled Broyden with little or no Adam first (finding 38), not the paper's 30 % of Adam, and on Burgers with its points drawn from the residual (finding 57). Combinations of published methods count as baselines: Levenberg–Marquardt with residual points is one. Against them, on the same loss:
 
 | Equation | Best method here | Meets the bar |
 |---|---|---|
 | Heat | The filter for 30 s, then self-scaled Broyden | Yes: within 2 times of the best at every reading, 2 to 4 times below it at the end |
-| Burgers | The filter alone | Yes: 7 to 60 times below at every reading, 14 times at the end |
+| Burgers | The filter with the step limit and rows drawn from the residual | From 30 s: 1.5 to 3 times below the best baseline to 90 s, level after, 1.8 times over the last 30 s. At 10 s 6 times behind. The plain filter is 1.5 to 7 times behind at every reading (findings 57, 58) |
 | KdV | The filter until 37 s | No: after 37 s self-scaled Broyden leads, by up to 200 times |
-| Allen–Cahn | The filter alone | Yes: 2.3 to 250 times below at every reading from 20 s, and no wrong solution on any seed (finding 47) |
-| Burgers, $\nu = 0.003/\pi$ | Levenberg–Marquardt with residual points | Provisionally yes from 60 s: 5 to 60 times below the best self-scaled Broyden, measured on battery (finding 54); level or behind before 30 s. The filter fails, and made stable stops near 0.3 |
+| Allen–Cahn | The filter alone | Yes: 2.3 to 250 times below at every reading from 20 s, and no wrong solution on any seed (finding 47). Also with the step limit and residual rows (finding 58) |
+| Burgers, $\nu = 0.003/\pi$ | Levenberg–Marquardt with residual points, itself a baseline | No new method. Two published methods combined fit the front to 1.1e-03, 50 times below plain Levenberg–Marquardt (finding 54). The filter fails, with or without the step limit and residual rows |
 
-No single method meets it on all five. The filter's lead is real on both equations with a moderate front and in the first half-minute of the smooth ones. On KdV it is not yet an optimizer that finishes. On a front 3.3 times thinner than Burgers' usual one the points decide: on uniform points every method stops above 3e-02, and Levenberg–Marquardt on points drawn from the residual fits it to 3e-03.
+No single method meets it on all five. The filter's lead is clear on Allen–Cahn and in the first half-minute of heat and KdV; on Burgers it is at most 3 times, and only with residual rows. On KdV it is not yet an optimizer that finishes. Where the solution has a layer the points decide: on a front 3.3 times thinner than Burgers' usual one every method stops above 3e-02 on uniform points, and Levenberg–Marquardt on points drawn from the residual fits it to 1.1e-03. The same points make self-scaled Broyden 30 times better on Burgers and change little on heat and KdV (findings 55, 57). So a fair baseline places its points too, and a new optimizer has to win with the points placed.
 
 ## What it does not show
 
@@ -521,7 +600,8 @@ No single method meets it on all five. The filter's lead is real on both equatio
   $$
 
   Tested in finding 43: with rows weighted to match the full loss, the filter's Burgers and heat results hold; on KdV it is 3 times worse. The tables before the self-scaled baselines use the light weighting.
-- **The Burgers reference** is the package's Cole–Hopf solution on a 256 by 101 grid; its own accuracy bounds what can be read below about 1e-4.
+- **The Burgers reference** is the package's Cole–Hopf solution on a 256 by 101 grid. It is exact there to machine precision (2e-16 against 4 times the quadrature nodes and a wider window; an earlier version of this note put its limit at 1e-4, which was wrong). The grid is 0.0078 apart in $x$, against a front about 0.013 wide, so the front adds one or two points per time row to the error.
 - **The Allen–Cahn reference** has its own error of about 4e-07 (a solver grid 32 times finer than the output; against 64 times finer, 2.9e-07). The best errors read here are 8 times above it.
 - **The fronts runs shared the machine with desktop use.** Runs more than 10 % slow by their step count were rerun; one kept is 15 % slow (finding 48). The heat, Burgers and KdV tables were made on an idle machine.
-- **Finding 54 is from runs on battery** in Low Power Mode, at about 0.55 of full speed by their step counts; its comparisons are against full-speed runs, so they favour the others. The traces in findings 51–53 count steps, not time.
+- **The traces in findings 51–53 count steps, not time.** Their runs shared the machine, so their seconds are not compared.
+- **The sharp-Burgers grading grid** has 513 points in $x$, 0.0039 apart: about one front width ($4\nu$). The reference is exact there to 1e-09 (the same Cole–Hopf quotient with 4 times the quadrature nodes and a wider window), but the front adds one or two points per time row to the error.

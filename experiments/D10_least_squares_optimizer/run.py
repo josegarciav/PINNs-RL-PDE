@@ -160,11 +160,23 @@ def reference(problem):
     return np.stack([xx.ravel(), tt.ravel()], 1), spec["exact"](xx, tt).ravel()
 
 
-def make_net(width, depth, seed):
+class Sine(torch.nn.Module):
+    def forward(self, x):
+        return torch.sin(x)
+
+
+# A method name may end in "@" and options joined by "+": "filter64g25@sin+hard".
+ACTIVATIONS = {"tanh": torch.nn.Tanh, "sin": Sine, "gelu": torch.nn.GELU, "silu": torch.nn.SiLU}
+# With "hard" the network meets the initial and boundary data by construction (Scaler), so
+# every row a sampler draws is an equation row.
+HARD = {"on": False}
+
+
+def make_net(width, depth, seed, activation="tanh"):
     torch.manual_seed(seed)
     layers, n_in = [], 2
     for _ in range(depth):
-        layers += [torch.nn.Linear(n_in, width), torch.nn.Tanh()]
+        layers += [torch.nn.Linear(n_in, width), ACTIVATIONS[activation]()]
         n_in = width
     layers.append(torch.nn.Linear(n_in, 1))
     return torch.nn.Sequential(*layers).double()
@@ -172,6 +184,8 @@ def make_net(width, depth, seed):
 
 def sample(problem, generator, sizes=None):
     n_col, n_ic, n_bc = sizes or (N_COL, N_IC, N_BC)
+    if HARD["on"]:  # the conditions hold exactly: their points go to the equation
+        n_col, n_ic, n_bc = n_col + n_ic + n_bc, 0, 0
     spec = PROBLEMS[problem]
     (x0, x1), (t0, t1) = spec["x"], spec["t"]
     rand = lambda n: torch.rand(n, dtype=torch.float64, generator=generator)  # noqa: E731
@@ -183,19 +197,42 @@ def sample(problem, generator, sizes=None):
 
 
 class Scaler(torch.nn.Module):
-    """Inputs mapped to [-1, 1] so every problem's box looks the same to the network."""
+    """Inputs mapped to [-1, 1] so every problem's box looks the same to the network.
 
-    def __init__(self, net, problem):
+    ``hard``: the initial and boundary data are built in (roadmap R3; Lagaris et al. 1998,
+    Sukumar and Srivastava 2022). With s in [-1, 1] across the box and tau = (t - t0) / T,
+
+        u = g + tau (1 - s^2) N,
+        g = u0(x) + (1 - s)/2 (b(x0, t) - u0(x0)) + (1 + s)/2 (b(x1, t) - u0(x1))
+
+    g equals u0 at t0 and b on both sides (the data agree at the corners), and the second
+    term vanishes there, so no loss weight is needed."""
+
+    def __init__(self, net, problem, hard=False):
         super().__init__()
         spec = PROBLEMS[problem]
-        self.net = net
+        self.net, self.problem, self.hard = net, problem, hard
         lo = torch.tensor([spec["x"][0], spec["t"][0]], dtype=torch.float64)
         hi = torch.tensor([spec["x"][1], spec["t"][1]], dtype=torch.float64)
         self.register_buffer("lo", lo)
         self.register_buffer("span", hi - lo)
 
     def forward(self, z):
-        return self.net(2.0 * (z - self.lo) / self.span - 1.0)
+        scaled = 2.0 * (z - self.lo) / self.span - 1.0
+        out = self.net(scaled)
+        if not self.hard:
+            return out
+        spec = PROBLEMS[self.problem]
+        s, tau = scaled[:, :1], 0.5 * (scaled[:, 1:] + 1.0)
+        x, t = z[:, :1], z[:, 1:]
+        left = torch.full_like(x, spec["x"][0])
+        right = torch.full_like(x, spec["x"][1])
+        g = (
+            spec["initial"](x)
+            + 0.5 * (1.0 - s) * (spec["boundary"](left, t) - spec["initial"](left))
+            + 0.5 * (1.0 + s) * (spec["boundary"](right, t) - spec["initial"](right))
+        )
+        return g + tau * (1.0 - s * s) * out
 
 
 # ------------------------------------------------------- residual vector, two formulations
@@ -231,8 +268,8 @@ def residual_rows(problem, model, weights=(W_IC, W_BC)):
         n_col, n_ic, n_bc = counts
         return (
             1.0 / math.sqrt(n_col),
-            math.sqrt(weights[0] / n_ic),
-            math.sqrt(weights[1] / n_bc),
+            math.sqrt(weights[0] / n_ic) if n_ic else 0.0,
+            math.sqrt(weights[1] / n_bc) if n_bc else 0.0,
         )
 
     def rows(params, col, ic, bc, counts=None, shift=None):
@@ -286,7 +323,8 @@ def loss_autograd(problem, model, col, ic, bc, weights=(W_IC, W_BC)):
     r = spec["residual"](u, g[:, 0], uxx, third, g[:, 1])
     v_ic = model(ic)[:, 0] - spec["initial"](ic[:, 0])
     v_bc = model(bc)[:, 0] - spec["boundary"](bc[:, 0], bc[:, 1])
-    return (r**2).mean() + weights[0] * (v_ic**2).mean() + weights[1] * (v_bc**2).mean()
+    edge = lambda v, w: w * (v**2).mean() if len(v) else 0.0  # noqa: E731
+    return (r**2).mean() + edge(v_ic, weights[0]) + edge(v_bc, weights[1])
 
 
 def residual_values(problem, model, col):
@@ -349,6 +387,33 @@ class Clock:
             self.curve.append((self.spent, float(np.linalg.norm(pred - self.values) / self.norm)))
             self.next = self.spent + self.every
         self.mark = time.perf_counter()
+        return self.spent
+
+
+class StepClock(Clock):
+    """Counts steps in place of seconds, for screens on a shared or slow core: a method's
+    path does not depend on the clock, so its error after k steps is the same on any
+    machine. ``every`` and the budget are then in steps; ``seconds`` keeps the time spent.
+
+    Each optimizer calls ``tick()`` once before every step, so the value returned is the
+    number of steps taken; ``tick(force=True)`` reads the error without counting a step."""
+
+    def __init__(self, model, points, values, every):
+        super().__init__(model, points, values, every)
+        self.calls, self.start = 0, time.perf_counter()
+
+    def tick(self, force=False):
+        if force:
+            done = max(self.calls - 1, 0)
+        else:
+            done, self.calls = self.calls, self.calls + 1
+        self.spent = float(done)
+        if force or done >= self.next:
+            with torch.no_grad():
+                pred = self.model(self.points)[:, 0].numpy()
+            self.curve.append((self.spent, float(np.linalg.norm(pred - self.values) / self.norm)))
+            self.next = self.spent + self.every
+        self.seconds = time.perf_counter() - self.start
         return self.spent
 
 
@@ -694,6 +759,52 @@ def run_continue(problem, model, clock, budget, generator, stages=8, resample_ev
     return stats
 
 
+def pick_rows(A, r, forced, k, score):
+    """Greedy choice of ``k`` rows from candidates, given the rows ``forced`` (always kept).
+
+    ``A = J P J^T + I`` is the candidates' predicted innovation covariance and ``r`` their
+    residuals. Rows are taken one at a time, each conditioned on those taken before, as a
+    sequential Kalman update in the candidates' own space (a pivoted Cholesky of A). After
+    conditioning on the set B taken so far,
+
+        d_j = A_jj - A_jB A_BB^-1 A_Bj,     r~_j = r_j - A_jB A_BB^-1 r_B,     s_j = d_j - 1
+
+    are row j's innovation variance, its innovation and its predicted variance without the
+    noise. ``score``:
+      - "info": the largest d_j, which maximizes log det(A_BB), the information the batch
+        gives about the weights (D-optimal design). It measures the directions P is unsure
+        of, the persistent excitation that keeps P from winding up.
+      - "gain": the largest r~_j^2 s_j / d_j, the first-order fall of row j's square when
+        it is measured: residual and uncertainty together.
+    Neighbouring candidates are correlated, so taking one lowers the others' scores: the
+    batch spreads without a distance rule."""
+    m = A.shape[0]
+    d = A.diagonal().clone()
+    rt = r.clone()
+    L = torch.zeros(m, len(forced) + k, dtype=A.dtype)
+    free = torch.ones(m, dtype=torch.bool)
+    picked = []
+
+    def take(p, j):
+        root = d[p].clamp_min(1e-300).sqrt()
+        col = (A[:, p] - L[:, :j] @ L[p, :j]) / root
+        L[:, j] = col
+        rt.sub_(col * (rt[p] / root))
+        d.sub_(col * col)
+        free[p] = False
+
+    for j, p in enumerate(forced):
+        take(p, j)
+    for j in range(len(forced), len(forced) + k):
+        s = (d - 1.0).clamp_min(0.0)
+        value = d.clone() if score == "info" else rt * rt * s / d.clamp_min(1e-300)
+        value[~free] = -math.inf
+        p = int(value.argmax())
+        picked.append(p)
+        take(p, j)
+    return picked
+
+
 def run_filter(
     problem,
     model,
@@ -713,6 +824,7 @@ def run_filter(
     damped=False,
     directional=False,
     trust=None,
+    select=None,
 ):
     """M3. Training as filtering. Each step draws ``batch`` fresh rows (three quarters in the
     domain, the rest on the initial line and the boundary), never seen again, and applies an
@@ -763,7 +875,14 @@ def run_filter(
     with the rows' noise 4, 16, ..., 1024 times larger, and if all fail the batch is skipped;
     P is never reset. On the front the breakdown came after a reset: with the weights grown
     large, P = prior lets each step fit its 64 rows exactly, and the median accepted step
-    changed u by 2. Steps that long in weights but short in u are allowed."""
+    changed u by 2. Steps that long in weights but short in u are allowed.
+
+    ``select`` = (score, factor): the filter chooses its own equation rows. It draws
+    ``factor`` times as many candidates, and keeps those :func:`pick_rows` picks given the
+    initial and boundary rows. In recursive least squares windup comes from a lack of
+    persistent excitation: the regressors do not reach some directions, so P grows there
+    unchecked. A PINN can choose its regressors, at the cost of a residual and a Jacobian
+    row each, so it can measure where P is largest."""
     weights = Weights(model)
     theta = weights.read()
     rows, jacobian = residual_rows(problem, model, loss_weights)
@@ -776,7 +895,7 @@ def run_filter(
             with torch.no_grad():
                 return torch.func.functional_call(model, weights.tree(vec), (probe,))[:, 0]
 
-    sizes = (batch - 2 * (batch // 8), batch // 8, batch // 8)
+    sizes = (batch, 0, 0) if HARD["on"] else (batch - 2 * (batch // 8), batch // 8, batch // 8)
     pool = ResidualPool(problem, model, generator) if stream else None
     unit = (1, 1, 1)  # rows unscaled: a stream has no total count
     P = prior * torch.eye(theta.numel(), dtype=theta.dtype)
@@ -788,17 +907,29 @@ def run_filter(
     it, stats = 0, {"iterations": 0, "rejected": 0, "batch": batch, "capped": 0}
     scale = torch.ones(batch, dtype=theta.dtype)
     while clock.tick() < budget:
-        pts = sample(problem, generator, sizes)
+        draw = (select[1] * sizes[0], *sizes[1:]) if select else sizes
+        pts = sample(problem, generator, draw)
         if pool is not None:
             # Without replacement: a repeated row makes J P J^T singular once J is large.
-            col, importance = pool.draw(sizes[0], replacement=False)
+            col, importance = pool.draw(draw[0], replacement=False)
             pts = (col, *pts[1:])
-            if stream == "radw":
+            if stream == "radw" and not select:
                 scale[: sizes[0]] = importance.sqrt()
         tree = weights.tree(theta)
-        r = scale * rows(tree, *pts, counts=unit)
-        J = scale[:, None] * jacobian(tree, *pts, counts=unit)
-        PJt = P @ J.T
+        if select:
+            r_all = rows(tree, *pts, counts=unit)
+            J_all = jacobian(tree, *pts, counts=unit)
+            PJ_all = P @ J_all.T
+            A = J_all @ PJ_all + torch.eye(J_all.shape[0], dtype=theta.dtype)
+            edge = list(range(draw[0], J_all.shape[0]))  # the initial and boundary rows
+            chosen = sorted(pick_rows(A, r_all, edge, sizes[0], select[0]))
+            index = torch.tensor(chosen + edge)
+            pts = (pts[0][torch.tensor(chosen)], *pts[1:])
+            r, J, PJt = r_all[index], J_all[index], PJ_all[:, index]
+        else:
+            r = scale * rows(tree, *pts, counts=unit)
+            J = scale[:, None] * jacobian(tree, *pts, counts=unit)
+            PJt = P @ J.T
         robust = None
         if huber is not None:
             spread = ((J * PJt.T).sum(1) + 1.0).sqrt()
@@ -1293,12 +1424,19 @@ def run_selfscaled(
     return stats
 
 
-def run_one(problem, method, seed, budget, width, depth, every):
+def run_one(problem, method, seed, budget, width, depth, every, by_steps=False):
     torch.set_num_threads(1)
+    name = method
+    method, _, arch = method.partition("@")
+    options = set(arch.split("+")) if arch else set()
+    unknown = options - set(ACTIVATIONS) - {"hard"}
+    assert not unknown, unknown
+    activation = next((o for o in options if o in ACTIVATIONS), "tanh")
+    HARD["on"] = "hard" in options
     generator = torch.Generator().manual_seed(1000 + seed)
-    model = Scaler(make_net(width, depth, seed), problem)
+    model = Scaler(make_net(width, depth, seed, activation), problem, hard=HARD["on"])
     points, values = reference(problem)
-    clock = Clock(model, points, values, every)
+    clock = (StepClock if by_steps else Clock)(model, points, values, every)
     clock.tick(force=True)
     if method in ("lm", "lmrad"):
         stats = run_lm(problem, model, clock, budget, generator, rad=method == "lmrad")
@@ -1377,11 +1515,13 @@ def run_one(problem, method, seed, budget, width, depth, every):
         # filter64g25dir: directional forgetting; filter64g25t: a step may change u by at
         # most a quarter of its scale
         found = re.fullmatch(
-            r"filter(\d+)(?:c(\d+))?(?:f(\d+))?(?:g(\d+))?(m?)(dir)?(t?)(rad|radw)?(?:h(\d+))?(d?)",
+            r"filter(\d+)(?:c(\d+))?(?:f(\d+))?(?:g(\d+))?(m?)(dir)?(t?)(?:x(g?)(\d+))?"
+            r"(rad|radw)?(?:h(\d+))?(d?)",
             method,
         )
         assert found, method
-        size, exponent, keep, every, matched, direct, limit, stream, huber, damped = found.groups()
+        size, exponent, keep, every, matched, direct, limit = found.groups()[:7]
+        gain, factor, stream, huber, damped = found.groups()[7:]
         stats = run_filter(
             problem,
             model,
@@ -1398,6 +1538,9 @@ def run_one(problem, method, seed, budget, width, depth, every):
             damped=bool(damped),
             directional=bool(direct),
             trust=0.25 if limit else None,
+            # filter64g25x4: rows chosen for information from 4 times as many candidates;
+            # filter64g25xg4: for residual and uncertainty together (pick_rows)
+            select=("gain" if gain else "info", int(factor)) if factor else None,
         )
     elif method in ("al", "lm_w1"):
         stats = run_al(problem, model, clock, budget, generator, multipliers=method == "al")
@@ -1429,13 +1572,14 @@ def run_one(problem, method, seed, budget, width, depth, every):
     clock.tick(force=True)
     return {
         "problem": problem,
-        "method": method,
+        "method": name,
         "seed": seed,
         "width": width,
         "depth": depth,
         "curve": clock.curve,
         "final": clock.curve[-1][1],
         "best": min(e for _, e in clock.curve),
+        **({"seconds": clock.seconds} if by_steps else {}),
         **stats,
     }
 
@@ -1455,10 +1599,16 @@ def main():
     parser.add_argument("--methods", nargs="+", default=list(METHODS))
     parser.add_argument("--out", type=Path, default=HERE / "results")
     parser.add_argument("--fresh", action="store_true", help="discard saved runs")
+    parser.add_argument(
+        "--by-steps",
+        action="store_true",
+        help="budget and --every in steps, not seconds (screens on a shared or slow core)",
+    )
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     meta = {
         "budget_s": args.budget,
+        "by_steps": args.by_steps,
         "machine": platform.machine(),
         "system": platform.platform(),
         "torch": torch.__version__,
@@ -1479,7 +1629,14 @@ def main():
                 if method.startswith("continue") and "family" not in PROBLEMS[problem]:
                     continue
                 run = run_one(
-                    problem, method, seed, args.budget, args.width, args.depth, args.every
+                    problem,
+                    method,
+                    seed,
+                    args.budget,
+                    args.width,
+                    args.depth,
+                    args.every,
+                    by_steps=args.by_steps,
                 )
                 run["budget_s"] = args.budget
                 runs.append(run)
