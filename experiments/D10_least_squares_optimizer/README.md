@@ -416,9 +416,24 @@ The figures are `results/runs_3x32.png`, `results/long/runs_3x32.png`, `results/
 50. **Burgers at $\nu = 0.003/\pi$ defeats every method at this size.**
     - No method ends below 3e-02. Levenberg–Marquardt is the least bad: 5.5e-02 over the last 30 s, one seed at 0.28.
     - Self-scaled Broyden sits at 0.22 to 0.27 from 20 s to the end, with or without Adam.
-    - The filter is the worst. It is at 0.31 at 10 s and near 1 from 40 s on, with either weighting. Why its error rises is not diagnosed.
+    - The filter is the worst. It is at 0.31 at 10 s and near 1 from 40 s on, with either weighting.
+    - **The filter's failure is instability** (seed 0, 60 s, not a timed run): its weights reach a norm of 57,000, and the network loses even the initial and boundary values ($u(-1, t) = 0.56$ for 0). The cap lets $P$ grow to $10^{12}$ in the directions the front excites.
+    - **Levenberg–Marquardt's error is the front.** Away from it the solution is right to two digits. Its error grows from 0.03 at $t = 0.4$ to 0.36 at $t = 1$ as the front steepens and its fit of it stays about 4 times too wide.
     - The front, $u \approx -\tanh(x / 2\nu)$, is about $4\nu \approx 4 \cdot 10^{-3}$ wide. The 2,000 points are about 0.03 apart, 8 times more: a full sample puts about 3 points in the front, a filter batch one point every 15 batches.
-    - So at this viscosity the question is where the points go before how the optimizer steps. A stream drawn from the residual is the next test.
+    - **Neither the points nor the cap fix the filter** (scans on seed 0 on a shared machine, not timed runs):
+
+      | Filter, sharp Burgers | Error at the end | Best reading |
+      |---|---|---|
+      | Rows drawn from the residual (30 s) | 1.2 | 0.30 |
+      | The same with importance weights (30 s) | 0.30 | 0.29 |
+      | Cap $10^4$ (60 s) | 0.58 | 0.28 |
+      | Cap $10^6$ (60 s) | 1.0 | 0.29 |
+      | Cap $10^8$ (60 s) | 1.3 | 0.25 |
+      | Cap $10^6$, residual rows with weights (60 s) | 1.6 | 0.27 |
+
+      Self-scaled Broyden with its points drawn from the residual at each redraw ends at 0.50 after 30 s (best 0.15).
+      - **Rows drawn from the residual**: from a uniform pool of 4,096 points, refreshed every 25 steps, point $i$ with probability $p_i \propto |r_i| / \overline{|r|} + 1$ (RAD, Wu et al., 2023).
+      - **Importance weights**: each row scaled by $(4096\, p_i)^{-1/2}$, so the expected batch loss is the uniform one.
 
 ## Verdict against the plan
 

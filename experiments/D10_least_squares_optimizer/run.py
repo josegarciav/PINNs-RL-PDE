@@ -289,6 +289,45 @@ def loss_autograd(problem, model, col, ic, bc, weights=(W_IC, W_BC)):
     return (r**2).mean() + weights[0] * (v_ic**2).mean() + weights[1] * (v_bc**2).mean()
 
 
+def residual_values(problem, model, col):
+    """``|r|`` of the equation at many points in one batched pass, for choosing points."""
+    spec = PROBLEMS[problem]
+    z = col.clone().requires_grad_(True)
+    u = model(z)[:, 0]
+    g = torch.autograd.grad(u.sum(), z, create_graph=True)[0]
+    third_order = spec["order"] >= 3
+    uxx = torch.autograd.grad(g[:, 0].sum(), z, create_graph=third_order)[0][:, 0]
+    third = torch.autograd.grad(uxx.sum(), z)[0][:, 0] if third_order else 0.0
+    return spec["residual"](u, g[:, 0], uxx, third, g[:, 1]).detach().abs()
+
+
+class ResidualPool:
+    """Equation points drawn where the residual is large (RAD, Wu et al., 2023, CMAME 403):
+    from a uniform pool of ``size`` points, point i with probability
+
+        p_i = q_i / sum q,        q_i = |r_i|^k / mean |r|^k + c
+
+    The pool and its residuals are redrawn every ``refresh`` draws. ``draw`` also returns the
+    importance weights ``1 / (size p_i)``: a batch scaled by their square roots has the
+    uniform batch's expected sum of squares, so the loss is unchanged and only the points
+    move. Without them the loss leans towards the large residuals."""
+
+    def __init__(self, problem, model, generator, size=4096, k=1.0, c=1.0, refresh=25):
+        self.problem, self.model, self.generator = problem, model, generator
+        self.size, self.k, self.c, self.refresh = size, k, c, refresh
+        self.draws = 0
+
+    def draw(self, n, replacement=True):
+        if self.draws % self.refresh == 0:
+            self.points = sample(self.problem, self.generator, (self.size, 0, 0))[0]
+            q = residual_values(self.problem, self.model, self.points) ** self.k
+            q = q / q.mean().clamp_min(1e-300) + self.c
+            self.p = q / q.sum()
+        self.draws += 1
+        index = torch.multinomial(self.p, n, replacement=replacement, generator=self.generator)
+        return self.points[index], 1.0 / (self.size * self.p[index])
+
+
 # ------------------------------------------------------------------------------ optimizers
 class Clock:
     """Wall-clock time spent optimizing: evaluation of the error is not charged."""
@@ -660,6 +699,7 @@ def run_filter(
     grow=None,
     keep=None,
     loss_weights=(W_IC, W_BC),
+    stream=None,
 ):
     """M3. Training as filtering. Each step draws ``batch`` fresh rows (three quarters in the
     domain, the rest on the initial line and the boundary), never seen again, and applies an
@@ -681,11 +721,16 @@ def run_filter(
     ``loss_weights`` multiply the squares of the initial and boundary rows. The rows are
     unscaled and the batch is 3/4 equation rows, so per point the batch weighs those terms
     w / 6 against the equation: the default 10 gives 5/3, where every full-batch method uses
-    10; 60 matches them."""
+    10; 60 matches them.
+
+    ``stream``: None draws the equation rows uniformly; "rad" draws them from a
+    :class:`ResidualPool`; "radw" also scales each by the root of its importance weight, so
+    the expected batch loss is the uniform one."""
     weights = Weights(model)
     theta = weights.read()
     rows, jacobian = residual_rows(problem, model, loss_weights)
     sizes = (batch - 2 * (batch // 8), batch // 8, batch // 8)
+    pool = ResidualPool(problem, model, generator) if stream else None
     unit = (1, 1, 1)  # rows unscaled: a stream has no total count
     P = prior * torch.eye(theta.numel(), dtype=theta.dtype)
     if warm:
@@ -694,18 +739,27 @@ def run_filter(
         P = torch.cholesky_inverse(torch.linalg.cholesky(information))
     eye = torch.eye(batch, dtype=theta.dtype)
     it, stats = 0, {"iterations": 0, "rejected": 0, "batch": batch, "capped": 0}
+    scale = torch.ones(batch, dtype=theta.dtype)
     while clock.tick() < budget:
         pts = sample(problem, generator, sizes)
+        if pool is not None:
+            # Without replacement: a repeated row makes J P J^T singular once J is large.
+            col, importance = pool.draw(sizes[0], replacement=False)
+            pts = (col, *pts[1:])
+            if stream == "radw":
+                scale[: sizes[0]] = importance.sqrt()
         tree = weights.tree(theta)
-        r = rows(tree, *pts, counts=unit)
-        J = jacobian(tree, *pts, counts=unit)
+        r = scale * rows(tree, *pts, counts=unit)
+        J = scale[:, None] * jacobian(tree, *pts, counts=unit)
         PJt = P @ J.T
-        gain = torch.linalg.solve(J @ PJt + eye, PJt.T).T
+        gain, info = torch.linalg.solve_ex(J @ PJt + eye, PJt.T)
+        gain = gain.T
         cand = theta - gain @ r
         # The update should lower the residual of its own batch. One that more than doubles
         # it is the sign of a covariance gone bad: the step is refused and P starts again.
-        after = float(rows(weights.tree(cand), *pts, counts=unit).norm())
-        if math.isfinite(after) and after <= 2.0 * float(r.norm()):
+        # So is a system too ill-conditioned to solve (J P J^T so large that + I is lost).
+        after = float((scale * rows(weights.tree(cand), *pts, counts=unit)).norm())
+        if int(info) == 0 and math.isfinite(after) and after <= 2.0 * float(r.norm()):
             theta = cand
             f = 1.0 - 1.0 / max(grow[0], grow[1] * it) if grow else forget
             P = (P - gain @ PJt.T) / f
@@ -1049,6 +1103,7 @@ def run_selfscaled(
     resample_every=500,
     base=None,
     loss_weights=(W_IC, W_BC),
+    rad=False,
 ):
     """Self-scaled quasi-Newton (Urban, Stefanou and Pons, arXiv 2405.04230, eqs. 5-23): a
     dense inverse Hessian H, strong Wolfe line search, and the update
@@ -1066,7 +1121,10 @@ def run_selfscaled(
     in the filter's row units and not the loss's. A reset after a failed search still goes
     to I: by then ``base`` belongs to other weights.
 
-    ``loss_weights``: the weights of the initial and boundary terms in the loss."""
+    ``loss_weights``: the weights of the initial and boundary terms in the loss.
+
+    ``rad``: at each redraw the equation points are drawn from a :class:`ResidualPool` of
+    8 times as many, without replacement and without weights, as RAD is used."""
     weights = Weights(model)
     theta = weights.read()
     n = theta.numel()
@@ -1081,11 +1139,20 @@ def run_selfscaled(
     eye = torch.eye(n, dtype=theta.dtype)
     H, fresh = (eye.clone() if base is None else base.clone()), True
     it, stats = 0, {"iterations": 0, "restarts": 0, "evaluations": 0}
-    pts = sample(problem, generator)
+    pool = ResidualPool(problem, model, generator, size=8 * N_COL, refresh=1) if rad else None
+
+    def draw():
+        pts = sample(problem, generator)
+        if pool is None:
+            return pts
+        weights.write(theta)
+        return (pool.draw(N_COL, replacement=False)[0], *pts[1:])
+
+    pts = draw()
     loss, g = evaluate(theta, pts)
     while clock.tick() < budget:
         if it > 0 and it % resample_every == 0:
-            pts = sample(problem, generator)
+            pts = draw()
             loss, g = evaluate(theta, pts)
         p = -(H @ g)
         gtd = float(g @ p)
@@ -1218,9 +1285,11 @@ def run_one(problem, method, seed, budget, width, depth, every):
         # filter64, filter64c4 (variances capped at 1e4), filter64f98 (forgetting 0.98),
         # filter64g25 (memory of max(20, k / 25) batches at step k), filter64g25m (initial and
         # boundary rows weighted to match the full-batch loss)
-        found = re.fullmatch(r"filter(\d+)(?:c(\d+))?(?:f(\d+))?(?:g(\d+))?(m?)", method)
+        # filter64g25rad / filter64g25radw: equation rows drawn from the residual, without or
+        # with importance weights
+        found = re.fullmatch(r"filter(\d+)(?:c(\d+))?(?:f(\d+))?(?:g(\d+))?(m?)(rad|radw)?", method)
         assert found, method
-        size, exponent, keep, every, matched = found.groups()
+        size, exponent, keep, every, matched, stream = found.groups()
         stats = run_filter(
             problem,
             model,
@@ -1232,14 +1301,16 @@ def run_one(problem, method, seed, budget, width, depth, every):
             forget=float("0." + keep) if keep else 0.995,
             grow=(20.0, 1.0 / int(every)) if every else None,
             loss_weights=(60.0, 60.0) if matched else (W_IC, W_BC),
+            stream=stream,
         )
     elif method in ("al", "lm_w1"):
         stats = run_al(problem, model, clock, budget, generator, multipliers=method == "al")
-    elif re.fullmatch(r"adam(\d*)_ss(broyden|bfgs)(f?)", method):
+    elif re.fullmatch(r"adam(\d*)_ss(broyden|bfgs)(f?)(rad)?", method):
         # adam_ssbroyden: Adam for 30 % of the budget; adam10_ssbroyden: for 10 s;
-        # adam0_ssbroydenf: the initial and boundary terms weighted 5/3, as the filter does
-        found = re.fullmatch(r"adam(\d*)_ss(broyden|bfgs)(f?)", method)
-        seconds, variant, light = found.groups()
+        # adam0_ssbroydenf: the initial and boundary terms weighted 5/3, as the filter does;
+        # adam0_ssbroydenrad: equation points drawn from the residual at each redraw
+        found = re.fullmatch(r"adam(\d*)_ss(broyden|bfgs)(f?)(rad)?", method)
+        seconds, variant, light, rad = found.groups()
         first = run_adam(
             problem, model, clock, float(seconds) if seconds else 0.3 * budget, generator
         )
@@ -1251,6 +1322,7 @@ def run_one(problem, method, seed, budget, width, depth, every):
             generator,
             variant=variant,
             loss_weights=(5.0 / 3.0, 5.0 / 3.0) if light else (W_IC, W_BC),
+            rad=bool(rad),
         )
         stats["adam_iterations"] = first["iterations"]
     else:
