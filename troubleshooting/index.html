@@ -1,0 +1,2831 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Physics-informed neural networks for forward and inverse PDE problems, evaluated against numerical references">
+      
+      
+      
+        <link rel="canonical" href="https://josegarciav.github.io/PINNs-RL-PDE/troubleshooting/">
+      
+      
+        <link rel="prev" href="../applications/">
+      
+      
+        <link rel="next" href="../theory/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Troubleshooting - pinnrl</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#troubleshooting" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="pinnrl" class="md-header__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            pinnrl
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Troubleshooting
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting_started/" class="md-tabs__link">
+          
+  
+  
+  Start
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../custom_equations/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../theory/" class="md-tabs__link">
+          
+  
+  
+  Theory
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../engine/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Engine
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/cli/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../roadmap/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="pinnrl" class="md-nav__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    pinnrl
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../when_to_use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When to use a PINN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../custom_equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Custom equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inverse_problems/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverse problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../process_twins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process twins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets (The Well)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../applications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Applications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#installation-and-the-native-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation and the native engine
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Installation and the native engine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-compiled-engine-is-not-used" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The compiled engine is not used
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-pause-of-a-second-or-two-early-in-a-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A pause of a second or two early in a run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-stale-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A stale cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#thewellnotinstallederror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TheWellNotInstalledError
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#training" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Training">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-loss-falls-and-the-solution-is-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The loss falls and the solution is wrong
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-system-of-odes-collapses-to-a-constant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A system of ODEs collapses to a constant
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adam_lbfgs-diverges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        adam_lbfgs diverges
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results-vary-more-between-seeds-than-between-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results vary more between seeds than between methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-network-with-torchnnlayernorm-trains-on-a-wrong-gradient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A network with torch.nn.LayerNorm trains on a wrong gradient
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timings-are-twice-those-of-the-benchmarks-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timings are twice those of the benchmarks page
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inverse-problems" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inverse problems
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Inverse problems">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#an-identified-parameter-stalls-12-from-the-truth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An identified parameter stalls 1–2 % from the truth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-estimate-is-confidently-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The estimate is confidently wrong
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#two-parameters-cannot-be-told-apart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two parameters cannot be told apart
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#an-unknown-function-collapses-to-a-constant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An unknown function collapses to a constant
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#an-interval-that-does-not-cover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An interval that does not cover
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#process-twins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Process twins
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Process twins">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-twin-fails-its-misfit-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The twin fails its misfit test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-filters-interval-is-too-narrow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A filter's interval is too narrow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests-and-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests and development
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Theory
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/well_posedness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Well-posedness and stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/identifiability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identifiability and conditioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/bayesian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Bayesian view and uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/numerical_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The numerical-analysis bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/equivalence_regions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equivalence regions and swarm sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration file
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_4" id="__nav_7_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/neural_networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neural networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/pdes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDEs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/native/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/rl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL sampler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/plots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/uq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command-line entry points
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What has been built
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research program
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../paper/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Software paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#installation-and-the-native-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation and the native engine
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Installation and the native engine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-compiled-engine-is-not-used" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The compiled engine is not used
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-pause-of-a-second-or-two-early-in-a-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A pause of a second or two early in a run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-stale-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A stale cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#thewellnotinstallederror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TheWellNotInstalledError
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#training" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Training">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-loss-falls-and-the-solution-is-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The loss falls and the solution is wrong
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-system-of-odes-collapses-to-a-constant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A system of ODEs collapses to a constant
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adam_lbfgs-diverges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        adam_lbfgs diverges
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results-vary-more-between-seeds-than-between-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results vary more between seeds than between methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-network-with-torchnnlayernorm-trains-on-a-wrong-gradient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A network with torch.nn.LayerNorm trains on a wrong gradient
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timings-are-twice-those-of-the-benchmarks-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timings are twice those of the benchmarks page
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inverse-problems" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inverse problems
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Inverse problems">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#an-identified-parameter-stalls-12-from-the-truth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An identified parameter stalls 1–2 % from the truth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-estimate-is-confidently-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The estimate is confidently wrong
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#two-parameters-cannot-be-told-apart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two parameters cannot be told apart
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#an-unknown-function-collapses-to-a-constant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An unknown function collapses to a constant
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#an-interval-that-does-not-cover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An interval that does not cover
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#process-twins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Process twins
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Process twins">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-twin-fails-its-misfit-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The twin fails its misfit test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-filters-interval-is-too-narrow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A filter's interval is too narrow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests-and-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests and development
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h1>
+<p>Failure modes the package and its experiments have met. Each has a symptom, a cause and a fix. Experiment codes (<code>F01</code>, <code>J06</code>, ...) name the source of each number; see <a href="../benchmarks/">Benchmarks</a>.</p>
+<h2 id="installation-and-the-native-engine">Installation and the native engine<a class="headerlink" href="#installation-and-the-native-engine" title="Permanent link">&para;</a></h2>
+<h3 id="the-compiled-engine-is-not-used">The compiled engine is not used<a class="headerlink" href="#the-compiled-engine-is-not-used" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl</span><span class="w"> </span><span class="kn">import</span> <span class="n">native</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">native</span><span class="o">.</span><span class="n">available</span><span class="p">(),</span> <span class="n">native</span><span class="o">.</span><span class="n">unavailable_reason</span><span class="p">())</span>
+</code></pre></div>
+<p>Training still works on autograd, two to eight times slower per step (<a href="../benchmarks/#the-step-against-the-alternatives-experiment-i17">I17</a>).</p>
+<table>
+<thead>
+<tr>
+<th>Reason printed</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>no C++ compiler found</code></td>
+<td>macOS: <code>xcode-select --install</code>. Linux: install <code>g++</code></td>
+</tr>
+<tr>
+<td><code>compiling jets.cpp failed</code> on Linux</td>
+<td><code>apt install libopenblas-dev</code>, or point <code>PINNRL_NATIVE_CXXFLAGS</code> and <code>PINNRL_NATIVE_LDFLAGS</code> at OpenBLAS</td>
+</tr>
+<tr>
+<td><code>the native kernels build on macOS (Accelerate) and Linux (OpenBLAS) only</code></td>
+<td>None on other platforms; autograd runs</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong><code>available()</code> is true but <code>pde.native_active(model)</code> is false:</strong> the network or the problem is outside what the engine covers. See <a href="../engine/#where-it-does-not-apply">where it does not apply</a>.</li>
+</ul>
+<h3 id="a-pause-of-a-second-or-two-early-in-a-run">A pause of a second or two early in a run<a class="headerlink" href="#a-pause-of-a-second-or-two-early-in-a-run" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Cause:</strong> the step for your equations is compiled once per machine, and takes over at evaluation 32.</li>
+<li><strong>Fix:</strong> none needed; later runs load it from the cache. <code>PINNRL_NATIVE_SPECIALIZE=off</code> skips the build.</li>
+</ul>
+<h3 id="a-stale-cache">A stale cache<a class="headerlink" href="#a-stale-cache" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Where:</strong> <code>~/.cache/pinnrl/native</code>.</li>
+<li><strong>Fix:</strong> delete the directory. It is always safe; libraries are rebuilt on demand.</li>
+</ul>
+<h3 id="thewellnotinstallederror"><code>TheWellNotInstalledError</code><a class="headerlink" href="#thewellnotinstallederror" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Fix:</strong> <code>pip install 'pinnrl[well]'</code>. The registry works without it; loading a slice does not.</li>
+</ul>
+<h2 id="training">Training<a class="headerlink" href="#training" title="Permanent link">&para;</a></h2>
+<h3 id="the-loss-falls-and-the-solution-is-wrong">The loss falls and the solution is wrong<a class="headerlink" href="#the-loss-falls-and-the-solution-is-wrong" title="Permanent link">&para;</a></h3>
+<p>The residual is not the error. They are linked by a stability constant <span class="arithmatex">\(C\)</span>:</p>
+<div class="arithmatex">\[
+\lVert u - u_{\text{exact}} \rVert \le C\, \lVert r \rVert .
+\]</div>
+<ul>
+<li><strong>Evidence:</strong> for heat in <span class="arithmatex">\(d = 1 \ldots 5\)</span> the residual stays at 2–7 % while the error grows from 2 % to 44 % (K08).</li>
+<li><strong>Fix:</strong> check against a reference: <code>pde.validate</code>, <code>pinnrl.benchmarks</code>, or <code>pinnrl-benchmark fdm</code>.</li>
+</ul>
+<h3 id="a-system-of-odes-collapses-to-a-constant">A system of ODEs collapses to a constant<a class="headerlink" href="#a-system-of-odes-collapses-to-a-constant" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Cause:</strong> a trivial solution satisfies the residual almost everywhere (K09).</li>
+<li><strong>Fix:</strong> time-marching windows rescue SIR (error 1.0 to 0.1 %, <a href="../benchmarks/#time-marching-windows-experiment-h04">H04</a>). Nothing rescues Lorenz; use the reference solver.</li>
+</ul>
+<h3 id="adam_lbfgs-diverges"><code>adam_lbfgs</code> diverges<a class="headerlink" href="#adam_lbfgs-diverges" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Evidence:</strong> an early switch diverged in 3 of 6 runs on Burgers (D01).</li>
+<li><strong>Fix:</strong> leave more of the budget to Adam (<code>adam_lbfgs_switch_ratio</code>, default 0.7), or run L-BFGS as a second <code>train()</code> call.</li>
+</ul>
+<h3 id="results-vary-more-between-seeds-than-between-methods">Results vary more between seeds than between methods<a class="headerlink" href="#results-vary-more-between-seeds-than-between-methods" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Evidence:</strong> on Burgers the error varies six-fold from seed to seed (B01).</li>
+<li><strong>Fix:</strong> compare with paired seeds and equal budgets, as <code>pinnrl-benchmark sampling</code> does.</li>
+</ul>
+<h3 id="a-network-with-torchnnlayernorm-trains-on-a-wrong-gradient">A network with <code>torch.nn.LayerNorm</code> trains on a wrong gradient<a class="headerlink" href="#a-network-with-torchnnlayernorm-trains-on-a-wrong-gradient" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Cause:</strong> <code>torch.nn.LayerNorm</code> (PyTorch 2.10) returns a wrong weight gradient for a loss with second derivatives of the network. It is 2–3 % off in norm on heat (I12).</li>
+<li><strong>Fix:</strong> use <code>pinnrl.neural_networks.ExactLayerNorm</code>. Same function, same parameters, same checkpoint keys.</li>
+</ul>
+<h3 id="timings-are-twice-those-of-the-benchmarks-page">Timings are twice those of the benchmarks page<a class="headerlink" href="#timings-are-twice-those-of-the-benchmarks-page" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Cause:</strong> a laptop on battery in low power mode runs at about half speed.</li>
+<li><strong>Fix:</strong> run on mains power with nothing else using the processor.</li>
+</ul>
+<h2 id="inverse-problems">Inverse problems<a class="headerlink" href="#inverse-problems" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Inverse problem:</strong> estimating a parameter <span class="arithmatex">\(\theta\)</span> of the equation from data.</li>
+<li><strong>Cramér–Rao bound:</strong> the smallest standard deviation any unbiased estimate can have, <span class="arithmatex">\(\sigma_\theta \ge \sqrt{(F^{-1})_{\theta\theta}}\)</span>.</li>
+<li><strong>Fisher information</strong> <span class="arithmatex">\(F = J^\top \Sigma^{-1} J\)</span>: how much the data say about <span class="arithmatex">\(\theta\)</span>, from the sensitivities <span class="arithmatex">\(J = \partial u / \partial \theta\)</span> and the noise covariance <span class="arithmatex">\(\Sigma\)</span>.</li>
+</ul>
+<h3 id="an-identified-parameter-stalls-12-from-the-truth">An identified parameter stalls 1–2 % from the truth<a class="headerlink" href="#an-identified-parameter-stalls-12-from-the-truth" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Cause:</strong> weight decay and gradient clipping act as priors on the network, and the parameter absorbs them.</li>
+<li><strong>Evidence:</strong> the heat diffusivity stalled at 1.5–2 % with them; the floor is 0.1–0.2 % without (F01, D01).</li>
+<li><strong>Fix:</strong> <code>weight_decay=0</code>, <code>gradient_clipping=0</code> (<code>--weight-decay 0 --gradient-clipping 0</code>).</li>
+</ul>
+<h3 id="the-estimate-is-confidently-wrong">The estimate is confidently wrong<a class="headerlink" href="#the-estimate-is-confidently-wrong" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Cause:</strong> a PINN returns a number whether or not the data determine it. Field error does not predict parameter error.</li>
+<li><strong>Evidence:</strong> KdV's coefficients come back 18 % and 25 % low where the bound says 0.6 % and 1.4 % (F02). The Burgers viscosity is 2.5–5 times too large (F03).</li>
+<li><strong>Fix:</strong> compare with the bound: <code>pinnrl.analysis.fisher_information</code>. See <a href="../inverse_problems/">Inverse problems</a>.</li>
+</ul>
+<h3 id="two-parameters-cannot-be-told-apart">Two parameters cannot be told apart<a class="headerlink" href="#two-parameters-cannot-be-told-apart" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Cause:</strong> some combinations are one unknown for any method.</li>
+<li><strong>Evidence:</strong> on the evaporator, 0.5 K of steam bias reproduces the records of a 30 % fouling error (J04).</li>
+<li><strong>Fix:</strong> read the correlations of <span class="arithmatex">\(F\)</span> before training. Fix one of the pair, or add the measurement that separates them (<code>pinnrl.analysis.greedy_design</code>).</li>
+</ul>
+<h3 id="an-unknown-function-collapses-to-a-constant">An unknown function collapses to a constant<a class="headerlink" href="#an-unknown-function-collapses-to-a-constant" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Evidence:</strong> the droplet's drying-rate closure does so from a cold start on every seed (J07).</li>
+<li><strong>Fix:</strong><ol>
+<li>Constrain it: <code>positive</code>, <code>monotone</code>, an <code>anchor</code> where its value is known.</li>
+<li>Start it from a pointwise estimate of the record.</li>
+<li>Judge it by the misfit through the reference solver (<a href="../process_twins/">Process twins</a>).</li>
+</ol>
+</li>
+</ul>
+<h3 id="an-interval-that-does-not-cover">An interval that does not cover<a class="headerlink" href="#an-interval-that-does-not-cover" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Coverage:</strong> the fraction of repeated data sets whose interval contains the truth. A 90 % interval should cover 90 %.</li>
+<li><strong>Evidence:</strong> ensembles over initializations covered 13 %; a Laplace interval 77 % with a 2 % bias; the swarm's region 90 % (F06).</li>
+<li><strong>Fix:</strong> measure it with <code>pinnrl.uq.coverage</code> before reporting an interval.</li>
+</ul>
+<h2 id="process-twins">Process twins<a class="headerlink" href="#process-twins" title="Permanent link">&para;</a></h2>
+<h3 id="the-twin-fails-its-misfit-test">The twin fails its misfit test<a class="headerlink" href="#the-twin-fails-its-misfit-test" title="Permanent link">&para;</a></h3>
+<p>The test runs the fitted model through a reference solver and returns</p>
+<div class="arithmatex">\[
+\chi^2_{\text{red}} = \frac{1}{n} \sum_{i=1}^{n} \frac{(y_i - \hat y_i)^2}{\sigma_i^2},
+\]</div>
+<p>which is near 1 for a fit.</p>
+<ul>
+<li><strong>Evidence:</strong> the PINN twin failed on 22 of 36 runs on the evaporator (J06) and on every run on the counter-current dryer (J13).</li>
+<li><strong>Fix:</strong><ol>
+<li>Retry from new seeds: <code>train_with_restarts</code> keeps the run with the best misfit.</li>
+<li>If no run passes and the model has a reference solver, use the classical estimator: <code>ExtendedKalmanFilter</code>, <code>MovingHorizonEstimator</code>, or least squares through <code>reference()</code>.</li>
+</ol>
+</li>
+</ul>
+<h3 id="a-filters-interval-is-too-narrow">A filter's interval is too narrow<a class="headerlink" href="#a-filters-interval-is-too-narrow" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Evidence:</strong> a model biased by 2.7 % (11 cells where 51 are needed) cut the coverage to 0.33–0.69. A steam record trusted beyond its 0.3 K accuracy cut it to 0.21–0.52 (J06).</li>
+<li><strong>Fix:</strong> refine the grid until the estimate stops moving. Estimate an instrument's offset under its prior.</li>
+</ul>
+<h2 id="tests-and-development">Tests and development<a class="headerlink" href="#tests-and-development" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Eleven tests skipped</td>
+<td>They download from Hugging Face</td>
+<td><code>PINNRL_NETWORK_TESTS=1</code> (about ten minutes)</td>
+</tr>
+<tr>
+<td>Kernel tests skipped</td>
+<td>The kernel cannot be built</td>
+<td>See the first section; <code>PINNRL_REQUIRE_NATIVE=1</code> makes it a failure</td>
+</tr>
+<tr>
+<td>The docs build fails on a link</td>
+<td><code>mkdocs build --strict</code> treats broken links and anchors as errors</td>
+<td>Fix the link; add a new page to the navigation of <code>mkdocs.yml</code></td>
+</tr>
+<tr>
+<td>A snippet fails in the release check</td>
+<td><code>scripts/run_doc_snippets.py</code> runs every <code>python</code> block of <code>README.md</code> and <code>docs/</code></td>
+<td>Put <code>&lt;!-- doctest: skip --&gt;</code> before a block that is slow or needs missing files</td>
+</tr>
+<tr>
+<td>An API name is undocumented</td>
+<td><code>test_docs_api_coverage.py</code> checks every public name</td>
+<td>Add a <code>:::</code> entry under <code>docs/api/</code></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

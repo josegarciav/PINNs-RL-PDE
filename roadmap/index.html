@@ -1,0 +1,2900 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Physics-informed neural networks for forward and inverse PDE problems, evaluated against numerical references">
+      
+      
+      
+        <link rel="canonical" href="https://josegarciav.github.io/PINNs-RL-PDE/roadmap/">
+      
+      
+        <link rel="prev" href="../api/cli/">
+      
+      
+        <link rel="next" href="../history/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Roadmap - pinnrl</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#roadmap" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="pinnrl" class="md-header__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            pinnrl
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Roadmap
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting_started/" class="md-tabs__link">
+          
+  
+  
+  Start
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../custom_equations/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../theory/" class="md-tabs__link">
+          
+  
+  
+  Theory
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../engine/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Engine
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/cli/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="pinnrl" class="md-nav__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    pinnrl
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../when_to_use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When to use a PINN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../custom_equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Custom equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inverse_problems/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverse problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../process_twins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process twins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets (The Well)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../applications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Applications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Theory
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/well_posedness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Well-posedness and stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/identifiability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identifiability and conditioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/bayesian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Bayesian view and uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/numerical_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The numerical-analysis bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/equivalence_regions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equivalence regions and swarm sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration file
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_4" id="__nav_7_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/neural_networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neural networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/pdes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDEs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/native/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/rl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL sampler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/plots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/uq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command-line entry points
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#where-this-goes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where this goes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#research-bets-accuracy-per-second" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Research bets: accuracy per second
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Research bets: accuracy per second">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#r6-a-network-designed-for-the-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        R6. A network designed for the loop
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v09-the-engine-everywhere" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9: the engine, everywhere
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#every-release-from-v09-tests-that-protect-the-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every release from v0.9: tests that protect the architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-dashboard-as-an-experiment-tracking-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The dashboard as an experiment-tracking tool
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v010-pinnrlgym-process-environments-and-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.10: pinnrl.gym, process environments and control
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v011-decisions-that-serve-the-inverse-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.11: decisions that serve the inverse problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v012-discovering-unknown-physics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.12: discovering unknown physics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v013-simulation-at-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.13: simulation at scale
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v10-a-stable-platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v1.0: a stable platform
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v20-to-v60-the-platform-before-the-plant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v2.0 to v6.0: the platform before the plant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v70-the-plant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v7.0: the plant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not planned
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What has been built
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research program
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../paper/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Software paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#where-this-goes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where this goes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#research-bets-accuracy-per-second" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Research bets: accuracy per second
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Research bets: accuracy per second">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#r6-a-network-designed-for-the-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        R6. A network designed for the loop
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v09-the-engine-everywhere" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.9: the engine, everywhere
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#every-release-from-v09-tests-that-protect-the-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every release from v0.9: tests that protect the architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-dashboard-as-an-experiment-tracking-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The dashboard as an experiment-tracking tool
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v010-pinnrlgym-process-environments-and-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.10: pinnrl.gym, process environments and control
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v011-decisions-that-serve-the-inverse-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.11: decisions that serve the inverse problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v012-discovering-unknown-physics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.12: discovering unknown physics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v013-simulation-at-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.13: simulation at scale
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v10-a-stable-platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v1.0: a stable platform
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v20-to-v60-the-platform-before-the-plant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v2.0 to v6.0: the platform before the plant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v70-the-plant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v7.0: the plant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not planned
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="roadmap">Roadmap<a class="headerlink" href="#roadmap" title="Permanent link">&para;</a></h1>
+<p>What is planned, in the order the <a href="../research/">research program</a> needs it. Each item states what a user gains and, where it can be said in advance, when it counts as done. Within a release, items are worked top to bottom. What is already built is on the <a href="../history/">history page</a>.</p>
+<h2 id="where-this-goes">Where this goes<a class="headerlink" href="#where-this-goes" title="Permanent link">&para;</a></h2>
+<p>Eight releases built three things: a PINN trainer whose derivatives run in a compiled kernel, an inverse-modelling toolbox that says when an estimate can be trusted (identifiability, stability, calibrated intervals, a misfit test), and four process simulators with their classical estimators. Two findings shape what comes next:</p>
+<ul>
+<li><strong>On every unit with a cheap reference solve, the classical estimator beat the PINN twin</strong> (J05, J07d, J11, J13). The PINN's case is narrower than the literature claims: models with no trusted forward solve, unknown functions inside the equations, and amortised or parametric use, where one network replaces thousands of solves.</li>
+<li><strong>The "RL" in <code>pinnrl</code> is one contextual bandit</strong> that chooses collocation cells and does not beat uniform sampling at equal cost (B01/B06). Meanwhile the package owns what reinforcement learning is usually short of: fast, validated, physically meaningful simulators (a line shift in 1.6 s, an evaporator solve in milliseconds) with realistic sensors, hidden states and economic stakes.</li>
+</ul>
+<p>The direction follows from both: <strong><code>pinnrl</code> becomes the place where physics-informed models and sequential decisions meet.</strong> PINNs estimate what the plant does not measure; reinforcement learning and optimal control decide what to do about it (how to run, when to clean, what to measure next), in environments built from the same equations, graded against the classical controller as the estimators were graded against the Kalman filter.</p>
+<table>
+<thead>
+<tr>
+<th>Theme</th>
+<th>Release</th>
+<th>What a user gains</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Accuracy per second (research bets, below)</td>
+<td>v0.9–v0.10</td>
+<td>A lower error in the same time, by an optimizer, an architecture and a training controller built for physics-informed losses</td>
+</tr>
+<tr>
+<td>The engine, everywhere</td>
+<td>v0.9</td>
+<td>The fastest PINN step on a CPU on every problem the package solves and on every machine; custom networks at the same speed; twins that run outside Python</td>
+</tr>
+<tr>
+<td>Tests that protect the architecture</td>
+<td>every release</td>
+<td>Nothing existing breaks when a component is added; dead code removed</td>
+</tr>
+<tr>
+<td>The dashboard as an experiment tracker</td>
+<td>v0.9–v0.10</td>
+<td>Runs searched, compared and traced from data to result</td>
+</tr>
+<tr>
+<td><code>pinnrl.gym</code>: process environments and control</td>
+<td>v0.10</td>
+<td>Standard RL environments of real unit operations, with baselines (PID, MPC) and a twin in the loop</td>
+</tr>
+<tr>
+<td>Decisions that serve the inverse problem</td>
+<td>v0.11</td>
+<td>What to measure, where to sample and how to train, learned as policies and compared with the greedy designs</td>
+</tr>
+<tr>
+<td>Discovering unknown physics</td>
+<td>v0.12</td>
+<td>From a learned closure to an equation with an error bar; model-form error named instead of absorbed</td>
+</tr>
+<tr>
+<td>Simulation at scale</td>
+<td>v0.13</td>
+<td>One network across operating points; new units and geometries; inference in microseconds</td>
+</tr>
+<tr>
+<td>A stable platform</td>
+<td>v1.0</td>
+<td>An API that does not move under a user; the software paper</td>
+</tr>
+<tr>
+<td>The platform matured (see below)</td>
+<td>v2.0–v6.0</td>
+<td>Control, discovery, scale and an autonomous twin, each proven on simulated plants</td>
+</tr>
+<tr>
+<td>The plant</td>
+<td>v7.0</td>
+<td>Live data in, advice with intervals out, validated on a real line</td>
+</tr>
+</tbody>
+</table>
+<h2 id="research-bets-accuracy-per-second">Research bets: accuracy per second<a class="headerlink" href="#research-bets-accuracy-per-second" title="Permanent link">&para;</a></h2>
+<p>On an Apple M4 the engine leads on the time of a step (<a href="../benchmarks/#the-step-against-the-alternatives-experiment-i17">I17</a>). A user feels something else: the error reached in a given time. The bets below aim at that number, and they come before any publication. Each is a claim that can fail.</p>
+<p><strong>The measure</strong></p>
+<div class="arithmatex">\[
+\varepsilon(T) = \frac{\lVert u_\theta - u \rVert_2}{\lVert u \rVert_2} \quad \text{after wall-clock time } T \text{ on one CPU core}
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(u_\theta\)</span></strong>: the trained network.</li>
+<li><strong><span class="arithmatex">\(u\)</span></strong>: the exact or reference solution.</li>
+<li><strong>Protocol</strong>: ten seeds, median and interquartile range, the nine equations of I17 plus published suites (PINNacle, PDEBench), the same machine for every method.</li>
+</ul>
+<p><strong>The structure the bets use</strong></p>
+<div class="arithmatex">\[
+L(\theta) = \tfrac12 \lVert r(\theta) \rVert^2, \qquad r = \big(w_r\, r_{\text{pde}},\; w_b\, r_{\text{bc}},\; w_0\, r_{\text{ic}}\big)
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(r(\theta)\)</span></strong>: every residual of the problem stacked in one vector (equation, boundary, initial).</li>
+<li><strong>Least-squares problem</strong>: a loss that is a sum of squares. Adam and L-BFGS treat it as a generic function; the methods below use the squares.</li>
+<li><strong>Jacobian <span class="arithmatex">\(J = \partial r / \partial \theta\)</span></strong>: how each residual moves with each weight. The engine can apply <span class="arithmatex">\(J\)</span> and <span class="arithmatex">\(J^\top\)</span> to a vector at the cost of a step, without forming <span class="arithmatex">\(J\)</span>.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Bet</th>
+<th>The idea</th>
+<th>Baseline to beat</th>
+<th>It fails if</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R1. A least-squares optimizer</td>
+<td>Levenberg–Marquardt steps <span class="arithmatex">\(\delta = -(J^\top J + \lambda I)^{-1} J^\top r\)</span>, solved matrix-free with the engine's <span class="arithmatex">\(J v\)</span> and <span class="arithmatex">\(J^\top w\)</span></td>
+<td>Adam then L-BFGS at equal time</td>
+<td>It does not reach the published Gauss–Newton errors (about <span class="arithmatex">\(10^{-6}\)</span> on heat) on one CPU core in minutes, or is not at least 100 times below Adam then L-BFGS at equal time on six of the nine equations</td>
+</tr>
+<tr>
+<td>R2. The last layer solved, not trained</td>
+<td>With <span class="arithmatex">\(u_\theta = \sum_j c_j \phi_j(x; \vartheta)\)</span> and a linear equation, <span class="arithmatex">\(r\)</span> is linear in <span class="arithmatex">\(c\)</span>: solve <span class="arithmatex">\(c\)</span> by least squares at every step and optimize only <span class="arithmatex">\(\vartheta\)</span> (variable projection)</td>
+<td>R1 without it</td>
+<td>No gain in <span class="arithmatex">\(\varepsilon(T)\)</span> on the linear problems (heat, 2-D heat)</td>
+</tr>
+<tr>
+<td>R3. Conditions built into the network</td>
+<td><span class="arithmatex">\(u_\theta = g + d \cdot N_\theta\)</span> with <span class="arithmatex">\(g\)</span> matching the initial and boundary data and <span class="arithmatex">\(d\)</span> vanishing there, compiled like the rest</td>
+<td>Penalty terms with tuned weights</td>
+<td>The error is not lower without any loss weight to tune</td>
+</tr>
+<tr>
+<td>R4. A learned training controller</td>
+<td>A policy sets the damping <span class="arithmatex">\(\lambda\)</span>, the resampling and the restarts of R1 from the loss history, trained across equations</td>
+<td>Marquardt's and Nielsen's damping rules</td>
+<td>It does not beat the rules on equations it was not trained on</td>
+</tr>
+<tr>
+<td>R5. A benchmark others accept</td>
+<td><span class="arithmatex">\(\varepsilon(T)\)</span> curves against DeepXDE and JAX baselines on public suites, scripts in the repository</td>
+<td>The best published number per task</td>
+<td>The lead of R1–R3 does not survive on problems the package was not tuned on</td>
+</tr>
+<tr>
+<td>R6. A network designed for the loop (below)</td>
+<td>A trunk cached once and a small head per step, so a model queried millions of times in a reinforcement-learning loop costs microseconds and adapts by a least-squares update</td>
+<td>A general network retrained by Adam; the reference solver as environment</td>
+<td>The loop is not 10 times faster, or the policy is worse than one trained on the solver</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Levenberg–Marquardt</strong>: Gauss–Newton with a damping term <span class="arithmatex">\(\lambda I\)</span> that keeps the step inside the region where the linearization holds.</li>
+<li><strong>Matrix-free</strong>: the linear system is solved by conjugate gradients, which needs only products with <span class="arithmatex">\(J\)</span> and <span class="arithmatex">\(J^\top\)</span>.</li>
+<li><strong>Variable projection</strong>: eliminating the parameters a model is linear in, and optimizing over the rest.</li>
+</ul>
+<p><strong>What is new and what is not</strong> (from a literature review of November 2026; absence means "not found", not "proven absent"):</p>
+<table>
+<thead>
+<tr>
+<th>Bet</th>
+<th>Already published</th>
+<th>Not found, and what the bet has to show</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R1</td>
+<td>Gauss–Newton, Levenberg–Marquardt, natural-gradient and self-scaled quasi-Newton methods for PINNs, matrix-free and with Taylor mode, three to five orders below Adam on GPUs in double precision</td>
+<td>The same accuracy on one CPU core in comparable time; the measured cost of <span class="arithmatex">\(Jv\)</span> and <span class="arithmatex">\(J^\top w\)</span> against one gradient; where a dense solve beats the matrix-free one; single precision; inverse problems</td>
+</tr>
+<tr>
+<td>R2</td>
+<td>Random-feature and extreme-learning-machine solvers; variable projection on hidden weights</td>
+<td>The solve timed in compiled code, and combined with R1 and R3</td>
+</tr>
+<tr>
+<td>R3</td>
+<td>Distance-function and functional-connection ansatz, also paired with an exact last-layer solve</td>
+<td>The three together with trained hidden weights; time-dependent nonlinear problems; inverse problems</td>
+</tr>
+<tr>
+<td>R4</td>
+<td>Learned damping on classical least squares, with thin evidence; adaptive sampling and loss weights, which rarely beat simple baselines at equal compute</td>
+<td>Control of damping, switching and restarts for R1, trained across equations and tested on unseen ones, against Marquardt's and Nielsen's rules. A null result is worth reporting</td>
+</tr>
+<tr>
+<td>R5</td>
+<td>Suites that report final error (PINNacle, the jaxpi leaderboard)</td>
+<td>Error against wall-clock time, CPU timings, a small-network track, inverse problems scored on identifiability and calibration</td>
+</tr>
+<tr>
+<td>R6</td>
+<td>The trunk-and-head form (DeepONet); online last-layer adaptation in flight control and Koopman control</td>
+<td>Recursive least squares on a physics-trained cached basis; closed-form action gradients; latency on one CPU core; a policy trained on the model against one trained on the solver</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>The bar for R1 is higher than first written.</strong> Published Gauss–Newton results reach errors near <span class="arithmatex">\(10^{-6}\)</span> on heat and <span class="arithmatex">\(10^{-7}\)</span> on Poisson in minutes on a GPU. Ten times better than Adam is not enough: R1 has to reach those errors on a CPU core.</li>
+<li><strong>A warning for R6.</strong> In one benchmark of predictive control on reactors, PINN surrogates were slower than the mechanistic model in every case, because of the cost of derivatives. R6 exists to remove that cost and must be judged against that result.</li>
+<li><strong>For industry.</strong> No PINN validated on plant data for an evaporator or a spray dryer was found; plants run grey-box models with predictive control. Readiness there is a lifecycle matter (historian validation, shadow mode, drift monitoring, change control), which is what v6.0 and v7.0 are for.</li>
+</ul>
+<p><strong>R1 has a research plan and a first prototype</strong> in <code>experiments/D10_least_squares_optimizer/</code> (<code>PLAN.md</code>, <code>run.py</code>). The plan goes beyond Levenberg–Marquardt: nine moves that use what a physics-informed loss is (the residual's flow integrated like a stiff ODE, a coarse classical solve as the preconditioner, training as filtering over a stream of fresh points, small blocks solved exactly with the sampler choosing them, the linear layer solved and the basis grown, continuation in a physical parameter, the equation's own time as the training loop, multipliers in place of loss weights) and an agent that chooses among them, which is R4 widened from damping to moves. Each has a test and a condition under which it is dropped.</p>
+<p>First measurements (one core, three seeds, heat, Burgers and KdV): at 60 s Levenberg–Marquardt reaches <span class="arithmatex">\(6 \times 10^{-7}\)</span> on heat and <span class="arithmatex">\(6 \times 10^{-6}\)</span> on KdV, 120 and 220 times below Adam then L-BFGS, and only 3 times below on Burgers. An extended Kalman filter over a stream of fresh points is slower for the first minute and then ahead on all three: at 180 s, <span class="arithmatex">\(2 \times 10^{-5}\)</span> on Burgers (65 times below Levenberg–Marquardt), <span class="arithmatex">\(1.5 \times 10^{-9}\)</span> on heat, <span class="arithmatex">\(10^{-7}\)</span> on KdV. Solving the last layer reaches <span class="arithmatex">\(5 \times 10^{-9}\)</span> on heat in 60 s. Four of the seven moves tried were dropped. At 180 s the filter is 350 (Burgers) to 35,000 (heat) times below Adam then L-BFGS. Twenty seconds of Levenberg–Marquardt before the filter remove its slow start at no loss. Open: the filter's covariance costs the square of the number of weights; kept only within each layer it holds on heat and KdV and loses a factor of 20 on Burgers. At 12,737 weights a low-rank form keeps level with Levenberg–Marquardt, not ahead: the filter's lead does not yet survive the size. A memory that grows with the stream (short early, long late) puts the filter ahead of Levenberg–Marquardt from the first seconds on heat and KdV, and 150, 17 and 12 times below it at 180 s on heat, Burgers and KdV. Adam then L-BFGS was too weak a baseline. Self-scaled Broyden (Urbán, Stefanou and Pons, 2024) with little or no Adam first reaches <span class="arithmatex">\(2 \times 10^{-10}\)</span> to <span class="arithmatex">\(4 \times 10^{-10}\)</span> on heat and KdV in 180 s. R1's bar is now the best published method at every moment of the run. Against it the filter leads until 68 s on heat and 37 s on KdV, and on Burgers throughout, 14 times at the end, on the same loss. The filter then self-scaled Broyden meets the bar on heat. On KdV nothing here does after 37 s. On Allen–Cahn the filter meets it alone: 250 times below the best self-scaled Broyden at 20 s, 2.3 times at 180 s (<span class="arithmatex">\(3.3 \times 10^{-6}\)</span>), and it never lands on a wrong solution, where Broyden does on up to two seeds of three. Burgers at <span class="arithmatex">\(\nu = 0.003/\pi\)</span> defeats every method on uniform points: the front is 8 times narrower than their spacing. The filter breaks down there from covariance windup; a step limit on the change in <span class="arithmatex">\(u\)</span> makes it stable at no cost by steps on the smooth equations, and it then stops near 0.3. Levenberg–Marquardt on points redrawn from the residual every 5 steps fits the front to 1.1e-03, 50 times below the same method on uniform points. On a sharp front the points decide, and so a fair baseline places its points too: self-scaled Broyden on residual points is 30 times better on Burgers and takes the filter's lead there. With the step limit and rows drawn from the residual the filter leads Burgers again from 30 s, by 1.5 to 3 times, and keeps its Allen–Cahn lead.</p>
+<p>Order of work: R1 as a prototype in plain PyTorch first (to measure what it buys), then in the engine; R2 and R3 on top; R5 throughout; R4 and R6 last, because R4 needs R1 and R6 needs R2. The review is in the repository's <code>reports/</code> folder when it is kept there.</p>
+<h3 id="r6-a-network-designed-for-the-loop">R6. A network designed for the loop<a class="headerlink" href="#r6-a-network-designed-for-the-loop" title="Permanent link">&para;</a></h3>
+<p>A reinforcement-learning loop calls the physics model at every step of every episode: millions of evaluations, each for a new state and action, often with a small update in between. A general network recomputes everything at each call. This bet is an architecture, built together with the engine, in which almost nothing has to be recomputed.</p>
+<div class="arithmatex">\[
+u_\theta(x, t;\, z) \;=\; \sum_{j=1}^{m} c_j(z)\, \phi_j(x, t), \qquad c(z) = A\, h(z) + b
+\]</div>
+<ul>
+<li><strong><span class="arithmatex">\(z\)</span></strong>: what changes at every step of the loop (the state, the action, the operating point, the estimated parameters).</li>
+<li><strong>Trunk <span class="arithmatex">\(\phi_j(x,t)\)</span></strong>: features of space and time and their derivative streams. They do not depend on <span class="arithmatex">\(z\)</span>, so they are computed once and cached.</li>
+<li><strong>Head <span class="arithmatex">\(c(z)\)</span></strong>: a small map from the loop's variables to the coefficients. It is all that runs per step.</li>
+<li><strong>Linear in <span class="arithmatex">\(c\)</span></strong>: for a fixed trunk the residual is linear or low-order in the coefficients, so an update is a least-squares solve (R2), not a gradient-descent run.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>How the design gets it</th>
+<th>Done when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A query costs microseconds</td>
+<td>Cached trunk streams; the head is one small matrix product; batched over parallel environments in one call</td>
+<td>One core serves a stated number of queries per second, with <span class="arithmatex">\(\partial u / \partial z\)</span> included</td>
+</tr>
+<tr>
+<td>The model adapts inside the loop</td>
+<td>Recursive least squares on <span class="arithmatex">\(c\)</span> as new sensor data arrive, one rank update per measurement</td>
+<td>The twin tracks a drifting parameter at every environment step</td>
+</tr>
+<tr>
+<td>The policy can differentiate through it</td>
+<td><span class="arithmatex">\(\partial u / \partial z\)</span> in closed form from the head, exact, no graph</td>
+<td>A policy gradient through the model matches finite differences</td>
+</tr>
+<tr>
+<td>Rollouts stay stable</td>
+<td>The network advances the state over one control interval, with the physics residual and a bound on its growth built in</td>
+<td>A long rollout does not drift from the reference solver</td>
+</tr>
+<tr>
+<td>It runs outside Python</td>
+<td>Fixed widths and block sizes chosen for the cache; exported as C with the engine's export</td>
+<td>The exported model reproduces the Python one to rounding</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Recursive least squares</strong>: updating a least-squares solution when one more data point arrives, without solving again from the start.</li>
+<li><strong>Rollout</strong>: applying the model to its own output step after step, as a simulator does.</li>
+<li><strong>Control interval</strong>: the time between two actions of the controller.</li>
+</ul>
+<p>Baseline to beat: the same task with a general 4 × 64 network retrained by Adam, and with the reference solver as the environment. It fails if a policy trained on this model does not match one trained on the solver, or if the loop is not at least ten times faster than with the general network. It builds on R2 (the linear last layer) and feeds <a href="#v010-pinnrlgym-process-environments-and-control"><code>pinnrl.gym</code></a>, where the PINN world model is planned.</p>
+<h2 id="v09-the-engine-everywhere">v0.9: the engine, everywhere<a class="headerlink" href="#v09-the-engine-everywhere" title="Permanent link">&para;</a></h2>
+<p>In progress. Already built in this release (<a href="../history/#unreleased-v09-so-far">history</a>): the compiled kernel is the default engine; a benchmark against PyTorch, JAX and DeepXDE on nine equations (<a href="../benchmarks/#the-step-against-the-alternatives-experiment-i17">I17</a>); a step compiled per equation, which covers forward and inverse problems, scaled networks and layer normalization (1.3–1.4× the general kernel with normalization on). The aim of what remains is that the engine's lead holds on every problem the package solves and on the machines most users have, and that everything later (control, design, discovery) is built on it.</p>
+<ul>
+<li><strong>The rest of the step in the compiled call.</strong> The boundary and initial points, the loss reduction and Adam inside the same call (0.5 ms of heat's 3.5); L-BFGS on the compiled gradients in float64, since L-BFGS is what does the learning on the stiff process problems (J13); steady problems; unknown functions of a field (a closure <span class="arithmatex">\(f(u)\)</span>), which still run on autograd. <em>Gain: one call per step on every problem, and second-order training at engine speed.</em></li>
+<li><strong>Beyond one core, beyond one machine.</strong> The step's matrix products are single-threaded on Apple's matrix unit, where threads do not add. On Linux and x86 the blocks of the compiled step are independent and can run on a core each. <em>Gain: the lead held on the machines most users have; timed there first, since I17's table is one Apple M4.</em></li>
+<li><strong>Custom architectures.</strong> A declarative network description (blocks, widths, activations, normalization, input embeddings, skip connections) that both the autograd path and the kernel run; activations beyond <code>tanh</code> (<code>sin</code> for SIREN, <code>gelu</code>, <code>silu</code>) by their Taylor recurrences; Fourier features. <em>Gain: a user's architecture is not a reason to fall back.</em></li>
+<li><strong>Many networks in one call.</strong> Ensembles, the swarm of <code>pinnrl.uq</code>, restarts and hyperparameter sweeps trained as a batch of networks through one threaded kernel call. <em>Gain: a calibrated ensemble for the price of a few single runs; <code>train_with_restarts</code> in parallel.</em></li>
+<li><strong>Inference outside Python.</strong> Export a trained twin to a dependency-free C source or shared library (values and derivatives), and to ONNX; a throughput benchmark (evaluations per second per core). <em>Gain: a soft sensor that runs in a PLC gateway, a historian calculation or a spreadsheet plug-in at plant rate.</em></li>
+<li><strong>Prebuilt wheels.</strong> Platform wheels with the kernels compiled (macOS arm64/x86, Linux x86/aarch64), so no compiler is needed. <em>Gain: <code>pip install pinnrl</code> is enough.</em></li>
+<li><em>Stretch:</em> a Metal/CUDA backend for large batches; the kernel is a CPU design and small networks are where it wins.</li>
+</ul>
+<h2 id="every-release-from-v09-tests-that-protect-the-architecture">Every release from v0.9: tests that protect the architecture<a class="headerlink" href="#every-release-from-v09-tests-that-protect-the-architecture" title="Permanent link">&para;</a></h2>
+<p>A release must not break what exists. The suite today has about 900 tests and covers 96 % of the lines it measures, but it measures neither the dashboard, the launcher nor the training command line, and line coverage says little about whether a new component is caught when it breaks a contract.</p>
+<ul>
+<li><strong>Contract test</strong>: one test, written once, that every implementation of an extension point must pass (every equation, every network, every sampler, every process unit).</li>
+<li><strong>Integration test</strong>: a test that runs several parts together, as a user does (train, save, reload, analyse, display).</li>
+<li><strong>Dead code</strong>: code that no test, no entry point and no documented use reaches.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>What is built</th>
+<th>Done when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>T1. Contracts for the extension points</td>
+<td>A registry-driven suite: a new equation, architecture, sampler, optimizer or process unit is picked up automatically and must satisfy the same contract (shapes; the exact solution has zero residual; the compiled step equals autograd; save and reload give the same output)</td>
+<td>Adding a component without touching the tests still tests it</td>
+</tr>
+<tr>
+<td>T2. Engine equivalence by generation</td>
+<td>Random equations (orders, mixed terms, fields, parameters, unknown functions) checked compiled step against autograd</td>
+<td>A defect planted in the generator's output is caught</td>
+</tr>
+<tr>
+<td>T3. Pipelines end to end</td>
+<td>Train, checkpoint, reload, analyse, and read the run in the dashboard, for the forward, inverse and process paths, through the command line and the Python API</td>
+<td>Each documented workflow is one test</td>
+</tr>
+<tr>
+<td>T4. Compatibility</td>
+<td>Run folders and checkpoints written by earlier releases still load</td>
+<td>A fixture per released version</td>
+</tr>
+<tr>
+<td>T5. Coverage that counts everything</td>
+<td>The dashboard, the launcher and the training command line come back into the measurement</td>
+<td>Coverage of the whole package stays above 75 % (the present gate of 90 % on the measured part stays)</td>
+</tr>
+<tr>
+<td>T6. Tests judged by what they catch</td>
+<td>Mutation testing on the core modules: a test that never fails when the code is altered is rewritten or removed</td>
+<td>A mutation score is reported per module</td>
+</tr>
+<tr>
+<td>T7. Dead code removed</td>
+<td>Unreached code found by coverage and a static scan, then deleted or given a test</td>
+<td>The scan is clean and runs in CI</td>
+</tr>
+</tbody>
+</table>
+<p>Rule for new tests: no assertion that restates the implementation. A test states a property a user relies on, or a contract a new component must meet.</p>
+<h2 id="the-dashboard-as-an-experiment-tracking-tool">The dashboard as an experiment-tracking tool<a class="headerlink" href="#the-dashboard-as-an-experiment-tracking-tool" title="Permanent link">&para;</a></h2>
+<p>Today the dashboard launches, monitors and compares runs. The aim is a tool a team can use to track experiments and follow their data from the record to the result.</p>
+<ul>
+<li><strong>Run</strong>: one training or estimation, with its configuration, metrics, checkpoints and figures.</li>
+<li><strong>Lineage</strong>: which data, which code version and which settings produced a result.</li>
+<li><strong>Artifact</strong>: a file a run produced (a model, a figure, a table).</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>What a user gains</th>
+<th>Done when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D1. A run store with a schema</td>
+<td>Every run indexed: configuration, metrics, tags, code version, data fingerprint; search and filter over thousands of runs</td>
+<td>A query over 5,000 runs returns in under a second</td>
+</tr>
+<tr>
+<td>D2. Compare and diff</td>
+<td>Curves overlaid, configurations diffed, error against wall-clock time, seeds grouped with median and spread</td>
+<td>Two runs can be explained apart from one screen</td>
+</tr>
+<tr>
+<td>D3. Lineage and artifacts</td>
+<td>From a figure back to the run, the data and the commit; an artifact browser; export of a run as a report</td>
+<td>Every number in a report links to its run</td>
+</tr>
+<tr>
+<td>D4. Live operation</td>
+<td>Launch, queue, stop and resume runs; live loss, residual maps and engine status; alerts when the misfit test fails</td>
+<td>A study of 100 runs is managed without a terminal</td>
+</tr>
+<tr>
+<td>D5. The process view, grown</td>
+<td>Sensors, estimated states with intervals, fouling monitors and the line's variance budget, on recorded or replayed data</td>
+<td>An engineer reads a shift from one page</td>
+</tr>
+<tr>
+<td>D6. Design and reliability</td>
+<td>A design system (layout, colour, type), keyboard access, tested callbacks, a separate data layer under the pages</td>
+<td>The pages are covered by T3 and usable on a laptop screen</td>
+</tr>
+<tr>
+<td>D7. Working with other tools</td>
+<td>Import and export to MLflow and Weights &amp; Biases formats</td>
+<td>A run moves in and out without loss of its metrics</td>
+</tr>
+</tbody>
+</table>
+<h2 id="v010-pinnrlgym-process-environments-and-control">v0.10: <code>pinnrl.gym</code>, process environments and control<a class="headerlink" href="#v010-pinnrlgym-process-environments-and-control" title="Permanent link">&para;</a></h2>
+<p>The simulators become environments with the Gymnasium interface, so any RL library can train on them, and the package ships the baselines that an RL result must beat.</p>
+<ul>
+<li><strong>The environments.</strong> <code>Evaporator-v0</code> (actions: steam temperature, feed flow; hidden: fouling), <code>SprayDryer-v0</code> and <code>CounterCurrentDryer-v0</code> (actions: inlet air temperature, feed rate; constraint: the stickiness margin), <code>Line-v0</code> (the passes and the dryer together). Observations are the plant's sensors with their noise, delays and lab assays that arrive hourly, so the problems are partially observed as a plant is. Disturbances come from a model or from a historian export replayed. <em>Done when each environment passes Gymnasium's checker and a random policy runs at a stated number of steps per second.</em></li>
+<li><strong>Tasks with money in them.</strong> Setpoint tracking of the powder moisture; energy per kilogram of powder under a moisture specification and a stickiness limit (a constrained problem); <strong>when to clean</strong> (the fouling monitor's time-to-threshold turned into an optimal-stopping decision against production lost); start-up and product changeover. Each task has a reward in physical units and a documented constraint.</li>
+<li><strong>Throughput.</strong> Vectorised environments on the compiled integrators; the dryer's steady and transient solves in C++ as the evaporator's are (I16). <em>Gain: millions of environment steps an hour on a laptop, which is what RL needs and what a CFD-based environment cannot give.</em></li>
+<li><strong>Baselines first.</strong> PID loops, linear MPC on the linearised model and nonlinear MPC through the reference solver, each with the EKF or MHE as its state estimator. <em>Rule, as for the estimators: an RL policy is reported against MPC with the same information, and where MPC wins the documentation says so.</em></li>
+<li><strong>Agents.</strong> Adapters for Stable-Baselines3 and CleanRL, and one reference PPO and SAC in the package for reproducibility; the existing DQN becomes one agent behind the same interface.</li>
+<li><strong>The twin in the loop.</strong> Policies that act on the estimator's state and its interval (the EKF's fouling and band, the powder soft sensor), and training under the uncertainty the inverse tools quantify: domain randomisation over the equivalence region of <code>pinnrl.uq</code> instead of over arbitrary ranges. <em>Gain: a policy robust to exactly the model errors the data cannot rule out, the sim-to-real gap stated in the units of the identifiability analysis.</em></li>
+<li><strong>Safe and offline RL.</strong> Constrained policies for the stickiness margin (a shield from the twin's interval); offline RL from historian data with the simulator as the evaluation ground truth. <em>Gain: a path to a plant, where exploration on the equipment is not allowed.</em></li>
+<li><strong>PINN world models.</strong> Where an environment has no cheap solve, a parametric PINN as the differentiable model inside model-based RL, with policy gradients through the surrogate. <em>This is the PINN's case restated for control, and it is tested where it belongs: against the solver-based environment on a unit that has one.</em></li>
+</ul>
+<h2 id="v011-decisions-that-serve-the-inverse-problem">v0.11: decisions that serve the inverse problem<a class="headerlink" href="#v011-decisions-that-serve-the-inverse-problem" title="Permanent link">&para;</a></h2>
+<p>The inverse problem contains decisions that are made greedily or by hand today. They become policies, each with its greedy baseline already in the package.</p>
+<ul>
+<li><strong>Sequential experiment design.</strong> Which operating point to run next and when to pull a lab sample, to identify a closure or a fouling law fastest. Baseline: <code>analysis.greedy_design</code> (J09, J12), which is myopic and linear-Gaussian; candidates: Bayesian optimal design and an RL policy on the design environment. <em>Gain: a campaign plan for a pilot tower in fewer runs, with the expected interval before the first run is made.</em></li>
+<li><strong>Sensor placement and maintenance.</strong> Where to put a thermocouple, which instrument to recalibrate, as a budgeted decision under the same information currency.</li>
+<li><strong>A training gym (<code>PINNTraining-v0</code>).</strong> The PINN's own training as an environment: actions are the sampling distribution, the loss weights, the learning rate and when to restart; the reward is the error gained per residual evaluation. The bandit, RAD, the adaptive weights and the schedules become policies in one interface, and classical bandits (UCB, Thompson, EXP3; C07) and a policy-gradient sampler (C09) join them. <em>Gain: the sampling study (B01–B08) becomes a leaderboard anyone can add to, and a learned training controller is tested for transfer across equations (C10).</em></li>
+<li><strong>Acceptance and restarts as a policy.</strong> <code>train_with_restarts</code> chooses the next seed blindly; a policy that reads the misfit and the loss curve chooses whether to continue, restart or switch optimizer.</li>
+</ul>
+<h2 id="v012-discovering-unknown-physics">v0.12: discovering unknown physics<a class="headerlink" href="#v012-discovering-unknown-physics" title="Permanent link">&para;</a></h2>
+<p>The package identifies parameters and free-form functions. The step beyond is to say what the function is, whether the model's form is wrong, and how the plant is being run.</p>
+<ul>
+<li><strong>From a learned closure to an equation.</strong> Sparse regression of a fitted <code>UnknownFunction</code> on a library of candidate terms (the SINDy idea applied to the closure, not the whole equation), with the candidates' identifiability checked first and the selected form refitted through the reference solver and judged by the misfit test. <em>Gain: a drying-rate law an engineer can read and publish, with an interval on every coefficient.</em></li>
+<li><strong>Model-form error, named.</strong> A structured discrepancy term next to the known physics, constrained so it cannot absorb what the parameters explain (F08); a report that separates "the parameters are uncertain" from "the equations are wrong". Model selection between candidate closures by Laplace evidence and held-out misfit.</li>
+<li><strong>Hybrid models.</strong> Known balances with learned terms where the physics is missing (wall deposition, agglomeration), using the anchor and monotonicity constraints so the learned part stays physical.</li>
+<li><strong>Units without a method-of-lines form.</strong> A droplet size distribution (population balance) and wall deposition in the dryer, the first models where the PINN twin has no cheap classical rival. <em>This is the open item of J13: the place the PINN's case can still be made.</em></li>
+<li><strong>Ways of working.</strong> From historian data: operating regimes and transitions (changepoints and clustering on the twin's states, not on raw tags), the differences between shifts or recipes expressed as differences in estimated parameters, and drift that precedes a quality excursion. <em>Gain: the twin explains how the line is actually run, which is the question a plant asks first.</em></li>
+<li><strong>Amortised identification.</strong> A network trained on simulated records that maps a new record to parameters and intervals in one pass (simulation-based inference), checked for calibration as J06 checked the filters. <em>Gain: identification in milliseconds for a fleet of units.</em></li>
+</ul>
+<h2 id="v013-simulation-at-scale">v0.13: simulation at scale<a class="headerlink" href="#v013-simulation-at-scale" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Parametric surrogates.</strong> One network across operating points, geometries and parameters (inputs beyond <code>x, t</code>), trained against the reference solver where one exists and by the residual where none does. <em>Gain: what-if studies and design sweeps without a solve per point, and the world model v0.10 needs.</em></li>
+<li><strong>Hard constraints and decomposition.</strong> Exact initial and boundary conditions by output transform (D09); domain decomposition and time marching for long horizons and sharp fronts; separable networks for 2-D and 3-D (E09).</li>
+<li><strong>A unit library with a plugin interface.</strong> Wiped-film evaporators (P22), plate heat exchangers, membrane filtration, fluidised-bed drying, the cleaning cycle itself; a documented base class so a user's unit gets the reference solver, the PINN form, the estimators and a gym environment from one definition. <em>Gain: the method leaves food powders for pharmaceuticals, batteries and chemicals without a rewrite.</em></li>
+<li><strong>Pretraining on The Well.</strong> The dataset loader is in place; operator backbones pretrained on simulation data and fine-tuned with a residual, tested on whether pretraining buys accuracy at equal compute.</li>
+</ul>
+<h2 id="v10-a-stable-platform">v1.0: a stable platform<a class="headerlink" href="#v10-a-stable-platform" title="Permanent link">&para;</a></h2>
+<p>The 0.x releases may still move the API. 1.0 is the promise that they stop.</p>
+<ul>
+<li><strong>A stable API.</strong> A deprecation policy, semantic versioning that means it, and one documented public surface for the trainer, the inverse tools, the process units and the gym.</li>
+<li><strong>The software paper (P06).</strong> The package described and benchmarked in one citable place, with the head-to-head of v0.9 and the control baselines of v0.10.</li>
+<li><strong>Reproducibility.</strong> Every figure in the documentation regenerated by one command from a pinned environment.</li>
+</ul>
+<h2 id="v20-to-v60-the-platform-before-the-plant">v2.0 to v6.0: the platform before the plant<a class="headerlink" href="#v20-to-v60-the-platform-before-the-plant" title="Permanent link">&para;</a></h2>
+<p>The plant is not next. A twin that advises a real line has to be right when nobody can check it, so the platform first has to be far more capable, and proven on simulated plants where the truth is known. The major versions are the stages of that; their content will be set as the 0.x work shows what holds up.</p>
+<table>
+<thead>
+<tr>
+<th>Release</th>
+<th>Stage</th>
+<th>Done when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v2.0</td>
+<td><strong>Control that earns its place.</strong> <code>pinnrl.gym</code> as a benchmark suite: tasks, baselines and a leaderboard for constrained, partially observed process control</td>
+<td>A learned policy beats nonlinear MPC on at least one task at equal information, or the suite documents why none does</td>
+</tr>
+<tr>
+<td>v3.0</td>
+<td><strong>Discovery as a workflow.</strong> Records in; parameters, closures as equations, model-form error and operating regimes out, with intervals</td>
+<td>The workflow recovers planted physics on every unit of the library, blind</td>
+</tr>
+<tr>
+<td>v4.0</td>
+<td><strong>Scale.</strong> Parametric and operator surrogates, 2-D and 3-D units, flowsheets of many units, a GPU backend where the batch justifies it</td>
+<td>A whole line's what-if study runs interactively</td>
+</tr>
+<tr>
+<td>v5.0</td>
+<td><strong>The autonomous twin.</strong> A twin that identifies itself, tests its own misfit, redesigns its measurements, retrains and says when it should not be trusted, unattended</td>
+<td>It runs for simulated months through drift, faults and recipe changes without a silent failure</td>
+</tr>
+<tr>
+<td>v6.0</td>
+<td><strong>The plant rehearsal.</strong> The whole stack against a simulated plant behind real interfaces (OPC UA, MQTT, a historian), with public pilot-scale data wherever it exists</td>
+<td>Advice in shadow mode is scored against the simulated truth, and the failures are reported</td>
+</tr>
+</tbody>
+</table>
+<h2 id="v70-the-plant">v7.0: the plant<a class="headerlink" href="#v70-the-plant" title="Permanent link">&para;</a></h2>
+<p>Deliberately far out: nothing here starts until v6.0's rehearsal has passed.</p>
+<ul>
+<li><strong>Live data.</strong> OPC UA and MQTT connectors next to the historian adapter; the monitor as a service that runs for weeks, with alarms on the misfit test.</li>
+<li><strong>Advice with intervals (P25).</strong> Setpoint recommendations and cleaning schedules from the controllers, shown in the dashboard with what they are expected to gain and how sure the twin is.</li>
+<li><strong>Validation on a real line (P26).</strong> The simulated-plant results repeated on plant data, with the failures reported.</li>
+</ul>
+<h2 id="not-planned">Not planned<a class="headerlink" href="#not-planned" title="Permanent link">&para;</a></h2>
+<p>A hosted service and monetization (until the research results justify it); a custom PDE-builder UI; a general-purpose RL library (the agents come from the libraries that exist; <code>pinnrl</code> supplies the environments, the baselines and the twin); CFD-scale solvers.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

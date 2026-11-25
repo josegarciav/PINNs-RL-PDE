@@ -1,0 +1,2965 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Physics-informed neural networks for forward and inverse PDE problems, evaluated against numerical references">
+      
+      
+      
+        <link rel="canonical" href="https://josegarciav.github.io/PINNs-RL-PDE/process_twins/">
+      
+      
+        <link rel="prev" href="../inverse_problems/">
+      
+      
+        <link rel="next" href="../datasets/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Process twins - pinnrl</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#process-twins" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="pinnrl" class="md-header__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            pinnrl
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Process twins
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting_started/" class="md-tabs__link">
+          
+  
+  
+  Start
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../custom_equations/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../theory/" class="md-tabs__link">
+          
+  
+  
+  Theory
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../engine/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Engine
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/cli/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../roadmap/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="pinnrl" class="md-nav__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    pinnrl
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../when_to_use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When to use a PINN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../custom_equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Custom equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inverse_problems/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverse problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process twins
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process twins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-units" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The units
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The units">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-falling-film-evaporator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The falling-film evaporator
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#estimating-a-drifting-parameter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Estimating a drifting parameter
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#moving-horizon-estimation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Moving-horizon estimation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plant-data-a-historian-export-and-a-tag-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plant data: a historian export and a tag map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checking-a-learned-closure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checking a learned closure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-measurement-to-add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which measurement to add
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-the-rig-to-the-tower" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the rig to the tower
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-counter-current-tower" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The counter-current tower
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The line
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-estimator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which estimator
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets (The Well)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../applications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Applications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Theory
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/well_posedness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Well-posedness and stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/identifiability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identifiability and conditioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/bayesian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Bayesian view and uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/numerical_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The numerical-analysis bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/equivalence_regions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equivalence regions and swarm sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration file
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_4" id="__nav_7_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/neural_networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neural networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/pdes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDEs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/native/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/rl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL sampler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/plots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/uq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command-line entry points
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What has been built
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research program
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../paper/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Software paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-units" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The units
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The units">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-falling-film-evaporator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The falling-film evaporator
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#estimating-a-drifting-parameter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Estimating a drifting parameter
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#moving-horizon-estimation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Moving-horizon estimation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plant-data-a-historian-export-and-a-tag-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plant data: a historian export and a tag map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checking-a-learned-closure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checking a learned closure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-measurement-to-add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which measurement to add
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-the-rig-to-the-tower" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the rig to the tower
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-counter-current-tower" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The counter-current tower
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The line
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-estimator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which estimator
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="process-twins">Process twins<a class="headerlink" href="#process-twins" title="Permanent link">&para;</a></h1>
+<p>This page shows how to build the twin of a process unit with <code>pinnrl.process</code>: the model of each unit, what a plant measures on it, and which estimator recovers what it cannot measure. It is for readers who know machine learning and want the process-engineering side; the full results are in <a href="../benchmarks/">Benchmarks</a> (experiments J01–J13).</p>
+<ul>
+<li><strong>Twin</strong>: a model of a running unit, kept in step with its records, that reports quantities no instrument measures.</li>
+<li><strong>Reference solver</strong>: a classical numerical solver of the unit's model. It plays the plant in the experiments and the forward model in the classical estimators.</li>
+<li><strong>Classical estimator</strong>: one that needs no neural network (a Kalman filter, a least-squares fit through the reference solver). Every PINN result is compared with one.</li>
+</ul>
+<p><code>pinnrl.process</code> holds reference simulators of the units, the same models as <a href="../custom_equations/"><code>CustomPDE</code></a> problems for the PINN, the classical estimators, and an adapter for plant-historian data.</p>
+<h2 id="the-units">The units<a class="headerlink" href="#the-units" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Unit</th>
+<th>Class</th>
+<th>Unknown a plant cannot measure</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Falling-film evaporator tube</td>
+<td><a href="../api/process/#process.evaporator.FallingFilmEvaporator"><code>FallingFilmEvaporator</code></a></td>
+<td>the fouling resistance <span class="arithmatex">\(R_f(t)\)</span></td>
+</tr>
+<tr>
+<td>Drying droplet</td>
+<td><a href="../api/process/#process.droplet.DryingDroplet"><code>DryingDroplet</code></a></td>
+<td>the drying-rate closure <span class="arithmatex">\(f(X)\)</span></td>
+</tr>
+<tr>
+<td>Spray-dryer tower (co-current, steady)</td>
+<td><a href="../api/process/#process.dryer.SprayDryer"><code>SprayDryer</code></a></td>
+<td>the same closure, seen through the air</td>
+</tr>
+<tr>
+<td>Counter-current tower (steady and transient)</td>
+<td><a href="../api/process/#process.counter_dryer.CounterCurrentDryer"><code>CounterCurrentDryer</code></a></td>
+<td>the curve's parameters and the wall loss, from a transient</td>
+</tr>
+<tr>
+<td>The line: evaporator passes feeding the dryer</td>
+<td><a href="../api/process/#process.line.ProcessLine"><code>ProcessLine</code></a></td>
+<td>every unit's unknowns, and which one the powder inherits</td>
+</tr>
+</tbody>
+</table>
+<p>Each class has two faces:</p>
+<ul>
+<li><code>reference</code>: the reference solver, an ODE integrator or the <strong>method of lines</strong> (space derivatives replaced by differences on a grid, which leaves ODEs in time).</li>
+<li><code>custom_pde()</code>: the same equations with their inputs, scales and sensors, for the PINN.</li>
+</ul>
+<h3 id="the-falling-film-evaporator">The falling-film evaporator<a class="headerlink" href="#the-falling-film-evaporator" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Falling film</strong>: a thin liquid film that runs down the inside of a steam-heated tube and boils as it goes, which concentrates the liquid.</li>
+<li><strong>Fouling</strong>: a deposit that grows on the heated wall and adds a resistance <span class="arithmatex">\(R_f\)</span> to the heat flow. The tube is cleaned when <span class="arithmatex">\(R_f\)</span> reaches a limit.</li>
+</ul>
+<div class="arithmatex">\[
+\begin{aligned}
+W_t + v\,W_z &amp;= -\frac{v\,P\,q}{\lambda}, \\
+X_t + v\,X_z &amp;= \frac{v\,X\,P\,q}{\lambda\,W}, \\
+q &amp;= \frac{T_s(t) - T_b(X)}{1/U + R_f(t)}, \qquad T_b(X) = T_{sat} + k_{bpe}\,X .
+\end{aligned}
+\]</div>
+<ul>
+<li><span class="arithmatex">\(W(z, t)\)</span>: liquid mass flow, kg/s. <span class="arithmatex">\(X(z, t)\)</span>: solids mass fraction.</li>
+<li><span class="arithmatex">\(z\)</span>: distance down the tube of length <span class="arithmatex">\(L\)</span> (10 m). <span class="arithmatex">\(v\)</span>: film velocity (0.5 m/s, 20 s of residence).</li>
+<li><span class="arithmatex">\(q\)</span>: wall heat flux, W/m². <span class="arithmatex">\(P\)</span>: wetted perimeter. <span class="arithmatex">\(\lambda\)</span>: latent heat of evaporation.</li>
+<li><span class="arithmatex">\(T_s(t)\)</span>: steam temperature. <span class="arithmatex">\(T_b\)</span>: boiling point of the film. <span class="arithmatex">\(T_{sat}\)</span>: the solvent's saturation temperature. <span class="arithmatex">\(k_{bpe}\)</span>: boiling-point elevation, the rise of the boiling point per unit of solids.</li>
+<li><span class="arithmatex">\(U\)</span>: clean heat-transfer coefficient (2,000 W/m²K). <span class="arithmatex">\(R_f(t)\)</span>: fouling resistance, m²K/W.</li>
+<li>Inlet: <span class="arithmatex">\(W(0, t) = W_{in}(t)\)</span>, <span class="arithmatex">\(X(0, t) = X_{in}(t)\)</span>, the feed.</li>
+</ul>
+<p>Measured:</p>
+<ul>
+<li>the inputs <span class="arithmatex">\(T_s(t)\)</span>, <span class="arithmatex">\(W_{in}(t)\)</span>, <span class="arithmatex">\(X_{in}(t)\)</span>;</li>
+<li>the outlet <span class="arithmatex">\(X(L, t)\)</span> and <span class="arithmatex">\(W(L, t)\)</span>.</li>
+</ul>
+<p>Unknown:</p>
+<ul>
+<li><span class="arithmatex">\(R_f(t)\)</span>. Only the sum <span class="arithmatex">\(1/U + R_f\)</span> enters, so a monitor estimates the change of resistance since a reference state (<a href="../benchmarks/#fouling-from-outlet-sensors-identifiability-experiment-j04">J04</a>).</li>
+</ul>
+<p>Headline (J05): an extended Kalman filter on an 11-cell model recovers <span class="arithmatex">\(R_f(t)\)</span> to 3.5 % in L2 in 0.2 s; the PINN twin reaches 9–16 % in five minutes and fails to train on 22 of 36 runs (J03, J06). Every estimator is in <a href="../benchmarks/#calibrated-fouling-intervals-experiment-j06">Benchmarks</a>.</p>
+<p>Finding: with the model's structure known, the classical estimators reach the data limit at a thousandth of the PINN twin's cost. The steam temperature is the input that limits every estimator (J04).</p>
+<p>The other units have their model where the page uses them: the <a href="#checking-a-learned-closure">droplet</a>, the <a href="#from-the-rig-to-the-tower">co-current tower</a>, the <a href="#the-counter-current-tower">counter-current tower</a> and <a href="#the-line">the line</a>.</p>
+<p>The plant used in the rest of the page: a fouling ramp, a recorded steam signal, noisy outlet records.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.process</span><span class="w"> </span><span class="kn">import</span> <span class="n">FallingFilmEvaporator</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">T</span> <span class="o">=</span> <span class="mf">600.0</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">steam</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="mf">355.15</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">t</span> <span class="o">/</span> <span class="mf">400.0</span><span class="p">)</span>   <span class="c1"># recorded, K</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">plant</span> <span class="o">=</span> <span class="n">FallingFilmEvaporator</span><span class="p">(</span><span class="n">T_s</span><span class="o">=</span><span class="n">steam</span><span class="p">,</span> <span class="n">R_f</span><span class="o">=</span><span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="mf">1e-4</span> <span class="o">*</span> <span class="n">t</span> <span class="o">/</span> <span class="n">T</span><span class="p">)</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">ref</span> <span class="o">=</span> <span class="n">plant</span><span class="o">.</span><span class="n">reference</span><span class="p">(</span><span class="n">t_max</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">nz</span><span class="o">=</span><span class="mi">51</span><span class="p">,</span> <span class="n">nt</span><span class="o">=</span><span class="mi">121</span><span class="p">)</span>               <span class="c1"># one output every 5 s</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">times</span> <span class="o">=</span> <span class="n">ref</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">records</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span>                                         <span class="c1"># outlet solids and flow, with noise</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="p">[</span><span class="n">ref</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">u</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">:]</span> <span class="o">+</span> <span class="mf">0.002</span> <span class="o">*</span> <span class="n">rng</span><span class="o">.</span><span class="n">standard_normal</span><span class="p">(</span><span class="n">times</span><span class="o">.</span><span class="n">size</span><span class="p">),</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>     <span class="n">ref</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">u</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">:]</span> <span class="o">+</span> <span class="mf">0.001</span> <span class="o">*</span> <span class="n">rng</span><span class="o">.</span><span class="n">standard_normal</span><span class="p">(</span><span class="n">times</span><span class="o">.</span><span class="n">size</span><span class="p">)],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="estimating-a-drifting-parameter">Estimating a drifting parameter<a class="headerlink" href="#estimating-a-drifting-parameter" title="Permanent link">&para;</a></h2>
+<div class="arithmatex">\[
+\frac{ds}{dt} = f(t, s, \theta), \qquad y_k = h(t_k, s) + v_k, \qquad v_k \sim \mathcal{N}(0, R) .
+\]</div>
+<ul>
+<li><span class="arithmatex">\(s\)</span>: the model's state (here <span class="arithmatex">\(W\)</span> and <span class="arithmatex">\(X\)</span> on a coarse grid). <span class="arithmatex">\(\theta\)</span>: the drifting unknown (here <span class="arithmatex">\(R_f\)</span>).</li>
+<li><span class="arithmatex">\(y_k\)</span>: the record at time <span class="arithmatex">\(t_k\)</span>. <span class="arithmatex">\(R\)</span>: its noise covariance.</li>
+<li><strong>Extended Kalman filter (EKF)</strong>: at each record, corrects the model's prediction by the record, each weighted by its uncertainty; the model is linearized at the current estimate.</li>
+<li><strong>Smoother</strong>: a backward pass that estimates each time from the whole record (the hindsight estimate).</li>
+<li><strong>Process noise</strong> <span class="arithmatex">\(Q\)</span>: how much each state may wander between records.</li>
+</ul>
+<p>With the structure known and one slowly drifting unknown, this filter on a coarse method-of-lines model is the estimator to beat (J05). The unknown joins the state in one of two ways:</p>
+<table>
+<thead>
+<tr>
+<th>Drift model</th>
+<th>Equations</th>
+<th>Suits</th>
+<th>Limit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Random walk (<code>augment_random_walk</code>)</td>
+<td><span class="arithmatex">\(\dot\theta = w\)</span></td>
+<td>a parameter that wanders</td>
+<td>on a steady drift it lags, or needs so much process noise that its band is several times wider than its error</td>
+</tr>
+<tr>
+<td>Local linear trend (<code>augment_local_linear_trend</code>)</td>
+<td><span class="arithmatex">\(\dot\theta = \rho,\ \dot\rho = w\)</span></td>
+<td>a parameter that drifts steadily</td>
+<td>honest only while the rate changes slowly</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><span class="arithmatex">\(w\)</span>: white noise of intensity <span class="arithmatex">\(Q\)</span>. <span class="arithmatex">\(\rho\)</span>: the drift's rate.</li>
+<li>The trend follows a ramp without lag and gives the rate a prognosis needs.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.process</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExtendedKalmanFilter</span><span class="p">,</span> <span class="n">augment_local_linear_trend</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">nz</span> <span class="o">=</span> <span class="mi">11</span>                                                     <span class="c1"># a coarse model is enough for the filter</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">model</span> <span class="o">=</span> <span class="n">FallingFilmEvaporator</span><span class="p">(</span><span class="n">T_s</span><span class="o">=</span><span class="n">steam</span><span class="p">,</span> <span class="n">R_f</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">f</span><span class="p">,</span> <span class="n">h</span><span class="p">,</span> <span class="n">s0</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">fouling_state_space</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span>                    <span class="c1"># f(t, s, [R_f]), h(t, s), steady start</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">n</span> <span class="o">=</span> <span class="n">s0</span><span class="o">.</span><span class="n">size</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">ekf</span> <span class="o">=</span> <span class="n">ExtendedKalmanFilter</span><span class="p">(</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">augment_local_linear_trend</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>                    <span class="c1"># state = [s, R_f, dR_f/dt]</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">h</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">x</span><span class="p">[:</span><span class="n">n</span><span class="p">]),</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">Q</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="p">[(</span><span class="mf">1e-9</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">]]),</span>     <span class="c1"># only the rate wanders</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">R</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.002</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="mf">0.001</span><span class="o">**</span><span class="mi">2</span><span class="p">]),</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="p">)</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">x0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">s0</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.5e-4</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]])</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="n">P0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="mf">1e-6</span><span class="p">),</span> <span class="p">[(</span><span class="mf">1e-4</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="p">(</span><span class="mf">1e-6</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">]]))</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">res</span> <span class="o">=</span> <span class="n">ekf</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">times</span><span class="p">,</span> <span class="n">records</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">P0</span><span class="p">,</span> <span class="n">smooth</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">interval</span><span class="p">(</span><span class="mf">0.9</span><span class="p">)</span>                                  <span class="c1"># (K, n + 2) each</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;R_f(T) = </span><span class="si">{</span><span class="n">res</span><span class="o">.</span><span class="n">filtered</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">]</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2"> in [</span><span class="si">{</span><span class="n">lo</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">]</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">hi</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">]</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">]  (truth 1.00e-04)&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>The level and the rate give the time until the unknown reaches a limit <span class="arithmatex">\(\theta^*\)</span>, here the fouling at which the tube is cleaned:</p>
+<div class="arithmatex">\[
+\tau = \frac{\theta^* - \theta}{\rho} .
+\]</div>
+<ul>
+<li><a href="../api/process/#process.ekf.time_to_threshold"><code>time_to_threshold</code></a> samples <span class="arithmatex">\(\tau\)</span> from the level, the rate and their block of the covariance. The interval is asymmetric.</li>
+<li>When the rate is not clearly positive, part of the draws never arrive: <code>probability &lt; 1</code> and an infinite upper end.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.process</span><span class="w"> </span><span class="kn">import</span> <span class="n">time_to_threshold</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">idx</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">tt</span> <span class="o">=</span> <span class="n">time_to_threshold</span><span class="p">(</span><span class="n">res</span><span class="o">.</span><span class="n">filtered</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">n</span><span class="p">],</span> <span class="n">res</span><span class="o">.</span><span class="n">filtered</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">],</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>                       <span class="n">res</span><span class="o">.</span><span class="n">filtered_cov</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="n">np</span><span class="o">.</span><span class="n">ix_</span><span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">idx</span><span class="p">)],</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">2e-4</span><span class="p">)</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cleaning in </span><span class="si">{</span><span class="n">tt</span><span class="o">.</span><span class="n">median</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">60</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> min, 90 % interval &quot;</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>      <span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">tt</span><span class="o">.</span><span class="n">lower</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">60</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">tt</span><span class="o">.</span><span class="n">upper</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">60</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">] min (truth 10 min)&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>Such an interval can be trusted under three conditions (<a href="../benchmarks/#calibrated-fouling-intervals-experiment-j06">J06</a> measures each):</p>
+<ol>
+<li><strong>The drift model fits the drift.</strong> A random walk's band is honest only where it is wide; a trend's only while the rate changes slowly.</li>
+<li><strong>The model's own error is below the interval's width.</strong> A coarse grid biases the estimate by more than a tight interval allows.</li>
+<li><strong>Every input the unknown can be traded against is measured to that accuracy or estimated alongside.</strong> For the evaporator that is the steam temperature (<a href="../benchmarks/#fouling-from-outlet-sensors-identifiability-experiment-j04">J04</a>), which enters the state as one more constant with its prior.</li>
+</ol>
+<p><a href="../api/process/#process.monitor.monitor_fouling"><code>monitor_fouling</code></a> packages this for the evaporator: the trend filter on a 51-cell model, optionally with the steam record's offset as one more state. It returns the fouling with its band, the hindsight estimate, the records against the filter's predictions, and the time to clean.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.process</span><span class="w"> </span><span class="kn">import</span> <span class="n">monitor_fouling</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">mon</span> <span class="o">=</span> <span class="n">monitor_fouling</span><span class="p">(</span><span class="n">FallingFilmEvaporator</span><span class="p">(</span><span class="n">T_s</span><span class="o">=</span><span class="n">steam</span><span class="p">),</span> <span class="n">times</span><span class="p">,</span> <span class="n">records</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>                      <span class="n">steam_bias_std</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">2e-4</span><span class="p">)</span>      <span class="c1"># the steam record trusted to 0.3 K</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">mon</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
+</code></pre></div>
+<p>The estimators spend their time in the reference solve. Experiment <a href="../benchmarks/#the-evaporators-reference-solve-in-c-experiment-i16">I16</a> put the evaporator's method-of-lines model in C++ (<a href="../api/native/"><code>pinnrl.native.evaporator</code></a>), with an L-stable fourth-order SDIRK integrator.</p>
+<ul>
+<li><code>reference(..., method="native")</code> uses it, with the inputs sampled every 5 s and interpolated by a spline.</li>
+<li><code>FallingFilmEvaporator.native_propagator(nz, steam_bias, trend)</code> gives the filters a <code>propagate(t0, t1, x)</code> (<code>ExtendedKalmanFilter(..., propagate=...)</code>).</li>
+<li><code>monitor_fouling(..., integrator="auto")</code> takes it wherever it builds.</li>
+<li>SciPy's BDF remains the default of <code>reference</code> and the fallback everywhere.</li>
+</ul>
+<h2 id="moving-horizon-estimation">Moving-horizon estimation<a class="headerlink" href="#moving-horizon-estimation" title="Permanent link">&para;</a></h2>
+<div class="arithmatex">\[
+\min_{x_0,\ w_1..w_N}\ \lVert x_0 - \bar x_0 \rVert^2_{P_0^{-1}} + \sum_{k=1}^{N} \lVert w_k \rVert^2_{Q^{-1}} + \sum_{k=1}^{N} \lVert y_k - h(t_k, x_k) \rVert^2_{R^{-1}}
+\quad \text{with} \quad x^{lo} \le x_0 \le x^{hi},\quad w^{lo} \le w_k \le w^{hi} .
+\]</div>
+<ul>
+<li><strong>Moving-horizon estimation (MHE)</strong>: at every record, re-solve this least-squares problem over the last <span class="arithmatex">\(N\)</span> records (<code>horizon</code>).</li>
+<li><span class="arithmatex">\(x_0\)</span>: the state at the window's start. <span class="arithmatex">\(\bar x_0\)</span>, <span class="arithmatex">\(P_0\)</span>: what the earlier records say about it (the arrival cost).</li>
+<li><span class="arithmatex">\(w_k\)</span>: one disturbance per record for each state with process noise. <span class="arithmatex">\(x_k\)</span> follows the model from <span class="arithmatex">\(x_0\)</span> and the <span class="arithmatex">\(w_k\)</span>.</li>
+<li>Bounds: <code>lower</code> and <code>upper</code> on <span class="arithmatex">\(x_0\)</span>, <code>noise_lower</code> and <code>noise_upper</code> on the <span class="arithmatex">\(w_k\)</span>.</li>
+</ul>
+<p>For a linear model without bounds, <a href="../api/process/#process.mhe.MovingHorizonEstimator"><code>MovingHorizonEstimator</code></a> is the Kalman filter, whatever the horizon. Use it for what the filter cannot express: bounds on the states and on the disturbances, such as a fouling resistance that only grows.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.process</span><span class="w"> </span><span class="kn">import</span> <span class="n">MovingHorizonEstimator</span><span class="p">,</span> <span class="n">augment_random_walk</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">Q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">n</span><span class="p">),</span> <span class="p">[(</span><span class="mf">1e-6</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">]])</span>            <span class="c1"># R_f a random walk</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">mhe</span> <span class="o">=</span> <span class="n">MovingHorizonEstimator</span><span class="p">(</span><span class="n">augment_random_walk</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">h</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">x</span><span class="p">[:</span><span class="n">n</span><span class="p">]),</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>                             <span class="n">Q</span><span class="o">=</span><span class="n">Q</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.002</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="mf">0.001</span><span class="o">**</span><span class="mi">2</span><span class="p">]),</span> <span class="n">horizon</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">lower</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">]</span>                     <span class="c1"># R_f &gt;= 0</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">grow</span> <span class="o">=</span> <span class="n">mhe</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">times</span><span class="p">,</span> <span class="n">records</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">s0</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.5e-4</span><span class="p">]]),</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>               <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="mf">1e-6</span><span class="p">),</span> <span class="p">[(</span><span class="mf">1e-4</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">]])),</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>               <span class="n">lower</span><span class="o">=</span><span class="n">lower</span><span class="p">,</span> <span class="n">noise_lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>     <span class="c1"># disturbances &gt;= 0, one solve a minute</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="nb">print</span><span class="p">(</span><span class="n">grow</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">grow</span><span class="o">.</span><span class="n">filtered</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+</code></pre></div>
+<p>Results on the evaporator (<a href="../benchmarks/#moving-horizon-estimation-experiment-j05b">J05b</a>):</p>
+<ul>
+<li><strong>Cost</strong>: 10 to 35 times the filter, about three linearizations of the window per solve. <code>stride</code> solves every few records.</li>
+<li><strong>Accuracy</strong>: the filter's, because the evaporator's nonlinearity is mild.</li>
+<li><strong>What it adds</strong>: the constraint.</li>
+</ul>
+<h2 id="plant-data-a-historian-export-and-a-tag-map">Plant data: a historian export and a tag map<a class="headerlink" href="#plant-data-a-historian-export-and-a-tag-map" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Historian</strong>: the plant's database of instrument readings. Its export is a table of readings in plant units, with gaps and bad readings.</li>
+<li><strong>Tag</strong>: the name of one instrument signal, such as <code>TT205.PV</code>.</li>
+<li><strong>Tag map</strong>: which tag is which signal of the model, and how to convert it.</li>
+</ul>
+<p><a href="../api/process/#process.historian.Historian"><code>Historian.from_file</code></a> reads:</p>
+<ul>
+<li>a column per tag, or a row per reading (with an optional quality flag);</li>
+<li>CSV or Parquet (Parquet needs <code>pyarrow</code>);</li>
+<li>numeric or dated timestamps.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.process</span><span class="w"> </span><span class="kn">import</span> <span class="n">Historian</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">rows</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;timestamp,TT205.PV,DT310.PV,FT320.PV&quot;</span><span class="p">]</span>            <span class="c1"># degC, % solids, kg/h</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">times</span><span class="p">):</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">t</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="n">steam</span><span class="p">(</span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">273.15</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="mi">100</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">records</span><span class="p">[</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="mi">3600</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">records</span><span class="p">[</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">export</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span> <span class="o">/</span> <span class="s2">&quot;evaporator.csv&quot;</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">export</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="n">tag_map</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="s2">&quot;inputs&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;T_s&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;tag&quot;</span><span class="p">:</span> <span class="s2">&quot;TT205.PV&quot;</span><span class="p">,</span> <span class="s2">&quot;offset&quot;</span><span class="p">:</span> <span class="mf">273.15</span><span class="p">}},</span>                 <span class="c1"># degC -&gt; K</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="s2">&quot;sensors&quot;</span><span class="p">:</span> <span class="p">[</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>        <span class="p">{</span><span class="s2">&quot;tag&quot;</span><span class="p">:</span> <span class="s2">&quot;DT310.PV&quot;</span><span class="p">,</span> <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;outlet X&quot;</span><span class="p">,</span> <span class="s2">&quot;location&quot;</span><span class="p">:</span> <span class="mf">10.0</span><span class="p">,</span> <span class="s2">&quot;expression&quot;</span><span class="p">:</span> <span class="s2">&quot;X&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>         <span class="s2">&quot;gain&quot;</span><span class="p">:</span> <span class="mf">0.01</span><span class="p">,</span> <span class="s2">&quot;noise&quot;</span><span class="p">:</span> <span class="mf">0.002</span><span class="p">},</span>                                        <span class="c1"># % -&gt; fraction</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>        <span class="p">{</span><span class="s2">&quot;tag&quot;</span><span class="p">:</span> <span class="s2">&quot;FT320.PV&quot;</span><span class="p">,</span> <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;outlet W&quot;</span><span class="p">,</span> <span class="s2">&quot;location&quot;</span><span class="p">:</span> <span class="mf">10.0</span><span class="p">,</span> <span class="s2">&quot;expression&quot;</span><span class="p">:</span> <span class="s2">&quot;W&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>         <span class="s2">&quot;gain&quot;</span><span class="p">:</span> <span class="mi">1</span> <span class="o">/</span> <span class="mi">3600</span><span class="p">,</span> <span class="s2">&quot;noise&quot;</span><span class="p">:</span> <span class="mf">0.001</span><span class="p">},</span>                                    <span class="c1"># kg/h -&gt; kg/s</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>    <span class="p">],</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="p">}</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="n">data</span> <span class="o">=</span> <span class="n">Historian</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="n">export</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">tag_map</span><span class="p">)</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="nb">print</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">t_max</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">inputs</span><span class="p">[</span><span class="s2">&quot;T_s&quot;</span><span class="p">],</span> <span class="n">data</span><span class="o">.</span><span class="n">sensors</span><span class="p">)</span>
+</code></pre></div>
+<p>The result feeds both kinds of estimator:</p>
+<ul>
+<li><strong>The PINN twin</strong>: the inputs are <code>TimeSeries</code> and the sensors carry their records, as <code>custom_pde</code> takes them.</li>
+<li><strong>A process model</strong>: <code>series.numpy</code> is the same signal as a plain function.</li>
+<li><strong>A filter</strong>: <code>data.records()</code> is the array it runs on.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">model</span> <span class="o">=</span> <span class="n">FallingFilmEvaporator</span><span class="p">(</span><span class="n">T_s</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">inputs</span><span class="p">[</span><span class="s2">&quot;T_s&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">numpy</span><span class="p">,</span> <span class="n">R_f</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">hist_times</span><span class="p">,</span> <span class="n">hist_records</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">records</span><span class="p">([</span><span class="s2">&quot;outlet X&quot;</span><span class="p">,</span> <span class="s2">&quot;outlet W&quot;</span><span class="p">])</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">pde</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">custom_pde</span><span class="p">(</span><span class="n">t_max</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">t_max</span><span class="p">,</span> <span class="n">sensors</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">sensors</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>                       <span class="n">unknown_fouling</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">5e-4</span><span class="p">],</span> <span class="s2">&quot;positive&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">})</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">hist_records</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">pde</span><span class="o">.</span><span class="n">sensors</span><span class="p">))</span>
+</code></pre></div>
+<p>Shortcuts and options:</p>
+<ul>
+<li><a href="../api/process/#process.monitor.monitor_from_historian"><code>monitor_from_historian(data)</code></a> runs the fouling monitor on such a window.</li>
+<li>The <a href="../dashboard/#process">dashboard's Process view</a> does the same from the two file paths.</li>
+<li><code>write_demo_export(folder)</code> writes a synthetic export and its tag map to start from.</li>
+<li><code>window: [t0, t1]</code> in the map cuts an interval and shifts it to <span class="arithmatex">\(t = 0\)</span>.</li>
+<li><code>every</code> and <code>aggregate</code> (<code>interp</code>, <code>mean</code>, <code>last</code>) put a tag on a regular grid, which sensors need to share for <code>records()</code>.</li>
+<li>The map can be a YAML file with the same keys.</li>
+</ul>
+<h2 id="checking-a-learned-closure">Checking a learned closure<a class="headerlink" href="#checking-a-learned-closure" title="Permanent link">&para;</a></h2>
+<p>The unit is the drying droplet: one droplet of a solids solution in hot air, as on a single-droplet rig.</p>
+<ul>
+<li><strong>Closure</strong>: a relation the balance equations need but do not supply, here the drying rate as a function of the moisture.</li>
+<li><strong>Dry-basis moisture</strong> <span class="arithmatex">\(X\)</span>: kg of water per kg of solids.</li>
+<li><strong>Characteristic drying curve</strong> <span class="arithmatex">\(f(X)\)</span>: the drying rate divided by that of a fully wet surface. It is 1 above the critical moisture <span class="arithmatex">\(X_{cr}\)</span> and 0 at and below the equilibrium moisture <span class="arithmatex">\(X_{eq}\)</span>.</li>
+</ul>
+<div class="arithmatex">\[
+\begin{aligned}
+\frac{dX}{dt} &amp;= -r, \qquad r = \frac{h_m A\,\big(\rho_{vs}(T) - Y \rho_a\big)}{m_s}\, f(X), \\
+\frac{dT}{dt} &amp;= \frac{h A\,(T_a - T) - \lambda\, m_s\, r}{m_s\,(c_s + c_w X)}, \\
+f(X) &amp;= \min\!\left(1,\ \left(\frac{X - X_{eq}}{X_{cr} - X_{eq}}\right)^{n}\right) .
+\end{aligned}
+\]</div>
+<ul>
+<li><span class="arithmatex">\(T\)</span>, <span class="arithmatex">\(T_a\)</span>: droplet and air temperature. <span class="arithmatex">\(Y\)</span>: humidity ratio of the air, kg of water per kg of dry air. <span class="arithmatex">\(\rho_a\)</span>: air density.</li>
+<li><span class="arithmatex">\(r\)</span>: drying rate per unit of solids. <span class="arithmatex">\(m_s\)</span>: solids mass of the droplet. <span class="arithmatex">\(A\)</span>: its surface.</li>
+<li><span class="arithmatex">\(h\)</span>, <span class="arithmatex">\(h_m\)</span>: heat- and mass-transfer coefficients (Ranz–Marshall correlations of the droplet's diameter).</li>
+<li><span class="arithmatex">\(\rho_{vs}(T)\)</span>: vapour density at saturation. <span class="arithmatex">\(c_s\)</span>, <span class="arithmatex">\(c_w\)</span>: heat capacities of solids and water.</li>
+<li><span class="arithmatex">\(n\)</span>: exponent of the falling-rate part of the curve. Defaults: <span class="arithmatex">\(X_{eq} = 0.05\)</span>, <span class="arithmatex">\(X_{cr} = 1.0\)</span>, <span class="arithmatex">\(n = 1.5\)</span>.</li>
+</ul>
+<p>Measured:</p>
+<ul>
+<li>the droplet's mass <span class="arithmatex">\(m = m_s (1 + X)\)</span>;</li>
+<li>its temperature <span class="arithmatex">\(T\)</span>.</li>
+</ul>
+<p>Unknown:</p>
+<ul>
+<li>the closure <span class="arithmatex">\(f(X)\)</span>.</li>
+</ul>
+<p>Headline (J07d): shooting with a monotone piecewise-linear closure on 24 knots recovers <span class="arithmatex">\(f(X)\)</span> to 1.5–1.6 % on every seed in 8–10 s; a PINN with <span class="arithmatex">\(f\)</span> an unknown function, from a cold start, collapses to a constant on every seed (J07). Every estimator is in <a href="../benchmarks/#a-drying-droplet-and-its-closure-experiment-j07">Benchmarks</a>.</p>
+<ul>
+<li><strong>Shooting</strong>: adjust the unknowns until the reference solver's output matches the record.</li>
+</ul>
+<p>Finding: with an ODE model and a reference solver that takes a closure, an unknown function is a few dozen bounded parameters, and shooting beats the PINN.</p>
+<p>The network that produced a closure is not the judge of it: in J07b a closure 20 % off came with fields that fitted the record to 1 %. The check is independent of the network:</p>
+<ol>
+<li>Solve the model with the closure by the reference solver.</li>
+<li>Compare with the record by the reduced chi-square.</li>
+</ol>
+<div class="arithmatex">\[
+\chi^2 = \frac{1}{N} \sum_{i=1}^{N} \left( \frac{y_i - \hat y_i}{\sigma_i} \right)^2 .
+\]</div>
+<ul>
+<li><span class="arithmatex">\(y_i\)</span>: a reading. <span class="arithmatex">\(\hat y_i\)</span>: the model's value. <span class="arithmatex">\(\sigma_i\)</span>: the reading's noise.</li>
+<li><strong>Reduced chi-square</strong>: about 1 when the closure explains the record to its noise.</li>
+<li><a href="../api/process/#process.droplet.DryingDroplet"><code>DryingDroplet.record_misfit</code></a> returns it for the mass, the temperature and both.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.process</span><span class="w"> </span><span class="kn">import</span> <span class="n">DryingDroplet</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">dr</span> <span class="o">=</span> <span class="n">DryingDroplet</span><span class="p">()</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">run</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">reference</span><span class="p">(</span><span class="mf">200.0</span><span class="p">,</span> <span class="n">nt</span><span class="o">=</span><span class="mi">2001</span><span class="p">)</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">t_rec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">201.0</span><span class="p">)</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">mass</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">t_rec</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">m</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.005</span> <span class="o">*</span> <span class="n">dr</span><span class="o">.</span><span class="n">m0</span> <span class="o">*</span> <span class="n">rng</span><span class="o">.</span><span class="n">standard_normal</span><span class="p">(</span><span class="n">t_rec</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">temp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">t_rec</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">rng</span><span class="o">.</span><span class="n">standard_normal</span><span class="p">(</span><span class="n">t_rec</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">candidate</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">X</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">((</span><span class="n">X</span> <span class="o">-</span> <span class="n">dr</span><span class="o">.</span><span class="n">X_eq</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.3</span> <span class="o">-</span> <span class="n">dr</span><span class="o">.</span><span class="n">X_eq</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">**</span> <span class="mf">1.5</span>   <span class="c1"># a critical moisture 30 % off</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="nb">print</span><span class="p">(</span><span class="n">dr</span><span class="o">.</span><span class="n">record_misfit</span><span class="p">(</span><span class="n">t_rec</span><span class="p">,</span> <span class="n">mass</span><span class="p">,</span> <span class="n">temp</span><span class="p">,</span> <span class="mf">0.005</span> <span class="o">*</span> <span class="n">dr</span><span class="o">.</span><span class="n">m0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)[</span><span class="s2">&quot;total&quot;</span><span class="p">],</span>              <span class="c1"># about 1</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>      <span class="n">dr</span><span class="o">.</span><span class="n">record_misfit</span><span class="p">(</span><span class="n">t_rec</span><span class="p">,</span> <span class="n">mass</span><span class="p">,</span> <span class="n">temp</span><span class="p">,</span> <span class="mf">0.005</span> <span class="o">*</span> <span class="n">dr</span><span class="o">.</span><span class="n">m0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="n">closure</span><span class="o">=</span><span class="n">candidate</span><span class="p">)[</span><span class="s2">&quot;total&quot;</span><span class="p">])</span>
+</code></pre></div>
+<p>The rule from <a href="../benchmarks/#a-drying-droplet-and-its-closure-experiment-j07">J07c</a>:</p>
+<ol>
+<li>Reject a refined closure whose misfit is above its start's.</li>
+<li>Read the level: only a misfit near 1 says the closure reproduces the record.</li>
+</ol>
+<p>With the network class, give the closure what is known of it:</p>
+<ul>
+<li><strong>Anchor</strong>: <code>unknown_rate={"bounds": None, "anchor": {"at": dr.X_eq, "value": 0.0}}</code> in <code>custom_pde</code> makes the closure zero at the equilibrium moisture by construction. That alone takes a pointwise estimate's misfit from 60–90 to about 2 (J07e).</li>
+<li><strong>The network's own fit</strong>: <code>pde.sensor_misfit(trainer.model)</code> is the same test without a reference solver.</li>
+<li><strong>Restarts</strong>: <a href="../api/training/#training.restarts.train_with_restarts"><code>train_with_restarts</code></a> restarts on that misfit.</li>
+</ul>
+<h2 id="which-measurement-to-add">Which measurement to add<a class="headerlink" href="#which-measurement-to-add" title="Permanent link">&para;</a></h2>
+<div class="arithmatex">\[
+\Sigma = \left( P_0^{-1} + J^\top R^{-1} J \right)^{-1} .
+\]</div>
+<ul>
+<li><span class="arithmatex">\(\Sigma\)</span>: posterior covariance of the unknowns around the operating point.</li>
+<li><span class="arithmatex">\(P_0\)</span>: prior covariance. Each instrument error is an unknown with its accuracy as the prior.</li>
+<li><span class="arithmatex">\(J\)</span>: sensitivities of the records to the unknowns. <span class="arithmatex">\(R\)</span>: measurement-noise covariance.</li>
+</ul>
+<p><span class="arithmatex">\(\Sigma\)</span> does not depend on what the records turn out to be, so a sensor or a calibration is priced from the sensitivities alone, before buying it.</p>
+<ul>
+<li>A calibration is a tighter prior.</li>
+<li>A new measurement is more rows of <span class="arithmatex">\(J\)</span>.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="n">greedy_design</span><span class="p">,</span> <span class="n">information</span><span class="p">,</span> <span class="n">posterior_covariance</span><span class="p">,</span> <span class="n">target_std</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">outlet</span><span class="p">(</span><span class="n">theta</span><span class="p">):</span>                                  <span class="c1"># records for theta = [R_f mean (1e-4), R_f slope, steam offset]</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="n">ev</span> <span class="o">=</span> <span class="n">FallingFilmEvaporator</span><span class="p">(</span><span class="n">T_s</span><span class="o">=</span><span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="n">steam</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="o">-</span> <span class="n">theta</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>                               <span class="n">R_f</span><span class="o">=</span><span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="mf">1e-4</span> <span class="o">*</span> <span class="p">(</span><span class="n">theta</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">theta</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">t</span> <span class="o">/</span> <span class="n">T</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)))</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">r</span> <span class="o">=</span> <span class="n">ev</span><span class="o">.</span><span class="n">reference</span><span class="p">(</span><span class="n">t_max</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">nz</span><span class="o">=</span><span class="mi">51</span><span class="p">,</span> <span class="n">nt</span><span class="o">=</span><span class="mi">121</span><span class="p">)</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="k">return</span> <span class="n">r</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">u</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">:],</span> <span class="n">r</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">u</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">:]</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="n">nominal</span><span class="p">,</span> <span class="n">steps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.02</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">])</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="n">cols</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>                                  <span class="c1"># central differences through the reference solver</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="n">up</span><span class="p">,</span> <span class="n">dn</span> <span class="o">=</span> <span class="n">nominal</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span> <span class="n">nominal</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="n">up</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steps</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="n">dn</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">-=</span> <span class="n">steps</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>    <span class="n">cols</span><span class="o">.</span><span class="n">append</span><span class="p">([(</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">steps</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">outlet</span><span class="p">(</span><span class="n">up</span><span class="p">),</span> <span class="n">outlet</span><span class="p">(</span><span class="n">dn</span><span class="p">))])</span>
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="n">JX</span><span class="p">,</span> <span class="n">JW</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">c</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cols</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="n">F</span> <span class="o">=</span> <span class="n">information</span><span class="p">(</span><span class="n">JX</span><span class="p">,</span> <span class="mf">0.002</span><span class="p">)</span> <span class="o">+</span> <span class="n">information</span><span class="p">(</span><span class="n">JW</span><span class="p">,</span> <span class="mf">0.001</span><span class="p">)</span>
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="n">end</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1e-4</span><span class="p">,</span> <span class="mf">1e-4</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">])</span>                   <span class="c1"># R_f(T) = 1e-4 (mean + slope)</span>
+<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">steam_std</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">&quot;steam trusted to 0.3 K&quot;</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;calibrated to 0.03 K&quot;</span><span class="p">,</span> <span class="mf">0.03</span><span class="p">)):</span>
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>    <span class="n">cov</span> <span class="o">=</span> <span class="n">posterior_covariance</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="n">steam_std</span><span class="p">])</span>
+<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">: R_f(T) to </span><span class="si">{</span><span class="n">target_std</span><span class="p">(</span><span class="n">cov</span><span class="p">,</span><span class="w"> </span><span class="n">end</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e-4</span><span class="si">:</span><span class="s2">.1%</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="n">lab</span> <span class="o">=</span> <span class="n">greedy_design</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">JX</span><span class="p">[</span><span class="mi">11</span><span class="p">::</span><span class="mi">12</span><span class="p">]),</span> <span class="mf">0.0005</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">prior_std</span><span class="o">=</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">],</span>
+<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>                    <span class="n">base_information</span><span class="o">=</span><span class="n">F</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="n">end</span><span class="p">)</span>  <span class="c1"># two lab assays of the outlet solids: when?</span>
+<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="nb">print</span><span class="p">([</span><span class="nb">float</span><span class="p">(</span><span class="n">times</span><span class="p">[</span><span class="mi">11</span><span class="p">::</span><span class="mi">12</span><span class="p">][</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">lab</span><span class="o">.</span><span class="n">chosen</span><span class="p">],</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">c</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e-4</span><span class="si">:</span><span class="s2">.1%</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">lab</span><span class="o">.</span><span class="n">criterion</span><span class="p">])</span>
+</code></pre></div>
+<p>Experiment <a href="../benchmarks/#measurement-design-for-the-fouling-estimate-experiment-j09">J09</a> does this for the evaporator with six instrument errors:</p>
+<ul>
+<li>The estimate is limited by the steam offset and, jointly, by the four mass-balance instruments.</li>
+<li>A condensate meter and a larger, faster steam swing are worth more than any calibration.</li>
+<li>Check a design that matters by fitting simulated records, as J09 does.</li>
+</ul>
+<h2 id="from-the-rig-to-the-tower">From the rig to the tower<a class="headerlink" href="#from-the-rig-to-the-tower" title="Permanent link">&para;</a></h2>
+<p>A droplet rig records the droplet itself; a tower records the air. <a href="../api/process/#process.dryer.SprayDryer"><code>SprayDryer</code></a> is the droplet coupled to its air: a plug flow of equal droplets that travel down the tower with the air (co-current), at steady state.</p>
+<div class="arithmatex">\[
+\begin{aligned}
+\frac{dX}{d\tau} &amp;= -r, \\
+\frac{dT_p}{d\tau} &amp;= \frac{h A\,(T_a - T_p) - \lambda\, m_s\, r}{m_s\,(c_s + c_w X)}, \\
+\frac{dY}{d\tau} &amp;= \frac{F_s}{G}\, r, \\
+\frac{dT_a}{d\tau} &amp;= -\frac{\dfrac{F_s}{m_s}\, h A\,(T_a - T_p) + G\, c_v\,(T_a - T_p)\,\dfrac{dY}{d\tau} + U_w\, \pi D\, v_p\,(T_a - T_{amb})}{G\,(c_a + c_v Y)} .
+\end{aligned}
+\]</div>
+<ul>
+<li><span class="arithmatex">\(\tau = z / v_p\)</span>: residence time of the droplets. <span class="arithmatex">\(z\)</span>: distance below the atomiser. <span class="arithmatex">\(v_p\)</span>: droplet velocity.</li>
+<li><span class="arithmatex">\(X\)</span>, <span class="arithmatex">\(T_p\)</span>: moisture and temperature of the droplets. <span class="arithmatex">\(Y\)</span>, <span class="arithmatex">\(T_a\)</span>: humidity ratio and temperature of the air.</li>
+<li><span class="arithmatex">\(r\)</span>: the droplet's drying rate, with the same closure <span class="arithmatex">\(f(X)\)</span> and the local <span class="arithmatex">\(Y\)</span>.</li>
+<li><span class="arithmatex">\(F_s\)</span>: solids flow, kg/s. <span class="arithmatex">\(G\)</span>: dry-air flow, kg/s. <span class="arithmatex">\(c_a\)</span>, <span class="arithmatex">\(c_v\)</span>: heat capacities of dry air and vapour.</li>
+<li><span class="arithmatex">\(U_w\)</span>: wall loss coefficient. <span class="arithmatex">\(D\)</span>: tower diameter. <span class="arithmatex">\(T_{amb}\)</span>: ambient temperature.</li>
+<li>Start: the droplets' state at the atomiser and the inlet air (<span class="arithmatex">\(T_{in}\)</span>, <span class="arithmatex">\(Y_{in}\)</span>).</li>
+</ul>
+<p>Measured (<code>records()</code>, one operating point):</p>
+<ul>
+<li>air temperatures at six heights;</li>
+<li>the outlet air's humidity;</li>
+<li>the powder's moisture, from the lab.</li>
+</ul>
+<p>Unknown:</p>
+<ul>
+<li>the closure <span class="arithmatex">\(f(X)\)</span>, or the two parameters <span class="arithmatex">\(X_{cr}\)</span> and <span class="arithmatex">\(n\)</span> of a known form;</li>
+<li>the nuisances: the wall loss and the droplet size.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.process</span><span class="w"> </span><span class="kn">import</span> <span class="n">SprayDryer</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">tower</span> <span class="o">=</span> <span class="n">SprayDryer</span><span class="p">()</span>                                         <span class="c1"># 8 m, air at 180 degC, 250 um droplets</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">profile</span> <span class="o">=</span> <span class="n">tower</span><span class="o">.</span><span class="n">reference</span><span class="p">()</span>                                  <span class="c1"># X, T_p, Y, T_a along the height; 5 ms</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">profile</span><span class="o">.</span><span class="n">outlet</span><span class="p">(),</span> <span class="n">tower</span><span class="o">.</span><span class="n">balances</span><span class="p">(</span><span class="n">profile</span><span class="p">)[</span><span class="s2">&quot;energy&quot;</span><span class="p">])</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">slow</span> <span class="o">=</span> <span class="n">tower</span><span class="o">.</span><span class="n">with_closure</span><span class="p">(</span><span class="k">lambda</span> <span class="n">X</span><span class="p">:</span> <span class="mf">0.7</span> <span class="o">*</span> <span class="n">tower</span><span class="o">.</span><span class="n">droplet</span><span class="o">.</span><span class="n">drying_curve</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">tower</span><span class="o">.</span><span class="n">records</span><span class="p">()[</span><span class="s2">&quot;T_air&quot;</span><span class="p">]</span> <span class="o">-</span> <span class="mf">273.15</span><span class="p">,</span> <span class="n">slow</span><span class="o">.</span><span class="n">records</span><span class="p">()[</span><span class="s2">&quot;T_air&quot;</span><span class="p">]</span> <span class="o">-</span> <span class="mf">273.15</span><span class="p">)</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">tower</span><span class="o">.</span><span class="n">operating_point</span><span class="p">(</span><span class="n">T_in</span><span class="o">=</span><span class="mf">438.15</span><span class="p">,</span> <span class="n">solids_flow</span><span class="o">=</span><span class="mf">0.012</span><span class="p">)</span><span class="o">.</span><span class="n">records</span><span class="p">()[</span><span class="s2">&quot;X_out&quot;</span><span class="p">])</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="nb">print</span><span class="p">(</span><span class="n">tower</span><span class="o">.</span><span class="n">stickiness_margin</span><span class="p">(</span><span class="n">profile</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>                  <span class="c1"># T_p - T_g(X) at the outlet, K</span>
+</code></pre></div>
+<p>What the twin gives that no instrument does is the stickiness margin:</p>
+<div class="arithmatex">\[
+\Delta T = T_p - T_g(X), \qquad T_g = \frac{w_s\, T_{gs} + k\, w_w\, T_{gw}}{w_s + k\, w_w}, \qquad w_w = \frac{X}{1 + X},\quad w_s = 1 - w_w .
+\]</div>
+<ul>
+<li><strong>Glass transition</strong> <span class="arithmatex">\(T_g\)</span>: the temperature above which an amorphous solid softens. Water lowers it (the Gordon–Taylor relation above).</li>
+<li><strong>Stickiness margin</strong> <span class="arithmatex">\(\Delta T\)</span>: how far a particle is above its glass transition. Particles stick to the wall and cake when it passes a material limit.</li>
+<li><span class="arithmatex">\(T_{gs}\)</span>, <span class="arithmatex">\(T_{gw}\)</span>: glass transitions of the dry solids and of water. <span class="arithmatex">\(k\)</span>: the Gordon–Taylor constant of the pair.</li>
+</ul>
+<p>Headline (<a href="../benchmarks/#a-soft-sensor-for-the-stickiness-margin-experiment-j08">J08</a>): the twin, run forward with the identified closure, gives the outlet margin to 1.0–1.5 K, against 1.6–3.2 K for a lab assay hours later. With the curve's form known, five operating points identify its two parameters and predict the powder moisture at a new operating point to 1–2 % (<a href="../benchmarks/#the-closure-at-dryer-scale-experiment-j11">J11</a>).</p>
+<p>Finding: identify the closure on the rig and carry it to the tower; at dryer scale estimate a few numbers and the nuisances.</p>
+<p>J12 prices the measurements at dryer scale:</p>
+<ul>
+<li><strong>Pay</strong>: better thermocouples, more operating points, replicate lab assays.</li>
+<li><strong>Does not pay</strong>: a droplet-size measurement.</li>
+</ul>
+<h2 id="the-counter-current-tower">The counter-current tower<a class="headerlink" href="#the-counter-current-tower" title="Permanent link">&para;</a></h2>
+<p>The air enters at the bottom against the falling droplets. The droplets' state is known at the top and the air's at the bottom.</p>
+<div class="arithmatex">\[
+\begin{aligned}
+X_t + v_p\, X_z &amp;= -r, \\
+T_t + v_p\, T_z &amp;= \frac{h A\,(T_a - T) - \lambda\, m_s\, r}{m_s\,(c_s + c_w X)}, \\
+Y_t - v_a\, Y_z &amp;= \frac{v_a}{G}\, S, \\
+T_{a,t} - v_a\, T_{a,z} &amp;= -\frac{v_a}{G}\, \frac{Q + c_v\,(T_a - T)\, S + U_w\, \pi D\,(T_a - T_{amb})}{c_a + c_v Y} .
+\end{aligned}
+\]</div>
+<ul>
+<li><span class="arithmatex">\(z\)</span>: distance down from the atomiser. <span class="arithmatex">\(T\)</span>: droplet temperature. The other fields are those of the co-current tower.</li>
+<li><span class="arithmatex">\(v_p\)</span>: droplet velocity, downward. <span class="arithmatex">\(v_a = G / (\rho_a A_{tower})\)</span>: air velocity, upward.</li>
+<li><span class="arithmatex">\(S = (F_s / v_p)\, r\)</span>: water the droplets give to the air per metre of height.</li>
+<li><span class="arithmatex">\(Q = \dfrac{F_s}{m_s v_p}\, h A\,(T_a - T)\)</span>: heat they take from it per metre.</li>
+<li>Boundaries: <span class="arithmatex">\(X\)</span>, <span class="arithmatex">\(T\)</span> at the top (<span class="arithmatex">\(z = 0\)</span>); <span class="arithmatex">\(Y\)</span>, <span class="arithmatex">\(T_a\)</span> at the bottom, the inlet air <span class="arithmatex">\(T_{in}(t)\)</span>, <span class="arithmatex">\(Y_{in}(t)\)</span>.</li>
+<li>Time scales: the droplets cross the tower in 5.3 s, the air in 106 s.</li>
+</ul>
+<p>Measured (<code>records</code>, over a transient):</p>
+<ul>
+<li>air temperatures at five heights;</li>
+<li>the humidity of the air leaving at the top;</li>
+<li>the moisture of the powder leaving at the bottom.</li>
+</ul>
+<p>Unknown:</p>
+<ul>
+<li>the curve's parameters <span class="arithmatex">\(X_{cr}\)</span> and <span class="arithmatex">\(n\)</span>;</li>
+<li>the wall loss <span class="arithmatex">\(U_w\)</span>.</li>
+</ul>
+<p>Solvers:</p>
+<ul>
+<li><a href="../api/process/#process.counter_dryer.CounterCurrentDryer"><code>CounterCurrentDryer.steady</code></a> solves the steady state, a boundary-value problem, by shooting on the air's state at the top: about 100 ms, against 5 ms for the co-current tower.</li>
+<li><code>transient</code> integrates the transport equations by the method of lines with a sparse Jacobian. Ten minutes take 0.04–0.13 s for a smooth step and 0.34–1.3 s for an inlet record with 10 s knots, on 51 to 401 cells (J13).</li>
+<li><code>custom_pde</code> writes the same four fields in <span class="arithmatex">\((z, t)\)</span> for the PINN: the inlet air as time-series inputs, the steady profiles as the initial condition, each equation divided by its own scale. <code>identify=</code> names the parameters to estimate.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.process</span><span class="w"> </span><span class="kn">import</span> <span class="n">CounterCurrentDryer</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">tower</span> <span class="o">=</span> <span class="n">CounterCurrentDryer</span><span class="p">(</span><span class="n">T_in</span><span class="o">=</span><span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="mf">433.15</span> <span class="o">+</span> <span class="p">(</span><span class="mf">15.0</span> <span class="k">if</span> <span class="n">t</span> <span class="o">&gt;</span> <span class="mf">10.0</span> <span class="k">else</span> <span class="mf">0.0</span><span class="p">))</span>   <span class="c1"># a step of the inlet air</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">profile</span> <span class="o">=</span> <span class="n">tower</span><span class="o">.</span><span class="n">steady</span><span class="p">()</span>                                   <span class="c1"># X, T_p, Y, T_a down the tower; the BVP by shooting</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">profile</span><span class="o">.</span><span class="n">outlet</span><span class="p">(),</span> <span class="n">tower</span><span class="o">.</span><span class="n">balances</span><span class="p">(</span><span class="n">profile</span><span class="p">)[</span><span class="s2">&quot;energy&quot;</span><span class="p">],</span> <span class="n">tower</span><span class="o">.</span><span class="n">stickiness_margin</span><span class="p">(</span><span class="n">profile</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="n">response</span> <span class="o">=</span> <span class="n">tower</span><span class="o">.</span><span class="n">transient</span><span class="p">(</span><span class="mf">600.0</span><span class="p">,</span> <span class="n">nz</span><span class="o">=</span><span class="mi">201</span><span class="p">)</span>                  <span class="c1"># the step response by the method of lines</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="n">records</span> <span class="o">=</span> <span class="n">tower</span><span class="o">.</span><span class="n">records</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">probe_heights</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.5</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.5</span><span class="p">))</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="nb">print</span><span class="p">(</span><span class="n">records</span><span class="p">[</span><span class="s2">&quot;T_air&quot;</span><span class="p">][:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mf">273.15</span><span class="p">,</span> <span class="n">records</span><span class="p">[</span><span class="s2">&quot;X_out&quot;</span><span class="p">][[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="n">pde</span> <span class="o">=</span> <span class="n">tower</span><span class="o">.</span><span class="n">custom_pde</span><span class="p">(</span><span class="mf">600.0</span><span class="p">,</span> <span class="n">identify</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Xcr&quot;</span><span class="p">,</span> <span class="s2">&quot;ncdc&quot;</span><span class="p">],</span> <span class="n">initial_guesses</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;Xcr&quot;</span><span class="p">:</span> <span class="mf">0.7</span><span class="p">,</span> <span class="s2">&quot;ncdc&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">})</span>
+</code></pre></div>
+<p>Headline (<a href="../benchmarks/#the-counter-current-tower-experiment-j13">J13</a>): bounded least squares through one transient record takes 10 s and recovers <span class="arithmatex">\(X_{cr}\)</span>, <span class="arithmatex">\(n\)</span>, <span class="arithmatex">\(U_w\)</span> within the linear prediction (±0.011, ±0.015, ±0.003) on all three data sets; the PINN twin on the same record takes 110–140 s and all six runs are rejected by the misfit test (reduced chi-square 5–9).</p>
+<p>Finding: the steady state has no cheap initial-value solve, the case the roadmap set for the PINN twin, but the transient does, and the classical fit through it wins.</p>
+<h2 id="the-line">The line<a class="headerlink" href="#the-line" title="Permanent link">&para;</a></h2>
+<p><a href="../api/process/#process.line.ProcessLine"><code>ProcessLine</code></a> chains evaporator passes and hands the concentrate to the dryer.</p>
+<div class="arithmatex">\[
+\begin{aligned}
+W^{(k+1)}_{in}(t) &amp;= W^{(k)}(L, t), \qquad X^{(k+1)}_{in}(t) = X^{(k)}(L, t), \\
+F_s(t) &amp;= W_c(t)\, X_c(t), \qquad \text{droplet solids fraction} = X_c(t), \\
+\sigma_y^2 &amp;= \sum_j \left( \frac{\partial y}{\partial \theta_j}\, \sigma_j \right)^2, \qquad \text{share}_j = \frac{1}{\sigma_y^2} \left( \frac{\partial y}{\partial \theta_j}\, \sigma_j \right)^2 .
+\end{aligned}
+\]</div>
+<ul>
+<li><span class="arithmatex">\(W^{(k)}\)</span>, <span class="arithmatex">\(X^{(k)}\)</span>: flow and solids of pass <span class="arithmatex">\(k\)</span>, each pass an evaporator tube as above.</li>
+<li><span class="arithmatex">\(W_c\)</span>, <span class="arithmatex">\(X_c\)</span>: the concentrate, the outlet of the last pass. <span class="arithmatex">\(F_s\)</span>: the dryer's solids flow.</li>
+<li><span class="arithmatex">\(y\)</span>: a target (the concentrate's solids, the powder's moisture, its stickiness margin).</li>
+<li><span class="arithmatex">\(\theta_j\)</span>, <span class="arithmatex">\(\sigma_j\)</span>: an uncertain quantity of a unit and its standard deviation.</li>
+<li>The dryer is quasi-steady: its residence time is seconds against the evaporator's hours of fouling.</li>
+</ul>
+<p>Methods:</p>
+<ul>
+<li><code>steady</code>: the line at an instant.</li>
+<li><code>reference</code>: the shift. The passes by the method of lines, the dryer at every output time.</li>
+<li><code>records</code>: what the line's instruments report.</li>
+<li><code>propagate</code>: linear and Monte-Carlo propagation of each unit's uncertainty to the three targets, with each source's share of the variance.</li>
+</ul>
+<p>Measured:</p>
+<ul>
+<li>each pass's outlet solids and flow;</li>
+<li>the dryer's air temperatures and outlet humidity;</li>
+<li>lab assays of the powder.</li>
+</ul>
+<p>Unknown:</p>
+<ul>
+<li>every unit's unknowns (twelve in J10), and which one the powder inherits.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.process</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProcessLine</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">line</span> <span class="o">=</span> <span class="n">ProcessLine</span><span class="o">.</span><span class="n">default</span><span class="p">(</span><span class="n">fouling</span><span class="o">=</span><span class="p">[</span><span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="mf">2e-5</span> <span class="o">*</span> <span class="n">t</span> <span class="o">/</span> <span class="mi">14400</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="mf">4e-5</span> <span class="o">*</span> <span class="n">t</span> <span class="o">/</span> <span class="mi">14400</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">])</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">steady</span><span class="p">()[</span><span class="s2">&quot;X&quot;</span><span class="p">],</span> <span class="n">line</span><span class="o">.</span><span class="n">steady</span><span class="p">(</span><span class="n">t</span><span class="o">=</span><span class="mf">14400.0</span><span class="p">)[</span><span class="s2">&quot;powder&quot;</span><span class="p">])</span>      <span class="c1"># 10 % -&gt; 41 % solids; the powder after four hours</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">shift</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">reference</span><span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="mf">3600.0</span><span class="p">,</span> <span class="n">nz</span><span class="o">=</span><span class="mi">51</span><span class="p">,</span> <span class="n">dryer_every</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>          <span class="c1"># three passes, then the dryer every 2 min</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">budget</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">propagate</span><span class="p">({</span><span class="s2">&quot;R_f_0&quot;</span><span class="p">:</span> <span class="mf">6e-6</span><span class="p">,</span> <span class="s2">&quot;R_f_1&quot;</span><span class="p">:</span> <span class="mf">5e-6</span><span class="p">,</span> <span class="s2">&quot;X_cr&quot;</span><span class="p">:</span> <span class="mf">0.1</span><span class="p">,</span> <span class="s2">&quot;d0&quot;</span><span class="p">:</span> <span class="mf">25e-6</span><span class="p">,</span> <span class="s2">&quot;W_feed&quot;</span><span class="p">:</span> <span class="mf">0.002</span><span class="p">},</span> <span class="n">t</span><span class="o">=</span><span class="mf">14400.0</span><span class="p">)</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">budget</span><span class="p">[</span><span class="s2">&quot;linear&quot;</span><span class="p">][</span><span class="s2">&quot;powder&quot;</span><span class="p">])</span>                                  <span class="c1"># std of the powder moisture and the shares</span>
+</code></pre></div>
+<p>Headline (<a href="../benchmarks/#the-line-level-twin-experiment-j10">J10</a>): at the end of a shift, the standard deviation of the powder moisture is 0.094 from the fouling monitor on each pass followed by propagation, 0.0054 from the dryer's own online records, and 0.0011 from every record of the line.</p>
+<p>Findings:</p>
+<ul>
+<li><strong>The information flows downstream only.</strong> The dryer's instruments determine its powder but not the fouling behind it.</li>
+<li><strong>The first pass's fouling is one unknown with the feed's calibration.</strong></li>
+</ul>
+<h2 id="which-estimator">Which estimator<a class="headerlink" href="#which-estimator" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Use</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Known model, a drifting scalar, online</td>
+<td>EKF on a coarse model, trend-augmented</td>
+<td>J05, J06</td>
+</tr>
+<tr>
+<td>The same with bounds or monotone growth</td>
+<td>Moving-horizon estimation</td>
+<td>J05b</td>
+</tr>
+<tr>
+<td>Known model, whole record at once, an interval to defend</td>
+<td>Gauss–Newton on the reference solver with a few modes of the unknown</td>
+<td>J04, J06</td>
+</tr>
+<tr>
+<td>An unknown function of the state in an ODE model</td>
+<td>Shooting with a monotone interpolant through the reference solver</td>
+<td>J07d</td>
+</tr>
+<tr>
+<td>A closure seen only through a unit's outlet and profile records</td>
+<td>A few parameters of a known form (or a scale factor) by least squares through the reference; report the prediction, not the closure</td>
+<td>J11</td>
+</tr>
+<tr>
+<td>A few parameters from a transient of a unit whose steady state is a boundary-value problem</td>
+<td>Least squares through the method-of-lines transient (a tenth of a second a solve)</td>
+<td>J13</td>
+</tr>
+<tr>
+<td>A line of units</td>
+<td>Monitor each unit on its own records, then propagate; use the downstream unit's records for its own product</td>
+<td>J10</td>
+</tr>
+<tr>
+<td>No reference solver for the unknown's form, or a field in space</td>
+<td>The PINN twin, started from a pointwise estimate and checked with a misfit guard</td>
+<td>J03, J07b, J07c</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

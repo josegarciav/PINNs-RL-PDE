@@ -1,0 +1,2778 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Physics-informed neural networks for forward and inverse PDE problems, evaluated against numerical references">
+      
+      
+      
+        <link rel="canonical" href="https://josegarciav.github.io/PINNs-RL-PDE/engine/">
+      
+      
+        <link rel="prev" href="../theory/equivalence_regions/">
+      
+      
+        <link rel="next" href="../benchmarks/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Engine - pinnrl</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-native-engine" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="pinnrl" class="md-header__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            pinnrl
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Engine
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting_started/" class="md-tabs__link">
+          
+  
+  
+  Start
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../custom_equations/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../theory/" class="md-tabs__link">
+          
+  
+  
+  Theory
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Engine
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/cli/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../roadmap/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="pinnrl" class="md-nav__button md-logo" aria-label="pinnrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    pinnrl
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/josegarciav/PINNs-RL-PDE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    josegarciav/PINNs-RL-PDE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../when_to_use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When to use a PINN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../custom_equations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Custom equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inverse_problems/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverse problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../process_twins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process twins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets (The Well)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../applications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Applications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Theory
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/well_posedness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Well-posedness and stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/identifiability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identifiability and conditioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/bayesian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Bayesian view and uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/numerical_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The numerical-analysis bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/equivalence_regions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equivalence regions and swarm sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Engine
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-idea" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The idea
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#taylor-mode-streams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Taylor-mode streams
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-general-kernel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The general kernel
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-step-compiled-per-equation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The step compiled per equation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The step compiled per equation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-it-takes-over" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When it takes over
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#blocks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blocks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-rational-tanh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The rational tanh
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-rest-of-the-package-can-rely-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the rest of the package can rely on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-it-does-not-apply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where it does not apply
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-engine-ran" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which engine ran
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-a-build-fails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When a build fails
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extending-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extending it
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration file
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_4" id="__nav_7_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/neural_networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neural networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/pdes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PDEs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/native/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/rl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL sampler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/plots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/uq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Uncertainty
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Process models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command-line entry points
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What has been built
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research program
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../paper/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Software paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-idea" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The idea
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#taylor-mode-streams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Taylor-mode streams
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-general-kernel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The general kernel
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-step-compiled-per-equation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The step compiled per equation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The step compiled per equation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-it-takes-over" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When it takes over
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#blocks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blocks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-rational-tanh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The rational tanh
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-rest-of-the-package-can-rely-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the rest of the package can rely on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-it-does-not-apply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where it does not apply
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-engine-ran" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which engine ran
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-a-build-fails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When a build fails
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extending-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extending it
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="the-native-engine">The native engine<a class="headerlink" href="#the-native-engine" title="Permanent link">&para;</a></h1>
+<p>How <code>pinnrl</code> computes a training step. You do not need this page to use the engine: it is the default.</p>
+<ul>
+<li><strong>To use it:</strong> <a href="../custom_equations/#a-faster-step-the-compiled-kernel">Custom equations</a>.</li>
+<li><strong>Its measurements:</strong> <a href="../benchmarks/#the-step-against-the-alternatives-experiment-i17">Benchmarks, experiment I17</a>.</li>
+<li><strong>Its functions:</strong> <a href="../api/native/">API reference</a>.</li>
+</ul>
+<h2 id="the-problem">The problem<a class="headerlink" href="#the-problem" title="Permanent link">&para;</a></h2>
+<p>A PINN minimises the squared residual of an equation. For heat,</p>
+<div class="arithmatex">\[
+L(w) = \frac{1}{N} \sum_{n=1}^{N} r(x_n, t_n)^2, \qquad r = u_t - \alpha\, u_{xx},
+\]</div>
+<p>where <span class="arithmatex">\(u\)</span> is the network with weights <span class="arithmatex">\(w\)</span>. A step needs <span class="arithmatex">\(u_t\)</span>, <span class="arithmatex">\(u_{xx}\)</span> and <span class="arithmatex">\(\partial L / \partial w\)</span>.</p>
+<ul>
+<li><strong>Residual</strong> <span class="arithmatex">\(r\)</span>: what is left when the network is put into the equation. Zero for an exact solution.</li>
+<li><strong>Collocation points</strong> <span class="arithmatex">\((x_n, t_n)\)</span>: the points where the residual is evaluated.</li>
+<li><strong>Reverse-mode differentiation (autograd):</strong> the chain rule applied backwards from the output. One pass per derivative order, each over the graph of the one before.</li>
+</ul>
+<p>The textbook step applies reverse mode twice for <span class="arithmatex">\(u_{xx}\)</span> and a third time for <span class="arithmatex">\(w\)</span>. Its cost grows with the order: 8.7 ms for heat, 43.6 ms for Cahn–Hilliard in eager PyTorch (I17).</p>
+<h2 id="the-idea">The idea<a class="headerlink" href="#the-idea" title="Permanent link">&para;</a></h2>
+<p>Carry the derivatives forward with the value, in one pass, then take one reverse pass written by hand.</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>File</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>General kernel</td>
+<td><code>jets.cpp</code>, <code>native.mlp_jets</code></td>
+<td>Derivatives of any order, for any equation; residual and loss stay in PyTorch</td>
+</tr>
+<tr>
+<td>Step compiled per equation</td>
+<td><code>specialize.py</code>, <code>step.h</code></td>
+<td>C++ generated for one set of equations; one call returns the loss term and every gradient</td>
+</tr>
+<tr>
+<td>Rational <code>tanh</code></td>
+<td><code>fast_tanh.h</code></td>
+<td>The activation both use</td>
+</tr>
+</tbody>
+</table>
+<h2 id="taylor-mode-streams">Taylor-mode streams<a class="headerlink" href="#taylor-mode-streams" title="Permanent link">&para;</a></h2>
+<p>The network is a stack of layers</p>
+<div class="arithmatex">\[
+a = W h + b, \qquad h = \tanh(a).
+\]</div>
+<p>The kernel carries a set of <strong>streams</strong> through it.</p>
+<ul>
+<li><strong>Stream:</strong> one array per derivative, for all points at once.</li>
+<li><strong>Multi-index</strong> <span class="arithmatex">\(\alpha\)</span>: how many times each input is differentiated. <span class="arithmatex">\(u_{xxt}\)</span> is <span class="arithmatex">\(\alpha = (2, 1)\)</span> over <span class="arithmatex">\((x, t)\)</span>.</li>
+<li><strong>Taylor coefficient:</strong> the derivative divided by a factorial, <span class="arithmatex">\(u_\alpha = D^\alpha u / \alpha!\)</span>. Stream 0 is the value.</li>
+<li><strong>Downward closed:</strong> if <span class="arithmatex">\(\alpha\)</span> is carried, so is every <span class="arithmatex">\(\beta \le \alpha\)</span>. <span class="arithmatex">\(u_{xxt}\)</span> brings <span class="arithmatex">\(u, u_x, u_t, u_{xx}, u_{xt}\)</span>.</li>
+</ul>
+<p><code>native.taylor_streams</code> builds the set and sorts it by degree. Heat needs 4 streams, KdV 5, Cahn–Hilliard 6.</p>
+<p><strong>Through a linear layer</strong> each stream passes linearly, and the bias enters the value only:</p>
+<div class="arithmatex">\[
+a_\alpha = W h_\alpha \quad (\alpha \ne 0), \qquad a_0 = W h_0 + b.
+\]</div>
+<p>All streams of all <span class="arithmatex">\(N\)</span> points are stacked in one <span class="arithmatex">\((S N \times \text{width})\)</span> matrix, so a layer is one matrix product.</p>
+<p><strong>Through <code>tanh</code></strong>, with <span class="arithmatex">\(s = \tanh(a)\)</span> and <span class="arithmatex">\(q = 1 - s^2\)</span> (so <span class="arithmatex">\(s' = q\, a'\)</span>), for <span class="arithmatex">\(\alpha_i &gt; 0\)</span>:</p>
+<div class="arithmatex">\[
+\alpha_i\, s_\alpha = \sum_{\beta \le \alpha,\ \beta_i \ge 1} \beta_i\, a_\beta\, q_{\alpha - \beta},
+\qquad
+q_\gamma = \delta_{\gamma 0} - \sum_{\beta \le \gamma} s_\beta\, s_{\gamma - \beta}.
+\]</div>
+<p>The reverse pass is the same recurrence read backwards.</p>
+<p><strong>Through layer normalization</strong>, per row of a layer:</p>
+<div class="arithmatex">\[
+c = a - \operatorname{mean}(a), \qquad v = \operatorname{mean}(c^2) + \varepsilon, \qquad r = v^{-1/2}, \qquad y = \gamma\, c\, r + \beta.
+\]</div>
+<p>The streams follow by the same arithmetic for the mean, the product and the inverse square root.</p>
+<h2 id="the-general-kernel">The general kernel<a class="headerlink" href="#the-general-kernel" title="Permanent link">&para;</a></h2>
+<p><code>jets.cpp</code> implements the recurrences for any stream set.</p>
+<ol>
+<li><code>Tables</code> builds the index tables of the recurrences from the multi-indices.</li>
+<li><code>pinn_jets_forward</code> carries the streams through the layers and keeps them in a work buffer.</li>
+<li>PyTorch computes the residual and the loss from the output streams.</li>
+<li><code>pinn_jets_backward</code> returns the weight gradient when PyTorch asks for it.</li>
+</ol>
+<p><code>mlp_jets</code> wraps steps 2 and 4 as a <code>torch.autograd.Function</code>, so the outputs are ordinary tensors.</p>
+<p>It applies to:</p>
+<ul>
+<li>a feed-forward stack of <code>Linear</code> and <code>tanh</code>, with or without <code>LayerNorm</code> before each <code>tanh</code> (<code>native.supported_stack</code> is the test);</li>
+<li>float32 on the CPU;</li>
+<li>macOS (Accelerate) or Linux (OpenBLAS).</li>
+</ul>
+<p>Its generality has a cost: each term of each recurrence is one loop over arrays of megabytes, and the two passes are separate calls with PyTorch between them.</p>
+<h2 id="the-step-compiled-per-equation">The step compiled per equation<a class="headerlink" href="#the-step-compiled-per-equation" title="Permanent link">&para;</a></h2>
+<p>For equations given as text, <code>pinnrl.native.specialize</code> writes C++ for those equations and compiles it. One call returns <span class="arithmatex">\(L\)</span> and every gradient.</p>
+<p>The generated file includes <code>jets.cpp</code> and <code>step.h</code> and defines five functions:</p>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Generator</th>
+<th>Body</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gen_tanh_fwd</code>, <code>gen_tanh_bwd</code></td>
+<td><code>tanh_program</code></td>
+<td>One loop over a layer each way, straight-line code for exactly the streams used</td>
+</tr>
+<tr>
+<td><code>gen_norm_fwd</code>, <code>gen_norm_bwd</code></td>
+<td><code>norm_program</code></td>
+<td>Per row, three loops over the features each way</td>
+</tr>
+<tr>
+<td><code>gen_residual</code></td>
+<td><code>residual_code</code></td>
+<td>Per point: <span class="arithmatex">\(r\)</span> for every equation, <span class="arithmatex">\(r^2\)</span>, and the adjoint of every stream</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Adjoint:</strong> the derivative of the loss with respect to an intermediate quantity. The reverse pass starts from the adjoints of the output streams, <span class="arithmatex">\(\partial L / \partial u_\alpha = 2\, r\, \partial r / \partial u_\alpha \cdot \alpha! / N\)</span>.</li>
+<li><strong>Fused loop:</strong> one loop that does the work of several, so each array is read once.</li>
+</ul>
+<p>How <code>residual_code</code> gets the adjoints:</p>
+<ol>
+<li>It takes the SymPy expressions <code>CustomPDE</code> parsed.</li>
+<li>It differentiates each residual with respect to every symbol (<code>sympy.diff</code>).</li>
+<li>It shares subexpressions (<code>sympy.cse</code>) and prints single-precision C.</li>
+<li>If a function has no C form, it returns <code>None</code> and the general kernel carries on.</li>
+</ol>
+<p><code>step.h</code>'s <code>blocked_residual</code> runs the batch in blocks of points: forward, residual, reverse, with the gradients summed over the blocks.</p>
+<p>What the compiled code reads at run time, so one build serves a problem while its numbers change:</p>
+<ul>
+<li><strong>Parameters</strong> of the equations. Trainable ones get <span class="arithmatex">\(\partial L / \partial \theta\)</span> from the same loop.</li>
+<li><strong>Per-point values:</strong> measured inputs and unknown functions of the coordinates, evaluated by PyTorch. Their adjoints are returned, and PyTorch backpropagates into the unknown function's own weights.</li>
+<li><strong>Scaling</strong> of a network built with <code>normalize=True</code>: mapped inputs for the kernel, physical coordinates for the residual, and one factor per stream.</li>
+</ul>
+<p><code>CustomPDE._step_spec</code> builds a problem's description (<code>ResidualSpec</code>); <code>CustomPDE._compiled_residual_loss</code> calls the step.</p>
+<h3 id="when-it-takes-over">When it takes over<a class="headerlink" href="#when-it-takes-over" title="Permanent link">&para;</a></h3>
+<p>Compiling takes about 1.5 s, once per set of equations and machine.</p>
+<ol>
+<li>Evaluations 1 to 31 use the general kernel.</li>
+<li>At evaluation 16 the build starts in a background thread.</li>
+<li>At evaluation 32 the compiled step takes over, waiting for the compiler if it must.</li>
+</ol>
+<p>The switch is at exactly evaluation 32 whether the library was cached or not, so a run does not depend on build time. <code>PINNRL_NATIVE_SPECIALIZE</code> changes the number.</p>
+<h3 id="the-cache">The cache<a class="headerlink" href="#the-cache" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Where:</strong> <code>~/.cache/pinnrl/native</code> (<code>PINNRL_NATIVE_CACHE</code> moves it).</li>
+<li><strong>Files:</strong> <code>jets-&lt;hash&gt;.so</code>, <code>evaporator-&lt;hash&gt;.so</code>, and one <code>step-&lt;hash&gt;.so</code> per set of equations.</li>
+<li><strong>Key:</strong> a hash of the generated source, <code>jets.cpp</code>, <code>step.h</code>, <code>fast_tanh.h</code> and a version tag. An upgrade rebuilds what changed.</li>
+<li><strong>Clearing it:</strong> deleting the directory is always safe.</li>
+</ul>
+<h3 id="blocks">Blocks<a class="headerlink" href="#blocks" title="Permanent link">&para;</a></h3>
+<p><code>PINNRL_NATIVE_BLOCK</code> sets the points per block (default 1,024). On an Apple M4, blocks of 1,024 are as fast as the whole batch and smaller ones are slower (I17). The blocks are independent, which a threaded version would use (<a href="../roadmap/#v09-the-engine-everywhere">roadmap</a>).</p>
+<h2 id="the-rational-tanh">The rational <code>tanh</code><a class="headerlink" href="#the-rational-tanh" title="Permanent link">&para;</a></h2>
+<div class="arithmatex">\[
+\tanh(x) \approx \frac{x\, P(x^2)}{Q(x^2)}, \qquad |x| \le 7.905,
+\]</div>
+<p>with <span class="arithmatex">\(P\)</span> of degree 6 and <span class="arithmatex">\(Q\)</span> of degree 3 in <span class="arithmatex">\(x^2\)</span>, the form Eigen uses (<code>fast_math::tanhf_rational</code>).</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Time per element</th>
+<th>Error</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rational form</td>
+<td>0.4 ns</td>
+<td>within <span class="arithmatex">\(2.4 \times 10^{-7}\)</span></td>
+</tr>
+<tr>
+<td>Accelerate's <code>vvtanhf</code></td>
+<td>1.1 ns</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>It has no exponential and no branch, so the compiler vectorises it. A step evaluates about 1.3 million of them (I17, Apple M4).</p>
+<h2 id="what-the-rest-of-the-package-can-rely-on">What the rest of the package can rely on<a class="headerlink" href="#what-the-rest-of-the-package-can-rely-on" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>The same numbers.</strong> Residual, loss and gradients agree with autograd to float32 rounding (<span class="arithmatex">\(10^{-7}\)</span>–<span class="arithmatex">\(10^{-5}\)</span> relative). <code>test_native.py</code> and <code>test_native_specialize.py</code> check each case.</li>
+<li><strong>A gradient can be differentiated again.</strong> With <code>create_graph=True</code>, the gradient is taken by autograd on the same function. Hessian-vector products and <code>pinnrl.analysis</code> work, at autograd speed.</li>
+<li><strong><code>torch.func</code> sees the ordinary module.</strong> Inside <code>jvp</code>, <code>vmap</code> or <code>grad</code>, PyTorch evaluates the network.</li>
+<li>
+<p><strong>A silent fallback.</strong> Where one layer of the engine does not apply, the next one down runs.</p>
+</li>
+<li>
+<p><strong>Hessian-vector product:</strong> the second derivative of the loss applied to a vector, <span class="arithmatex">\(H v\)</span>, without forming <span class="arithmatex">\(H\)</span>.</p>
+</li>
+</ul>
+<h2 id="where-it-does-not-apply">Where it does not apply<a class="headerlink" href="#where-it-does-not-apply" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>What runs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Another architecture or activation (Fourier features, SIREN, ResNet), dropout</td>
+<td>autograd</td>
+</tr>
+<tr>
+<td>A GPU (<code>mps</code>, <code>cuda</code>) or float64</td>
+<td>autograd</td>
+</tr>
+<tr>
+<td>No C++ compiler, or no OpenBLAS on Linux</td>
+<td>autograd</td>
+</tr>
+<tr>
+<td>A residual given as a Python function</td>
+<td>autograd</td>
+</tr>
+<tr>
+<td>An unknown function of a field, or a derivative of an unknown function</td>
+<td>autograd</td>
+</tr>
+<tr>
+<td>A loss other than the squared one; a steady problem</td>
+<td>general kernel</td>
+</tr>
+<tr>
+<td>A function in the equation with no C form</td>
+<td>general kernel</td>
+</tr>
+<tr>
+<td>A parameter made differentiable outside <code>trainable_parameters</code></td>
+<td>general kernel</td>
+</tr>
+<tr>
+<td><code>derivatives="autograd"</code></td>
+<td>autograd, by request</td>
+</tr>
+</tbody>
+</table>
+<h2 id="which-engine-ran">Which engine ran<a class="headerlink" href="#which-engine-ran" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl</span><span class="w"> </span><span class="kn">import</span> <span class="n">native</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pinnrl.pdes.catalog</span><span class="w"> </span><span class="kn">import</span> <span class="n">from_catalog</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">pde</span> <span class="o">=</span> <span class="n">from_catalog</span><span class="p">(</span><span class="s2">&quot;heat&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">trainer</span> <span class="o">=</span> <span class="n">pde</span><span class="o">.</span><span class="n">build_trainer</span><span class="p">(</span><span class="s2">&quot;feedforward&quot;</span><span class="p">,</span> <span class="n">num_collocation_points</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">native</span><span class="o">.</span><span class="n">available</span><span class="p">(),</span> <span class="n">native</span><span class="o">.</span><span class="n">unavailable_reason</span><span class="p">())</span>   <span class="c1"># True None where the kernel builds</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">pde</span><span class="o">.</span><span class="n">native_active</span><span class="p">(</span><span class="n">trainer</span><span class="o">.</span><span class="n">model</span><span class="p">))</span>                  <span class="c1"># True: the kernel serves this problem</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">x</span><span class="p">,</span> <span class="n">t</span> <span class="o">=</span> <span class="n">pde</span><span class="o">.</span><span class="n">generate_collocation_points</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">loss</span> <span class="o">=</span> <span class="n">pde</span><span class="o">.</span><span class="n">compute_loss</span><span class="p">(</span><span class="n">trainer</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">t</span><span class="p">)[</span><span class="s2">&quot;residual&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nb">print</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">loss</span><span class="o">.</span><span class="n">grad_fn</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">)</span>   <span class="c1"># _ResidualStepBackward once the compiled step has taken over</span>
+</code></pre></div>
+<p>The last line prints an ordinary PyTorch node for the first 31 evaluations and <code>_ResidualStepBackward</code> from the 32nd.</p>
+<h2 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PINNRL_NATIVE_SPECIALIZE</code></td>
+<td><code>32</code></td>
+<td>Evaluations before the compiled step takes over; <code>off</code> or <code>0</code> disables it</td>
+</tr>
+<tr>
+<td><code>PINNRL_NATIVE_BLOCK</code></td>
+<td><code>1024</code></td>
+<td>Points per block of the compiled step</td>
+</tr>
+<tr>
+<td><code>PINNRL_NATIVE_CACHE</code></td>
+<td><code>~/.cache/pinnrl/native</code></td>
+<td>Where compiled libraries are kept</td>
+</tr>
+<tr>
+<td><code>CXX</code></td>
+<td>first of <code>clang++</code>, <code>g++</code>, <code>c++</code></td>
+<td>The compiler</td>
+</tr>
+<tr>
+<td><code>PINNRL_NATIVE_CXXFLAGS</code></td>
+<td>empty</td>
+<td>Extra compiler flags</td>
+</tr>
+<tr>
+<td><code>PINNRL_NATIVE_LDFLAGS</code></td>
+<td>empty</td>
+<td>Extra linker flags</td>
+</tr>
+<tr>
+<td><code>PINNRL_REQUIRE_NATIVE</code></td>
+<td>unset</td>
+<td>In the tests: fail instead of skipping when the kernel cannot be built</td>
+</tr>
+</tbody>
+</table>
+<h2 id="when-a-build-fails">When a build fails<a class="headerlink" href="#when-a-build-fails" title="Permanent link">&para;</a></h2>
+<p>Nothing breaks: the run goes on by autograd and a warning is logged once.</p>
+<ol>
+<li>Print the reason: <code>python -c "from pinnrl import native; print(native.unavailable_reason())"</code>.</li>
+<li><code>no C++ compiler found</code>: run <code>xcode-select --install</code> on macOS, or install <code>g++</code> on Linux.</li>
+<li><code>compiling jets.cpp failed</code> on Linux: <code>apt install libopenblas-dev</code>, or point <code>PINNRL_NATIVE_CXXFLAGS</code> and <code>PINNRL_NATIVE_LDFLAGS</code> at OpenBLAS.</li>
+<li><code>the specialised step could not be built</code> (a warning): the general kernel stays in charge. <code>PINNRL_NATIVE_SPECIALIZE=1</code> reproduces it at the first evaluation.</li>
+</ol>
+<p>The kernels build on macOS and Linux only.</p>
+<h2 id="extending-it">Extending it<a class="headerlink" href="#extending-it" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>A new activation:</strong> add its Taylor recurrence, forward and reverse, to <code>jets.cpp</code> and to <code>tanh_program</code>, and an entry in <code>supported_stack</code>.</li>
+<li><strong>A new term in the compiled step</strong> (boundary points, the optimizer): add it to the driver in <code>step.h</code>, with the per-equation part generated in <code>specialize.py</code>.</li>
+<li><strong>Check it:</strong> every case of <code>test_native_specialize.py</code> compares loss and gradient with autograd; <code>experiments/I17_step_head_to_head/run.py</code> times the step.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
